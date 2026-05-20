@@ -4,9 +4,9 @@ import 'package:zappymobilenew/main.dart';
 import 'package:zappymobilenew/providers/cart_provider.dart';
 
 void main() {
-  testWidgets('Zappy app smoke test', (WidgetTester tester) async {
+  testWidgets('Enything app smoke test', (WidgetTester tester) async {
     // Build the app and trigger a frame.
-    await tester.pumpWidget(ZappyApp(cartProvider: CartProvider()));
+    await tester.pumpWidget(EnythingApp(cartProvider: CartProvider()));
     // Verify splash screen appears
     expect(find.byType(MaterialApp), findsOneWidget);
   });

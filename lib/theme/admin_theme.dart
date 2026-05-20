@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// ── Zappy Super Admin Design System ─────────────────────────────
+// ── Enything Super Admin Design System ─────────────────────────
 // Single source of truth for all admin UI tokens.
 
 class AdminColors {

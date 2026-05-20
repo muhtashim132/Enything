@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/location_provider.dart';
@@ -26,10 +28,54 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String? _selectedPaymentMethod = 'upi';
   final List<XFile> _prescriptions = [];
 
+  late Razorpay _razorpay;
+
+  // Stored while Razorpay sheet is open so we can use them in callbacks
+  double _pendingTotal = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _razorpay = Razorpay();
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
+  }
+
   @override
   void dispose() {
+    _razorpay.clear();
     _notesController.dispose();
     super.dispose();
+  }
+
+  // ── Razorpay callbacks ────────────────────────────────────────────────────
+  void _onPaymentSuccess(PaymentSuccessResponse response) {
+    debugPrint('Razorpay success: ${response.paymentId}');
+    _createOrderInDb(razorpayPaymentId: response.paymentId);
+  }
+
+  void _onPaymentError(PaymentFailureResponse response) {
+    setState(() => _isProcessing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Payment failed: ${response.message ?? "Unknown error"}'),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _onExternalWallet(ExternalWalletResponse response) {
+    setState(() => _isProcessing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('External wallet selected: ${response.walletName}'),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   Future<void> _pickPrescription() async {
@@ -46,25 +92,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _prescriptions.removeAt(index));
   }
 
+  // ── Main entry point: validate then open Razorpay sheet ─────────────────
   Future<void> _placeOrder() async {
     setState(() => _isProcessing = true);
     final cart = context.read<CartProvider>();
-    final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
 
-    try {
-      if (cart.requiresPrescription && _prescriptions.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'A valid prescription is required for medicines in your cart.'),
-              backgroundColor: AppColors.danger),
-        );
-        setState(() => _isProcessing = false);
-        return;
-      }
+    // Prescription guard
+    if (cart.requiresPrescription && _prescriptions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'A valid prescription is required for medicines in your cart.'),
+            backgroundColor: AppColors.danger),
+      );
+      setState(() => _isProcessing = false);
+      return;
+    }
 
-      final supabase = Supabase.instance.client;
+    try {
+
       double distanceKm = 3.0;
       if (location.currentLocation != null && cart.shops.isNotEmpty) {
         distanceKm = location.distanceTo(cart.shops.first.location);
@@ -78,14 +125,76 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final riderEarnings = effectiveBase + surcharge + heavyFee;
       final totalDelivery = riderEarnings + cart.smallCartFee - discount;
 
-      // ── Full Tax & Payout Breakdown ────────────────────────────────────────
+      // ── Full Tax & Payout Breakdown ──────────────────────────────────────
       final breakdown = OrderTaxBreakdown.calculate(
         items: cart.taxBreakdownItems,
         deliveryCharge: totalDelivery,
         platformFee: cart.platformFee,
         paymentMethod: _selectedPaymentMethod!,
       );
-      debugPrint(breakdown.toString()); // visible in debug console
+      debugPrint(breakdown.toString());
+
+      _pendingTotal = breakdown.grandTotal;
+
+      // ── Open Razorpay payment sheet ──────────────────────────────────────
+      final razorpayKey = dotenv.maybeGet('RAZORPAY_KEY') ?? '';
+      final auth = context.read<AuthProvider>();
+      final options = <String, dynamic>{
+        'key': razorpayKey,
+        // Razorpay expects amount in paise (1 INR = 100 paise)
+        'amount': (_pendingTotal * 100).toInt(),
+        'name': 'Enything',
+        'description': 'Order Payment',
+        'prefill': {
+          'contact': auth.user?.phone ?? '',
+          'name': auth.user?.fullName ?? '',
+        },
+        'theme': {'color': '#4C6EF5'},
+      };
+      _razorpay.open(options);
+      // Razorpay callbacks (_onPaymentSuccess / _onPaymentError) handle the rest
+    } catch (e) {
+      debugPrint('Razorpay open error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not open payment. Please try again.'),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+      setState(() => _isProcessing = false);
+    }
+  }
+
+  // ── Actually write the order to Supabase (called after payment succeeds) ──
+  Future<void> _createOrderInDb({String? razorpayPaymentId}) async {
+    final cart = context.read<CartProvider>();
+    final auth = context.read<AuthProvider>();
+    final location = context.read<LocationProvider>();
+    final supabase = Supabase.instance.client;
+
+    try {
+      double distanceKm = 3.0;
+      if (location.currentLocation != null && cart.shops.isNotEmpty) {
+        distanceKm = location.distanceTo(cart.shops.first.location);
+      }
+      final baseDelivery = cart.calculateDeliveryCharges(distanceKm);
+      final surcharge = cart.multiShopSurcharge;
+      final heavyFee = cart.heavyOrderFee;
+      final discount = cart.calculateDeliveryDiscount(distanceKm);
+      final effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
+      final riderEarnings = effectiveBase + surcharge + heavyFee;
+      final totalDelivery = riderEarnings + cart.smallCartFee - discount;
+
+      final breakdown = OrderTaxBreakdown.calculate(
+        items: cart.taxBreakdownItems,
+        deliveryCharge: totalDelivery,
+        platformFee: cart.platformFee,
+        paymentMethod: _selectedPaymentMethod!,
+      );
 
       final cartGroupId = const Uuid().v4();
       final numShops = cart.shops.length;
@@ -199,7 +308,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'delivery_notes':
                   _notesController.text.isEmpty ? null : _notesController.text,
               'payment_method': _selectedPaymentMethod,
-              'payment_status': 'pending_upi',
+              'payment_status': razorpayPaymentId != null ? 'paid' : 'pending_upi',
+              'razorpay_payment_id': razorpayPaymentId,
               'customer_phone': customerPhone,
               'shop_phone': shopPhones[shop.id],
               // ── Financial Snapshot — written ONCE, never recalculated ────

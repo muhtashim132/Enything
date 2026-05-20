@@ -50,7 +50,7 @@ class LegalPage extends StatelessWidget {
             const SizedBox(height: 40),
             Center(
               child: Text(
-                '© 2026 Zappy Technologies. All Rights Reserved.',
+                '© 2026 Enything Technologies. All Rights Reserved.',
                 style: GoogleFonts.outfit(
                   color: Colors.grey,
                   fontSize: 12,

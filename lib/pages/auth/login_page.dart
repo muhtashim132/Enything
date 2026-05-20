@@ -155,7 +155,7 @@ class _LoginPageState extends State<LoginPage>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Sign in to continue to Zappy',
+                      'Sign in to continue to Enything',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.75),
                         fontSize: 14,

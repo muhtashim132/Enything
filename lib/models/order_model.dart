@@ -3,7 +3,7 @@
 // ============================================================================
 //
 // FINANCIAL SNAPSHOT PATTERN:
-//   Every order in Zappy permanently stores its complete financial breakdown
+//   Every order in Enything permanently stores its complete financial breakdown
 //   at the moment of checkout. This means:
 //     • GST rates, commission %, and payout amounts are FROZEN in the DB.
 //     • Future rate changes will never corrupt historical reporting.
@@ -11,9 +11,9 @@
 //       reports directly from the orders table, no recalculation needed.
 //
 // INDIA GST COMPLIANCE FIELDS:
-//   s9_5GstAmount    — Food/restaurant GST. Zappy remits to Govt (§9(5) CGST).
+//   s9_5GstAmount    — Food/restaurant GST. Enything remits to Govt (§9(5) CGST).
 //   nonFoodGstAmount — Retail GST. Seller remits to Govt (declare in GSTR-1/3B).
-//   tcsAmount        — 1% TCS Zappy deducts (Zappy files GSTR-8 by 10th).
+//   tcsAmount        — 1% TCS Enything deducts (Enything files GSTR-8 by 10th).
 //   grandTotalCollected — True INR collected from customer (incl. all GST).
 //   gstRateSnapshot  — Frozen {category: rate} map used at checkout.
 // ============================================================================
@@ -67,25 +67,25 @@ class OrderModel {
   /// GST charged on items and added on top of base price (ADD-ON model).
   final double gstItemTotal;
 
-  /// GST on Section 9(5) food/restaurant items — Zappy remits to Govt.
-  /// Seller does NOT declare this in their GSTR-1. It is Zappy's liability.
+  /// GST on Section 9(5) food/restaurant items — Enything remits to Govt.
+  /// Seller does NOT declare this in their GSTR-1. It is Enything's liability.
   final double s9_5GstAmount;
 
   /// GST on non-food retail/grocery/pharma — passed to seller in payout.
   /// Seller MUST declare this in their GSTR-1/3B.
   final double nonFoodGstAmount;
 
-  /// 18% GST embedded in the delivery charge — Zappy remits to Govt.
+  /// 18% GST embedded in the delivery charge — Enything remits to Govt.
   final double gstDelivery;
 
-  /// 18% GST embedded in the platform/handling fee — Zappy remits to Govt.
+  /// 18% GST embedded in the platform/handling fee — Enything remits to Govt.
   final double gstPlatform;
 
-  /// 1% Tax Collected at Source deducted from seller by Zappy (CGST §52).
-  /// Zappy files GSTR-8 by 10th. Seller claims credit via GSTR-2B.
+  /// 1% Tax Collected at Source deducted from seller by Enything (CGST §52).
+  /// Enything files GSTR-8 by 10th. Seller claims credit via GSTR-2B.
   final double tcsAmount;
 
-  /// Gross commission Zappy charged on base item subtotal (5% standard).
+  /// Gross commission Enything charged on base item subtotal (5% standard).
   final double zappyCommission;
 
   /// Net payout to seller: (base − commission + nonFoodGst − tcs).
@@ -93,11 +93,11 @@ class OrderModel {
   final double sellerPayout;
 
   /// Razorpay / gateway deduction (2.36% for UPI/Card, 0 for COD).
-  /// Absorbed entirely by Zappy under the 5% commission plan.
+  /// Absorbed entirely by Enything under the 5% commission plan.
   final double gatewayDeduction;
 
   /// Actual total collected from the customer including all GST + fees.
-  /// This is Zappy's "gross turnover" figure for ECO reporting.
+  /// This is Enything's "gross turnover" figure for ECO reporting.
   final double grandTotalCollected;
 
   /// Frozen snapshot of {category: gstRate} used at checkout.

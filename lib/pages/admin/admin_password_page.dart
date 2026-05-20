@@ -24,7 +24,7 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
   bool _loading = false;
   bool _obscure = true;
   String? _error;
-  bool _shakeError = false;
+  final bool _shakeError = false;
 
   late AnimationController _bgCtrl;
   late AnimationController _shakeCtrl;
@@ -120,7 +120,7 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
               Positioned(
                 top: size.height * 0.5 + (_bgAnim.value * 30),
                 left: size.width * 0.2,
-                child: _Aura(200, AdminColors.info, 0.07),
+                child: const _Aura(200, AdminColors.info, 0.07),
               ),
             ]),
           ),
@@ -145,7 +145,7 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
 
                   // Title block
                   Text(
-                    '⚡ ZAPPY ADMIN',
+                    'ENYTHING ADMIN',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
                       color: AdminColors.warning,
@@ -176,7 +176,7 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
                   const SizedBox(height: 12),
 
                   Text(
-                    'Enter your admin password to access\nthe Zappy back-office.',
+                    'Enter your admin password to access\nthe Enything back-office.',
                     textAlign: TextAlign.center,
                     style: AdminStyles.body(
                         size: 14, color: AdminColors.textSecondary),
@@ -237,7 +237,7 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.fingerprint_rounded,
+                      const Icon(Icons.fingerprint_rounded,
                           color: AdminColors.textMuted, size: 18),
                       const SizedBox(width: 8),
                       Text('Biometric login available after first sign-in',
@@ -270,17 +270,20 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
       height: 96,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: AdminGradients.primary,
         boxShadow: [
           BoxShadow(
-            color: AdminColors.primary.withOpacity(0.5),
+            color: AdminColors.primary.withOpacity(0.3),
             blurRadius: 40,
             spreadRadius: 4,
           ),
         ],
       ),
-      child: const Center(
-        child: Text('👑', style: TextStyle(fontSize: 44)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(48),
+        child: Image.asset(
+          'assets/images/Enything.png',
+          fit: BoxFit.cover,
+        ),
       ),
     )
         .animate()

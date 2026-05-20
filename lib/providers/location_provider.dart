@@ -104,7 +104,7 @@ class LocationProvider extends ChangeNotifier {
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=${_currentLocation!.latitude}&lon=${_currentLocation!.longitude}',
         ),
         headers: {
-          'User-Agent': 'ZappyMobileApp/1.0',
+          'User-Agent': 'EnythingMobileApp/1.0',
         },
       ).timeout(const Duration(seconds: 10));
 
@@ -145,7 +145,7 @@ class LocationProvider extends ChangeNotifier {
         Uri.parse(
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}',
         ),
-        headers: {'User-Agent': 'ZappyMobileApp/1.0'},
+        headers: {'User-Agent': 'EnythingMobileApp/1.0'},
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {

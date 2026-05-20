@@ -121,19 +121,6 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       final auth = context.read<AuthProvider>();
       final allRoles = auth.user?.activeRoles ?? [];
 
-      // ── God Mode Override ──────────────────────────────────────────────────
-      // If the user's account actually has admin privileges, intercept normal
-      // routing and force them into the God Mode 2FA gate, regardless of what
-      // role card they clicked.
-      if (allRoles.contains('admin')) {
-        _showSnack('👑 Administrator detected. Securing connection...',
-            isError: false);
-        await Future.delayed(const Duration(milliseconds: 1200));
-        if (!mounted) return;
-        Navigator.pushNamedAndRemoveUntil(
-            context, AppRoutes.adminPassword, (_) => false);
-        return;
-      }
 
       // ── Case A: requested role is NOT yet registered — add new role ────────
       if (_requestedRole != null && !allRoles.contains(_requestedRole)) {
@@ -815,22 +802,23 @@ class _MiniLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            colors: [Color(0xFF1A35C8), Color(0xFF0A178C)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(size * 0.28),
-        border: Border.all(
-            color: const Color(0xFFF4C542).withOpacity(0.35), width: 1.5),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFFF4C542).withOpacity(0.30),
+              color: const Color(0xFFF4C542).withOpacity(0.20),
               blurRadius: 20,
               spreadRadius: 2)
         ],
       ),
-      child: Center(
-          child: Text('⚡', style: TextStyle(fontSize: size * 0.45))),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.28),
+        child: Image.asset(
+          'assets/images/Enything.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+        ),
+      ),
     );
   }
 }

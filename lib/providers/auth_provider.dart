@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 
@@ -103,7 +107,7 @@ class AuthProvider extends ChangeNotifier {
       try {
         final admin = await _supabase
             .from('admin_users')
-            .select('id, admin_level, permissions, is_active, admin_password')
+            .select('id, admin_level, is_active, admin_password')
             .eq('id', userId)
             .eq('is_active', true)
             .maybeSingle();
@@ -111,7 +115,9 @@ class AuthProvider extends ChangeNotifier {
           roles.add('admin');
           _adminData = Map<String, dynamic>.from(admin);
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Admin Check Error: $e');
+      }
     }
 
     return roles;
@@ -249,15 +255,33 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── OTP Auth (Phone) ────────────────────────────────────────────────────
+  // ─── OTP Auth (Phone) via Fast2SMS ──────────────────────────────────────
 
-  /// Step 1: Send OTP to phone number (e.g. +911234567890)
+  /// Generates a cryptographically random 6-digit OTP.
+  String _generateOtp() {
+    final rng = Random.secure();
+    return (100000 + rng.nextInt(900000)).toString();
+  }
+
+  /// Derives a stable email+password pair from a phone number so we can
+  /// create a real Supabase Auth session after Fast2SMS OTP verification.
+  String _emailFromPhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    return '$digits@auth.enything.app';
+  }
+
+  String _passwordFromPhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    return 'Enything$digits#Auth2025';
+  }
+
+  /// Step 1: Generate OTP, store in Supabase, and deliver via Fast2SMS.
   Future<String?> sendPhoneOtp(String phone) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
-    // Mock bypass for testing
+    // ── Magic number bypass for internal testing ──────────────────────────
     if (phone.contains('9999999991') ||
         phone.contains('9999999992') ||
         phone.contains('9999999993') ||
@@ -271,22 +295,61 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      await _supabase.auth.signInWithOtp(phone: phone);
+      final otp = _generateOtp();
+      final expiresAt =
+          DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String();
+
+      // 1️⃣ Persist OTP in Supabase (upsert so resends overwrite old OTP)
+      await _supabase.from('phone_otps').upsert({
+        'phone': phone,
+        'otp': otp,
+        'expires_at': expiresAt,
+      }, onConflict: 'phone');
+
+      // 2️⃣ Send OTP via Fast2SMS
+      final apiKey = dotenv.maybeGet('FAST2SMS_API_KEY') ?? '';
+      final mobileNumber = phone.replaceAll(RegExp(r'^\+91'), '').replaceAll(RegExp(r'\D'), '');
+
+      final response = await http.post(
+        Uri.parse('https://www.fast2sms.com/dev/bulkV2'),
+        headers: {
+          'authorization': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'route': 'q',
+          'message': 'Your Enything login OTP is $otp. Do not share this with anyone.',
+          'flash': 0,
+          'numbers': mobileNumber,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      final body = json.decode(response.body) as Map<String, dynamic>;
+      if (response.statusCode != 200 || body['return'] != true) {
+        final msg = body['message']?.toString() ?? 'SMS delivery failed.';
+        _error = msg;
+        _isLoading = false;
+        notifyListeners();
+        return _error;
+      }
+
       _pendingPhone = phone;
       _isLoading = false;
       notifyListeners();
-      return null;
-    } on AuthException catch (e) {
-      _error = e.message;
+      return null; // success
     } catch (e) {
-      _error = 'Could not send OTP. Please check the number and try again.';
+      _error = 'Could not send OTP. Check your number and try again.';
+      debugPrint('sendPhoneOtp error: $e');
     }
     _isLoading = false;
     notifyListeners();
     return _error;
   }
 
-  /// Step 2: Verify OTP.
+  /// Step 2: Verify OTP against Supabase `phone_otps` table, then create
+  /// or sign in to the Supabase Auth session using an email derived from
+  /// the phone number.
+  ///
   /// Returns:
   ///   'existing' — user has a profile (may have multiple roles)
   ///   'new'      — no profile yet, needs role selection + setup
@@ -297,7 +360,7 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    // ─── Magic Number Bypass ────────────────────────────────────────────────
+    // ─── Magic Number Bypass (internal testing) ────────────────────────────
     if (phone.contains('9999999991') ||
         phone.contains('9999999992') ||
         phone.contains('9999999993') ||
@@ -327,26 +390,84 @@ class AuthProvider extends ChangeNotifier {
       }
       return 'new';
     }
-    // ─────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────
 
     try {
-      final response = await _supabase.auth.verifyOTP(
-        phone: phone,
-        token: otp,
-        type: OtpType.sms,
-      );
+      // 1️⃣ Validate OTP from phone_otps table
+      final record = await _supabase
+          .from('phone_otps')
+          .select('otp, expires_at')
+          .eq('phone', phone)
+          .maybeSingle();
 
-      if (response.user == null) {
+      if (record == null) {
+        _error = 'OTP expired or not found. Please request a new one.';
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+
+      final storedOtp = record['otp'] as String? ?? '';
+      final expiresAt = DateTime.tryParse(record['expires_at'] as String? ?? '');
+
+      if (storedOtp != otp.trim()) {
         _error = 'Invalid OTP. Please try again.';
         _isLoading = false;
         notifyListeners();
         return null;
       }
 
+      if (expiresAt == null || DateTime.now().toUtc().isAfter(expiresAt)) {
+        _error = 'OTP has expired. Please request a new one.';
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+
+      // 2️⃣ OTP is valid — clean up the record
+      await _supabase.from('phone_otps').delete().eq('phone', phone);
+
+      // 3️⃣ Create / sign-in to Supabase Auth using phone-derived credentials
+      final email = _emailFromPhone(phone);
+      final password = _passwordFromPhone(phone);
+
+      String? userId;
+      try {
+        // Attempt sign-in first (existing user)
+        final signInRes = await _supabase.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+        userId = signInRes.user?.id;
+      } on AuthException {
+        // User doesn't exist yet — create them
+        try {
+          final signUpRes = await _supabase.auth.signUp(
+            email: email,
+            password: password,
+            data: {'phone': phone},
+          );
+          userId = signUpRes.user?.id;
+        } on AuthException catch (e) {
+          _error = e.message;
+          _isLoading = false;
+          notifyListeners();
+          return null;
+        }
+      }
+
+      if (userId == null) {
+        _error = 'Authentication failed. Please try again.';
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+
+      // 4️⃣ Check if this user already has a profile
       final existing = await _supabase
           .from('profiles')
           .select('id, role')
-          .eq('id', response.user!.id)
+          .eq('id', userId)
           .maybeSingle();
 
       _isLoading = false;
@@ -361,6 +482,7 @@ class AuthProvider extends ChangeNotifier {
       _error = e.message;
     } catch (e) {
       _error = 'Verification failed. Please try again.';
+      debugPrint('verifyPhoneOtp error: $e');
     }
     _isLoading = false;
     notifyListeners();

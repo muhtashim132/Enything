@@ -391,8 +391,16 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                   : [],
                             ),
                             child: Center(
-                                child: Text(cat['emoji'],
-                                    style: const TextStyle(fontSize: 26))),
+                              child: (isSelected && cat['name'] == 'Grocery')
+                                  ? ColorFiltered(
+                                      colorFilter: const ColorFilter.mode(
+                                        Colors.black87,
+                                        BlendMode.srcIn,
+                                      ),
+                                      child: Text(cat['emoji'], style: const TextStyle(fontSize: 26)),
+                                    )
+                                  : Text(cat['emoji'], style: const TextStyle(fontSize: 26)),
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Text(

@@ -19,11 +19,11 @@ class PrivacyPolicyPage extends StatelessWidget {
         ),
         LegalSection(
           heading: '3. Data Fiduciary & Processors',
-          content: 'Zappy acts as the Data Fiduciary for your account data. Independent Sellers and Delivery Partners act as Data Processors granted temporary, restricted access to your phone and location solely for the active delivery duration.',
+          content: 'Enything acts as the Data Fiduciary for your account data. Independent Sellers and Delivery Partners act as Data Processors granted temporary, restricted access to your phone and location solely for the active delivery duration.',
         ),
         LegalSection(
           heading: '4. Your Rights under DPDPA, 2023',
-          content: 'As a Data Principal, you have the right to Access (request a summary), Correction (update via Profile), Erasure (delete account), and Grievance Redressal (contact our DPO at grievances@zappy.in).',
+          content: 'As a Data Principal, you have the right to Access (request a summary), Correction (update via Profile), Erasure (delete account), and Grievance Redressal (contact our DPO at grievances@enything.in).',
         ),
         LegalSection(
           heading: '5. Security Measures',

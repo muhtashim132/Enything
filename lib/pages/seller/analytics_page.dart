@@ -153,7 +153,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                     children: [
                       Expanded(
                         child: _statCard(
-                          'Zappy Comm.',
+                          'Platform Comm.',
                           '₹${_totalCommission.toStringAsFixed(0)}',
                           Icons.pie_chart_outline,
                           AppColors.danger,

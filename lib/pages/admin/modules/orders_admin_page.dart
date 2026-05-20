@@ -195,18 +195,18 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
         padding: const EdgeInsets.all(16),
         decoration: AdminDecorations.glassCard(),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const SkeletonBox(width: 44, height: 44, radius: 14),
-            const SizedBox(width: 12),
+          const Row(children: [
+            SkeletonBox(width: 44, height: 44, radius: 14),
+            SizedBox(width: 12),
             Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  const SkeletonBox(width: 130, height: 14),
-                  const SizedBox(height: 6),
-                  const SkeletonBox(width: 90, height: 11),
+                  SkeletonBox(width: 130, height: 14),
+                  SizedBox(height: 6),
+                  SkeletonBox(width: 90, height: 11),
                 ])),
-            const SkeletonBox(width: 60, height: 22, radius: 20),
+            SkeletonBox(width: 60, height: 22, radius: 20),
           ]),
           const SizedBox(height: 14),
           Row(children: List.generate(
@@ -354,7 +354,7 @@ class _OrderCardState extends State<_OrderCard> {
         color: AdminColors.surface.withOpacity(0.5),
         borderRadius:
             const BorderRadius.vertical(bottom: Radius.circular(20)),
-        border: Border(top: BorderSide(color: AdminColors.cardBorder)),
+        border: const Border(top: BorderSide(color: AdminColors.cardBorder)),
       ),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       child: Column(

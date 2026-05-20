@@ -398,9 +398,26 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       child: Column(
         children: [
           const SizedBox(height: 20),
-          const Text('🎉', style: TextStyle(fontSize: 52)),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF4C542).withOpacity(0.20),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                )
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.asset('assets/images/Enything.png', fit: BoxFit.cover),
+            ),
+          ),
           const SizedBox(height: 20),
-          Text("Choose how you want\nto use Zappy",
+          Text("Choose how you want\nto use Enything",
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                   color: Colors.white,
@@ -449,6 +466,27 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
+          Center(
+            child: Container(
+              width: 72,
+              height: 72,
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF4C542).withOpacity(0.20),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  )
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset('assets/images/Enything.png', fit: BoxFit.cover),
+              ),
+            ),
+          ),
           Text(_roleTitle,
               style: GoogleFonts.outfit(
                   color: Colors.white,

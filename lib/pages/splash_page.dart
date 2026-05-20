@@ -147,17 +147,17 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                 right: -size.width * 0.25,
                 child: _aurora(size.width * 0.95, const Color(0xFF6230C8), 0.15 + (1 - _bgAnim.value) * 0.12),
               ),
-              // Gold center glow
+              // Blue center glow behind logo
               Opacity(
-                opacity: (_logoFade.value * 0.18).clamp(0.0, 1.0),
-                child: _aurora(size.shortestSide * 0.65, const Color(0xFFF4C542), 1.0),
+                opacity: (_logoFade.value * 0.20).clamp(0.0, 1.0),
+                child: _aurora(size.shortestSide * 0.70, const Color(0xFF5B8BFF), 1.0),
               ),
 
               // ── Expanding rings ──────────────────────────────────────────
               ...[
-                (_ring1, size.shortestSide * 0.42, const Color(0xFFF4C542), 2.0),
+                (_ring1, size.shortestSide * 0.42, const Color(0xFF5B8BFF), 2.0),
                 (_ring2, size.shortestSide * 0.30, const Color(0xFF4C6EF5), 1.4),
-                (_ring3, size.shortestSide * 0.22, const Color(0xFFF4C542), 0.9),
+                (_ring3, size.shortestSide * 0.22, const Color(0xFF5B8BFF), 0.9),
               ].map((r) => _RingWidget(progress: r.$1.value, maxRadius: r.$2, color: r.$3, strokeW: r.$4)),
 
               // ── Star field ───────────────────────────────────────────────
@@ -175,8 +175,8 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                       scale: _logoScale,
                       child: ScaleTransition(
                         scale: _pulseAnim,
-                        child: _ZappyLogo(
-                          logoSize: size.shortestSide * 0.27,
+                        child: _EnythingLogo(
+                          logoSize: size.shortestSide * 0.30,
                           shimmer: _shimmerAnim,
                         ),
                       ),
@@ -194,18 +194,18 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // ZAPPY wordmark
+                          // ENYTHING wordmark
                           ShaderMask(
                             shaderCallback: (b) => const LinearGradient(
-                              colors: [Color(0xFFFFE566), Color(0xFFF4C542), Color(0xFFE89A00)],
+                              colors: [Color(0xFF8BAAFF), Color(0xFF5B8BFF), Color(0xFF4C6EF5)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ).createShader(b),
-                            child: Text('ZAPPY',
+                            child: Text('ENYTHING',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
-                                color: Colors.white, fontSize: 60,
-                                fontWeight: FontWeight.w900, letterSpacing: 12, height: 1.0,
+                                color: Colors.white, fontSize: 52,
+                                fontWeight: FontWeight.w900, letterSpacing: 8, height: 1.0,
                               ),
                             ),
                           ),
@@ -215,7 +215,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                           FadeTransition(
                             opacity: _taglineFade,
                             child: Text(
-                              'Delivered at the speed of life',
+                              'Everything. Everywhere. Instantly.',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
                                 color: Colors.white.withOpacity(0.55),
@@ -247,7 +247,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                           height: i == 1 ? 9 : 5.5,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Color.lerp(Colors.white.withOpacity(0.15), const Color(0xFFF4C542), wave),
+                            color: Color.lerp(Colors.white.withOpacity(0.15), const Color(0xFF5B8BFF), wave),
                           ),
                         );
                       }),
@@ -274,11 +274,11 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   );
 }
 
-// ─── Zappy Logo Widget ────────────────────────────────────────────────────────
-class _ZappyLogo extends StatelessWidget {
+// ─── Enything Logo Widget ─────────────────────────────────────────────────────
+class _EnythingLogo extends StatelessWidget {
   final double logoSize;
   final Animation<double> shimmer;
-  const _ZappyLogo({required this.logoSize, required this.shimmer});
+  const _EnythingLogo({required this.logoSize, required this.shimmer});
 
   @override
   Widget build(BuildContext context) {
@@ -288,31 +288,63 @@ class _ZappyLogo extends StatelessWidget {
       children: [
         // Outer glow
         Container(
-          width: logoSize + 32, height: logoSize + 32,
+          width: logoSize + 48, height: logoSize + 48,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
-              BoxShadow(color: const Color(0xFFF4C542).withOpacity(0.40), blurRadius: 52, spreadRadius: 10),
-              BoxShadow(color: const Color(0xFF3B5BDB).withOpacity(0.25), blurRadius: 30, spreadRadius: 4),
+              BoxShadow(color: const Color(0xFF5B8BFF).withOpacity(0.35), blurRadius: 60, spreadRadius: 12),
+              BoxShadow(color: const Color(0xFF4C6EF5).withOpacity(0.20), blurRadius: 30, spreadRadius: 4),
             ],
           ),
         ),
-        // Main container
+        // Inner glow ring
+        Container(
+          width: logoSize + 16, height: logoSize + 16,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF8BAAFF).withOpacity(0.22), blurRadius: 20, spreadRadius: 2),
+            ],
+          ),
+        ),
+        // Main logo container with frosted-glass border
         Container(
           width: logoSize, height: logoSize,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF162AC4), Color(0xFF0A178C), Color(0xFF06104E)],
+              colors: [Color(0xFF1A2A6C), Color(0xFF0D1B4A), Color(0xFF07103A)],
               begin: Alignment.topLeft, end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(r),
-            border: Border.all(color: const Color(0xFFF4C542).withOpacity(0.30), width: 1.5),
+            border: Border.all(
+              color: const Color(0xFF5B8BFF).withOpacity(0.40),
+              width: 2.0,
+            ),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(r),
             child: Stack(
               alignment: Alignment.center,
               children: [
+                // Actual Enything.png logo image
+                Padding(
+                  padding: EdgeInsets.all(logoSize * 0.10),
+                  child: Image.asset(
+                    'logo/Enything.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(
+                        'E',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF5B8BFF),
+                          fontSize: logoSize * 0.45,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Shimmer sweep overlay
                 AnimatedBuilder(
                   animation: shimmer,
                   builder: (_, __) => Container(
@@ -324,14 +356,10 @@ class _ZappyLogo extends StatelessWidget {
                           shimmer.value.clamp(0.0, 1.0),
                           (shimmer.value + 0.45).clamp(0.0, 1.0),
                         ],
-                        colors: [Colors.transparent, Colors.white.withOpacity(0.07), Colors.transparent],
+                        colors: [Colors.transparent, Colors.white.withOpacity(0.09), Colors.transparent],
                       ),
                     ),
                   ),
-                ),
-                CustomPaint(
-                  size: Size(logoSize * 0.60, logoSize * 0.60),
-                  painter: _ZappyLogoPainter(),
                 ),
               ],
             ),
@@ -343,77 +371,6 @@ class _ZappyLogo extends StatelessWidget {
 }
 
 // ─── Custom Painters ──────────────────────────────────────────────────────────
-class _ZappyLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    final goldShader = const LinearGradient(
-      colors: [Color(0xFFFFE566), Color(0xFFF4C542), Color(0xFFCC8800)],
-      begin: Alignment.topLeft, end: Alignment.bottomRight,
-    ).createShader(Rect.fromLTWH(0, 0, w, h));
-
-    // ── Bold Z body (filled) ──────────────────────────────────────────────
-    final t = h * 0.12;   // bar thickness
-    final lm = w * 0.06;
-    final rm = w * 0.06;
-
-    final zPath = Path()
-      ..moveTo(lm, 0)
-      ..lineTo(w - rm, 0)
-      ..lineTo(w - rm, t)
-      ..lineTo(lm + t * 1.05, h - t)
-      ..lineTo(w - rm, h - t)
-      ..lineTo(w - rm, h)
-      ..lineTo(lm, h)
-      ..lineTo(lm, h - t)
-      ..lineTo(w - rm - t * 1.05, t)
-      ..lineTo(lm, t)
-      ..close();
-
-    canvas.drawPath(zPath, Paint()..shader = goldShader..style = PaintingStyle.fill);
-
-    // Subtle white outline
-    canvas.drawPath(
-      zPath,
-      Paint()
-        ..color = Colors.white.withOpacity(0.10)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = w * 0.022,
-    );
-
-    // ── Lightning bolt cutout / overlay centered on the diagonal ─────────
-    // Renders as a crisp white bolt punched on the Z
-    final cx = w * 0.50;
-    final cy = h * 0.50;
-    final bh = h * 0.46;
-    final bw = w * 0.22;
-
-    final boltPath = Path()
-      ..moveTo(cx + bw, cy - bh * 0.5)
-      ..lineTo(cx - bw * 0.3, cy + bh * 0.04)
-      ..lineTo(cx + bw * 0.18, cy + bh * 0.04)
-      ..lineTo(cx - bw, cy + bh * 0.5)
-      ..lineTo(cx + bw * 0.3, cy - bh * 0.04)
-      ..lineTo(cx - bw * 0.18, cy - bh * 0.04)
-      ..close();
-
-    // Dark backing (so bolt reads over the Z)
-    canvas.drawPath(boltPath, Paint()..color = const Color(0xFF0A178C)..style = PaintingStyle.fill);
-    // White bolt
-    canvas.drawPath(boltPath,
-      Paint()
-        ..color = Colors.white.withOpacity(0.95)
-        ..style = PaintingStyle.fill
-        ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 0.5),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_ZappyLogoPainter _) => false;
-}
-
 class _RingWidget extends StatelessWidget {
   final double progress, maxRadius, strokeW;
   final Color color;

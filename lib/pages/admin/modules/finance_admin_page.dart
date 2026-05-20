@@ -197,15 +197,15 @@ class _TransactionsTab extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(14),
           decoration: AdminDecorations.glassCard(),
-          child: Row(children: [
-            const SkeletonBox(width: 38, height: 38, radius: 12),
-            const SizedBox(width: 12),
+          child: const Row(children: [
+            SkeletonBox(width: 38, height: 38, radius: 12),
+            SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SkeletonBox(width: 100, height: 13),
-              const SizedBox(height: 6),
-              const SkeletonBox(width: 70, height: 11),
+              SkeletonBox(width: 100, height: 13),
+              SizedBox(height: 6),
+              SkeletonBox(width: 70, height: 11),
             ])),
-            const SkeletonBox(width: 55, height: 20, radius: 10),
+            SkeletonBox(width: 55, height: 20, radius: 10),
           ]),
         ).animate().shimmer(duration: 1500.ms),
       );

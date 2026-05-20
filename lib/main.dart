@@ -44,12 +44,12 @@ void main() async {
   final cartProvider = CartProvider();
   await cartProvider.loadCart();
 
-  runApp(ZappyApp(cartProvider: cartProvider));
+  runApp(EnythingApp(cartProvider: cartProvider));
 }
 
-class ZappyApp extends StatelessWidget {
+class EnythingApp extends StatelessWidget {
   final CartProvider cartProvider;
-  const ZappyApp({super.key, required this.cartProvider});
+  const EnythingApp({super.key, required this.cartProvider});
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +68,7 @@ class ZappyApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
           return MaterialApp(
-            title: 'Zappy',
+            title: 'Enything',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,

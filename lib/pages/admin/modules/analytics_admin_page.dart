@@ -445,7 +445,7 @@ class _AiInsightBanner extends StatelessWidget {
             ),
           ]),
         ),
-        AdminBadge(label: 'LIVE', color: AdminColors.success),
+        const AdminBadge(label: 'LIVE', color: AdminColors.success),
       ]),
     );
   }
@@ -502,15 +502,15 @@ class _StatusSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: List.generate(3, (i) => Padding(
-        padding: const EdgeInsets.only(bottom: 14),
+      children: List.generate(3, (i) => const Padding(
+        padding: EdgeInsets.only(bottom: 14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             SkeletonBox(width: 80, height: 20, radius: 20),
-            const Spacer(),
+            Spacer(),
             SkeletonBox(width: 50, height: 13),
           ]),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           SkeletonBox(width: double.infinity, height: 6, radius: 4),
         ]),
       )).toList(),

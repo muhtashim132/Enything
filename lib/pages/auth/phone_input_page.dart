@@ -464,22 +464,23 @@ class _MiniLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            colors: [Color(0xFF1A35C8), Color(0xFF0A178C)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(size * 0.28),
-        border: Border.all(
-            color: const Color(0xFFF4C542).withOpacity(0.35), width: 1.5),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFFF4C542).withOpacity(0.30),
+              color: const Color(0xFFF4C542).withOpacity(0.20),
               blurRadius: 20,
               spreadRadius: 2)
         ],
       ),
-      child: Center(
-          child: Text('⚡', style: TextStyle(fontSize: size * 0.45))),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.28),
+        child: Image.asset(
+          'assets/images/Enything.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+        ),
+      ),
     );
   }
 }

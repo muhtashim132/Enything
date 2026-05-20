@@ -11,7 +11,7 @@ import '../../providers/auth_provider.dart';
 // Produces the 4 documents required by your CA every month by the 20th:
 //   Doc 1 — Sales Register       → GSTR-1 & GSTR-3B filing
 //   Doc 2 — Commission Invoice   → Input Tax Credit (ITC) claim
-//   Doc 3 — Section 9(5) Statement → Proves Zappy paid food GST
+//   Doc 3 — Section 9(5) Statement → Proves Enything paid food GST
 //   Doc 4 — TCS Statement        → GSTR-8 credit in GSTR-2B
 // ============================================================================
 
@@ -31,7 +31,7 @@ class _CaReportPageState extends State<CaReportPage> {
   // Aggregated values from DB
   double _totalBaseSales = 0;
   double _nonFoodGst = 0;      // Seller remits (GSTR-1 liability)
-  double _s9_5Gst = 0;         // Zappy remits (exempt for seller)
+  double _s9_5Gst = 0;         // Enything remits (exempt for seller)
   double _deliveryGst = 0;
   double _platformGst = 0;
   double _tcsDeducted = 0;     // GSTR-8 TCS credit
@@ -156,7 +156,7 @@ class _CaReportPageState extends State<CaReportPage> {
   String _buildFullReport() {
     final commGst = _commission * 0.18;
     return '''
-ZAPPY — CA MONTHLY TAX REPORT
+ENYTHING — CA MONTHLY TAX REPORT
 Period : $_monthLabel
 Shop   : $_shopName
 Orders : $_deliveredOrders delivered
@@ -167,13 +167,13 @@ DOC 1 — SALES REGISTER (for GSTR-1 / 3B)
 ════════════════════════════════════════
 Taxable Base Sales (excl. GST) : ₹${_f(_totalBaseSales)}
 GST Seller Must Remit (non-food): ₹${_f(_nonFoodGst)}
-GST Paid by Zappy — S.9(5) Food : ₹${_f(_s9_5Gst)}  ← YOU OWE NOTHING ON THIS
+GST Paid by Enything — S.9(5) Food : ₹${_f(_s9_5Gst)}  ← YOU OWE NOTHING ON THIS
 Total GST in Orders             : ₹${_f(_nonFoodGst + _s9_5Gst)}
 
 ════════════════════════════════════════
 DOC 2 — COMMISSION INVOICE (for ITC)
 ════════════════════════════════════════
-Zappy Commission (5% of base)   : ₹${_f(_commission)}
+Enything Commission (5% of base)   : ₹${_f(_commission)}
 GST on Commission (18%)         : ₹${_f(commGst)}
 Total Commission + GST          : ₹${_f(_commission + commGst)}
 → Claim ₹${_f(commGst)} as Input Tax Credit in GSTR-3B
@@ -181,7 +181,7 @@ Total Commission + GST          : ₹${_f(_commission + commGst)}
 ════════════════════════════════════════
 DOC 3 — SECTION 9(5) STATEMENT
 ════════════════════════════════════════
-Food/Restaurant GST paid by Zappy: ₹${_f(_s9_5Gst)}
+Food/Restaurant GST paid by Enything: ₹${_f(_s9_5Gst)}
 Legal basis: CGST Notification 17/2021-CT(R) §9(5)
 You are NOT the deemed supplier for these orders.
 Do NOT include this in your GSTR-1.
@@ -189,19 +189,19 @@ Do NOT include this in your GSTR-1.
 ════════════════════════════════════════
 DOC 4 — TCS STATEMENT (GSTR-8 / GSTR-2B)
 ════════════════════════════════════════
-TCS Deducted by Zappy (1%)      : ₹${_f(_tcsDeducted)}
+TCS Deducted by Enything (1%)      : ₹${_f(_tcsDeducted)}
 Legal basis: CGST Act §52
-→ Claim this as credit in your GSTR-2B after Zappy files GSTR-8 by 10th.
+→ Claim this as credit in your GSTR-2B after Enything files GSTR-8 by 10th.
 
 ════════════════════════════════════════
 PAYOUT RECONCILIATION
 ════════════════════════════════════════
 Gross Collected from Customers  : ₹${_f(_grandCollected)}
 Seller Net Payout (incl. GST)   : ₹${_f(_sellerPayout)}
-Zappy Commission                : ₹${_f(_commission)}
+Enything Commission                : ₹${_f(_commission)}
 TCS Withheld                    : ₹${_f(_tcsDeducted)}
-Delivery GST (Zappy remits)     : ₹${_f(_deliveryGst)}
-Platform GST (Zappy remits)     : ₹${_f(_platformGst)}
+Delivery GST (Enything remits)     : ₹${_f(_deliveryGst)}
+Platform GST (Enything remits)     : ₹${_f(_platformGst)}
 Gateway Fees                    : ₹${_f(_gatewayFees)}
 ''';
   }
@@ -263,7 +263,7 @@ Gateway Fees                    : ₹${_f(_gatewayFees)}
                     _row('Taxable Base Sales (excl. GST)', _totalBaseSales),
                     _row('GST You Must Remit (non-food)', _nonFoodGst,
                         color: const Color(0xFFFF6B6B)),
-                    _row('GST Paid by Zappy — S.9(5) Food', _s9_5Gst,
+                    _row('GST Paid by Enything — S.9(5) Food', _s9_5Gst,
                         color: const Color(0xFF51CF66), tag: 'NOT YOUR LIABILITY'),
                     _divider(),
                     _row('Total Orders (Delivered)', _deliveredOrders.toDouble(),
@@ -272,7 +272,7 @@ Gateway Fees                    : ₹${_f(_gatewayFees)}
                   copyText: '''Sales Register — $_monthLabel
 Taxable Base Sales : ₹${_f(_totalBaseSales)}
 GST Seller Remits  : ₹${_f(_nonFoodGst)}
-GST Zappy S.9(5)   : ₹${_f(_s9_5Gst)}  (not your liability)
+GST Enything S.9(5)   : ₹${_f(_s9_5Gst)}  (not your liability)
 Orders Delivered   : $_deliveredOrders''',
                 ),
                 // ── Document 2 — Commission Invoice ──────────────────────
@@ -282,14 +282,14 @@ Orders Delivered   : $_deliveredOrders''',
                   subtitle: 'Claim GST on commission as ITC in GSTR-3B',
                   accentColor: const Color(0xFFCC5DE8),
                   rows: [
-                    _row('Zappy Commission (5%)', _commission),
+                    _row('Enything Commission (5%)', _commission),
                     _row('GST on Commission (18%)', _commission * 0.18,
                         color: const Color(0xFF51CF66), tag: 'CLAIM AS ITC'),
                     _divider(),
                     _row('Total Invoice Amount', _commission * 1.18, isBold: true),
                   ],
                   copyText: '''Commission Invoice — $_monthLabel
-Zappy Commission   : ₹${_f(_commission)}
+Enything Commission   : ₹${_f(_commission)}
 GST on Commission  : ₹${_f(_commission * 0.18)}  ← claim as ITC
 Total              : ₹${_f(_commission * 1.18)}''',
                 ),
@@ -297,46 +297,46 @@ Total              : ₹${_f(_commission * 1.18)}''',
                 _docCard(
                   docNumber: '03',
                   title: 'Section 9(5) Statement',
-                  subtitle: 'Proves Zappy paid food GST — exclude from your GSTR-1',
+                  subtitle: 'Proves Enything paid food GST — exclude from your GSTR-1',
                   accentColor: const Color(0xFF51CF66),
                   rows: [
-                    _row('Food/Restaurant GST — Zappy Remitted', _s9_5Gst,
+                    _row('Food/Restaurant GST — Enything Remitted', _s9_5Gst,
                         color: const Color(0xFF51CF66)),
-                    _row('Delivery GST — Zappy Remitted', _deliveryGst,
+                    _row('Delivery GST — Enything Remitted', _deliveryGst,
                         color: const Color(0xFF51CF66)),
-                    _row('Platform GST — Zappy Remitted', _platformGst,
+                    _row('Platform GST — Enything Remitted', _platformGst,
                         color: const Color(0xFF51CF66)),
                     _divider(),
-                    _row('Total GST Zappy Pays to Govt',
+                    _row('Total GST Enything Pays to Govt',
                         _s9_5Gst + _deliveryGst + _platformGst,
                         isBold: true, color: const Color(0xFF51CF66)),
                   ],
                   copyText: '''S.9(5) Statement — $_monthLabel
 Legal basis: CGST Notification 17/2021-CT(R)
-Food GST Zappy remits  : ₹${_f(_s9_5Gst)}
+Food GST Enything remits  : ₹${_f(_s9_5Gst)}
 Delivery GST           : ₹${_f(_deliveryGst)}
 Platform GST           : ₹${_f(_platformGst)}
-Total Zappy Pays       : ₹${_f(_s9_5Gst + _deliveryGst + _platformGst)}
+Total Enything Pays       : ₹${_f(_s9_5Gst + _deliveryGst + _platformGst)}
 Do NOT include food GST in your GSTR-1.''',
                 ),
                 // ── Document 4 — TCS Statement ────────────────────────────
                 _docCard(
                   docNumber: '04',
                   title: 'TCS Statement',
-                  subtitle: 'Claim this credit in GSTR-2B after Zappy files GSTR-8',
+                  subtitle: 'Claim this credit in GSTR-2B after Enything files GSTR-8',
                   accentColor: const Color(0xFFF4C542),
                   rows: [
-                    _row('TCS Withheld by Zappy (1%)', _tcsDeducted,
+                    _row('TCS Withheld by Enything (1%)', _tcsDeducted,
                         color: const Color(0xFFF4C542), tag: 'GSTR-2B CREDIT'),
                     _row('Net Taxable Supply Basis', _totalBaseSales),
                     _divider(),
-                    _infoRow('Zappy files GSTR-8 by 10th of next month.\nClaim credit in your GSTR-2B after that.'),
+                    _infoRow('Enything files GSTR-8 by 10th of next month.\nClaim credit in your GSTR-2B after that.'),
                   ],
                   copyText: '''TCS Statement — $_monthLabel
 Legal basis: CGST Act §52
 TCS Deducted (1%)  : ₹${_f(_tcsDeducted)}
 Taxable Supply     : ₹${_f(_totalBaseSales)}
-→ Claim ₹${_f(_tcsDeducted)} in GSTR-2B after Zappy files GSTR-8 by 10th.''',
+→ Claim ₹${_f(_tcsDeducted)} in GSTR-2B after Enything files GSTR-8 by 10th.''',
                 ),
                 // ── Payout Reconciliation ─────────────────────────────────
                 _docCard(
@@ -348,14 +348,14 @@ Taxable Supply     : ₹${_f(_totalBaseSales)}
                     _row('Gross Collected from Customers', _grandCollected),
                     _row('Seller Net Payout (incl. GST)', _sellerPayout,
                         color: const Color(0xFF51CF66), isBold: true),
-                    _row('Zappy Commission', _commission),
+                    _row('Enything Commission', _commission),
                     _row('TCS Withheld', _tcsDeducted),
                     _row('Gateway Fees (Razorpay)', _gatewayFees),
                   ],
                   copyText: '''Payout Reconciliation — $_monthLabel
 Gross Collected    : ₹${_f(_grandCollected)}
 Seller Payout      : ₹${_f(_sellerPayout)}
-Zappy Commission   : ₹${_f(_commission)}
+Enything Commission   : ₹${_f(_commission)}
 TCS Withheld       : ₹${_f(_tcsDeducted)}
 Gateway Fees       : ₹${_f(_gatewayFees)}''',
                 ),
@@ -377,7 +377,7 @@ Gateway Fees       : ₹${_f(_gatewayFees)}''',
                 const SizedBox(height: 12),
                 Text(
                   '📌  Share this text report with your CA on WhatsApp or email.\n'
-                  '    Zappy files GSTR-8 by the 10th — your CA should check GSTR-2B after that.',
+                  '    Enything files GSTR-8 by the 10th — your CA should check GSTR-2B after that.',
                   style: GoogleFonts.outfit(
                       color: Colors.white38, fontSize: 11, height: 1.6),
                   textAlign: TextAlign.center,
@@ -444,7 +444,7 @@ Gateway Fees       : ₹${_f(_gatewayFees)}''',
 
                       String gstLabel = '';
                       if (s9_5Gst > 0 && nonFoodGst == 0) {
-                        gstLabel = '(Food - Zappy pays)';
+                        gstLabel = '(Food - Enything pays)';
                       } else if (nonFoodGst > 0 && s9_5Gst == 0) {
                         gstLabel = '(Retail - You pay)';
                       } else if (s9_5Gst > 0 && nonFoodGst > 0) {

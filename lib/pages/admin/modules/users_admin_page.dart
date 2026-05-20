@@ -167,7 +167,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                   style: AdminStyles.body(size: 13, color: AdminColors.textSecondary)),
               const SizedBox(height: 16),
               DropdownButtonFormField<RoleModel>(
-                value: selectedRole,
+                initialValue: selectedRole,
                 dropdownColor: AdminColors.surface,
                 style: AdminStyles.body(),
                 decoration: InputDecoration(
@@ -207,19 +207,21 @@ class _CustomersTabState extends State<_CustomersTab> {
       try {
         await _db.from('admin_users').insert({
           'id': user['id'],
-          'email': user['email'] ?? 'no-email@zappy.app',
           'full_name': user['full_name'] ?? 'Admin',
-          'phone': user['phone'],
           'role_id': selectedRole!.id,
           'admin_level': 'admin',
           'admin_password': passCtrl.text.trim(),
           'is_active': true,
         });
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Promoted to Admin!'), backgroundColor: AdminColors.success));
+        }
       } catch (_) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Already an admin or error occurred.'), backgroundColor: AdminColors.danger));
+        }
       }
     }
   }
@@ -377,7 +379,7 @@ class _SellersTabState extends State<_SellersTab> {
                                 ),
                                 Switch(
                                   value: isActive,
-                                  activeColor: AdminColors.success,
+                                  activeThumbColor: AdminColors.success,
                                   onChanged: (_) => _toggle(s['id'].toString(), isActive),
                                 ),
                               ],
@@ -506,7 +508,7 @@ class _RidersTabState extends State<_RidersTab> {
                                 ),
                                 Switch(
                                   value: isActive,
-                                  activeColor: AdminColors.success,
+                                  activeThumbColor: AdminColors.success,
                                   onChanged: (_) => _toggle(r['id'].toString(), isActive),
                                 ),
                               ],
@@ -616,13 +618,13 @@ Widget _skelList() => ListView.builder(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(14),
         decoration: AdminDecorations.glassCard(),
-        child: Row(children: [
-          const SkeletonBox(width: 44, height: 44, radius: 22),
-          const SizedBox(width: 12),
+        child: const Row(children: [
+          SkeletonBox(width: 44, height: 44, radius: 22),
+          SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const SkeletonBox(width: 120, height: 13),
-            const SizedBox(height: 6),
-            const SkeletonBox(width: 80, height: 11),
+            SkeletonBox(width: 120, height: 13),
+            SizedBox(height: 6),
+            SkeletonBox(width: 80, height: 11),
           ])),
         ]),
       ).animate().shimmer(duration: 1500.ms),

@@ -153,7 +153,7 @@ class _ComplaintsTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          AdminBadge(label: 'Table: support_tickets', color: AdminColors.info),
+          const AdminBadge(label: 'Table: support_tickets', color: AdminColors.info),
         ],
       );
     }
@@ -261,7 +261,7 @@ class _ComplaintCard extends StatelessWidget {
                 borderRadius:
                     const BorderRadius.vertical(bottom: Radius.circular(20)),
                 border:
-                    Border(top: BorderSide(color: AdminColors.cardBorder)),
+                    const Border(top: BorderSide(color: AdminColors.cardBorder)),
               ),
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -483,18 +483,18 @@ Widget _skelList() => ListView.builder(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: AdminDecorations.glassCard(),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const SkeletonBox(width: 60, height: 20, radius: 20),
-            const SizedBox(width: 8),
-            const SkeletonBox(width: 60, height: 20, radius: 20),
-            const Spacer(),
-            const SkeletonBox(width: 60, height: 11),
+            SkeletonBox(width: 60, height: 20, radius: 20),
+            SizedBox(width: 8),
+            SkeletonBox(width: 60, height: 20, radius: 20),
+            Spacer(),
+            SkeletonBox(width: 60, height: 11),
           ]),
-          const SizedBox(height: 10),
-          const SkeletonBox(width: double.infinity, height: 14),
-          const SizedBox(height: 6),
-          const SkeletonBox(width: 200, height: 11),
+          SizedBox(height: 10),
+          SkeletonBox(width: double.infinity, height: 14),
+          SizedBox(height: 6),
+          SkeletonBox(width: 200, height: 11),
         ]),
       ).animate().shimmer(duration: 1500.ms),
     );

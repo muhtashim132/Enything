@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -37,10 +36,13 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
   Future<void> _loadData() async {
     try {
       // Orders count + revenue
-      final orders = await _db.from('orders').select('grand_total_collected, created_at');
+      final orders =
+          await _db.from('orders').select('grand_total_collected, created_at');
       _totalOrders = orders.length;
       _totalRevenue = orders.fold<double>(
-          0, (sum, o) => sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
+          0,
+          (sum, o) =>
+              sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
 
       // Platform commission (5% of revenue estimate)
       _commission = _totalRevenue * 0.05;
@@ -58,10 +60,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
 
       // Pending withdrawals — fallback to 0 if table missing
       try {
-        final w = await _db
-            .from('withdrawals')
-            .select('id')
-            .eq('status', 'pending');
+        final w =
+            await _db.from('withdrawals').select('id').eq('status', 'pending');
         _pendingWithdrawals = w.length;
       } catch (_) {
         _pendingWithdrawals = 0;
@@ -87,8 +87,10 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
               d.year == day.year &&
               d.month == day.month &&
               d.day == day.day;
-        }).fold<double>(0, (sum, o) =>
-            sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
+        }).fold<double>(
+            0,
+            (sum, o) =>
+                sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
         spots.add(FlSpot((6 - i).toDouble(), dayRevenue));
       }
       _revenueSpots = spots;
@@ -102,7 +104,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat.compact(locale: 'en_IN');
-    final rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final rupee =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -114,7 +117,6 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-
           // ── KPI Grid ─────────────────────────────────────────────
           GridView.count(
             crossAxisCount: 2,
@@ -131,7 +133,10 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.currency_rupee_rounded,
                 gradient: AdminGradients.primary,
                 loading: _loading,
-              ).animate().fadeIn(delay: 50.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 50.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Total Orders',
                 value: fmt.format(_totalOrders),
@@ -139,14 +144,20 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.shopping_bag_rounded,
                 gradient: AdminGradients.info,
                 loading: _loading,
-              ).animate().fadeIn(delay: 100.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 100.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Active Users',
                 value: fmt.format(_totalUsers),
                 icon: Icons.people_rounded,
                 gradient: AdminGradients.success,
                 loading: _loading,
-              ).animate().fadeIn(delay: 150.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 150.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Pending KYC',
                 value: _pendingKyc.toString(),
@@ -154,7 +165,10 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.pending_actions_rounded,
                 gradient: AdminGradients.warning,
                 loading: _loading,
-              ).animate().fadeIn(delay: 200.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 200.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Withdrawals',
                 value: _pendingWithdrawals.toString(),
@@ -162,7 +176,10 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.account_balance_wallet_rounded,
                 gradient: AdminGradients.danger,
                 loading: _loading,
-              ).animate().fadeIn(delay: 250.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 250.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Commission',
                 value: rupee.format(_commission),
@@ -170,7 +187,10 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.bar_chart_rounded,
                 gradient: AdminGradients.primary,
                 loading: _loading,
-              ).animate().fadeIn(delay: 300.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 300.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
             ],
           ),
 
@@ -208,10 +228,11 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
               final i = e.key;
               final o = e.value;
               final status = (o['status'] ?? 'placed') as String;
-              final amount = (o['grand_total_collected'] as num?)?.toDouble() ?? 0;
+              final amount =
+                  (o['grand_total_collected'] as num?)?.toDouble() ?? 0;
               final time = o['created_at'] != null
-                  ? DateFormat('dd MMM, hh:mm a')
-                      .format(DateTime.parse(o['created_at'].toString()).toLocal())
+                  ? DateFormat('dd MMM, hh:mm a').format(
+                      DateTime.parse(o['created_at'].toString()).toLocal())
                   : '';
 
               final (color, label) = switch (status) {
@@ -240,7 +261,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Order #${o['id'].toString().substring(0, 8).toUpperCase()}',
+                        Text(
+                            'Order #${o['id'].toString().substring(0, 8).toUpperCase()}',
                             style: AdminStyles.body(size: 13)),
                         Text(time, style: AdminStyles.caption()),
                       ],
@@ -250,13 +272,17 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text('₹${amount.toStringAsFixed(0)}',
-                          style: AdminStyles.body(size: 13, color: AdminColors.success)),
+                          style: AdminStyles.body(
+                              size: 13, color: AdminColors.success)),
                       const SizedBox(height: 4),
                       AdminBadge(label: label, color: color),
                     ],
                   ),
                 ]),
-              ).animate().fadeIn(delay: Duration(milliseconds: 400 + i * 50)).slideY(begin: 0.1);
+              )
+                  .animate()
+                  .fadeIn(delay: Duration(milliseconds: 400 + i * 50))
+                  .slideY(begin: 0.1);
             }),
         ],
       ),
@@ -270,19 +296,21 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
         show: true,
         drawVerticalLine: false,
         horizontalInterval: maxY > 0 ? maxY / 4 : 100,
-        getDrawingHorizontalLine: (_) => const FlLine(
-            color: AdminColors.cardBorder, strokeWidth: 1),
+        getDrawingHorizontalLine: (_) =>
+            const FlLine(color: AdminColors.cardBorder, strokeWidth: 1),
       ),
       titlesData: FlTitlesData(
         leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
             interval: 1,
             getTitlesWidget: (v, _) {
-              final day = DateTime.now().subtract(Duration(days: 6 - v.toInt()));
+              final day =
+                  DateTime.now().subtract(Duration(days: 6 - v.toInt()));
               return Text(DateFormat('E').format(day),
                   style: AdminStyles.label());
             },
@@ -328,19 +356,22 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(14),
         decoration: AdminDecorations.glassCard(),
-        child: Row(children: [
-          const SkeletonBox(width: 38, height: 38, radius: 12),
-          const SizedBox(width: 12),
+        child: const Row(children: [
+          SkeletonBox(width: 38, height: 38, radius: 12),
+          SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const SkeletonBox(width: 120, height: 13),
-              const SizedBox(height: 6),
-              const SkeletonBox(width: 80, height: 11),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SkeletonBox(width: 120, height: 13),
+              SizedBox(height: 6),
+              SkeletonBox(width: 80, height: 11),
             ]),
           ),
-          const SkeletonBox(width: 55, height: 24, radius: 20),
+          SkeletonBox(width: 55, height: 24, radius: 20),
         ]),
-      ).animate().shimmer(duration: 1500.ms, delay: Duration(milliseconds: i * 100)),
+      )
+          .animate()
+          .shimmer(duration: 1500.ms, delay: Duration(milliseconds: i * 100)),
     );
   }
 }

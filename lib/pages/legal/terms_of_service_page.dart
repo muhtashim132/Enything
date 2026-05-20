@@ -12,12 +12,12 @@ class TermsOfServicePage extends StatelessWidget {
         LegalSection(
           heading: '1. Acceptance of Terms',
           content:
-              'By accessing or using the Zappy application, you agree to be bound by these Terms of Service. If you do not agree to all terms, please do not use the application.',
+              'By accessing or using the Enything application, you agree to be bound by these Terms of Service. If you do not agree to all terms, please do not use the application.',
         ),
         LegalSection(
           heading: '2. Platform Role & E-Commerce Compliance',
           content:
-              'Under the Consumer Protection (E-Commerce) Rules, 2020, Zappy acts as a Marketplace E-Commerce Entity connecting Customers, Sellers, and Delivery Partners. Zappy does not own the inventory and is not responsible for the quality, safety, or legality of items.',
+              'Under the Consumer Protection (E-Commerce) Rules, 2020, Enything acts as a Marketplace E-Commerce Entity connecting Customers, Sellers, and Delivery Partners. Enything does not own the inventory and is not responsible for the quality, safety, or legality of items.',
         ),
         LegalSection(
           heading: '3. E-Pharmacy Specific Rules (Drugs and Cosmetics Act, 1940)',
@@ -27,7 +27,7 @@ class TermsOfServicePage extends StatelessWidget {
         LegalSection(
           heading: '4. Pricing, Payments & GST',
           content:
-              'Zappy charges a 5% platform commission on base prices. A fixed Handling/Platform Fee of ₹15 is charged per order. In accordance with Section 9(5) of the CGST Act, Zappy collects and remits GST on behalf of restaurants for food deliveries. For non-food retail and pharmacy items, the seller is responsible for remitting GST, though Zappy will collect 1% TCS as per Section 52.',
+              'Enything charges a 5% platform commission on base prices. A fixed Handling/Platform Fee of ₹15 is charged per order. In accordance with Section 9(5) of the CGST Act, Enything collects and remits GST on behalf of restaurants for food deliveries. For non-food retail and pharmacy items, the seller is responsible for remitting GST, though Enything will collect 1% TCS as per Section 52.',
         ),
         LegalSection(
           heading: '5. Cancellation & Refunds',
@@ -42,7 +42,7 @@ class TermsOfServicePage extends StatelessWidget {
         LegalSection(
           heading: '7. Grievance Redressal Mechanism',
           content:
-              'In accordance with the Information Technology Act, 2000 and rules made thereunder, the name and contact details of the Grievance Officer are provided below:\nName: Grievance Officer\nEmail: grievance@zappy.in\nTime: Mon - Fri (9:00 AM - 6:00 PM).',
+              'In accordance with the Information Technology Act, 2000 and rules made thereunder, the name and contact details of the Grievance Officer are provided below:\nName: Grievance Officer\nEmail: grievance@enything.in\nTime: Mon - Fri (9:00 AM - 6:00 PM).',
         ),
       ],
     );

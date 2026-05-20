@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:latlong2/latlong.dart';
 import '../../theme/app_colors.dart';
 
@@ -17,6 +18,19 @@ class ZappyMap extends StatelessWidget {
     this.interactive = true,
   });
 
+  /// Returns the Mapbox tile URL if a valid token is configured, otherwise
+  /// falls back to OpenStreetMap so the app never shows a blank map.
+  String get _tileUrl {
+    final token = dotenv.maybeGet('MAPBOX_TOKEN') ?? '';
+    final isValid = token.isNotEmpty && token.startsWith('pk.');
+    if (isValid) {
+      // Mapbox Streets v12 — beautiful, commercial-grade map tiles
+      return 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=$token';
+    }
+    // Fallback until the user sets their Mapbox token
+    return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  }
+
   @override
   Widget build(BuildContext context) {
     return FlutterMap(
@@ -29,8 +43,13 @@ class ZappyMap extends StatelessWidget {
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.zappy.app',
+          urlTemplate: _tileUrl,
+          userAgentPackageName: 'com.enything.app',
+          tileDimension: 256,
+          // Mapbox requires attribution
+          additionalOptions: const {
+            'attribution': '© Mapbox © OpenStreetMap',
+          },
         ),
         MarkerLayer(
           markers: [

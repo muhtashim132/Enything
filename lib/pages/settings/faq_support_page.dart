@@ -51,9 +51,9 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
   Future<void> _launchEmail() async {
     final Uri emailLaunchUri = Uri(
       scheme: 'mailto',
-      path: 'support@zappy.in',
+      path: 'support@enything.in',
       queryParameters: {
-        'subject': 'Support Request: Zappy App'
+        'subject': 'Support Request: Enything App'
       },
     );
     if (await canLaunchUrl(emailLaunchUri)) {
@@ -61,14 +61,14 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open email client. Please email support@zappy.in directly.')),
+          const SnackBar(content: Text('Could not open email client. Please email support@enything.in directly.')),
         );
       }
     }
   }
 
   Future<void> _launchPhone() async {
-    final Uri phoneUri = Uri(scheme: 'tel', path: '18001234567');
+    final Uri phoneUri = Uri(scheme: 'tel', path: '+917006464241');
     if (await canLaunchUrl(phoneUri)) {
       await launchUrl(phoneUri);
     } else {
@@ -188,7 +188,7 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           _buildContactCard(
             icon: Icons.email_outlined,
             title: 'Email Us',
-            subtitle: 'support@zappy.in',
+            subtitle: 'support@enything.in',
             onTap: _launchEmail,
             isDark: isDark,
           ),
@@ -196,7 +196,7 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           _buildContactCard(
             icon: Icons.phone_outlined,
             title: 'Call Us',
-            subtitle: '1800-123-4567 (Toll Free)',
+            subtitle: '+91 7006464241',
             onTap: _launchPhone,
             isDark: isDark,
           ),

@@ -5,10 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/rbac_provider.dart';
-import '../../providers/team_provider.dart';
 import '../../config/routes.dart';
 import '../../theme/admin_theme.dart';
-import '../../widgets/rbac/rbac_widgets.dart';
 
 import 'modules/overview_admin_page.dart';
 import 'modules/orders_admin_page.dart';
@@ -33,9 +31,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   @override
   void initState() {
     super.initState();
-    _bgCtrl = AnimationController(
-        duration: const Duration(seconds: 12), vsync: this)
-      ..repeat(reverse: true);
+    _bgCtrl =
+        AnimationController(duration: const Duration(seconds: 12), vsync: this)
+          ..repeat(reverse: true);
     _bgAnim = CurvedAnimation(parent: _bgCtrl, curve: Curves.easeInOut);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -140,17 +138,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
               Positioned(
                 top: -120 + (_bgAnim.value * 40),
                 left: -80,
-                child: _Aura(400, AdminColors.primary, 0.12),
+                child: const _Aura(400, AdminColors.primary, 0.12),
               ),
               Positioned(
                 bottom: -180 - (_bgAnim.value * 30),
                 right: -60,
-                child: _Aura(500, AdminColors.primaryEnd, 0.08),
+                child: const _Aura(500, AdminColors.primaryEnd, 0.08),
               ),
               Positioned(
                 top: MediaQuery.of(context).size.height * 0.4,
                 left: MediaQuery.of(context).size.width * 0.3,
-                child: _Aura(250, AdminColors.info, 0.05),
+                child: const _Aura(250, AdminColors.info, 0.05),
               ),
             ]),
           ),
@@ -191,7 +189,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           value: rbac, child: const SettingsAdminPage()),
       'Analytics' => const AnalyticsAdminPage(),
       'Support' => const ComplaintsAdminPage(),
-      _ => Center(child: Text('$label — Coming Soon', style: AdminStyles.body())),
+      _ =>
+        Center(child: Text('$label — Coming Soon', style: AdminStyles.body())),
     };
   }
 
@@ -199,7 +198,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     return Container(
       decoration: BoxDecoration(
         color: AdminColors.surface,
-        border: Border(top: BorderSide(color: AdminColors.cardBorder, width: 1)),
+        border: const Border(
+            top: BorderSide(color: AdminColors.cardBorder, width: 1)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -248,7 +248,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
       decoration: BoxDecoration(
         color: AdminColors.surface.withOpacity(0.7),
-        border: Border(
+        border: const Border(
             bottom: BorderSide(color: AdminColors.cardBorder, width: 1)),
       ),
       child: Row(
@@ -256,7 +256,7 @@ class _Header extends StatelessWidget {
           // Avatar + gradient ring
           Container(
             padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: AdminGradients.primary,
               shape: BoxShape.circle,
             ),
@@ -283,11 +283,11 @@ class _Header extends StatelessWidget {
                 ),
                 Row(children: [
                   if (rbac.isSuperAdmin)
-                    AdminBadge(label: 'GOD MODE', color: AdminColors.warning)
-                  else if (role != null)
-                    ...[
-                      AdminBadge(label: role.name, color: AdminColors.primary),
-                    ],
+                    const AdminBadge(
+                        label: 'GOD MODE', color: AdminColors.warning)
+                  else if (role != null) ...[
+                    AdminBadge(label: role.name, color: AdminColors.primary),
+                  ],
                 ]),
               ],
             ),
@@ -333,8 +333,7 @@ class _Aura extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: RadialGradient(
-              colors: [color, color.withOpacity(0.0)]),
+          gradient: RadialGradient(colors: [color, color.withOpacity(0.0)]),
         ),
       ),
     );

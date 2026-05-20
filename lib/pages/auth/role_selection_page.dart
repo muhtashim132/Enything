@@ -123,49 +123,63 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             offset: Offset(0, _titleSlide.value),
                             child: Column(
                               children: [
-                                // Mini logo mark
+                                // Enything logo mark
                                 Container(
                                   width: 72,
                                   height: 72,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
                                       colors: [
-                                        Color(0xFF1A35C8),
-                                        Color(0xFF0A178C)
+                                        Color(0xFF1A2A6C),
+                                        Color(0xFF0D1B4A)
                                       ],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                     ),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                        color: const Color(0xFFF4C542)
-                                            .withOpacity(0.35),
+                                        color: const Color(0xFF5B8BFF)
+                                            .withOpacity(0.40),
                                         width: 1.5),
                                     boxShadow: [
                                       BoxShadow(
-                                          color: const Color(0xFFF4C542)
-                                              .withOpacity(0.28),
+                                          color: const Color(0xFF5B8BFF)
+                                              .withOpacity(0.30),
                                           blurRadius: 22,
                                           spreadRadius: 2),
                                     ],
                                   ),
-                                  child: const Center(
-                                    child: Text('⚡',
-                                        style: TextStyle(fontSize: 34)),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(18),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Image.asset(
+                                        'logo/Enything.png',
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, __, ___) =>
+                                            const Center(
+                                              child: Text('E',
+                                                  style: TextStyle(
+                                                      fontSize: 30,
+                                                      color: Color(0xFF5B8BFF),
+                                                      fontWeight: FontWeight.w900)),
+                                            ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 20),
                                 ShaderMask(
                                   shaderCallback: (b) => const LinearGradient(
                                     colors: [
-                                      Color(0xFFFFE566),
-                                      Color(0xFFF4C542),
-                                      Color(0xFFE89A00)
+                                      Color(0xFF8BAAFF),
+                                      Color(0xFF5B8BFF),
+                                      Color(0xFF4C6EF5)
                                     ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ).createShader(b),
-                                  child: Text('ZAPPY',
+                                  child: Text('ENYTHING',
                                       style: GoogleFonts.outfit(
                                         color: Colors.white,
                                         fontSize: 42,

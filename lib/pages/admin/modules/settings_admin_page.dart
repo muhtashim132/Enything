@@ -19,7 +19,7 @@ class SettingsAdminPage extends StatelessWidget {
       children: [
         // ── Team & Roles ─────────────────────────────────────────
         if (rbac.isSuperAdmin || rbac.can('roles.view')) ...[
-          _SectionLabel('Team & Access Control'),
+          const _SectionLabel('Team & Access Control'),
           _SettingsTile(
             icon: Icons.shield_rounded,
             iconColor: AdminColors.primary,
@@ -53,7 +53,7 @@ class SettingsAdminPage extends StatelessWidget {
         ],
 
         // ── Platform Config ──────────────────────────────────────
-        _SectionLabel('Platform Configuration'),
+        const _SectionLabel('Platform Configuration'),
         _SettingsTile(
           icon: Icons.percent_rounded,
           iconColor: AdminColors.success,
@@ -77,7 +77,7 @@ class SettingsAdminPage extends StatelessWidget {
         ).animate().fadeIn(delay: 300.ms).slideX(begin: -0.1),
 
         // ── Notifications ────────────────────────────────────────
-        _SectionLabel('Push Notifications'),
+        const _SectionLabel('Push Notifications'),
         _SettingsTile(
           icon: Icons.campaign_rounded,
           iconColor: AdminColors.info,
@@ -87,7 +87,7 @@ class SettingsAdminPage extends StatelessWidget {
         ).animate().fadeIn(delay: 350.ms).slideX(begin: -0.1),
 
         // ── Payment & Tax ────────────────────────────────────────
-        _SectionLabel('Payment & Tax'),
+        const _SectionLabel('Payment & Tax'),
         _SettingsTile(
           icon: Icons.payment_rounded,
           iconColor: AdminColors.success,
@@ -105,7 +105,7 @@ class SettingsAdminPage extends StatelessWidget {
 
         // ── Danger Zone ──────────────────────────────────────────
         if (rbac.isSuperAdmin) ...[
-          _SectionLabel('Security', color: AdminColors.danger),
+          const _SectionLabel('Security', color: AdminColors.danger),
           _SettingsTile(
             icon: Icons.security_rounded,
             iconColor: AdminColors.danger,
@@ -118,7 +118,7 @@ class SettingsAdminPage extends StatelessWidget {
         const SizedBox(height: 24),
         Center(
           child: Text(
-            'Zappy Admin v1.0.0',
+            'Enything Admin v1.0.0',
             style: AdminStyles.label(),
           ),
         ),
@@ -239,7 +239,7 @@ class _NotificationSheetState extends State<_NotificationSheet> {
   final _titleCtrl = TextEditingController();
   final _msgCtrl = TextEditingController();
   String _audience = 'All Users';
-  bool _sending = false;
+  final bool _sending = false;
 
   final List<String> _audiences = [
     'All Users', 'Customers', 'Sellers', 'Riders'

@@ -106,7 +106,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             ),
             _buildSettingTile(
               icon: Icons.info_outline_rounded,
-              title: 'About Zappy',
+              title: 'About Enything',
               subtitle: 'App version, Terms, Privacy Policy',
               isDark: isDark,
               onTap: _showAboutBottomSheet,
@@ -135,7 +135,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
 
             Center(
               child: Text(
-                'Zappy v1.0.0',
+                'Enything v1.0.0',
                 style: GoogleFonts.outfit(color: Colors.grey, fontSize: 12),
               ),
             ),
@@ -424,7 +424,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('About Zappy',
+            Text('About Enything',
                 style: GoogleFonts.outfit(
                     fontSize: 20, fontWeight: FontWeight.w700)),
             const SizedBox(height: 20),
