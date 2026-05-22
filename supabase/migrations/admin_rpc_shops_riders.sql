@@ -37,7 +37,7 @@ BEGIN
 
   RETURN QUERY
   SELECT 
-    s.id, s.seller_id, s.name AS shop_name, s.category, s.logo_url, 
+    s.id, s.seller_id, s.name AS shop_name, s.category, NULL::TEXT AS logo_url, 
     s.verification_status, s.is_active, s.kyc_documents,
     s.aadhar_number, s.pan_number, s.gst_number, s.trade_license,
     s.bank_account_number, s.bank_ifsc, s.bank_account_holder,
