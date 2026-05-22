@@ -227,10 +227,10 @@ class AuthProvider extends ChangeNotifier {
       String verificationStatus = 'verified'; // Default for customer
       if (sessionRole == 'seller') {
         final sellerData = await _supabase.from('shops').select('verification_status').eq('seller_id', userId).maybeSingle();
-        verificationStatus = sellerData?['verification_status'] ?? 'pending';
+        verificationStatus = sellerData?['verification_status'] ?? 'unverified';
       } else if (sessionRole == 'delivery_partner') {
         final deliveryData = await _supabase.from('delivery_partners').select('verification_status').eq('id', userId).maybeSingle();
-        verificationStatus = deliveryData?['verification_status'] ?? 'pending';
+        verificationStatus = deliveryData?['verification_status'] ?? 'unverified';
       }
 
       _user = UserModel.fromMap({
@@ -307,7 +307,7 @@ class AuthProvider extends ChangeNotifier {
       }, onConflict: 'phone');
 
       // 2️⃣ Send OTP via Fast2SMS
-      final apiKey = dotenv.maybeGet('FAST2SMS_API_KEY') ?? '';
+      final apiKey = dotenv.env['FAST2SMS_API_KEY'] ?? '';
       final mobileNumber = phone.replaceAll(RegExp(r'^\+91'), '').replaceAll(RegExp(r'\D'), '');
 
       final response = await http.post(
@@ -337,8 +337,15 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return null; // success
+    } on PostgrestException catch (e) {
+      if (e.code == '42501') {
+        _error = 'Database permission error. Please run the updated SQL migration in Supabase.';
+      } else {
+        _error = 'Database error: ${e.message}';
+      }
+      debugPrint('sendPhoneOtp PostgrestException: $e');
     } catch (e) {
-      _error = 'Could not send OTP. Check your number and try again.';
+      _error = 'Could not send OTP: ${e.toString()}';
       debugPrint('sendPhoneOtp error: $e');
     }
     _isLoading = false;

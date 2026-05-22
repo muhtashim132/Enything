@@ -21,6 +21,48 @@ void _showKycDialog(BuildContext context, Map<String, dynamic> data, String titl
   );
 }
 
+Future<void> _deleteUser(BuildContext context, String userId, String name, VoidCallback onSuccess) async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AdminColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Delete User', style: AdminStyles.title(color: AdminColors.danger)),
+      content: Text('Are you sure you want to permanently delete $name?\n\nThis will wipe all their data from the database. This action CANNOT be undone.',
+          style: AdminStyles.body(color: AdminColors.textSecondary)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AdminStyles.body())),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: ElevatedButton.styleFrom(backgroundColor: AdminColors.danger, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          child: Text('Delete', style: AdminStyles.body(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm == true) {
+    try {
+      final res = await Supabase.instance.client.functions.invoke(
+        'delete-user',
+        body: {'target_user_id': userId},
+      );
+      if (res.status == 200) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User deleted successfully!'), backgroundColor: AdminColors.success));
+        }
+        onSuccess();
+      } else {
+        throw Exception(res.data?['error'] ?? 'Unknown error');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.danger));
+      }
+    }
+  }
+}
+
 // ── Unified Users Hub (Customers / Sellers / Riders) ─────────────
 class UsersAdminPage extends StatefulWidget {
   const UsersAdminPage({super.key});
@@ -123,7 +165,12 @@ class _CustomersTabState extends State<_CustomersTab> {
 
   Future<void> _fetch() async {
     try {
-      final res = await _db.from('profiles').select().order('created_at', ascending: false).limit(100);
+      final res = await _db
+          .from('profiles')
+          .select()
+          .eq('role', 'customer')
+          .order('created_at', ascending: false)
+          .limit(100);
       _users = List<Map<String, dynamic>>.from(res);
       _filtered = _users;
     } catch (_) {}
@@ -256,10 +303,20 @@ class _CustomersTabState extends State<_CustomersTab> {
                             joined: joined,
                             avatarUrl: u['avatar_url'],
                             action: rbac.isSuperAdmin
-                                ? IconButton(
-                                    icon: const Icon(Icons.admin_panel_settings_rounded, color: AdminColors.primary, size: 20),
-                                    tooltip: 'Promote to Admin',
-                                    onPressed: () => _promoteToAdmin(u),
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.admin_panel_settings_rounded, color: AdminColors.primary, size: 20),
+                                        tooltip: 'Promote to Admin',
+                                        onPressed: () => _promoteToAdmin(u),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
+                                        tooltip: 'Delete User',
+                                        onPressed: () => _deleteUser(context, u['id'].toString(), u['full_name'] ?? 'Unknown', _fetch),
+                                      ),
+                                    ],
                                   )
                                 : null,
                           ).animate().fadeIn(delay: Duration(milliseconds: i * 40)).slideY(begin: 0.08);
@@ -334,6 +391,7 @@ class _SellersTabState extends State<_SellersTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isSuperAdmin = context.watch<RbacProvider>().isSuperAdmin;
     return Column(
       children: [
         _SearchBar(_searchCtrl, 'Search sellers...'),
@@ -382,6 +440,12 @@ class _SellersTabState extends State<_SellersTab> {
                                   activeThumbColor: AdminColors.success,
                                   onChanged: (_) => _toggle(s['id'].toString(), isActive),
                                 ),
+                                if (isSuperAdmin)
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
+                                    tooltip: 'Delete User',
+                                    onPressed: () => _deleteUser(context, s['seller_id'].toString(), s['shop_name'] ?? 'Unknown Shop', _fetch),
+                                  ),
                               ],
                             ),
                           ).animate().fadeIn(delay: Duration(milliseconds: i * 40)).slideY(begin: 0.08);
@@ -464,6 +528,7 @@ class _RidersTabState extends State<_RidersTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isSuperAdmin = context.watch<RbacProvider>().isSuperAdmin;
     return Column(
       children: [
         _SearchBar(_searchCtrl, 'Search riders...'),
@@ -511,6 +576,12 @@ class _RidersTabState extends State<_RidersTab> {
                                   activeThumbColor: AdminColors.success,
                                   onChanged: (_) => _toggle(r['id'].toString(), isActive),
                                 ),
+                                if (isSuperAdmin)
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
+                                    tooltip: 'Delete User',
+                                    onPressed: () => _deleteUser(context, r['id'].toString(), profile?['full_name'] ?? 'Unknown Rider', _fetch),
+                                  ),
                               ],
                             ),
                           ).animate().fadeIn(delay: Duration(milliseconds: i * 40)).slideY(begin: 0.08);

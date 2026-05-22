@@ -84,14 +84,18 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
       if (role == 'seller') {
         if (status == 'verified') {
           Navigator.pushReplacementNamed(context, AppRoutes.sellerDashboard);
-        } else {
+        } else if (status == 'pending' || status == 'rejected') {
           Navigator.pushReplacementNamed(context, AppRoutes.sellerPendingVerification);
+        } else {
+          Navigator.pushReplacementNamed(context, AppRoutes.sellerKycUpload);
         }
       } else if (role == 'delivery_partner') {
         if (status == 'verified') {
           Navigator.pushReplacementNamed(context, AppRoutes.deliveryDashboard);
-        } else {
+        } else if (status == 'pending' || status == 'rejected') {
           Navigator.pushReplacementNamed(context, AppRoutes.deliveryPendingVerification);
+        } else {
+          Navigator.pushReplacementNamed(context, AppRoutes.deliveryKycUpload);
         }
       } else if (role == 'admin') {
         // Admin must re-pass 2FA password gate on every app restart

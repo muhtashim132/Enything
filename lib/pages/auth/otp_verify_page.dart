@@ -208,17 +208,23 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       if (status == 'verified') {
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.sellerDashboard, (_) => false);
-      } else {
+      } else if (status == 'pending' || status == 'rejected') {
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.sellerPendingVerification, (_) => false);
+      } else {
+        Navigator.pushNamedAndRemoveUntil(
+            context, AppRoutes.sellerKycUpload, (_) => false);
       }
     } else if (role == 'delivery_partner') {
       if (status == 'verified') {
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.deliveryDashboard, (_) => false);
-      } else {
+      } else if (status == 'pending' || status == 'rejected') {
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.deliveryPendingVerification, (_) => false);
+      } else {
+        Navigator.pushNamedAndRemoveUntil(
+            context, AppRoutes.deliveryKycUpload, (_) => false);
       }
     } else {
       Navigator.pushNamedAndRemoveUntil(

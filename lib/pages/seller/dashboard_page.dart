@@ -86,7 +86,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
               context, AppRoutes.sellerPendingVerification, (_) => false);
         }
         return;
-      } else if (verificationStatus == null || verificationStatus == 'rejected') {
+      } else if (verificationStatus == null || verificationStatus == 'rejected' || verificationStatus == 'unverified') {
          if (mounted) {
           Navigator.pushNamedAndRemoveUntil(
               context, AppRoutes.sellerKycUpload, (_) => false);

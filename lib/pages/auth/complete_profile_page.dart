@@ -194,7 +194,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           'pincode': _pincodeCtrl.text.trim(),
           'landmark': _landmarkCtrl.text.trim(),
           'is_active': false,
-          'verification_status': 'pending',
+          'verification_status': 'unverified',
           'gst_number': _gstCtrl.text.trim(),
           // Merge the group-specific fields directly into the shops row.
           // Supabase ignores keys that don't exist as columns, so unknown
@@ -218,7 +218,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           'pincode': _pincodeCtrl.text.trim(),
           'landmark': _landmarkCtrl.text.trim(),
           'is_available': false,
-          'verification_status': 'pending',
+          'verification_status': 'unverified',
         };
         break;
     }

@@ -68,7 +68,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         const _NavDef(
           icon: Icons.dashboard_rounded,
           activeIcon: Icons.dashboard_rounded,
-          label: 'Dashboard',
+          label: 'Home',
           visible: true,
         ),
         _NavDef(
@@ -180,7 +180,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
   Widget _buildScreen(String label, String adminName, RbacProvider rbac) {
     return switch (label) {
-      'Dashboard' => OverviewAdminPage(adminName: adminName),
+      'Home' => OverviewAdminPage(adminName: adminName),
       'Orders' => const OrdersAdminPage(),
       'Users' => ChangeNotifierProvider.value(
           value: rbac, child: const UsersAdminPage()),
