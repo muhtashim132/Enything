@@ -69,13 +69,23 @@ serve(async (req: Request) => {
       });
     }
 
-    // Delete the user from auth.users (this should cascade and delete their profile if setup correctly, 
-    // but just to be sure we let Supabase handle the cascade or delete it directly)
+    // Delete the user from auth.users
     const { data, error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(target_user_id);
 
     if (deleteError) {
-      throw deleteError;
+      // If the auth user is already gone, ignore the error and proceed to clean up tables manually.
+      if (deleteError.message?.includes('User not found') || deleteError.status === 404) {
+        console.log(`Auth user ${target_user_id} not found. Proceeding with manual database cleanup.`);
+      } else {
+        throw deleteError;
+      }
     }
+
+    // Manually delete related records to ensure cleanup even if ON DELETE CASCADE is missing
+    await supabaseAdmin.from('shops').delete().eq('seller_id', target_user_id);
+    await supabaseAdmin.from('delivery_partners').delete().eq('id', target_user_id);
+    await supabaseAdmin.from('admin_users').delete().eq('id', target_user_id);
+    await supabaseAdmin.from('profiles').delete().eq('id', target_user_id);
 
     return new Response(JSON.stringify({ message: 'User successfully deleted', data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
