@@ -55,7 +55,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
       final kyc = await _db
           .from('shops')
           .select('id')
-          .or('kyc_status.eq.pending,kyc_status.is.null');
+          .or('verification_status.eq.pending,verification_status.is.null,verification_status.eq.unverified');
       _pendingKyc = kyc.length;
 
       // Pending withdrawals — fallback to 0 if table missing

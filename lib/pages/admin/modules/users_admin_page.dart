@@ -361,13 +361,12 @@ class _SellersTabState extends State<_SellersTab> {
 
   Future<void> _fetch() async {
     try {
-      final res = await _db
-          .from('shops')
-          .select('*, profiles:seller_id(full_name, email, phone)')
-          .order('created_at', ascending: false);
+      final res = await _db.rpc('admin_get_all_shops');
       _sellers = List<Map<String, dynamic>>.from(res);
       _filtered = _sellers;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error fetching sellers: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -409,7 +408,7 @@ class _SellersTabState extends State<_SellersTab> {
                         itemBuilder: (_, i) {
                           final s = _filtered[i];
                           final profile = s['profiles'] as Map?;
-                          final kycStatus = (s['kyc_status'] ?? 'pending') as String;
+                          final kycStatus = (s['verification_status'] ?? 'unverified') as String;
                           final isActive = s['is_active'] == true;
                           final (kycColor, kycLabel) = _kycBadge(kycStatus);
                           return _UserCard(
@@ -496,14 +495,12 @@ class _RidersTabState extends State<_RidersTab> {
 
   Future<void> _fetch() async {
     try {
-      final res = await _db
-          .from('delivery_partners')
-          .select('*, profiles:id(full_name, phone, avatar_url)')
-          .order('created_at', ascending: false)
-          .limit(100);
+      final res = await _db.rpc('admin_get_all_riders');
       _riders = List<Map<String, dynamic>>.from(res);
       _filtered = _riders;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error fetching riders: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -547,7 +544,7 @@ class _RidersTabState extends State<_RidersTab> {
                           final r = _filtered[i];
                           final profile = r['profiles'] as Map?;
                           final isActive = r['is_active'] == true;
-                          final isVerified = r['kyc_verified'] == true;
+                          final isVerified = r['verification_status'] == 'verified' || r['verification_status'] == 'approved';
                           return _UserCard(
                             name: profile?['full_name'] ?? 'Unknown Rider',
                             sub: profile?['phone'] ?? '',

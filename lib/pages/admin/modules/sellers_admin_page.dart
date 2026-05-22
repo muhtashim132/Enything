@@ -25,10 +25,7 @@ class _SellersAdminPageState extends State<SellersAdminPage> {
 
   Future<void> _fetchSellers() async {
     try {
-      final res = await _db
-          .from('shops')
-          .select('*, profiles:seller_id(full_name, email, phone)')
-          .order('created_at', ascending: false);
+      final res = await _db.rpc('admin_get_all_shops');
       setState(() {
         _sellers = List<Map<String, dynamic>>.from(res);
         _loading = false;
