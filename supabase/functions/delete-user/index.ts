@@ -32,7 +32,15 @@ serve(async (req: Request) => {
       });
     }
 
-    const supabaseAuthClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? supabaseServiceRoleKey, {
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!anonKey) {
+      return new Response(JSON.stringify({ error: 'Missing SUPABASE_ANON_KEY environment variable' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseAuthClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
@@ -60,7 +68,17 @@ serve(async (req: Request) => {
     }
 
     // Extract target user ID
-    const { target_user_id } = await req.json();
+    let reqBody: { target_user_id?: string } = {};
+    try {
+      reqBody = await req.json();
+    } catch (e: unknown) {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    const { target_user_id } = reqBody;
 
     if (!target_user_id) {
       return new Response(JSON.stringify({ error: 'target_user_id is required' }), {
@@ -74,20 +92,40 @@ serve(async (req: Request) => {
 
     if (deleteError) {
       // If the auth user is already gone, ignore the error and proceed to clean up tables manually.
-      if (deleteError.message?.includes('User not found') || deleteError.status === 404) {
+      if (deleteError.message?.includes('User not found') || (deleteError as any).status === 404) {
         console.log(`Auth user ${target_user_id} not found. Proceeding with manual database cleanup.`);
       } else {
         throw deleteError;
       }
     }
 
-    // Manually delete related records to ensure cleanup even if ON DELETE CASCADE is missing
-    await supabaseAdmin.from('shops').delete().eq('seller_id', target_user_id);
-    await supabaseAdmin.from('delivery_partners').delete().eq('id', target_user_id);
-    await supabaseAdmin.from('admin_users').delete().eq('id', target_user_id);
-    await supabaseAdmin.from('profiles').delete().eq('id', target_user_id);
+    // Manually delete related records sequentially to avoid foreign key deadlocks/conflicts
+    const cleanupQueries = [
+      { table: 'shops', query: supabaseAdmin.from('shops').delete().eq('seller_id', target_user_id) },
+      { table: 'delivery_partners', query: supabaseAdmin.from('delivery_partners').delete().eq('id', target_user_id) },
+      { table: 'admin_users', query: supabaseAdmin.from('admin_users').delete().eq('id', target_user_id) },
+      { table: 'customers', query: supabaseAdmin.from('customers').delete().eq('id', target_user_id) },
+      { table: 'profiles', query: supabaseAdmin.from('profiles').delete().eq('id', target_user_id) },
+    ];
+    
+    const cleanupErrors: any[] = [];
+    for (const { table, query } of cleanupQueries) {
+      const { error } = await query;
+      if (error) {
+        console.error(`Error deleting from ${table}:`, error);
+        cleanupErrors.push({ table, error });
+      }
+    }
 
-    return new Response(JSON.stringify({ message: 'User successfully deleted', data }), {
+    if (cleanupErrors.length > 0 && cleanupErrors.some(e => e.table === 'profiles')) {
+       // If profiles didn't delete, the phone number stays taken
+       return new Response(JSON.stringify({ error: 'User deleted from auth, but failed to delete profile data', details: cleanupErrors }), {
+         status: 500,
+         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+       });
+    }
+
+    return new Response(JSON.stringify({ message: 'User successfully deleted', data: data || null }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

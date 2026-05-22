@@ -1,8 +1,7 @@
-import 'dart:convert';
-import 'dart:math';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 
@@ -13,6 +12,8 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
   String? _pendingPhone; // Phone waiting for OTP verification
   String? _mockUserId; // ID used for magic numbers
+  String? _verificationId; // Firebase Verification ID
+  int? _resendToken; // Firebase Resend Token
 
   // ─── Admin (God Mode) State ───────────────────────────────────────────────
   bool _isAdminVerified = false; // true after 2nd-factor password gate
@@ -256,26 +257,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ─── OTP Auth (Phone) via Fast2SMS ──────────────────────────────────────
-
-  /// Generates a cryptographically random 6-digit OTP.
-  String _generateOtp() {
-    final rng = Random.secure();
-    return (100000 + rng.nextInt(900000)).toString();
-  }
-
-  /// Derives a stable email+password pair from a phone number so we can
-  /// create a real Supabase Auth session after Fast2SMS OTP verification.
-  String _emailFromPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
-    return '$digits@auth.enything.app';
-  }
-
-  String _passwordFromPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
-    return 'Enything$digits#Auth2025';
-  }
-
-  /// Step 1: Generate OTP, store in Supabase, and deliver via Fast2SMS.
+  /// Step 1: Trigger Firebase Phone Authentication OTP.
   Future<String?> sendPhoneOtp(String phone) async {
     _isLoading = true;
     _error = null;
@@ -295,55 +277,36 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      final otp = _generateOtp();
-      final expiresAt =
-          DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String();
+      final completer = Completer<String?>();
 
-      // 1️⃣ Persist OTP in Supabase (upsert so resends overwrite old OTP)
-      await _supabase.from('phone_otps').upsert({
-        'phone': phone,
-        'otp': otp,
-        'expires_at': expiresAt,
-      }, onConflict: 'phone');
-
-      // 2️⃣ Send OTP via Fast2SMS
-      final apiKey = dotenv.env['FAST2SMS_API_KEY'] ?? '';
-      final mobileNumber = phone.replaceAll(RegExp(r'^\+91'), '').replaceAll(RegExp(r'\D'), '');
-
-      final response = await http.post(
-        Uri.parse('https://www.fast2sms.com/dev/bulkV2'),
-        headers: {
-          'authorization': apiKey,
-          'Content-Type': 'application/json',
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phone,
+        timeout: const Duration(seconds: 60),
+        forceResendingToken: _resendToken,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          // Auto-resolution (mostly Android).
+          // We could auto-sign-in here, but to keep the flow consistent, 
+          // we usually just let the user enter the code or we fill it in the UI.
         },
-        body: json.encode({
-          'route': 'q',
-          'message': 'Your Enything login OTP is $otp. Do not share this with anyone.',
-          'flash': 0,
-          'numbers': mobileNumber,
-        }),
-      ).timeout(const Duration(seconds: 15));
+        verificationFailed: (FirebaseAuthException e) {
+          _error = e.message ?? 'Phone verification failed.';
+          if (!completer.isCompleted) completer.complete(_error);
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          _verificationId = verificationId;
+          _resendToken = resendToken;
+          _pendingPhone = phone;
+          if (!completer.isCompleted) completer.complete(null); // Success
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          _verificationId = verificationId;
+        },
+      );
 
-      final body = json.decode(response.body) as Map<String, dynamic>;
-      if (response.statusCode != 200 || body['return'] != true) {
-        final msg = body['message']?.toString() ?? 'SMS delivery failed.';
-        _error = msg;
-        _isLoading = false;
-        notifyListeners();
-        return _error;
-      }
-
-      _pendingPhone = phone;
+      final result = await completer.future;
       _isLoading = false;
       notifyListeners();
-      return null; // success
-    } on PostgrestException catch (e) {
-      if (e.code == '42501') {
-        _error = 'Database permission error. Please run the updated SQL migration in Supabase.';
-      } else {
-        _error = 'Database error: ${e.message}';
-      }
-      debugPrint('sendPhoneOtp PostgrestException: $e');
+      return result;
     } catch (e) {
       _error = 'Could not send OTP: ${e.toString()}';
       debugPrint('sendPhoneOtp error: $e');
@@ -353,7 +316,7 @@ class AuthProvider extends ChangeNotifier {
     return _error;
   }
 
-  /// Step 2: Verify OTP against Supabase `phone_otps` table, then create
+  /// Step 2: Verify OTP against Firebase, then create
   /// or sign in to the Supabase Auth session using an email derived from
   /// the phone number.
   ///
@@ -400,41 +363,29 @@ class AuthProvider extends ChangeNotifier {
     // ──────────────────────────────────────────────────────────────────────
 
     try {
-      // 1️⃣ Validate OTP from phone_otps table
-      final record = await _supabase
-          .from('phone_otps')
-          .select('otp, expires_at')
-          .eq('phone', phone)
-          .maybeSingle();
-
-      if (record == null) {
-        _error = 'OTP expired or not found. Please request a new one.';
+      // 1️⃣ Validate OTP using Firebase Auth
+      if (_verificationId == null) {
+        _error = 'Session expired. Please request a new OTP.';
         _isLoading = false;
         notifyListeners();
         return null;
       }
 
-      final storedOtp = record['otp'] as String? ?? '';
-      final expiresAt = DateTime.tryParse(record['expires_at'] as String? ?? '');
+      PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: _verificationId!,
+        smsCode: otp.trim(),
+      );
 
-      if (storedOtp != otp.trim()) {
-        _error = 'Invalid OTP. Please try again.';
+      try {
+        await FirebaseAuth.instance.signInWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        _error = e.message ?? 'Invalid OTP. Please try again.';
         _isLoading = false;
         notifyListeners();
         return null;
       }
 
-      if (expiresAt == null || DateTime.now().toUtc().isAfter(expiresAt)) {
-        _error = 'OTP has expired. Please request a new one.';
-        _isLoading = false;
-        notifyListeners();
-        return null;
-      }
-
-      // 2️⃣ OTP is valid — clean up the record
-      await _supabase.from('phone_otps').delete().eq('phone', phone);
-
-      // 3️⃣ Create / sign-in to Supabase Auth using phone-derived credentials
+      // 2️⃣ Create / sign-in to Supabase Auth using phone-derived credentials
       final email = _emailFromPhone(phone);
       final password = _passwordFromPhone(phone);
 
@@ -470,7 +421,7 @@ class AuthProvider extends ChangeNotifier {
         return null;
       }
 
-      // 4️⃣ Check if this user already has a profile
+      // 3️⃣ Check if this user already has a profile
       final existing = await _supabase
           .from('profiles')
           .select('id, role')
