@@ -30,7 +30,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
   late TabController _tabController;
-  int _selectedTabIndex = 0;
+  int _selectedTabIndex = -1; // -1 = no tab selected (show ALL)
   int _navIndex = 0;
   bool _isLoading = true;
   bool _isSearching = false;
@@ -40,8 +40,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   String _searchQuery = '';
   final _searchController = TextEditingController();
 
-  /// True when the Food / Restaurant tab is currently selected.
-  bool get _isFoodTab => _selectedTabIndex == 0; // index 0 = 'Food'
+  /// True when a food-type tab is currently selected.
+  bool get _isFoodTab {
+    if (_selectedTabIndex < 0) return false;
+    final name = _categories[_selectedTabIndex]['name'] as String;
+    return name == 'Food';
+  }
 
   final List<Map<String, dynamic>> _categories = [
     {
@@ -82,10 +86,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     _tabController = TabController(length: _categories.length, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
-        setState(() => _selectedTabIndex = _tabController.index);
-        _loadData(_categories[_tabController.index]['name']!);
+        final newIndex = _tabController.index;
+        setState(() => _selectedTabIndex = newIndex);
+        _loadData(_categories[newIndex]['name']! as String);
       }
     });
+    // Load ALL shops/products on startup — no tab pre-selected
     _checkLocationAndLoad();
     _startNotifications();
   }
@@ -159,7 +165,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     if (!locationProvider.hasLocation) {
       await locationProvider.requestLocation();
     }
-    _loadData(_categories[_selectedTabIndex]['name']!);
+    // _selectedTabIndex == -1 means "All" — fetch every active shop
+    if (_selectedTabIndex < 0) {
+      _loadAllData();
+    } else {
+      _loadData(_categories[_selectedTabIndex]['name']! as String);
+    }
   }
 
   /// Maps broad tab name → actual DB category values
@@ -171,6 +182,66 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     'Electronics': ['Electronics', 'Mobile & Repair'],
     'More': ['Hardware Store', 'Stationery', 'Toys & Games', 'Sports', 'Pet Supplies', 'Salon & Beauty', 'Flowers', 'Home Decor', 'Furniture', 'Auto Parts', 'Other'],
   };
+
+  /// Fetch ALL active shops & products, sorted by rating then total_orders.
+  /// Used on initial load when no category tab is selected.
+  Future<void> _loadAllData() async {
+    setState(() => _isLoading = true);
+    try {
+      final locationProvider = context.read<LocationProvider>();
+
+      final shopsResponse = await _supabase
+          .from('shops')
+          .select()
+          .eq('is_active', true)
+          .order('average_rating', ascending: false)
+          .order('total_orders', ascending: false);
+
+      final productsResponse = await _supabase
+          .from('products')
+          .select()
+          .eq('is_available', true)
+          .order('rating', ascending: false)
+          .limit(40);
+
+      if (mounted) {
+        final allShops =
+            (shopsResponse as List).map((s) => ShopModel.fromMap(s)).toList();
+
+        List<ShopModel> nearby;
+        if (locationProvider.hasLocation) {
+          for (final shop in allShops) {
+            shop.distanceKm = locationProvider.distanceTo(shop.location);
+          }
+          nearby = allShops
+              .where((s) =>
+                  (s.location.latitude == 0 && s.location.longitude == 0) ||
+                  DeliveryCalculator.isWithinRange(s.distanceKm!))
+              .toList()
+            ..sort((a, b) {
+              // Primary: rating descending
+              final ratingCmp = b.rating.compareTo(a.rating);
+              if (ratingCmp != 0) return ratingCmp;
+              // Secondary: distance ascending
+              return (a.distanceKm ?? 0).compareTo(b.distanceKm ?? 0);
+            });
+        } else {
+          nearby = allShops;
+        }
+
+        final prods = (productsResponse as List)
+            .map((p) => ProductModel.fromMap(p))
+            .toList();
+        setState(() {
+          _shops = nearby;
+          _products = prods;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _loadData(String tabName) async {
     setState(() => _isLoading = true);
@@ -229,7 +300,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
-
     }
   }
 
@@ -379,7 +449,15 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   final isSelected = _selectedTabIndex == index;
                   final grad = cat['grad'] as List<Color>;
                   return GestureDetector(
-                    onTap: () => _tabController.animateTo(index),
+                    onTap: () {
+                      if (_selectedTabIndex == index) {
+                        // Tap selected tab again → go back to All
+                        setState(() => _selectedTabIndex = -1);
+                        _loadAllData();
+                      } else {
+                        _tabController.animateTo(index);
+                      }
+                    },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 280),
                       width: 76,
@@ -530,9 +608,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                           ] else if (_shops.isNotEmpty) ...[
                             // ── Normal category browse ───────────────────
                             _buildSectionTitle(
-                              _isFoodTab
-                                  ? 'Restaurants near you'
-                                  : 'Shops near you',
+                              _selectedTabIndex < 0
+                                  ? 'All stores near you'
+                                  : _isFoodTab
+                                      ? 'Restaurants near you'
+                                      : 'Shops near you',
                               subtitle:
                                   '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
                             ),
