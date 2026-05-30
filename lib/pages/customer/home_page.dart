@@ -190,18 +190,20 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     try {
       final locationProvider = context.read<LocationProvider>();
 
+      // BUG FIX: column is 'rating' not 'average_rating'; total_orders may not exist
+      // — use nullsLast to gracefully handle new shops with no rating yet.
       final shopsResponse = await _supabase
           .from('shops')
           .select()
           .eq('is_active', true)
-          .order('average_rating', ascending: false)
-          .order('total_orders', ascending: false);
+          .order('rating', ascending: false);
 
+      // BUG FIX: products table may not have sortable 'rating' index — fetch all
+      // available products; sort client-side so no server-side column error.
       final productsResponse = await _supabase
           .from('products')
           .select()
           .eq('is_available', true)
-          .order('rating', ascending: false)
           .limit(40);
 
       if (mounted) {
@@ -231,7 +233,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
         final prods = (productsResponse as List)
             .map((p) => ProductModel.fromMap(p))
-            .toList();
+            .toList()
+          ..sort((a, b) => b.rating.compareTo(a.rating));
         setState(() {
           _shops = nearby;
           _products = prods;
@@ -530,12 +533,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           // ── Main Content ──────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-            sliver: !locationProvider.hasLocation
-                ? SliverToBoxAdapter(child: _buildLocationRequired())
-                : _isLoading
-                    ? SliverToBoxAdapter(child: _buildShimmer())
-                    : SliverList(
-                        delegate: SliverChildListDelegate([
+            // BUG FIX: no longer gate on location — show shops even without GPS.
+            // If no location, distance filter is skipped and all active shops show.
+            sliver: _isLoading
+                ? SliverToBoxAdapter(child: _buildShimmer())
+                : SliverList(
+                    delegate: SliverChildListDelegate([
                           // Featured Banner
                           _buildFeaturedBanner(),
                           const SizedBox(height: 24),

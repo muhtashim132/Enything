@@ -47,13 +47,25 @@ class ShopModel {
     double lat = 0.0, lng = 0.0;
     if (map['location'] != null) {
       try {
-        final loc = map['location'].toString();
-        final coords = loc
-            .replaceAll('POINT(', '')
-            .replaceAll(')', '')
-            .split(' ');
-        lng = double.tryParse(coords[0]) ?? 0.0;
-        lat = double.tryParse(coords[1]) ?? 0.0;
+        final loc = map['location'];
+        if (loc is Map) {
+          // Supabase REST API returns geography as GeoJSON:
+          // {"type":"Point","coordinates":[longitude, latitude]}
+          final coords = loc['coordinates'] as List?;
+          if (coords != null && coords.length >= 2) {
+            lng = (coords[0] as num).toDouble();
+            lat = (coords[1] as num).toDouble();
+          }
+        } else {
+          // Fallback: WKT string format "POINT(lng lat)"
+          final str = loc.toString();
+          final inner = str.replaceAll('POINT(', '').replaceAll(')', '').trim();
+          final parts = inner.split(' ');
+          if (parts.length >= 2) {
+            lng = double.tryParse(parts[0]) ?? 0.0;
+            lat = double.tryParse(parts[1]) ?? 0.0;
+          }
+        }
       } catch (_) {}
     }
 
