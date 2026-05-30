@@ -64,7 +64,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          user.roleDisplay,
+                          user.sessionRoleDisplay,
                           style: GoogleFonts.outfit(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
                         ),
                       ),

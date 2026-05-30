@@ -215,22 +215,21 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     try {
       final locationProvider = context.read<LocationProvider>();
 
-      // No .order() on the server — some columns may not exist in the DB yet.
-      // All sorting is done client-side to prevent 400 errors.
+      // Fetch all shops, then filter is_active locally to bypass any RLS column blocks
       final shopsResponse = await _supabase
           .from('shops')
-          .select()
-          .eq('is_active', true);
+          .select();
 
       final productsResponse = await _supabase
           .from('products')
           .select()
-          .eq('is_available', true)
-          .limit(40);
+          .limit(100);
 
       if (mounted) {
-        final allShops =
-            (shopsResponse as List).map((s) => ShopModel.fromMap(s)).toList();
+        final allShops = (shopsResponse as List)
+            .map((s) => ShopModel.fromMap(s))
+            .where((s) => s.isActive)
+            .toList();
 
         List<ShopModel> nearby;
         if (locationProvider.hasLocation) {
@@ -258,6 +257,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
         final prods = (productsResponse as List)
             .map((p) => ProductModel.fromMap(p))
+            .where((p) => p.isAvailable)
             .toList()
           ..sort((a, b) => b.rating.compareTo(a.rating));
 
@@ -285,23 +285,23 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           .map((c) => 'category.eq.$c')
           .join(',');
 
-      // No .order() calls — sort client-side to avoid column-not-found errors
+      // Fetch all, filter locally
       final shopsResponse = await _supabase
           .from('shops')
           .select()
-          .eq('is_active', true)
           .or(catFilter);
 
       final productsResponse = await _supabase
           .from('products')
           .select()
-          .eq('is_available', true)
           .inFilter('category', subcategories)
-          .limit(20);
+          .limit(100);
 
       if (mounted) {
-        final allShops =
-            (shopsResponse as List).map((s) => ShopModel.fromMap(s)).toList();
+        final allShops = (shopsResponse as List)
+            .map((s) => ShopModel.fromMap(s))
+            .where((s) => s.isActive)
+            .toList();
 
         List<ShopModel> nearby;
         if (locationProvider.hasLocation) {
@@ -321,6 +321,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
         final prods = (productsResponse as List)
             .map((p) => ProductModel.fromMap(p))
+            .where((p) => p.isAvailable)
             .toList()
           ..sort((a, b) => b.rating.compareTo(a.rating));
         setState(() {
