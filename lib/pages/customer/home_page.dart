@@ -270,7 +270,16 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     } catch (e, st) {
       // Log full error so we can debug exactly what Supabase query failed
       debugPrint('_loadAllData ERROR: $e\n$st');
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading data: $e', maxLines: 5),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
     }
   }
 
@@ -332,7 +341,16 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       }
     } catch (e, st) {
       debugPrint('_loadData ERROR: $e\n$st');
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading data: $e', maxLines: 5),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
     }
   }
 
