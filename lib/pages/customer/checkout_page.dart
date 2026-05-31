@@ -542,7 +542,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               Icon(Icons.add_photo_alternate_outlined,
                                   color: AppColors.primary, size: 32),
                               SizedBox(height: 8),
-                              Text('Tap to upload prescription',
+                              Text('Tap to upload prescription\n(Clear & readable image)',
+                                  textAlign: TextAlign.center,
                                   style: TextStyle(
                                       color: AppColors.primary,
                                       fontWeight: FontWeight.w600)),

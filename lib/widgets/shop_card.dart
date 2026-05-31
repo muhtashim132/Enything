@@ -41,7 +41,8 @@ class ShopCard extends StatelessWidget {
                           width: 100,
                           height: 100,
                           fit: BoxFit.cover,
-                          placeholder: (c, i) => Container(color: Colors.grey.shade100),
+                          placeholder: (c, i) =>
+                              Container(color: Colors.grey.shade100),
                           errorWidget: (c, e, s) => _buildImagePlaceholder(),
                         )
                       : _buildImagePlaceholder(),
@@ -50,7 +51,8 @@ class ShopCard extends StatelessWidget {
                   top: 8,
                   left: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(8),
@@ -58,7 +60,8 @@ class ShopCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.star_rounded, color: AppColors.accent, size: 14),
+                        const Icon(Icons.star_rounded,
+                            color: AppColors.accent, size: 14),
                         const SizedBox(width: 2),
                         Text(
                           shop.rating.toStringAsFixed(1),
@@ -85,9 +88,9 @@ class ShopCard extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(width: 16),
-            
+
             // ── Info ────────────────────────────────────────────────────
             Expanded(
               child: Column(
@@ -124,22 +127,23 @@ class ShopCard extends StatelessWidget {
                         color: Colors.blue.shade50,
                         textColor: Colors.blue.shade700,
                       ),
-                      if (shop.distanceKm != null) ...[
-                        _buildChip(
-                          icon: Icons.location_on_outlined,
-                          label: '${shop.distanceKm!.toStringAsFixed(1)} km',
-                          color: Colors.orange.shade50,
-                          textColor: Colors.orange.shade700,
-                        ),
-                        _buildDeliveryChip(shop.distanceKm!),
-                      ],
+                      _buildChip(
+                        icon: Icons.location_on_outlined,
+                        label: shop.distanceKm != null
+                            ? '${shop.distanceKm!.toStringAsFixed(1)} km'
+                            : 'N/A km',
+                        color: Colors.orange.shade50,
+                        textColor: Colors.orange.shade700,
+                      ),
+                      _buildDeliveryChip(shop.distanceKm ?? 0.0),
                     ],
                   ),
                 ],
               ),
             ),
-            
-            const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 16, color: Colors.grey),
           ],
         ),
       ),
@@ -192,7 +196,11 @@ class ShopCard extends StatelessWidget {
     );
   }
 
-  Widget _buildChip({required IconData icon, required String label, required Color color, required Color textColor}) {
+  Widget _buildChip(
+      {required IconData icon,
+      required String label,
+      required Color color,
+      required Color textColor}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(

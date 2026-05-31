@@ -470,7 +470,8 @@ class _UploadBox extends StatelessWidget {
                   color: file != null ? Colors.green : Colors.white54,
                   size: 28),
               const SizedBox(height: 8),
-              Text(file != null ? 'Uploaded' : label,
+              Text(file != null ? 'Uploaded' : label + '\n(Clear & readable)',
+                  textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                       color: file != null ? Colors.green : Colors.white54,
                       fontSize: 12,

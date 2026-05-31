@@ -174,23 +174,23 @@ class RestaurantShopCard extends StatelessWidget {
                         Colors.blue.shade600,
                       ),
                       const SizedBox(width: 10),
-                      if (shop.distanceKm != null) ...[
-                        _metaChip(
-                          Icons.delivery_dining_outlined,
-                          isFreeDelivery
-                              ? 'Free delivery'
-                              : '₹${deliveryCharge.toStringAsFixed(0)} delivery',
-                          isFreeDelivery
-                              ? Colors.green.shade600
-                              : Colors.orange.shade700,
-                        ),
-                        const SizedBox(width: 10),
-                        _metaChip(
-                          Icons.location_on_outlined,
-                          '${shop.distanceKm!.toStringAsFixed(1)} km',
-                          Colors.grey.shade600,
-                        ),
-                      ],
+                      _metaChip(
+                        Icons.delivery_dining_outlined,
+                        isFreeDelivery
+                            ? 'Free delivery'
+                            : '₹${deliveryCharge.toStringAsFixed(0)} delivery',
+                        isFreeDelivery
+                            ? Colors.green.shade600
+                            : Colors.orange.shade700,
+                      ),
+                      const SizedBox(width: 10),
+                      _metaChip(
+                        Icons.location_on_outlined,
+                        shop.distanceKm != null
+                            ? '${shop.distanceKm!.toStringAsFixed(1)} km'
+                            : 'N/A km',
+                        Colors.grey.shade600,
+                      ),
                     ],
                   ),
                 ],
@@ -217,7 +217,8 @@ class RestaurantShopCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 6),
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15), blurRadius: 6),
           ],
         ),
         child: Row(
@@ -233,9 +234,7 @@ class RestaurantShopCard extends StatelessWidget {
                   color: AppColors.textPrimary),
             ),
             Text(
-              shop.totalReviews > 0
-                  ? ' (${shop.totalReviews})'
-                  : ' (New)',
+              shop.totalReviews > 0 ? ' (${shop.totalReviews})' : ' (New)',
               style: GoogleFonts.outfit(
                   fontSize: 11, color: AppColors.textSecondary),
             ),

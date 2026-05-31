@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../theme/admin_theme.dart';
+import '../../../widgets/common/star_rating_display.dart';
 
 class ComplaintsAdminPage extends StatefulWidget {
   const ComplaintsAdminPage({super.key});
@@ -379,15 +380,7 @@ class _ReviewsTab extends StatelessWidget {
                   style: AdminStyles.heading(size: 40)),
               const SizedBox(width: 16),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: List.generate(5, (i) {
-                  return Icon(
-                    i < avg.round()
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: AdminColors.warning,
-                    size: 18,
-                  );
-                })),
+                StarRatingDisplay(rating: avg, size: 18, color: AdminColors.warning),
                 const SizedBox(height: 4),
                 Text('Average from ${reviews.length} reviews',
                     style: AdminStyles.caption(color: Colors.white70)),
@@ -443,15 +436,7 @@ class _ReviewsTab extends StatelessWidget {
                       ),
                     ),
                     Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Row(children: List.generate(5, (si) {
-                        return Icon(
-                          si < rating.round()
-                              ? Icons.star_rounded
-                              : Icons.star_outline_rounded,
-                          color: AdminColors.warning,
-                          size: 14,
-                        );
-                      })),
+                      StarRatingDisplay(rating: rating, size: 14, color: AdminColors.warning),
                       const SizedBox(height: 2),
                       Text(time, style: AdminStyles.label()),
                     ]),

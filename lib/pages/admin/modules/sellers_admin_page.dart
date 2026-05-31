@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../widgets/admin/kyc_verification_dialog.dart';
+import '../../../widgets/common/star_rating_display.dart';
 import '../../../theme/app_colors.dart';
 
 class SellersAdminPage extends StatefulWidget {
@@ -107,7 +108,8 @@ class _SellersAdminPageState extends State<SellersAdminPage> {
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  const Icon(Icons.star_rounded,
+                                  StarRatingDisplay(
+                                      rating: (shop['rating'] ?? 0.0).toDouble(),
                                       color: Colors.amber, size: 14),
                                   const SizedBox(width: 4),
                                   Text(

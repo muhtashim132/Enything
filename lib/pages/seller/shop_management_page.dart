@@ -362,7 +362,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                                               children: [
                                                 const Icon(Icons.add_photo_alternate_outlined, size: 40, color: AppColors.primary),
                                                 const SizedBox(height: 8),
-                                                Text('Tap to upload banner', style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                                Text('Tap to upload banner\nRecommended size: 16:9 or 2:1', textAlign: TextAlign.center, style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w600)),
                                               ],
                                             ),
                                 ),

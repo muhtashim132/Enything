@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:latlong2/latlong.dart';
 
 class ShopModel {
@@ -57,13 +58,34 @@ class ShopModel {
             lat = (coords[1] as num).toDouble();
           }
         } else {
-          // Fallback: WKT string format "POINT(lng lat)"
-          final str = loc.toString();
-          final inner = str.replaceAll('POINT(', '').replaceAll(')', '').trim();
-          final parts = inner.split(' ');
-          if (parts.length >= 2) {
-            lng = double.tryParse(parts[0]) ?? 0.0;
-            lat = double.tryParse(parts[1]) ?? 0.0;
+          final str = loc.toString().trim();
+          if (str.startsWith('0101000020E6100000')) {
+            // Parse EWKB Hex for SRID 4326 Point
+            final hex = str.substring(18);
+            if (hex.length >= 32) {
+              final xHex = hex.substring(0, 16);
+              final yHex = hex.substring(16, 32);
+              
+              double decodeHexDouble(String h) {
+                final bytes = <int>[];
+                for (int i = 0; i < 16; i += 2) {
+                  bytes.add(int.parse(h.substring(i, i + 2), radix: 16));
+                }
+                final bd = ByteData.view(Uint8List.fromList(bytes).buffer);
+                return bd.getFloat64(0, Endian.little);
+              }
+              
+              lng = decodeHexDouble(xHex);
+              lat = decodeHexDouble(yHex);
+            }
+          } else {
+            // Fallback: WKT string format "POINT(lng lat)"
+            final inner = str.replaceAll('POINT(', '').replaceAll(')', '').trim();
+            final parts = inner.split(' ');
+            if (parts.length >= 2) {
+              lng = double.tryParse(parts[0]) ?? 0.0;
+              lat = double.tryParse(parts[1]) ?? 0.0;
+            }
           }
         }
       } catch (_) {}
@@ -87,10 +109,10 @@ class ShopModel {
               : 'Other'),
       categories: List<String>.from(map['categories'] ?? []),
       isActive: map['is_active'] ?? true,
-      rating: (map['rating'] ?? 4.0).toDouble(),
+      rating: (map['average_rating'] ?? map['rating'] ?? 0.0).toDouble(),
       totalReviews: map['total_reviews'] ?? 0,
       totalOrders: map['total_orders'] ?? 0,
-      bannerImage: map['banner_image'],
+      bannerImage: map['banner_url'] ?? map['banner_image'],
     );
   }
 }

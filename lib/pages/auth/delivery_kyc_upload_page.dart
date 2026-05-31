@@ -440,7 +440,7 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
                       child: const Icon(Icons.add_a_photo_rounded, color: Colors.white54, size: 24),
                     ),
                     const SizedBox(height: 10),
-                    Text(label, style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500)),
+                    Text(label + '\n(Clear & readable)', textAlign: TextAlign.center, style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),

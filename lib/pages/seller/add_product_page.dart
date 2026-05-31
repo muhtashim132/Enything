@@ -235,7 +235,8 @@ class _AddProductPageState extends State<AddProductPage> {
                         ),
                         SizedBox(height: 8),
                         Text(
-                          'Tap to add up to 3 images',
+                          'Tap to add up to 3 images\nRecommended size: 1:1 (Square)',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w600,

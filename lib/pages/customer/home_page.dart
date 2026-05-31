@@ -17,6 +17,7 @@ import '../../utils/delivery_calculator.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
+import '../../widgets/product_search_card.dart';
 import '../../widgets/common/notification_bell.dart';
 
 class CustomerHomePage extends StatefulWidget {
@@ -29,13 +30,14 @@ class CustomerHomePage extends StatefulWidget {
 class _CustomerHomePageState extends State<CustomerHomePage>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
-  late TabController _tabController;
   int _selectedTabIndex = -1; // -1 = no tab selected (show ALL)
   int _navIndex = 0;
   bool _isLoading = true;
   bool _isSearching = false;
   List<ShopModel> _shops = [];
   List<ShopModel> _searchResults = [];
+  List<ProductModel> _searchProductResults = [];
+  Map<String, ShopModel> _searchProductShops = {};
   List<ProductModel> _products = [];
   String _searchQuery = '';
   final _searchController = TextEditingController();
@@ -83,14 +85,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _categories.length, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        final newIndex = _tabController.index;
-        setState(() => _selectedTabIndex = newIndex);
-        _loadData(_categories[newIndex]['name']! as String);
-      }
-    });
     // Load ALL shops/products on startup — no tab pre-selected
     _checkLocationAndLoad();
     _startNotifications();
@@ -133,7 +127,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   void dispose() {
     // Remove live location listener to avoid memory leaks
     context.read<LocationProvider>().removeListener(_onLocationChanged);
-    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -145,6 +138,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       setState(() {
         _searchQuery = '';
         _searchResults = [];
+        _searchProductResults = [];
+        _searchProductShops = {};
         _isSearching = false;
       });
       return;
@@ -155,28 +150,49 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     });
     try {
       final locationProvider = context.read<LocationProvider>();
-      final response =
+      
+      final shopsResponse =
           await _supabase.from('shops').select().ilike('name', '%$query%');
 
-      final allShops =
-          (response as List).map((s) => ShopModel.fromMap(s)).toList();
+      final productsResponse = 
+          await _supabase.from('products').select('*, shops(*)').ilike('name', '%$query%');
 
-      List<ShopModel> results;
+      final allShops =
+          (shopsResponse as List).map((s) => ShopModel.fromMap(s)).toList();
+
+      List<ShopModel> shopResults;
       if (locationProvider.hasLocation) {
         for (final shop in allShops) {
-          shop.distanceKm = locationProvider.distanceTo(shop.location);
+          if (shop.location.latitude != 0 && shop.location.longitude != 0) {
+            shop.distanceKm = locationProvider.distanceTo(shop.location);
+          } else {
+            shop.distanceKm = null;
+          }
         }
-        results = allShops
-            .where((s) => DeliveryCalculator.isWithinRange(s.distanceKm!))
+        shopResults = allShops
+            .where((s) => s.distanceKm == null || DeliveryCalculator.isWithinRange(s.distanceKm!))
             .toList()
-          ..sort((a, b) => a.distanceKm!.compareTo(b.distanceKm!));
+          ..sort((a, b) => (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity));
       } else {
-        results = allShops;
+        shopResults = allShops;
+      }
+
+      final List<ProductModel> prodResults = [];
+      final Map<String, ShopModel> prodShops = {};
+      
+      for (final p in productsResponse as List) {
+        final product = ProductModel.fromMap(p);
+        prodResults.add(product);
+        if (p['shops'] != null) {
+          prodShops[product.id] = ShopModel.fromMap(p['shops']);
+        }
       }
 
       if (mounted) {
         setState(() {
-          _searchResults = results;
+          _searchResults = shopResults;
+          _searchProductResults = prodResults;
+          _searchProductShops = prodShops;
           _isSearching = false;
         });
       }
@@ -234,12 +250,15 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         List<ShopModel> nearby;
         if (locationProvider.hasLocation) {
           for (final shop in allShops) {
-            shop.distanceKm = locationProvider.distanceTo(shop.location);
+            if (shop.location.latitude != 0 && shop.location.longitude != 0) {
+              shop.distanceKm = locationProvider.distanceTo(shop.location);
+            } else {
+              shop.distanceKm = null;
+            }
           }
           nearby = allShops
               .where((s) =>
-                  // Show shops with no GPS stored (0,0) OR within 9 km
-                  (s.location.latitude == 0 && s.location.longitude == 0) ||
+                  s.distanceKm == null ||
                   DeliveryCalculator.isWithinRange(s.distanceKm!))
               .toList()
             ..sort((a, b) {
@@ -247,7 +266,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               final ratingCmp = (b.rating).compareTo(a.rating);
               if (ratingCmp != 0) return ratingCmp;
               // Secondary: closer distance first
-              return (a.distanceKm ?? 0).compareTo(b.distanceKm ?? 0);
+              return (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity);
             });
         } else {
           // No GPS yet — show all active shops sorted by rating
@@ -315,14 +334,18 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         List<ShopModel> nearby;
         if (locationProvider.hasLocation) {
           for (final shop in allShops) {
-            shop.distanceKm = locationProvider.distanceTo(shop.location);
+            if (shop.location.latitude != 0 && shop.location.longitude != 0) {
+              shop.distanceKm = locationProvider.distanceTo(shop.location);
+            } else {
+              shop.distanceKm = null;
+            }
           }
           nearby = allShops
               .where((s) =>
-                  (s.location.latitude == 0 && s.location.longitude == 0) ||
+                  s.distanceKm == null ||
                   DeliveryCalculator.isWithinRange(s.distanceKm!))
               .toList()
-            ..sort((a, b) => (a.distanceKm ?? 0).compareTo(b.distanceKm ?? 0));
+            ..sort((a, b) => (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity));
         } else {
           nearby = allShops
             ..sort((a, b) => b.rating.compareTo(a.rating));
@@ -367,7 +390,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         slivers: [
           // ── Premium Modern AppBar ──────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 140,
+            expandedHeight: 170,
             floating: true,
             pinned: true,
             elevation: 0,
@@ -450,7 +473,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               ),
             ),
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(60),
+              preferredSize: const Size.fromHeight(70),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Hero(
@@ -506,7 +529,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         setState(() => _selectedTabIndex = -1);
                         _loadAllData();
                       } else {
-                        _tabController.animateTo(index);
+                        setState(() => _selectedTabIndex = index);
+                        _loadData(cat['name']);
                       }
                     },
                     child: AnimatedContainer(
@@ -598,7 +622,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                               'Search results',
                               subtitle: _isSearching
                                   ? 'Searching...'
-                                  : '${_searchResults.length} result${_searchResults.length == 1 ? '' : 's'}',
+                                  : '${_searchResults.length + _searchProductResults.length} result${(_searchResults.length + _searchProductResults.length) == 1 ? '' : 's'}',
                             ),
                             const SizedBox(height: 16),
                             if (_isSearching)
@@ -608,7 +632,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                   child: CircularProgressIndicator(),
                                 ),
                               )
-                            else if (_searchResults.isEmpty)
+                            else if (_searchResults.isEmpty && _searchProductResults.isEmpty)
                               Padding(
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 32),
@@ -619,7 +643,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                           style: TextStyle(fontSize: 48)),
                                       const SizedBox(height: 12),
                                       Text(
-                                        'No shops found for "$_searchQuery"',
+                                        'No results found for "$_searchQuery"',
                                         textAlign: TextAlign.center,
                                         style: GoogleFonts.outfit(
                                             fontSize: 15,
@@ -630,32 +654,53 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                   ),
                                 ),
                               )
-                            else
-                              ..._searchResults.map((shop) {
-                                final isFood =
-                                    AppCategories.groupFor(shop.category) ==
-                                        CategoryGroup.food;
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 16),
-                                  child: isFood
-                                      ? RestaurantShopCard(
-                                          shop: shop,
-                                          onTap: () => Navigator.pushNamed(
-                                            context,
-                                            AppRoutes.restaurantDashboard,
-                                            arguments: {'shopId': shop.id},
+                            else ...[
+                              if (_searchResults.isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: Text('Shops & Restaurants', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                                ),
+                                ..._searchResults.map((shop) {
+                                  final isFood =
+                                      AppCategories.groupFor(shop.category) ==
+                                          CategoryGroup.food;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: isFood
+                                        ? RestaurantShopCard(
+                                            shop: shop,
+                                            onTap: () => Navigator.pushNamed(
+                                              context,
+                                              AppRoutes.restaurantDashboard,
+                                              arguments: {'shopId': shop.id},
+                                            ),
+                                          )
+                                        : ShopCard(
+                                            shop: shop,
+                                            onTap: () => Navigator.pushNamed(
+                                              context,
+                                              AppRoutes.restaurant,
+                                              arguments: {'shopId': shop.id},
+                                            ),
                                           ),
-                                        )
-                                      : ShopCard(
-                                          shop: shop,
-                                          onTap: () => Navigator.pushNamed(
-                                            context,
-                                            AppRoutes.restaurant,
-                                            arguments: {'shopId': shop.id},
-                                          ),
-                                        ),
-                                );
-                              }),
+                                  );
+                                }),
+                              ],
+                              if (_searchProductResults.isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12, top: 8),
+                                  child: Text('Items & Products', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                                ),
+                                ..._searchProductResults.map((product) {
+                                  final shop = _searchProductShops[product.id];
+                                  if (shop == null) return const SizedBox.shrink();
+                                  return ProductSearchCard(
+                                    product: product,
+                                    shop: shop,
+                                  );
+                                }),
+                              ],
+                            ],
                           ] else if (_shops.isNotEmpty) ...[
                             // ── Normal category browse ───────────────────
                             _buildSectionTitle(
@@ -710,7 +755,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
-                                childAspectRatio: 0.72,
+                                childAspectRatio: 0.65,
                                 mainAxisSpacing: 16,
                                 crossAxisSpacing: 16,
                               ),

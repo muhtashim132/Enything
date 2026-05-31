@@ -112,7 +112,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                               setState(() => _currentImageIndex = i),
                           itemBuilder: (ctx, i) => CachedNetworkImage(
                             imageUrl: _product!.images[i],
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                             errorWidget: (c, e, s) => Container(
                               color: AppColors.primary.withValues(alpha: 0.1),
                               child: const Center(
