@@ -243,16 +243,32 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
 
           // ── Revenue Chart ──────────────────────────────────────
           const AdminSectionHeader(title: '7-Day Revenue'),
-          AdminCard(
-            padding: const EdgeInsets.fromLTRB(12, 16, 16, 8),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 24, 24, 16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AdminColors.cardBorder, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: AdminColors.primary.withValues(alpha: 0.15),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
             child: _loading
                 ? const SizedBox(
-                    height: 140,
+                    height: 180,
                     child: Center(
                         child: CircularProgressIndicator(
                             color: AdminColors.primary, strokeWidth: 2)))
                 : SizedBox(
-                    height: 140,
+                    height: 180,
                     child: _revenueSpots.isEmpty
                         ? Center(
                             child: Text('No data yet',
@@ -338,53 +354,117 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
 
   LineChartData _buildChart() {
     final maxY = _revenueSpots.fold<double>(0, (m, s) => s.y > m ? s.y : m);
+    final double topY = maxY > 0 ? maxY * 1.3 : 100;
+
     return LineChartData(
+      lineTouchData: LineTouchData(
+        handleBuiltInTouches: true,
+        touchTooltipData: LineTouchTooltipData(
+          getTooltipColor: (spot) => const Color(0xFF6C2BD9),
+          tooltipRoundedRadius: 12,
+          tooltipPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          getTooltipItems: (touchedSpots) {
+            return touchedSpots.map((spot) {
+              final val = spot.y;
+              return LineTooltipItem(
+                '₹${val.toStringAsFixed(0)}',
+                const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              );
+            }).toList();
+          },
+        ),
+      ),
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
         horizontalInterval: maxY > 0 ? maxY / 4 : 100,
-        getDrawingHorizontalLine: (_) =>
-            const FlLine(color: AdminColors.cardBorder, strokeWidth: 1),
+        getDrawingHorizontalLine: (value) => FlLine(
+          color: Colors.white.withValues(alpha: 0.05),
+          strokeWidth: 1,
+          dashArray: [4, 4],
+        ),
       ),
       titlesData: FlTitlesData(
         leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles:
-            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
             interval: 1,
+            reservedSize: 46,
             getTitlesWidget: (v, _) {
-              final day =
-                  DateTime.now().subtract(Duration(days: 6 - v.toInt()));
-              return Text(DateFormat('E').format(day),
-                  style: AdminStyles.label());
+              final dayIndex = 6 - v.toInt();
+              final day = DateTime.now().subtract(Duration(days: dayIndex));
+              final isToday = dayIndex == 0;
+
+              return Padding(
+                padding: const EdgeInsets.only(top: 12.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      DateFormat('EEE').format(day),
+                      style: TextStyle(
+                        color: isToday ? Colors.white : AdminColors.textSecondary,
+                        fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (isToday)
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          color: AdminColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      )
+                  ],
+                ),
+              );
             },
           ),
         ),
       ),
       borderData: FlBorderData(show: false),
+      minY: 0,
+      maxY: topY,
       lineBarsData: [
         LineChartBarData(
           spots: _revenueSpots,
           isCurved: true,
+          curveSmoothness: 0.4,
           gradient: AdminGradients.primary,
-          barWidth: 3,
+          barWidth: 4,
           isStrokeCapRound: true,
+          shadow: Shadow(
+            color: AdminColors.primary.withValues(alpha: 0.5),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
           dotData: FlDotData(
-            getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-              radius: 4,
-              color: AdminColors.primary,
-              strokeColor: Colors.white,
-              strokeWidth: 2,
-            ),
+            show: true,
+            getDotPainter: (spot, percent, barData, index) {
+              final isToday = index == 6; // last spot (today)
+              return FlDotCirclePainter(
+                radius: isToday ? 6 : 4,
+                color: isToday ? AdminColors.primary : AdminColors.surface,
+                strokeColor: isToday ? Colors.white : AdminColors.primary,
+                strokeWidth: isToday ? 3 : 2,
+              );
+            },
           ),
           belowBarData: BarAreaData(
             show: true,
             gradient: LinearGradient(
               colors: [
-                AdminColors.primary.withValues(alpha: 0.3),
+                AdminColors.primary.withValues(alpha: 0.35),
                 AdminColors.primaryEnd.withValues(alpha: 0.0),
               ],
               begin: Alignment.topCenter,

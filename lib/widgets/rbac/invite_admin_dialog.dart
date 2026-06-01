@@ -144,6 +144,7 @@ class _InviteAdminDialogState extends State<InviteAdminDialog> {
                       GoogleFonts.outfit(color: Colors.white60, fontSize: 12)),
               const SizedBox(height: 6),
               DropdownButtonFormField<RoleModel>(
+                isExpanded: true,
                 initialValue: _selectedRole,
                 dropdownColor: const Color(0xFF1A1030),
                 style: GoogleFonts.outfit(color: Colors.white),
@@ -154,6 +155,7 @@ class _InviteAdminDialogState extends State<InviteAdminDialog> {
                     .map((r) => DropdownMenuItem(
                           value: r,
                           child: Text(r.name,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.outfit(
                                   color: const Color(0xDEFFFFFF))),
                         ))

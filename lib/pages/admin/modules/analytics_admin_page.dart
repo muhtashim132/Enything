@@ -314,18 +314,28 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            interval: 6,
-            getTitlesWidget: (v, _) {
+            interval: 1,
+            reservedSize: 28,
+            getTitlesWidget: (v, meta) {
               final h = v.toInt();
-              if (h % 6 != 0) return const SizedBox.shrink(); // Prevent label overlap
+              // Show labels for 12AM, 6AM, 12PM, 6PM, 11PM so it spans the full width
+              if (h != 0 && h != 6 && h != 12 && h != 18 && h != 23) {
+                return const SizedBox.shrink();
+              }
               final label = h == 0
                   ? '12AM'
                   : h == 12
                       ? '12PM'
-                      : h > 12
-                          ? '${h - 12}PM'
-                          : '${h}AM';
-              return Text(label, style: AdminStyles.label(), softWrap: false, overflow: TextOverflow.visible);
+                      : h == 23
+                          ? '11PM'
+                          : h > 12
+                              ? '${h - 12}PM'
+                              : '${h}AM';
+              return SideTitleWidget(
+                axisSide: meta.axisSide,
+                space: 6,
+                child: Text(label, style: AdminStyles.label(), softWrap: false),
+              );
             },
           ),
         ),

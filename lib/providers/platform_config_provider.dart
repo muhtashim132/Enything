@@ -21,6 +21,8 @@ class PlatformConfigProvider extends ChangeNotifier {
   double _deliveryDiscountAmount = 15.0;
   double _maxDeliveryRadiusKm = 9.0;
   double _referralBonusAmount = 50.0;
+  double _deliveryGstRate = 0.18;
+  double _platformFeeGstRate = 0.18;
 
   bool _loading = false;
   String? _error;
@@ -37,6 +39,8 @@ class PlatformConfigProvider extends ChangeNotifier {
   double get deliveryDiscountAmount => _deliveryDiscountAmount;
   double get maxDeliveryRadiusKm => _maxDeliveryRadiusKm;
   double get referralBonusAmount => _referralBonusAmount;
+  double get deliveryGstRate => _deliveryGstRate;
+  double get platformFeeGstRate => _platformFeeGstRate;
 
   bool get loading => _loading;
   String? get error => _error;
@@ -84,6 +88,12 @@ class PlatformConfigProvider extends ChangeNotifier {
             break;
           case 'referral_bonus_amount':
             _referralBonusAmount = val;
+            break;
+          case 'delivery_gst_rate':
+            _deliveryGstRate = val;
+            break;
+          case 'platform_fee_gst_rate':
+            _platformFeeGstRate = val;
             break;
         }
       }
@@ -155,6 +165,8 @@ class PlatformConfigProvider extends ChangeNotifier {
       case 'delivery_discount_amount': return _deliveryDiscountAmount;
       case 'max_delivery_radius_km': return _maxDeliveryRadiusKm;
       case 'referral_bonus_amount': return _referralBonusAmount;
+      case 'delivery_gst_rate': return _deliveryGstRate;
+      case 'platform_fee_gst_rate': return _platformFeeGstRate;
       default: return 0.0;
     }
   }
@@ -171,6 +183,8 @@ class PlatformConfigProvider extends ChangeNotifier {
       case 'delivery_discount_amount': _deliveryDiscountAmount = val; break;
       case 'max_delivery_radius_km': _maxDeliveryRadiusKm = val; break;
       case 'referral_bonus_amount': _referralBonusAmount = val; break;
+      case 'delivery_gst_rate': _deliveryGstRate = val; break;
+      case 'platform_fee_gst_rate': _platformFeeGstRate = val; break;
     }
   }
 }

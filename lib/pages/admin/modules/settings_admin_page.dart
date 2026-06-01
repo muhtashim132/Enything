@@ -11,7 +11,8 @@ import '../rbac/audit_logs_page.dart';
 import '../platform/commission_fees_page.dart';
 import '../platform/coupon_management_page.dart';
 import '../platform/referral_settings_page.dart';
-
+import '../platform/tax_settings_page.dart';
+import '../platform/active_sessions_page.dart';
 class SettingsAdminPage extends StatelessWidget {
   const SettingsAdminPage({super.key});
 
@@ -104,7 +105,7 @@ class SettingsAdminPage extends StatelessWidget {
           iconColor: AdminColors.warning,
           title: 'Tax Settings',
           subtitle: 'GST rates and tax configuration',
-          onTap: () => _showComingSoon(context, 'Tax Settings'),
+          onTap: () => Navigator.push(context, _route(const TaxSettingsPage())),
         ).animate().fadeIn(delay: 450.ms).slideX(begin: -0.1),
 
         // ── Danger Zone ──────────────────────────────────────────
@@ -115,7 +116,7 @@ class SettingsAdminPage extends StatelessWidget {
             iconColor: AdminColors.danger,
             title: 'Active Sessions',
             subtitle: 'View and revoke admin sessions',
-            onTap: () => _showComingSoon(context, 'Session Management'),
+            onTap: () => Navigator.push(context, _route(const ActiveSessionsPage())),
           ).animate().fadeIn(delay: 500.ms).slideX(begin: -0.1),
         ],
 

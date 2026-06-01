@@ -17,6 +17,7 @@ class AuthProvider extends ChangeNotifier {
   // ─── Admin (God Mode) State ───────────────────────────────────────────────
   bool _isAdminVerified = false; // true after 2nd-factor password gate
   Map<String, dynamic>? _adminData; // row from admin_users table
+  String? _currentSessionId; // ID of the active admin_sessions row
 
   UserModel? get user => _user;
   bool get isLoading => _isLoading;
@@ -28,6 +29,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool get isAdminVerified => _isAdminVerified;
   bool get isAdmin => _adminData != null;
+  String? get currentSessionId => _currentSessionId;
   Map<String, dynamic>? get adminData => _adminData;
   String get adminLevel => _adminData?['admin_level'] as String? ?? '';
   Map<String, dynamic> get adminPermissions =>
@@ -138,6 +140,21 @@ class AuthProvider extends ChangeNotifier {
     // Dev: plain-text comparison (swap with bcrypt Edge Function in prod)
     if (password.trim() == storedPassword.trim()) {
       _isAdminVerified = true;
+
+      // ── Create admin session ──
+      try {
+        final sessionData = await _supabase.from('admin_sessions').insert({
+          'admin_id': userId,
+          'device_info': 'Enything Admin App', // You can use device_info package later
+        }).select('id').single();
+
+        _currentSessionId = sessionData['id'];
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('admin_session_id', _currentSessionId!);
+      } catch (e) {
+        debugPrint('Failed to create admin session: $e');
+      }
+
       notifyListeners();
 
       // Audit log: record login
@@ -253,6 +270,29 @@ class AuthProvider extends ChangeNotifier {
       await prefs.setString('last_active_role', sessionRole);
 
       // ── Detect verification status for the session role ──
+      
+      // If active role is admin, check if session is revoked
+      if (sessionRole == 'admin' && _isAdminVerified) {
+        final savedSessionId = prefs.getString('admin_session_id');
+        if (savedSessionId != null) {
+          try {
+            final sessionRow = await _supabase.from('admin_sessions').select('revoked_at').eq('id', savedSessionId).maybeSingle();
+            if (sessionRow == null || sessionRow['revoked_at'] != null) {
+              // Session was revoked remotely! Kick them out completely.
+              debugPrint('Admin session was revoked remotely.');
+              await signOut();
+              return;
+            } else {
+              _currentSessionId = savedSessionId;
+              // Update last seen
+              _supabase.from('admin_sessions').update({'last_seen_at': DateTime.now().toIso8601String()}).eq('id', savedSessionId).then((_) {}).catchError((_) {});
+            }
+          } catch (e) {
+            debugPrint('Error checking admin session: $e');
+          }
+        }
+      }
+
       String verificationStatus = 'verified'; // Default for customer
       if (sessionRole == 'seller') {
         final sellerData = await _supabase.from('shops').select('verification_status').eq('seller_id', userId).maybeSingle();
@@ -761,9 +801,16 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
+      if (_currentSessionId != null) {
+        await _supabase.from('admin_sessions').delete().eq('id', _currentSessionId!);
+      }
+    } catch (_) {}
+
+    try {
       await _supabase.auth.signOut();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('last_active_role');
+      await prefs.remove('admin_session_id');
     } catch (_) {}
     _user = null;
     _pendingPhone = null;
