@@ -177,7 +177,7 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           ),
           const SizedBox(height: 8),
           Text(
-            'Our support team is available from 9 AM to 9 PM, Monday through Saturday.',
+            'Our support team is available from 9 AM to 6 PM, Monday through Saturday.',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               fontSize: 14,
@@ -198,6 +198,14 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
             title: 'Call Us',
             subtitle: '+91 7006464241',
             onTap: _launchPhone,
+            isDark: isDark,
+          ),
+          const SizedBox(height: 16),
+          _buildContactCard(
+            icon: Icons.location_on_outlined,
+            title: 'Our Address',
+            subtitle: 'Ward No. 2, Bandipora\nJammu and Kashmir — 193502, India',
+            onTap: () {},
             isDark: isDark,
           ),
         ],

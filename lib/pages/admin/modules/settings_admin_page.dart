@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../../theme/admin_theme.dart';
 import '../../../providers/rbac_provider.dart';
@@ -7,6 +8,9 @@ import '../../../providers/team_provider.dart';
 import '../rbac/roles_list_page.dart';
 import '../rbac/team_members_page.dart';
 import '../rbac/audit_logs_page.dart';
+import '../platform/commission_fees_page.dart';
+import '../platform/coupon_management_page.dart';
+import '../platform/referral_settings_page.dart';
 
 class SettingsAdminPage extends StatelessWidget {
   const SettingsAdminPage({super.key});
@@ -59,21 +63,21 @@ class SettingsAdminPage extends StatelessWidget {
           iconColor: AdminColors.success,
           title: 'Commission & Fees',
           subtitle: 'Platform %, delivery fee, surge pricing',
-          onTap: () => _showComingSoon(context, 'Commission & Fees'),
+          onTap: () => Navigator.push(context, _route(const CommissionFeesPage())),
         ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.1),
         _SettingsTile(
           icon: Icons.local_offer_rounded,
           iconColor: AdminColors.warning,
           title: 'Coupon Management',
           subtitle: 'Create and manage discount codes',
-          onTap: () => _showComingSoon(context, 'Coupon Management'),
+          onTap: () => Navigator.push(context, _route(const CouponManagementPage())),
         ).animate().fadeIn(delay: 250.ms).slideX(begin: -0.1),
         _SettingsTile(
           icon: Icons.people_alt_rounded,
           iconColor: const Color(0xFFEC4899),
           title: 'Referral Rewards',
           subtitle: 'Referral bonus configuration',
-          onTap: () => _showComingSoon(context, 'Referral Rewards'),
+          onTap: () => Navigator.push(context, _route(const ReferralSettingsPage())),
         ).animate().fadeIn(delay: 300.ms).slideX(begin: -0.1),
 
         // ── Notifications ────────────────────────────────────────
@@ -239,7 +243,44 @@ class _NotificationSheetState extends State<_NotificationSheet> {
   final _titleCtrl = TextEditingController();
   final _msgCtrl = TextEditingController();
   String _audience = 'All Users';
-  final bool _sending = false;
+  bool _sending = false;
+
+  Future<void> _sendBroadcast() async {
+    final title = _titleCtrl.text.trim();
+    final body = _msgCtrl.text.trim();
+    if (title.isEmpty || body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please enter a title and message', style: AdminStyles.body(size: 13)),
+        backgroundColor: AdminColors.danger,
+      ));
+      return;
+    }
+
+    setState(() => _sending = true);
+    try {
+      final res = await Supabase.instance.client.functions.invoke('send-broadcast', body: {
+        'audience': _audience,
+        'title': title,
+        'body': body,
+      });
+
+      if (!mounted) return;
+      Navigator.pop(context); // close sheet
+      final sent = res.data['sent'] ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Successfully sent to $sent devices!', style: AdminStyles.body(size: 13, color: Colors.white)),
+        backgroundColor: AdminColors.success,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to send: $e', style: AdminStyles.body(size: 13, color: Colors.white)),
+        backgroundColor: AdminColors.danger,
+      ));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
 
   final List<String> _audiences = [
     'All Users', 'Customers', 'Sellers', 'Riders'
@@ -281,25 +322,6 @@ class _NotificationSheetState extends State<_NotificationSheet> {
             const SizedBox(height: 20),
             Text('Send Push Notification', style: AdminStyles.heading(size: 20)),
             const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AdminColors.warning.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AdminColors.warning.withValues(alpha: 0.3)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.warning_amber_rounded,
-                    color: AdminColors.warning, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Push notifications require FCM/APNs setup. This feature is coming soon.',
-                    style: AdminStyles.caption(color: AdminColors.warning),
-                  ),
-                ),
-              ]),
-            ),
             const SizedBox(height: 20),
             Text('Audience', style: AdminStyles.caption()),
             const SizedBox(height: 8),
@@ -348,16 +370,7 @@ class _NotificationSheetState extends State<_NotificationSheet> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: ElevatedButton(
-                  onPressed: _sending
-                      ? null
-                      : () {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Push notifications not configured yet.',
-                                style: AdminStyles.body(size: 13)),
-                            backgroundColor: AdminColors.surface,
-                            behavior: SnackBarBehavior.floating,
-                          ));
-                        },
+                  onPressed: _sending ? null : _sendBroadcast,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
@@ -365,8 +378,12 @@ class _NotificationSheetState extends State<_NotificationSheet> {
                         borderRadius: BorderRadius.circular(16)),
                   ),
                   child: _sending
-                      ? const CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2)
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        )
                       : Text('Send to $_audience',
                           style: AdminStyles.body(size: 15, color: Colors.white)),
                 ),

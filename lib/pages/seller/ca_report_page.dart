@@ -87,7 +87,7 @@ class _CaReportPageState extends State<CaReportPage> {
         delGst    += (o['gst_delivery'] ?? 0.0).toDouble();
         platGst   += (o['gst_platform'] ?? 0.0).toDouble();
         tcs       += (o['tcs_amount'] ?? 0.0).toDouble();
-        comm      += (o['zappy_commission'] ?? 0.0).toDouble();
+        comm      += (o['enything_commission'] ?? 0.0).toDouble();
         payout    += (o['seller_payout'] ?? 0.0).toDouble();
         grand     += (o['grand_total_collected'] ?? 0.0).toDouble();
         gw        += (o['gateway_deduction'] ?? 0.0).toDouble();

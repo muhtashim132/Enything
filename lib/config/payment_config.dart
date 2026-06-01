@@ -1,16 +1,16 @@
 // ============================================================================
-// payment_config.dart — Zappy App-Wide Payment & Fee Configuration
+// payment_config.dart — Enything App-Wide Payment & Fee Configuration
 // ============================================================================
 //
 // ── HOW FEES WORK (for your reference) ──────────────────────────────────────
 //
 //  [platformFee] = ₹15 flat per order, shown as "Handling Fee" to customer.
-//   → This covers Zappy's app operations PLUS absorbs the Razorpay gateway fee.
+//   → This covers Enything's app operations PLUS absorbs the Razorpay gateway fee.
 //   → This allows sellers to receive exactly 95% of their item price with no hidden cuts.
 //   → This is GST-INCLUSIVE at 18%. The GST inside = ₹15 - ₹15/1.18 = ₹2.29
 //
-//  Zappy's commission on item sales is pure 5%.
-//  It is exactly [TaxConfig.zappyTargetMarginPercent] (5%).
+//  Enything's commission on item sales is pure 5%.
+//  It is exactly [TaxConfig.enythingTargetMarginPercent] (5%).
 //  No gateway fees are deducted from the seller's payout.
 //
 // ============================================================================

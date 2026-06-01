@@ -20,7 +20,8 @@ class TermsOfServicePage extends StatelessWidget {
               'Under the Consumer Protection (E-Commerce) Rules, 2020, Enything acts as a Marketplace E-Commerce Entity connecting Customers, Sellers, and Delivery Partners. Enything does not own the inventory and is not responsible for the quality, safety, or legality of items.',
         ),
         LegalSection(
-          heading: '3. E-Pharmacy Specific Rules (Drugs and Cosmetics Act, 1940)',
+          heading:
+              '3. E-Pharmacy Specific Rules (Drugs and Cosmetics Act, 1940)',
           content:
               'The sale of Schedule H and H1 drugs requires a valid prescription from a Registered Medical Practitioner, which must be uploaded via the Platform. The sale of Schedule X drugs, Narcotic Drugs, and Psychotropic Substances (NDPS) is strictly prohibited. The registered pharmacy seller retains sole responsibility for verifying the authenticity of uploaded prescriptions.',
         ),

@@ -88,7 +88,7 @@ class AuthProvider extends ChangeNotifier {
       if (delivery != null) roles.add('delivery_partner');
     } catch (_) {}
 
-    // ── Admin / God Mode detection ───────────────────────────────────────────
+    // â”€â”€ Admin / God Mode detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (userId.endsWith('9999999996')) {
       roles.add('admin');
       _adminData = {
@@ -657,6 +657,81 @@ class AuthProvider extends ChangeNotifier {
       _error = e.message;
     } catch (e) {
       _error = 'Registration failed: ${e.toString()}';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return _error;
+  }
+
+  // ─── Accept Admin Invite Flow ──────────────────────────────────────────────
+
+  /// Fetch invite details (email, role_name) by token
+  Future<Map<String, dynamic>?> fetchInviteDetails(String token) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final response = await _supabase.rpc('get_invitation_details', params: {'p_token': token});
+      final List data = response as List;
+      if (data.isNotEmpty) {
+        _isLoading = false;
+        notifyListeners();
+        return data.first as Map<String, dynamic>;
+      }
+      _error = 'Invalid or expired invite code.';
+    } catch (e) {
+      _error = 'Error fetching invite: ${e.toString()}';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return null;
+  }
+
+  /// Registers the user, accepts the invite, and signs them in
+  Future<String?> acceptAdminInvite({
+    required String token,
+    required String email,
+    required String password,
+    required String fullName,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    
+    try {
+      // 1. Sign up the user (or if they exist, it might throw, but let's assume new user)
+      final authResponse = await _supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'full_name': fullName, 'role': 'admin'},
+      );
+
+      final userId = authResponse.user?.id;
+      if (userId == null) {
+        throw Exception('Failed to create user account. Check your email/password.');
+      }
+
+      // 2. Accept the invitation via RPC
+      await _supabase.rpc('accept_admin_invitation', params: {
+        'p_token': token,
+        'p_auth_user_id': userId,
+        'p_full_name': fullName,
+        'p_admin_password': password, // Store for 2FA verification
+      });
+
+      // 3. Fetch profile and mark them verified
+      await _fetchProfile(preferredRole: 'admin');
+      
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    } on AuthException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = e.toString();
+      if (_error!.contains('Invalid or expired')) {
+        _error = 'Invalid or expired invite code.';
+      }
     }
     _isLoading = false;
     notifyListeners();

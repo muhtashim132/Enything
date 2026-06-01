@@ -138,18 +138,18 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
         return;
       }
 
-      // ── Case 2: They requested a role they ALREADY have ────────
-      if (_requestedRole != null && allRoles.contains(_requestedRole)) {
-        _goToWelcomeThenDashboard(_requestedRole!);
-        return;
-      }
-
-      // ── Case 3: No specific role requested, but user has multiple roles ────────
+      // ── Case 2: User has multiple roles ────────
       if (allRoles.length > 1) {
         setState(() {
           _showRolePicker = true;
           _availableRoles = allRoles;
         });
+        return;
+      }
+
+      // ── Case 3: They requested a role they ALREADY have (and only have 1 role) ────────
+      if (_requestedRole != null && allRoles.contains(_requestedRole)) {
+        _goToWelcomeThenDashboard(_requestedRole!);
         return;
       }
 

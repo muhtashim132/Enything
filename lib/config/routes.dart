@@ -9,6 +9,7 @@ import '../pages/auth/seller_pending_verification_page.dart';
 import '../pages/auth/delivery_kyc_upload_page.dart';
 import '../pages/auth/delivery_pending_verification_page.dart';
 import '../pages/auth/login_page.dart';
+import '../pages/auth/accept_invite_page.dart';
 import '../pages/customer/home_page.dart';
 import '../pages/customer/restaurant_page.dart';
 import '../pages/customer/restaurant_dashboard_page.dart';
@@ -34,6 +35,9 @@ import '../pages/legal/privacy_policy_page.dart';
 import '../pages/admin/admin_password_page.dart';
 import '../pages/admin/admin_dashboard_page.dart';
 import '../pages/settings/faq_support_page.dart';
+import '../pages/legal/refund_policy_page.dart';
+import '../pages/seller/seller_withdrawals_page.dart';
+import '../pages/delivery/rider_withdrawals_page.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -46,6 +50,7 @@ class AppRoutes {
   static const String deliveryKycUpload = '/auth/delivery-kyc';
   static const String deliveryPendingVerification = '/auth/delivery-pending';
   static const String login = '/login';
+  static const String acceptAdminInvite = '/auth/accept-admin-invite';
   static const String customerHome = '/customer/home';
   static const String restaurant = '/customer/restaurant';
   static const String restaurantDashboard = '/customer/restaurant-food';
@@ -67,9 +72,12 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String terms = '/legal/terms';
   static const String privacy = '/legal/privacy';
-  static const String adminPassword  = '/admin/password';
-  static const String adminDashboard = '/admin/dashboard';
-  static const String faqSupport = '/settings/faq-support';
+  static const String adminPassword      = '/admin/password';
+  static const String adminDashboard     = '/admin/dashboard';
+  static const String faqSupport         = '/settings/faq-support';
+  static const String refundPolicy       = '/legal/refund-policy';
+  static const String sellerWithdrawals  = '/seller/withdrawals';
+  static const String riderWithdrawals   = '/delivery/withdrawals';
 
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
@@ -93,6 +101,8 @@ class AppRoutes {
         return _build(const DeliveryPendingVerificationPage(), routeSettings);
       case login:
         return _build(const LoginPage(), routeSettings);
+      case acceptAdminInvite:
+        return _build(const AcceptInvitePage(), routeSettings);
       case customerHome:
         return _build(const CustomerHomePage(), routeSettings);
       case restaurant:
@@ -150,6 +160,12 @@ class AppRoutes {
         return _build(const AdminDashboardPage(), routeSettings);
       case faqSupport:
         return _build(const FaqSupportPage(), routeSettings);
+      case refundPolicy:
+        return _build(const RefundPolicyPage(), routeSettings);
+      case sellerWithdrawals:
+        return _build(const SellerWithdrawalsPage(), routeSettings);
+      case riderWithdrawals:
+        return _build(const RiderWithdrawalsPage(), routeSettings);
       default:
         return _build(const SplashPage(), routeSettings);
     }

@@ -7,6 +7,7 @@ import '../models/product_model.dart';
 import '../models/shop_model.dart';
 import '../config/payment_config.dart';
 import '../config/tax_config.dart';
+import '../providers/platform_config_provider.dart';
 import '../utils/delivery_calculator.dart';
 
 // ---------------------------------------------------------------------------
@@ -89,7 +90,7 @@ ShopModel _shopFromJson(Map<String, dynamic> m) {
 }
 
 class CartProvider extends ChangeNotifier {
-  static const String _cartKey = 'zappy_cart_v1'; // Bug #20: persistence key
+  static const String _cartKey = 'enything_cart_v1'; // Bug #20: persistence key
   final List<CartItem> _items = [];
 
   List<CartItem> get items => List.unmodifiable(_items);
@@ -114,7 +115,7 @@ class CartProvider extends ChangeNotifier {
 
   bool get meetsMinimumOrder => subtotal >= PaymentConfig.minimumOrderValue;
 
-  double get platformFee => PaymentConfig.platformFee;
+  double get platformFee => PlatformConfigProvider.instance?.platformFee ?? PaymentConfig.platformFee;
 
   bool get requiresPrescription => _items.any((item) => item.product.requiresPrescription);
 
@@ -149,22 +150,27 @@ class CartProvider extends ChangeNotifier {
           })
       .toList();
 
-  double get smallCartFee =>
-      subtotal < PaymentConfig.smallCartThreshold && subtotal > 0
-          ? PaymentConfig.smallCartFee
-          : 0.0;
+  double get smallCartFee {
+    final threshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
+    final fee = PlatformConfigProvider.instance?.smallCartFee ?? PaymentConfig.smallCartFee;
+    return subtotal < threshold && subtotal > 0 ? fee : 0.0;
+  }
 
   double calculateDeliveryDiscount(double distanceKm) {
-    if (subtotal >= PaymentConfig.discountDeliveryThreshold && distanceKm <= 5.0) {
-      return PaymentConfig.deliveryDiscountAmount;
+    final threshold = PlatformConfigProvider.instance?.deliveryDiscountThreshold ?? PaymentConfig.discountDeliveryThreshold;
+    final discount = PlatformConfigProvider.instance?.deliveryDiscountAmount ?? PaymentConfig.deliveryDiscountAmount;
+    
+    if (subtotal >= threshold && distanceKm <= 5.0) {
+      return discount;
     }
     return 0.0;
   }
 
-  double get heavyOrderFee =>
-      totalWeight > PaymentConfig.heavyOrderThreshold
-          ? PaymentConfig.heavyOrderFee
-          : 0.0;
+  double get heavyOrderFee {
+    final threshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
+    final fee = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
+    return totalWeight > threshold ? fee : 0.0;
+  }
 
   /// True when items come from more than one shop.
   bool get isMultiShopOrder => shops.length > 1;

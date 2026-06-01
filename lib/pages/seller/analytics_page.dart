@@ -74,7 +74,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         final status = order['status'];
         final amount = (order['total_amount'] ?? 0.0).toDouble();
         final sp = (order['seller_payout'] ?? 0.0).toDouble();
-        final zc = (order['zappy_commission'] ?? 0.0).toDouble();
+        final zc = (order['enything_commission'] ?? 0.0).toDouble();
 
         if (status == 'delivered') {
           total += amount;

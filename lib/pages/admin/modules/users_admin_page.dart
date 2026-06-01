@@ -7,6 +7,7 @@ import '../../../theme/admin_theme.dart';
 import '../../../providers/rbac_provider.dart';
 import '../../../models/rbac/role_model.dart';
 import '../../../widgets/admin/kyc_verification_dialog.dart';
+import '../rbac/forbidden_page.dart';
 
 void _showKycDialog(BuildContext context, Map<String, dynamic> data, String title, String tableName, String idColumn, VoidCallback onRefresh) {
   showDialog(
@@ -64,71 +65,69 @@ Future<void> _deleteUser(BuildContext context, String userId, String name, VoidC
 }
 
 // ── Unified Users Hub (Customers / Sellers / Riders) ─────────────
-class UsersAdminPage extends StatefulWidget {
+class UsersAdminPage extends StatelessWidget {
   const UsersAdminPage({super.key});
 
   @override
-  State<UsersAdminPage> createState() => _UsersAdminPageState();
-}
-
-class _UsersAdminPageState extends State<UsersAdminPage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabs;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabs = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Tab bar
-        Container(
-          margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          decoration: BoxDecoration(
-            color: AdminColors.cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AdminColors.cardBorder),
-          ),
-          child: TabBar(
-            controller: _tabs,
-            indicator: BoxDecoration(
-              gradient: AdminGradients.primary,
-              borderRadius: BorderRadius.circular(14),
+    final rbac = context.watch<RbacProvider>();
+    final canViewCustomers = rbac.isSuperAdmin || rbac.can('customers.view');
+    final canViewSellers = rbac.isSuperAdmin || rbac.can('sellers.view');
+    final canViewRiders = rbac.isSuperAdmin || rbac.can('riders.view');
+
+    if (!canViewCustomers && !canViewSellers && !canViewRiders) {
+      return const ForbiddenPage(fullPage: false);
+    }
+
+    final tabs = <Tab>[];
+    final views = <Widget>[];
+
+    if (canViewCustomers) {
+      tabs.add(const Tab(text: 'Customers'));
+      views.add(const _CustomersTab());
+    }
+    if (canViewSellers) {
+      tabs.add(const Tab(text: 'Sellers'));
+      views.add(const _SellersTab());
+    }
+    if (canViewRiders) {
+      tabs.add(const Tab(text: 'Riders'));
+      views.add(const _RidersTab());
+    }
+
+    return DefaultTabController(
+      length: tabs.length,
+      child: Column(
+        children: [
+          // Tab bar
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            decoration: BoxDecoration(
+              color: AdminColors.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AdminColors.cardBorder),
             ),
-            indicatorSize: TabBarIndicatorSize.tab,
-            dividerColor: Colors.transparent,
-            labelColor: Colors.white,
-            unselectedLabelColor: AdminColors.textMuted,
-            labelStyle: AdminStyles.body(size: 13, color: Colors.white),
-            unselectedLabelStyle: AdminStyles.body(size: 13),
-            tabs: const [
-              Tab(text: 'Customers'),
-              Tab(text: 'Sellers'),
-              Tab(text: 'Riders'),
-            ],
+            child: TabBar(
+              indicator: BoxDecoration(
+                gradient: AdminGradients.primary,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              labelColor: Colors.white,
+              unselectedLabelColor: AdminColors.textMuted,
+              labelStyle: AdminStyles.body(size: 13, color: Colors.white),
+              unselectedLabelStyle: AdminStyles.body(size: 13),
+              tabs: tabs,
+            ),
           ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabs,
-            children: const [
-              _CustomersTab(),
-              _SellersTab(),
-              _RidersTab(),
-            ],
+          Expanded(
+            child: TabBarView(
+              children: views,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -165,10 +164,11 @@ class _CustomersTabState extends State<_CustomersTab> {
 
   Future<void> _fetch() async {
     try {
+      // All users in the database are customers (even if their primary role is seller or rider).
+      // Fetch all profiles so that sellers/riders also appear in the Customers list.
       final res = await _db
           .from('profiles')
           .select()
-          .eq('role', 'customer')
           .order('created_at', ascending: false)
           .limit(100);
       _users = List<Map<String, dynamic>>.from(res);
@@ -390,7 +390,11 @@ class _SellersTabState extends State<_SellersTab> {
 
   @override
   Widget build(BuildContext context) {
-    final isSuperAdmin = context.watch<RbacProvider>().isSuperAdmin;
+    final rbac = context.watch<RbacProvider>();
+    final isSuperAdmin = rbac.isSuperAdmin;
+    final canApprove = isSuperAdmin || rbac.can('sellers.approve');
+    final canSuspend = isSuperAdmin || rbac.can('sellers.suspend');
+
     return Column(
       children: [
         _SearchBar(_searchCtrl, 'Search sellers...'),
@@ -421,24 +425,26 @@ class _SellersTabState extends State<_SellersTab> {
                             action: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                IconButton(
-                                  icon: const Icon(Icons.verified_user_rounded, size: 20),
-                                  color: AdminColors.info,
-                                  tooltip: 'Verify KYC',
-                                  onPressed: () => _showKycDialog(
-                                    context,
-                                    s,
-                                    s['shop_name'] ?? 'Seller',
-                                    'shops',
-                                    'id',
-                                    _fetch,
+                                if (canApprove)
+                                  IconButton(
+                                    icon: const Icon(Icons.verified_user_rounded, size: 20),
+                                    color: AdminColors.info,
+                                    tooltip: 'Verify KYC',
+                                    onPressed: () => _showKycDialog(
+                                      context,
+                                      s,
+                                      s['shop_name'] ?? 'Seller',
+                                      'shops',
+                                      'id',
+                                      _fetch,
+                                    ),
                                   ),
-                                ),
-                                Switch(
-                                  value: isActive,
-                                  activeThumbColor: AdminColors.success,
-                                  onChanged: (_) => _toggle(s['id'].toString(), isActive),
-                                ),
+                                if (canSuspend)
+                                  Switch(
+                                    value: isActive,
+                                    activeThumbColor: AdminColors.success,
+                                    onChanged: (_) => _toggle(s['id'].toString(), isActive),
+                                  ),
                                 if (isSuperAdmin)
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
@@ -525,7 +531,10 @@ class _RidersTabState extends State<_RidersTab> {
 
   @override
   Widget build(BuildContext context) {
-    final isSuperAdmin = context.watch<RbacProvider>().isSuperAdmin;
+    final rbac = context.watch<RbacProvider>();
+    final isSuperAdmin = rbac.isSuperAdmin;
+    final canApprove = isSuperAdmin || rbac.can('riders.approve');
+    final canSuspend = isSuperAdmin || rbac.can('riders.suspend');
     return Column(
       children: [
         _SearchBar(_searchCtrl, 'Search riders...'),
@@ -555,24 +564,26 @@ class _RidersTabState extends State<_RidersTab> {
                             action: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                IconButton(
-                                  icon: const Icon(Icons.verified_user_rounded, size: 20),
-                                  color: AdminColors.info,
-                                  tooltip: 'Verify KYC',
-                                  onPressed: () => _showKycDialog(
-                                    context,
-                                    r,
-                                    profile?['full_name'] ?? 'Rider',
-                                    'delivery_partners',
-                                    'id',
-                                    _fetch,
+                                if (canApprove)
+                                  IconButton(
+                                    icon: const Icon(Icons.verified_user_rounded, size: 20),
+                                    color: AdminColors.info,
+                                    tooltip: 'Verify KYC',
+                                    onPressed: () => _showKycDialog(
+                                      context,
+                                      r,
+                                      profile?['full_name'] ?? 'Rider',
+                                      'delivery_partners',
+                                      'id',
+                                      _fetch,
+                                    ),
                                   ),
-                                ),
-                                Switch(
-                                  value: isActive,
-                                  activeThumbColor: AdminColors.success,
-                                  onChanged: (_) => _toggle(r['id'].toString(), isActive),
-                                ),
+                                if (canSuspend)
+                                  Switch(
+                                    value: isActive,
+                                    activeThumbColor: AdminColors.success,
+                                    onChanged: (_) => _toggle(r['id'].toString(), isActive),
+                                  ),
                                 if (isSuperAdmin)
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),

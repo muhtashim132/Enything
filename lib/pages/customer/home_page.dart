@@ -128,7 +128,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       if (userId != null) {
         final notifProvider = context.read<NotificationProvider>();
         notifProvider.listenAsCustomer(userId);
-        notifProvider.registerFcmToken(userId); // Register push token
+        notifProvider.registerFcmToken(userId, 'customer'); // Register push token
       }
     });
   }

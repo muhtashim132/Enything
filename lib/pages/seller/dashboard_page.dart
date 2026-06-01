@@ -166,7 +166,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         final userId = auth.currentUserId;
         final notifProvider = context.read<NotificationProvider>();
         notifProvider.listenAsSeller(shopId);
-        if (userId != null) notifProvider.registerFcmToken(userId);
+        if (userId != null) notifProvider.registerFcmToken(userId, 'seller');
       }
     });
   }
@@ -416,6 +416,16 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                     isDark: isDark,
                     onTap: () =>
                         Navigator.pushNamed(context, AppRoutes.caReport),
+                  ),
+                  _actionTile(
+                    icon: Icons.savings_rounded,
+                    gradient: const [Color(0xFF51CF66), Color(0xFF1E8449)],
+                    title: 'Withdraw Earnings',
+                    subtitle: 'Request payout to your UPI or bank',
+                    badge: null,
+                    isDark: isDark,
+                    onTap: () =>
+                        Navigator.pushNamed(context, AppRoutes.sellerWithdrawals),
                   ),
                   _actionTile(
                     icon: Icons.settings_outlined,

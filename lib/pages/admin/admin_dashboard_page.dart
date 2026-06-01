@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/rbac_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
 import '../../theme/admin_theme.dart';
+import '../../widgets/common/notification_bell.dart';
 
 import 'modules/overview_admin_page.dart';
 import 'modules/orders_admin_page.dart';
@@ -29,7 +31,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   int _currentIndex = 0;
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
-  int _kycPendingCount = 0;
 
   @override
   void initState() {
@@ -49,6 +50,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final userId = auth.currentUserId;
       if (userId != null) {
         context.read<RbacProvider>().loadCurrentAdmin(userId);
+        context.read<NotificationProvider>().listenAsAdmin(userId);
       }
       _loadKycPendingCount();
     });
@@ -71,14 +73,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           .from('delivery_partners')
           .select('id')
           .eq('verification_status', 'pending');
-      if (mounted) {
-        setState(() => _kycPendingCount =
-            (sellers as List).length + (riders as List).length);
-      }
+      if (mounted) setState(() {});
     } catch (_) {}
   }
 
   void _signOut() {
+    context.read<NotificationProvider>().stopListening();
     context.read<AuthProvider>().adminSignOut();
     context.read<RbacProvider>().clear();
     Navigator.pushNamedAndRemoveUntil(
@@ -92,34 +92,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           activeIcon: Icons.dashboard_rounded,
           label: 'Home',
           visible: true,
-        ),
-        _NavDef(
-          icon: Icons.receipt_long_outlined,
-          activeIcon: Icons.receipt_long_rounded,
-          label: 'Orders',
-          visible: rbac.can('orders.view') || rbac.isSuperAdmin,
-        ),
-        _NavDef(
-          icon: Icons.people_outline_rounded,
-          activeIcon: Icons.people_rounded,
-          label: 'Users',
-          visible: rbac.can('customers.view') ||
-              rbac.can('sellers.view') ||
-              rbac.can('riders.view') ||
-              rbac.isSuperAdmin,
-        ),
-        _NavDef(
-          icon: Icons.verified_user_outlined,
-          activeIcon: Icons.verified_user_rounded,
-          label: 'KYC',
-          visible: rbac.isSuperAdmin,
-          badgeCount: _kycPendingCount,
-        ),
-        _NavDef(
-          icon: Icons.account_balance_outlined,
-          activeIcon: Icons.account_balance_rounded,
-          label: 'Finance',
-          visible: rbac.can('finance.view') || rbac.isSuperAdmin,
         ),
         const _NavDef(
           icon: Icons.tune_outlined,
@@ -345,10 +317,10 @@ class _Header extends StatelessWidget {
                   color: AdminColors.primary, strokeWidth: 2),
             )
           else ...[
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: AdminColors.textSecondary, size: 22),
-              onPressed: () {},
+            const NotificationBell(
+              iconColor: AdminColors.textSecondary,
+              containerColor: Colors.transparent,
+              badgeColor: AdminColors.warning,
             ),
             IconButton(
               icon: const Icon(Icons.logout_rounded,

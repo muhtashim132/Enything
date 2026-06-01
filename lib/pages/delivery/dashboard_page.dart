@@ -64,7 +64,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (userId != null) {
         final notifProvider = context.read<NotificationProvider>();
         notifProvider.listenAsDelivery(userId);
-        notifProvider.registerFcmToken(userId); // Register push token
+        notifProvider.registerFcmToken(userId, 'delivery'); // Register push token
       }
     });
   }

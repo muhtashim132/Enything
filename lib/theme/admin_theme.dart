@@ -220,6 +220,7 @@ class AdminKpiCard extends StatelessWidget {
   final IconData icon;
   final LinearGradient gradient;
   final bool loading;
+  final VoidCallback? onTap;
 
   const AdminKpiCard({
     super.key,
@@ -229,16 +230,17 @@ class AdminKpiCard extends StatelessWidget {
     required this.icon,
     required this.gradient,
     this.loading = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    Widget card = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AdminColors.cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AdminColors.cardBorder),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AdminColors.cardBorder, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -279,6 +281,17 @@ class AdminKpiCard extends StatelessWidget {
               ],
             ),
     );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: card,
+        ),
+      );
+    }
+    return card;
   }
 }
 

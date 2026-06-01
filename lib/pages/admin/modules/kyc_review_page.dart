@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/rbac_provider.dart';
+import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
 
 class KycReviewPage extends StatefulWidget {
@@ -196,6 +199,10 @@ class _KycReviewPageState extends State<KycReviewPage>
 
   @override
   Widget build(BuildContext context) {
+    final rbac = context.watch<RbacProvider>();
+    if (!rbac.isSuperAdmin && !rbac.can('sellers.approve') && !rbac.can('riders.approve')) {
+      return const ForbiddenPage(fullPage: false);
+    }
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -354,6 +361,8 @@ class _KycReviewPageState extends State<KycReviewPage>
       docImages: _extractDocImages(docs, ['aadhar_front', 'aadhar_back', 'pan_front', 'pan_back', 'shop_proof_1', 'shop_proof_2', 'bank_proof']),
       onApprove: () => _approveSeller(shop),
       onReject: () => _rejectSeller(shop),
+      canApprove: context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('sellers.approve'),
+      canReject: context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('sellers.approve'),
     );
   }
 
@@ -387,6 +396,8 @@ class _KycReviewPageState extends State<KycReviewPage>
       docImages: _extractDocImages(docs, ['aadhar_front', 'aadhar_back', 'pan_front', 'pan_back', 'dl_front', 'dl_back', 'rc_front', 'rc_back']),
       onApprove: () => _approveRider(rider),
       onReject: () => _rejectRider(rider),
+      canApprove: context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('riders.approve'),
+      canReject: context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('riders.approve'),
     );
   }
 
@@ -410,6 +421,8 @@ class _KycCard extends StatefulWidget {
   final List<_DocImage> docImages;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
+  final bool canApprove;
+  final bool canReject;
 
   const _KycCard({
     required this.emoji,
@@ -421,6 +434,8 @@ class _KycCard extends StatefulWidget {
     required this.docImages,
     required this.onApprove,
     required this.onReject,
+    required this.canApprove,
+    required this.canReject,
   });
 
   @override
@@ -586,42 +601,45 @@ class _KycCardState extends State<_KycCard> {
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _rejecting ? null : () async {
-                  setState(() => _rejecting = true);
-                  await widget.onReject();
-                  if (mounted) setState(() => _rejecting = false);
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AdminColors.danger,
-                  side: const BorderSide(color: AdminColors.danger),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+            if (widget.canReject)
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _rejecting ? null : () async {
+                    setState(() => _rejecting = true);
+                    await widget.onReject();
+                    if (mounted) setState(() => _rejecting = false);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AdminColors.danger,
+                    side: const BorderSide(color: AdminColors.danger),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: _rejecting
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: AdminColors.danger, strokeWidth: 2))
+                      : Text('Reject', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                 ),
-                child: _rejecting
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: AdminColors.danger, strokeWidth: 2))
-                    : Text('Reject', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _approving ? null : () async {
-                  setState(() => _approving = true);
-                  await widget.onApprove();
-                  if (mounted) setState(() => _approving = false);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AdminColors.success,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+            if (widget.canReject && widget.canApprove)
+              const SizedBox(width: 12),
+            if (widget.canApprove)
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _approving ? null : () async {
+                    setState(() => _approving = true);
+                    await widget.onApprove();
+                    if (mounted) setState(() => _approving = false);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminColors.success,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: _approving
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text('Approve', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700)),
                 ),
-                child: _approving
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : Text('Approve', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700)),
               ),
-            ),
           ]),
         ),
       ]),

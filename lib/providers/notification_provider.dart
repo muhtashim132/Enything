@@ -46,7 +46,7 @@ class NotificationProvider extends ChangeNotifier {
 
   /// Call this once after the user logs in to register their FCM device token.
   /// Stores the token in Supabase `device_tokens` table for push delivery.
-  Future<void> registerFcmToken(String userId) async {
+  Future<void> registerFcmToken(String userId, String role) async {
     try {
       final messaging = FirebaseMessaging.instance;
 
@@ -62,6 +62,7 @@ class NotificationProvider extends ChangeNotifier {
         'user_id': userId,
         'token': token,
         'platform': 'android',
+        'role': role,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id,token');
 
@@ -73,6 +74,7 @@ class NotificationProvider extends ChangeNotifier {
           'user_id': userId,
           'token': newToken,
           'platform': 'android',
+          'role': role,
           'updated_at': DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,token');
       });
@@ -272,6 +274,59 @@ class NotificationProvider extends ChangeNotifier {
                 orderId: orderId,
               ));
             }
+          },
+        )
+        .subscribe();
+  }
+
+  /// Admin: watches for new KYC applications and complaints.
+  void listenAsAdmin(String adminId) {
+    if (_listeningUserId == adminId && _listeningRole == 'admin') return;
+    stopListening();
+    _listeningUserId = adminId;
+    _listeningRole = 'admin';
+
+    _channel = _supabase
+        .channel('notif-admin-$adminId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'shops',
+          callback: (payload) {
+            final shopId = payload.newRecord['id'] as String?;
+            final shopName = payload.newRecord['shop_name'] as String? ?? 'A new shop';
+            _add(AppNotification(
+              id: 'shop_kyc_$shopId',
+              title: '🏪 New Shop KYC!',
+              body: '$shopName has registered and is pending verification.',
+            ));
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'delivery_partners',
+          callback: (payload) {
+            final partnerId = payload.newRecord['id'] as String?;
+            _add(AppNotification(
+              id: 'rider_kyc_$partnerId',
+              title: '🛵 New Rider KYC!',
+              body: 'A new delivery partner has registered and is pending verification.',
+            ));
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'support_tickets',
+          callback: (payload) {
+            final id = payload.newRecord['id'] as String?;
+            final reason = payload.newRecord['subject'] as String? ?? payload.newRecord['title'] as String? ?? 'A new support ticket';
+            _add(AppNotification(
+              id: 'ticket_$id',
+              title: '🚨 New Support Ticket!',
+              body: reason,
+            ));
           },
         )
         .subscribe();

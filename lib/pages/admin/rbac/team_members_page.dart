@@ -200,7 +200,19 @@ class _TeamMembersPageState extends State<TeamMembersPage>
                                   ),
                                   _statusBadge(inv.status.name),
                                   if (inv.status.name == 'pending' &&
-                                      rbac.isSuperAdmin)
+                                      rbac.isSuperAdmin) ...[
+                                    IconButton(
+                                      icon: const Icon(Icons.copy_rounded,
+                                          color: Colors.white70, size: 18),
+                                      onPressed: () {
+                                        Clipboard.setData(ClipboardData(text: inv.token));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Invite code copied!')),
+                                        );
+                                      },
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      constraints: const BoxConstraints(),
+                                    ),
                                     IconButton(
                                       icon: const Icon(Icons.cancel_outlined,
                                           color: Colors.white24, size: 18),
@@ -209,6 +221,7 @@ class _TeamMembersPageState extends State<TeamMembersPage>
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(),
                                     ),
+                                  ],
                                 ]),
                               );
                             },

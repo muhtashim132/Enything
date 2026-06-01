@@ -19,6 +19,7 @@ import 'providers/notification_provider.dart';
 import 'providers/rbac_provider.dart';
 import 'providers/team_provider.dart';
 import 'providers/audit_provider.dart';
+import 'providers/platform_config_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +56,14 @@ void main() async {
   final cartProvider = CartProvider();
   await cartProvider.loadCart();
 
-  runApp(EnythingApp(cartProvider: cartProvider));
+  // Load platform config
+  final configProvider = PlatformConfigProvider();
+  await configProvider.load();
+
+  runApp(EnythingApp(
+    cartProvider: cartProvider,
+    configProvider: configProvider,
+  ));
 }
 
 /// Background FCM handler — MUST be a top-level function (not a closure).
@@ -68,7 +76,12 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
 
 class EnythingApp extends StatelessWidget {
   final CartProvider cartProvider;
-  const EnythingApp({super.key, required this.cartProvider});
+  final PlatformConfigProvider configProvider;
+  const EnythingApp({
+    super.key,
+    required this.cartProvider,
+    required this.configProvider,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +97,7 @@ class EnythingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RbacProvider()),
         ChangeNotifierProvider(create: (_) => TeamProvider()),
         ChangeNotifierProvider(create: (_) => AuditProvider()),
+        ChangeNotifierProvider<PlatformConfigProvider>.value(value: configProvider),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

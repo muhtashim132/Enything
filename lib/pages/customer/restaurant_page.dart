@@ -8,7 +8,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/product_card.dart';
-import '../../widgets/common/zappy_map.dart';
+import '../../widgets/common/enything_map.dart';
 
 class RestaurantPage extends StatefulWidget {
   final String shopId;
@@ -220,7 +220,7 @@ class _RestaurantPageState extends State<RestaurantPage> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: ZappyMap(
+                        child: EnythingMap(
                           center: _shop!.location,
                           zoom: 15,
                           interactive: false,

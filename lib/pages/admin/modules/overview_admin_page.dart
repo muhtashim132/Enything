@@ -3,7 +3,13 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/rbac_provider.dart';
 import '../../../theme/admin_theme.dart';
+import 'orders_admin_page.dart';
+import 'users_admin_page.dart';
+import 'kyc_review_page.dart';
+import 'finance_admin_page.dart';
 
 class OverviewAdminPage extends StatefulWidget {
   final String adminName;
@@ -101,6 +107,38 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
     if (mounted) setState(() => _loading = false);
   }
 
+  void _openModule(BuildContext context, String title, Widget child) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AdminColors.bg,
+          appBar: AppBar(
+            backgroundColor: AdminColors.surface,
+            elevation: 0,
+            leading: const BackButton(color: Colors.white),
+            title: Text(title, style: AdminStyles.title().copyWith(color: Colors.white)),
+          ),
+          body: child,
+        ),
+      ),
+    );
+  }
+
+  void _handleNav(BuildContext context, List<String> requiredPermissions, String title, Widget child) {
+    final rbac = context.read<RbacProvider>();
+    final hasPerm = rbac.isSuperAdmin || requiredPermissions.any((p) => rbac.can(p));
+    if (hasPerm) {
+      _openModule(context, title, child);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('You do not have permission to access $title.'),
+        backgroundColor: AdminColors.danger,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat.compact(locale: 'en_IN');
@@ -133,6 +171,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.currency_rupee_rounded,
                 gradient: AdminGradients.primary,
                 loading: _loading,
+                onTap: () => _handleNav(context, ['finance.view'], 'Finance', const FinanceAdminPage()),
               )
                   .animate()
                   .fadeIn(delay: 50.ms)
@@ -144,6 +183,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.shopping_bag_rounded,
                 gradient: AdminGradients.info,
                 loading: _loading,
+                onTap: () => _handleNav(context, ['orders.view'], 'Orders', const OrdersAdminPage()),
               )
                   .animate()
                   .fadeIn(delay: 100.ms)
@@ -154,6 +194,10 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.people_rounded,
                 gradient: AdminGradients.success,
                 loading: _loading,
+                onTap: () {
+                  final rbac = context.read<RbacProvider>();
+                  _handleNav(context, ['customers.view', 'sellers.view', 'riders.view'], 'Users', ChangeNotifierProvider.value(value: rbac, child: const UsersAdminPage()));
+                },
               )
                   .animate()
                   .fadeIn(delay: 150.ms)
@@ -165,6 +209,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.pending_actions_rounded,
                 gradient: AdminGradients.warning,
                 loading: _loading,
+                onTap: () => _handleNav(context, ['sellers.approve', 'riders.approve'], 'KYC Verification', const KycReviewPage()),
               )
                   .animate()
                   .fadeIn(delay: 200.ms)
@@ -176,6 +221,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.account_balance_wallet_rounded,
                 gradient: AdminGradients.danger,
                 loading: _loading,
+                onTap: () => _handleNav(context, ['finance.view'], 'Finance', const FinanceAdminPage()),
               )
                   .animate()
                   .fadeIn(delay: 250.ms)
@@ -187,6 +233,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.bar_chart_rounded,
                 gradient: AdminGradients.primary,
                 loading: _loading,
+                onTap: () => _handleNav(context, ['finance.view'], 'Finance', const FinanceAdminPage()),
               )
                   .animate()
                   .fadeIn(delay: 300.ms)

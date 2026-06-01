@@ -1,5 +1,5 @@
 // ============================================================================
-// order_model.dart — Zappy Order + Financial Snapshot
+// order_model.dart — Enything Order + Financial Snapshot
 // ============================================================================
 //
 // FINANCIAL SNAPSHOT PATTERN:
@@ -91,7 +91,7 @@ class OrderModel {
   final double tcsAmount;
 
   /// Gross commission Enything charged on base item subtotal (5% standard).
-  final double zappyCommission;
+  final double enythingCommission;
 
   /// Net payout to seller: (base − commission + nonFoodGst − tcs).
   /// This is what actually lands in the seller's bank account.
@@ -149,7 +149,7 @@ class OrderModel {
     this.gstDelivery = 0.0,
     this.gstPlatform = 0.0,
     this.tcsAmount = 0.0,
-    this.zappyCommission = 0.0,
+    this.enythingCommission = 0.0,
     this.sellerPayout = 0.0,
     this.gatewayDeduction = 0.0,
     this.grandTotalCollected = 0.0,
@@ -203,7 +203,7 @@ class OrderModel {
       gstDelivery: (map['gst_delivery'] ?? 0.0).toDouble(),
       gstPlatform: (map['gst_platform'] ?? 0.0).toDouble(),
       tcsAmount: (map['tcs_amount'] ?? 0.0).toDouble(),
-      zappyCommission: (map['zappy_commission'] ?? 0.0).toDouble(),
+      enythingCommission: (map['enything_commission'] ?? 0.0).toDouble(),
       sellerPayout: (map['seller_payout'] ?? 0.0).toDouble(),
       gatewayDeduction: (map['gateway_deduction'] ?? 0.0).toDouble(),
       grandTotalCollected: (map['grand_total_collected'] ?? 0.0).toDouble(),
@@ -288,7 +288,7 @@ class OrderModel {
       gstDelivery: gstDelivery,
       gstPlatform: gstPlatform,
       tcsAmount: tcsAmount,
-      zappyCommission: zappyCommission,
+      enythingCommission: enythingCommission,
       sellerPayout: sellerPayout,
       gatewayDeduction: gatewayDeduction,
       grandTotalCollected: grandTotalCollected,

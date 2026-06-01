@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/rbac_provider.dart';
+import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
 import '../../../widgets/common/star_rating_display.dart';
 
@@ -68,6 +71,10 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
 
   @override
   Widget build(BuildContext context) {
+    final rbac = context.watch<RbacProvider>();
+    if (!rbac.isSuperAdmin && !rbac.can('support.view')) {
+      return const ForbiddenPage(fullPage: false);
+    }
     return Column(
       children: [
         // Tab bar
@@ -255,7 +262,7 @@ class _ComplaintCard extends StatelessWidget {
           ),
 
           // Action footer
-          if (status != 'resolved' && status != 'closed')
+          if (status != 'resolved' && status != 'closed' && (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.reply') || context.read<RbacProvider>().can('support.close')))
             Container(
               decoration: BoxDecoration(
                 color: AdminColors.surface.withValues(alpha: 0.5),
@@ -267,49 +274,52 @@ class _ComplaintCard extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      await db
-                          .from('support_tickets')
-                          .update({'status': 'in_progress'}).eq(
-                              'id', complaint['id']);
-                      await onRefresh();
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AdminColors.info,
-                      side: BorderSide(
-                          color: AdminColors.info.withValues(alpha: 0.4)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                if (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.reply'))
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        await db
+                            .from('support_tickets')
+                            .update({'status': 'in_progress'}).eq(
+                                'id', complaint['id']);
+                        await onRefresh();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AdminColors.info,
+                        side: BorderSide(
+                            color: AdminColors.info.withValues(alpha: 0.4)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      child: Text('Start Review',
+                          style: AdminStyles.caption(
+                              color: AdminColors.info)),
                     ),
-                    child: Text('Start Review',
-                        style: AdminStyles.caption(
-                            color: AdminColors.info)),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      await db
-                          .from('support_tickets')
-                          .update({'status': 'resolved'}).eq(
-                              'id', complaint['id']);
-                      await onRefresh();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AdminColors.success,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                if ((context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.reply')) && (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.close')))
+                  const SizedBox(width: 10),
+                if (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.close'))
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await db
+                            .from('support_tickets')
+                            .update({'status': 'resolved'}).eq(
+                                'id', complaint['id']);
+                        await onRefresh();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AdminColors.success,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      child: Text('Mark Resolved',
+                          style: AdminStyles.caption(color: Colors.white)
+                              .copyWith(fontWeight: FontWeight.w600)),
                     ),
-                    child: Text('Resolve',
-                        style: AdminStyles.caption(color: Colors.white)),
                   ),
-                ),
               ]),
             ),
         ],

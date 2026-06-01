@@ -1,35 +1,35 @@
 // ============================================================================
-// tax_config.dart — Zappy India GST & Platform Payout Engine (ADD-ON MODEL)
+// tax_config.dart — Enything India GST & Platform Payout Engine (ADD-ON MODEL)
 // ============================================================================
 //
 // ── MODEL: ADD-ON GST ────────────────────────────────────────────────────────
 //
 //   Sellers enter their BASE price (pre-GST) in the app.
-//   Zappy adds the applicable GST % ON TOP at checkout.
+//   Enything adds the applicable GST % ON TOP at checkout.
 //   The customer sees and pays:  Base Price + GST + Delivery + Platform Fee
 //
 //   This means:
-//     • GST never comes out of Zappy's or seller's margin.
+//     • GST never comes out of Enything's or seller's margin.
 //     • The customer pays their fair share of tax — legally transparent.
-//     • Zappy's 10% commission is always 10% of base price, clean.
+//     • Enything's 10% commission is always 10% of base price, clean.
 //
 // ── LEGAL FRAMEWORK ─────────────────────────────────────────────────────────
 //
-//   Zappy is an E-Commerce Operator (ECO) under Section 2(45) of CGST Act.
+//   Enything is an E-Commerce Operator (ECO) under Section 2(45) of CGST Act.
 //
 //   RESTAURANT / FOOD (Section 9(5) + Notification 17/2021-CT(R)):
-//     → Zappy is the DEEMED SUPPLIER. Zappy collects 5% GST from customer
+//     → Enything is the DEEMED SUPPLIER. Enything collects 5% GST from customer
 //       and deposits it directly to the government.
 //     → Individual food sellers do NOT need a separate GST registration for
 //       these sales (if their annual turnover < ₹20 lakh).
 //
 //   GROCERY / RETAIL / PHARMACY etc.:
-//     → The seller is the supplier. Zappy collects GST from customer ON
+//     → The seller is the supplier. Enything collects GST from customer ON
 //       BEHALF of the seller, then passes it to the seller as part of their
 //       payout. The seller files their own GST returns.
 //
-//   ZAPPY'S OWN SERVICES (Delivery + Platform Fee):
-//     → Both carry 18% GST. Zappy deposits this to the government.
+//   ENYTHING'S OWN SERVICES (Delivery + Platform Fee):
+//     → Both carry 18% GST. Enything deposits this to the government.
 //     → SAC 9965/9967 for delivery, SAC 9985 for platform/handling fee.
 //
 // ── PAYMENT GATEWAY ─────────────────────────────────────────────────────────
@@ -38,12 +38,12 @@
 //   COD: zero gateway deduction (cash collected by rider).
 //   UPI/Card: 2.36% deducted from the ENTIRE transaction amount.
 //
-//   Gateway fee is apportioned between Zappy and seller proportionally:
+//   Gateway fee is apportioned between Enything and seller proportionally:
 //     - Seller absorbs 2.36% on THEIR portion (baseSubtotal - commission + GST passthrough)
-//     - Zappy absorbs 2.36% on ZAPPY'S portion (commission + delivery collected + platformFee)
+//     - Enything absorbs 2.36% on ENYTHING'S portion (commission + delivery collected + platformFee)
 //   This ensures no one cross-subsidises the other's gateway cost.
 //
-// ── ZAPPY COMMISSION ────────────────────────────────────────────────────────
+// ── ENYTHING COMMISSION ────────────────────────────────────────────────────────
 //
 //   Target: 10% of base item subtotal, NET after gateway.
 //   Formula: grossRate = 10% / (1 - 2.36%) = 10.2418%
@@ -65,13 +65,13 @@
 //   Rider payout (earnings):    -₹ 35.00   (full delivery before discount)
 //   Seller payout (base only):  -₹475.00   (₹500 - exactly 5% commission)
 //   Seller GST passthrough:     -₹ 25.00   (grocery GST — seller remits to govt)
-//   GST Zappy remits (own svc): -₹  7.63   (18% inside ₹35 delivery + ₹15 platform)
+//   GST Enything remits (own svc): -₹  7.63   (18% inside ₹35 delivery + ₹15 platform)
 //   ─────────────────────────────────────
-//   Zappy Net Profit:            ₹ 18.80
+//   Enything Net Profit:            ₹ 18.80
 //     • Commission (pure 5%):   +₹ 25.00
 //     • Platform net of GST:    +₹ 12.71
 //     • Gateway absorbed:       -₹ 13.57
-//     • Delivery net of GST:    -₹  5.34 (Zappy remits ₹5.34 GST out of the ₹35)
+//     • Delivery net of GST:    -₹  5.34 (Enything remits ₹5.34 GST out of the ₹35)
 //
 //   NOTE: The seller receives exactly 95% of their base price. Zero hidden cuts.
 //
@@ -90,17 +90,17 @@ class TaxConfig {
   static double get effectiveGatewayDeductionPercent =>
       gatewayFeePercent * (1 + gatewayFeeGst); // = 0.0236
 
-  // ── Zappy's Target Platform Commission ────────────────────────────────────
+  // ── Enything's Target Platform Commission ────────────────────────────────────
 
-  /// Zappy's pure commission % on base item subtotal.
+  /// Enything's pure commission % on base item subtotal.
   /// Set to exactly 5% (0.05). Seller receives exactly 95%.
-  static const double zappyTargetMarginPercent = 0.05; // 5%
+  static const double enythingTargetMarginPercent = 0.05; // 5%
 
-  /// We no longer gross up the commission. Zappy charges exactly 5%
+  /// We no longer gross up the commission. Enything charges exactly 5%
   /// and absorbs the gateway fee itself (covered by the platform fee).
-  static double get grossCommissionRateOnline => zappyTargetMarginPercent;
+  static double get grossCommissionRateOnline => enythingTargetMarginPercent;
 
-  // ── GST on Zappy's OWN services ───────────────────────────────────────────
+  // ── GST on Enything's OWN services ───────────────────────────────────────────
 
   /// Delivery charge GST rate (SAC 9965/9967): 18%.
   static const double deliveryGstRate = 0.18;
@@ -113,7 +113,7 @@ class TaxConfig {
   //   The customer sees: base price + GST in their bill separately.
 
   static const Map<String, double> _categoryGstRate = {
-    // ── Food: Zappy is deemed supplier (Section 9(5)) ─────────────────────
+    // ── Food: Enything is deemed supplier (Section 9(5)) ─────────────────────
     'Restaurant': 0.05, // 5% — no ITC for seller
     'Fast Food': 0.05,
     'Bakery': 0.05,
@@ -178,10 +178,10 @@ class TaxConfig {
     return 'GST ${(rate * 100).toStringAsFixed(0)}%';
   }
 
-  /// True if Zappy is the deemed supplier for this category (Section 9(5)).
+  /// True if Enything is the deemed supplier for this category (Section 9(5)).
   /// These are restaurant/food-service categories.
-  /// Zappy collects and deposits the GST for these — seller doesn't touch it.
-  static bool isZappyDeemedSupplier(String category) {
+  /// Enything collects and deposits the GST for these — seller doesn't touch it.
+  static bool isEnythingDeemedSupplier(String category) {
     const s9_5Categories = {
       'Restaurant',
       'Fast Food',
@@ -194,7 +194,7 @@ class TaxConfig {
     return s9_5Categories.contains(category);
   }
 
-  // ── GST Helpers for Zappy's own services (delivery + platform) ────────────
+  // ── GST Helpers for Enything's own services (delivery + platform) ────────────
 
   /// GST extracted from a delivery charge (18% inside).
   ///   e.g. ₹35 delivery: GST inside = ₹35 - ₹35/1.18 = ₹5.34
@@ -219,7 +219,7 @@ class TaxConfig {
 /// Call [OrderTaxBreakdown.calculate] once in checkout — it gives you:
 ///   • Exactly what the customer pays (grand total)
 ///   • Exactly what the seller receives
-///   • Exactly what Zappy nets
+///   • Exactly what Enything nets
 ///   • All GST amounts split by who remits them
 ///
 /// Usage:
@@ -243,10 +243,10 @@ class OrderTaxBreakdown {
 
   // ── GST split by remittance responsibility ────────────────────────────────
 
-  /// GST on Section 9(5) categories (food/restaurant) — Zappy remits to govt.
+  /// GST on Section 9(5) categories (food/restaurant) — Enything remits to govt.
   final double s9_5GstToRemit;
 
-  /// GST on non-food categories — Zappy passes to seller (seller remits).
+  /// GST on non-food categories — Enything passes to seller (seller remits).
   final double nonFoodGstPassThrough;
 
   // ── Delivery & Platform ───────────────────────────────────────────────────
@@ -254,13 +254,13 @@ class OrderTaxBreakdown {
   /// Delivery charge collected from customer (GST-inclusive at 18%).
   final double deliveryCharge;
 
-  /// GST embedded in deliveryCharge — Zappy remits to govt.
+  /// GST embedded in deliveryCharge — Enything remits to govt.
   final double deliveryGst;
 
   /// Platform/handling fee (GST-inclusive at 18%).
   final double platformFee;
 
-  /// GST embedded in platformFee — Zappy remits to govt.
+  /// GST embedded in platformFee — Enything remits to govt.
   final double platformFeeGst;
 
   // ── Totals ────────────────────────────────────────────────────────────────
@@ -276,24 +276,24 @@ class OrderTaxBreakdown {
   /// Amount deducted by payment gateway (0 for COD).
   final double gatewayDeduction;
 
-  /// Gateway deduction allocated to Zappy's revenue portion.
-  final double zappyGatewayShare;
+  /// Gateway deduction allocated to Enything's revenue portion.
+  final double enythingGatewayShare;
 
   /// Gateway deduction allocated to seller's portion.
   final double sellerGatewayShare;
 
-  // ── Zappy P&L ─────────────────────────────────────────────────────────────
+  // ── Enything P&L ─────────────────────────────────────────────────────────────
 
   /// Gross commission charged to seller on base subtotal.
-  final double zappyGrossCommission;
+  final double enythingGrossCommission;
 
-  /// Net commission after Zappy absorbs its share of gateway fees.
-  final double zappyNetCommission;
+  /// Net commission after Enything absorbs its share of gateway fees.
+  final double enythingNetCommission;
 
   // ── Seller ────────────────────────────────────────────────────────────────
 
   /// Amount paid to seller:
-  ///   (itemBaseSubtotal − zappyGrossCommission) + nonFoodGstPassThrough
+  ///   (itemBaseSubtotal − enythingGrossCommission) + nonFoodGstPassThrough
   ///   minus seller's gateway share.
   final double sellerPayout;
 
@@ -310,10 +310,10 @@ class OrderTaxBreakdown {
     required this.totalGst,
     required this.grandTotal,
     required this.gatewayDeduction,
-    required this.zappyGatewayShare,
+    required this.enythingGatewayShare,
     required this.sellerGatewayShare,
-    required this.zappyGrossCommission,
-    required this.zappyNetCommission,
+    required this.enythingGrossCommission,
+    required this.enythingNetCommission,
     required this.sellerPayout,
   });
 
@@ -336,7 +336,7 @@ class OrderTaxBreakdown {
     // ── 1. Item base subtotal + GST addition ─────────────────────────────────
     double baseSubtotal = 0;
     double itemGst = 0;
-    double s9_5Gst = 0; // food/restaurant GST — Zappy remits
+    double s9_5Gst = 0; // food/restaurant GST — Enything remits
     double nonFoodGst = 0; // retail GST — passed to seller
 
     for (final item in items) {
@@ -350,7 +350,7 @@ class OrderTaxBreakdown {
       baseSubtotal += lineBase;
       itemGst += lineGst;
 
-      if (TaxConfig.isZappyDeemedSupplier(category)) {
+      if (TaxConfig.isEnythingDeemedSupplier(category)) {
         s9_5Gst += lineGst;
       } else {
         nonFoodGst += lineGst;
@@ -359,7 +359,7 @@ class OrderTaxBreakdown {
 
     final itemGross = baseSubtotal + itemGst; // what customer pays for items
 
-    // ── 2. Delivery & Platform GST (extracted — these are Zappy's services) ──
+    // ── 2. Delivery & Platform GST (extracted — these are Enything's services) ──
     final dGst = TaxConfig.gstInDeliveryCharge(deliveryCharge);
     final pGst = TaxConfig.gstInPlatformFee(platformFee);
     final totalGst = itemGst + dGst + pGst;
@@ -372,28 +372,28 @@ class OrderTaxBreakdown {
     final gwDeduct =
         isOnline ? grand * TaxConfig.effectiveGatewayDeductionPercent : 0.0;
 
-    // ── 5. Zappy commission ───────────────────────────────────────────────────
+    // ── 5. Enything commission ───────────────────────────────────────────────────
     //   Commission is on BASE item subtotal only (delivery + platform are
-    //   100% Zappy's revenue — no commission formula needed there).
+    //   100% Enything's revenue — no commission formula needed there).
     final grossRate = isOnline
         ? TaxConfig.grossCommissionRateOnline
-        : TaxConfig.zappyTargetMarginPercent;
-    final zappyGross = baseSubtotal * grossRate;
+        : TaxConfig.enythingTargetMarginPercent;
+    final enythingGross = baseSubtotal * grossRate;
 
-    // ── 6. Gateway split (Zappy absorbs 100%) ───────────────────────────────
+    // ── 6. Gateway split (Enything absorbs 100%) ───────────────────────────────
     //   Under the 5% plan, seller pays NO gateway fees.
-    //   Zappy absorbs the entire gateway fee out of the higher platform fee.
-    final zappyGwShare = gwDeduct;
+    //   Enything absorbs the entire gateway fee out of the higher platform fee.
+    final enythingGwShare = gwDeduct;
     const sellerGwShare = 0.0;
 
-    // ── 7. Zappy's net commission ─────────────────────────────────────────────
+    // ── 7. Enything's net commission ─────────────────────────────────────────────
     //   Since gateway is entirely absorbed, commission remains pure 5%.
-    final zappyNet = zappyGross;
+    final enythingNet = enythingGross;
 
     // ── 8. Seller payout ─────────────────────────────────────────────────────
     //   Seller receives exactly 95% of base amount + their GST passthrough.
     //   Zero gateway deductions.
-    final sellerBasePayout = baseSubtotal - zappyGross;
+    final sellerBasePayout = baseSubtotal - enythingGross;
     final sellerPayout = sellerBasePayout + nonFoodGst;
 
     return OrderTaxBreakdown(
@@ -409,32 +409,32 @@ class OrderTaxBreakdown {
       totalGst: totalGst,
       grandTotal: grand,
       gatewayDeduction: gwDeduct,
-      zappyGatewayShare: zappyGwShare,
+      enythingGatewayShare: enythingGwShare,
       sellerGatewayShare: sellerGwShare,
-      zappyGrossCommission: zappyGross,
-      zappyNetCommission: zappyNet,
+      enythingGrossCommission: enythingGross,
+      enythingNetCommission: enythingNet,
       sellerPayout: sellerPayout,
     );
   }
 
-  // ── Zappy's actual net profit on this order ───────────────────────────────
+  // ── Enything's actual net profit on this order ───────────────────────────────
 
-  /// Commission after absorbing Zappy's gateway share + delivery/platform GST
-  /// remittance. This is what Zappy keeps after paying all obligations.
+  /// Commission after absorbing Enything's gateway share + delivery/platform GST
+  /// remittance. This is what Enything keeps after paying all obligations.
   ///
   /// Note: deliverySubsidy is included — if you gave a discount, you see it here.
-  double get zappyNetProfit =>
-      zappyNetCommission +
+  double get enythingNetProfit =>
+      enythingNetCommission +
       (deliveryCharge - deliveryGst) + // delivery net after GST remittance
       (platformFee - platformFeeGst) - // platform net after GST remittance
-      zappyGatewayShare; // Zappy's gateway share already absorbed above
+      enythingGatewayShare; // Enything's gateway share already absorbed above
   // but deliveryCharge portion gateway share is
-  // included in zappyGatewayShare already
+  // included in enythingGatewayShare already
 
   @override
   String toString() => '''
 ╔══════════════════════════════════════════════════════╗
-║         ZAPPY ORDER TAX & PAYOUT BREAKDOWN           ║
+║         ENYTHING ORDER TAX & PAYOUT BREAKDOWN           ║
 ╠══════════════════════════════════════════════════════╣
 ║ CUSTOMER BILL                                        ║
 ║   Item base subtotal:      ₹${itemBaseSubtotal.toStringAsFixed(2).padLeft(8)}              ║
@@ -447,25 +447,25 @@ class OrderTaxBreakdown {
 ╠══════════════════════════════════════════════════════╣
 ║ GATEWAY (UPI/Card only)                              ║
 ║   Razorpay deducts (2.36%):  ₹${gatewayDeduction.toStringAsFixed(2).padLeft(8)}           ║
-║   Net in Zappy bank:         ₹${(grandTotal - gatewayDeduction).toStringAsFixed(2).padLeft(8)}           ║
+║   Net in Enything bank:         ₹${(grandTotal - gatewayDeduction).toStringAsFixed(2).padLeft(8)}           ║
 ╠══════════════════════════════════════════════════════╣
-║ ZAPPY P&L                                            ║
-║   Gross commission (${(TaxConfig.grossCommissionRateOnline * 100).toStringAsFixed(2)}%): ₹${zappyGrossCommission.toStringAsFixed(2).padLeft(8)}           ║
-║   Net commission (10% tgt): ₹${zappyNetCommission.toStringAsFixed(2).padLeft(8)}           ║
+║ ENYTHING P&L                                            ║
+║   Gross commission (${(TaxConfig.grossCommissionRateOnline * 100).toStringAsFixed(2)}%): ₹${enythingGrossCommission.toStringAsFixed(2).padLeft(8)}           ║
+║   Net commission (10% tgt): ₹${enythingNetCommission.toStringAsFixed(2).padLeft(8)}           ║
 ║   Delivery net of GST:      ₹${(deliveryCharge - deliveryGst).toStringAsFixed(2).padLeft(8)}           ║
 ║   Platform net of GST:      ₹${(platformFee - platformFeeGst).toStringAsFixed(2).padLeft(8)}           ║
-║   Zappy gateway share:    - ₹${zappyGatewayShare.toStringAsFixed(2).padLeft(8)}           ║
+║   Enything gateway share:    - ₹${enythingGatewayShare.toStringAsFixed(2).padLeft(8)}           ║
 ╠══════════════════════════════════════════════════════╣
 ║ SELLER PAYOUT                                        ║
-║   Base (after commission):  ₹${(itemBaseSubtotal - zappyGrossCommission).toStringAsFixed(2).padLeft(8)}           ║
+║   Base (after commission):  ₹${(itemBaseSubtotal - enythingGrossCommission).toStringAsFixed(2).padLeft(8)}           ║
 ║   Non-food GST passthrough: ₹${nonFoodGstPassThrough.toStringAsFixed(2).padLeft(8)}           ║
 ║   Seller gateway share:   - ₹${sellerGatewayShare.toStringAsFixed(2).padLeft(8)}           ║
 ║   SELLER RECEIVES:          ₹${sellerPayout.toStringAsFixed(2).padLeft(8)}           ║
 ╠══════════════════════════════════════════════════════╣
 ║ GST TO REMIT TO GOVERNMENT                           ║
-║   S9(5) food GST (Zappy):   ₹${s9_5GstToRemit.toStringAsFixed(2).padLeft(8)}           ║
-║   Delivery GST (Zappy):     ₹${deliveryGst.toStringAsFixed(2).padLeft(8)}           ║
-║   Platform GST (Zappy):     ₹${platformFeeGst.toStringAsFixed(2).padLeft(8)}           ║
+║   S9(5) food GST (Enything):   ₹${s9_5GstToRemit.toStringAsFixed(2).padLeft(8)}           ║
+║   Delivery GST (Enything):     ₹${deliveryGst.toStringAsFixed(2).padLeft(8)}           ║
+║   Platform GST (Enything):     ₹${platformFeeGst.toStringAsFixed(2).padLeft(8)}           ║
 ║   Non-food GST (→ Seller):  ₹${nonFoodGstPassThrough.toStringAsFixed(2).padLeft(8)}           ║
 ║   Total GST in order:       ₹${totalGst.toStringAsFixed(2).padLeft(8)}           ║
 ╚══════════════════════════════════════════════════════╝''';

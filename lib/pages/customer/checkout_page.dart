@@ -8,12 +8,13 @@ import '../../providers/location_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
-import '../../widgets/common/zappy_map.dart';
+import '../../widgets/common/enything_map.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../config/payment_config.dart';
 import '../../config/tax_config.dart';
+import '../../providers/platform_config_provider.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -51,8 +52,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   // ── Razorpay callbacks ────────────────────────────────────────────────────
   void _onPaymentSuccess(PaymentSuccessResponse response) {
-    debugPrint('Razorpay success: ${response.paymentId}');
-    _createOrderInDb(razorpayPaymentId: response.paymentId);
+    debugPrint('Razorpay success: paymentId=${response.paymentId} orderId=${response.orderId}');
+    _verifyAndCreateOrder(
+      paymentId:  response.paymentId  ?? '',
+      orderId:    response.orderId    ?? '',
+      signature:  response.signature  ?? '',
+    );
   }
 
   void _onPaymentError(PaymentFailureResponse response) {
@@ -92,18 +97,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _prescriptions.removeAt(index));
   }
 
-  // ── Main entry point: validate then open Razorpay sheet ─────────────────
+  // ── Step 1: validate → (COD fast-path OR Razorpay order creation) ────────
   Future<void> _placeOrder() async {
     setState(() => _isProcessing = true);
-    final cart = context.read<CartProvider>();
+    final cart     = context.read<CartProvider>();
     final location = context.read<LocationProvider>();
 
     // Prescription guard
     if (cart.requiresPrescription && _prescriptions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text(
-                'A valid prescription is required for medicines in your cart.'),
+            content: Text('A valid prescription is required for medicines in your cart.'),
             backgroundColor: AppColors.danger),
       );
       setState(() => _isProcessing = false);
@@ -111,54 +115,76 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     try {
-
       double distanceKm = 3.0;
       if (location.currentLocation != null && cart.shops.isNotEmpty) {
         distanceKm = location.distanceTo(cart.shops.first.location);
       }
-      final baseDelivery = cart.calculateDeliveryCharges(distanceKm);
-      final surcharge = cart.multiShopSurcharge;
-      final heavyFee = cart.heavyOrderFee;
-      final discount = cart.calculateDeliveryDiscount(distanceKm);
-
+      final baseDelivery  = cart.calculateDeliveryCharges(distanceKm);
+      final surcharge     = cart.multiShopSurcharge;
+      final heavyFee      = cart.heavyOrderFee;
+      final discount      = cart.calculateDeliveryDiscount(distanceKm);
       final effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
       final riderEarnings = effectiveBase + surcharge + heavyFee;
       final totalDelivery = riderEarnings + cart.smallCartFee - discount;
 
-      // ── Full Tax & Payout Breakdown ──────────────────────────────────────
       final breakdown = OrderTaxBreakdown.calculate(
-        items: cart.taxBreakdownItems,
+        items:         cart.taxBreakdownItems,
         deliveryCharge: totalDelivery,
-        platformFee: cart.platformFee,
+        platformFee:   cart.platformFee,
         paymentMethod: _selectedPaymentMethod!,
       );
       debugPrint(breakdown.toString());
-
       _pendingTotal = breakdown.grandTotal;
 
-      // ── Open Razorpay payment sheet ──────────────────────────────────────
-      final razorpayKey = dotenv.maybeGet('RAZORPAY_KEY') ?? '';
+      // ── COD: skip Razorpay entirely ───────────────────────────────────────
       final auth = context.read<AuthProvider>();
+      if (_selectedPaymentMethod == 'cod') {
+        await _createOrderInDb(razorpayPaymentId: null, razorpayOrderId: null);
+        return;
+      }
+
+      // ── Online Payment: create a server-side Razorpay order first ─────────
+      final supabase = Supabase.instance.client;
+      final amountInPaise = (_pendingTotal * 100).toInt();
+
+      final orderRes = await supabase.functions.invoke(
+        'create-razorpay-order',
+        body: {
+          'amount':   amountInPaise,
+          'currency': 'INR',
+          'receipt':  'enything_${auth.currentUserId}_${DateTime.now().millisecondsSinceEpoch}',
+        },
+      );
+
+      if (orderRes.status != 200) {
+        throw Exception('Could not create payment order: ${orderRes.data?['error'] ?? 'Unknown error'}');
+      }
+
+      final razorpayOrderId = orderRes.data['id'] as String;
+
+      // ── Open Razorpay checkout with the server-issued order_id ────────────
+      final razorpayKey = dotenv.maybeGet('RAZORPAY_KEY') ?? '';
       final options = <String, dynamic>{
-        'key': razorpayKey,
-        // Razorpay expects amount in paise (1 INR = 100 paise)
-        'amount': (_pendingTotal * 100).toInt(),
-        'name': 'Enything',
+        'key':         razorpayKey,
+        'amount':      amountInPaise,
+        'currency':    'INR',
+        'order_id':    razorpayOrderId,   // ← CRITICAL: required for production
+        'name':        'Enything',
         'description': 'Order Payment',
         'prefill': {
           'contact': auth.user?.phone ?? '',
-          'name': auth.user?.fullName ?? '',
+          'name':    auth.user?.fullName ?? '',
         },
         'theme': {'color': '#4C6EF5'},
       };
       _razorpay.open(options);
-      // Razorpay callbacks (_onPaymentSuccess / _onPaymentError) handle the rest
+      // Callbacks (_onPaymentSuccess / _onPaymentError) handle the rest
     } catch (e) {
-      debugPrint('Razorpay open error: $e');
+      debugPrint('Payment initiation error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Could not open payment. Please try again.'),
+            content: Text('Could not open payment: ${e.toString().replaceAll('Exception: ', '')}'),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -169,8 +195,63 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  // ── Actually write the order to Supabase (called after payment succeeds) ──
-  Future<void> _createOrderInDb({String? razorpayPaymentId}) async {
+  // ── Step 2 (online pay): verify signature server-side, then write order ──
+  Future<void> _verifyAndCreateOrder({
+    required String paymentId,
+    required String orderId,
+    required String signature,
+  }) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final verifyRes = await supabase.functions.invoke(
+        'verify-razorpay-payment',
+        body: {
+          'razorpay_payment_id': paymentId,
+          'razorpay_order_id':   orderId,
+          'razorpay_signature':  signature,
+        },
+      );
+
+      final verified = verifyRes.data?['verified'] == true;
+      if (!verified) {
+        debugPrint('Signature verification failed: ${verifyRes.data}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment verification failed. Please contact support if amount was deducted.'),
+              backgroundColor: AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 6),
+            ),
+          );
+        }
+        setState(() => _isProcessing = false);
+        return;
+      }
+
+      // Signature verified — safe to record the order
+      await _createOrderInDb(
+        razorpayPaymentId: paymentId,
+        razorpayOrderId:   orderId,
+      );
+    } catch (e) {
+      debugPrint('Verify payment error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Payment confirmed but order save failed. Please contact support.'),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 8),
+          ),
+        );
+      }
+      setState(() => _isProcessing = false);
+    }
+  }
+
+  // ── Step 3: write order to Supabase (COD: direct | Online: after verification) ──
+  Future<void> _createOrderInDb({String? razorpayPaymentId, String? razorpayOrderId}) async {
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
@@ -273,7 +354,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           final rate =
               TaxConfig.gstRateForCategory(cat, itemPrice: item.product.price);
           final lineGst = item.totalPrice * rate;
-          if (TaxConfig.isZappyDeemedSupplier(cat)) {
+          if (TaxConfig.isEnythingDeemedSupplier(cat)) {
             shopS9_5Gst += lineGst;
           } else {
             shopNonFoodGst += lineGst;
@@ -308,8 +389,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'delivery_notes':
                   _notesController.text.isEmpty ? null : _notesController.text,
               'payment_method': _selectedPaymentMethod,
-              'payment_status': razorpayPaymentId != null ? 'paid' : 'pending_upi',
+              'payment_status': razorpayPaymentId != null ? 'captured' : 'cod',
               'razorpay_payment_id': razorpayPaymentId,
+              'razorpay_order_id':   razorpayOrderId,
               'customer_phone': customerPhone,
               'shop_phone': shopPhones[shop.id],
               // ── Financial Snapshot — written ONCE, never recalculated ────
@@ -317,13 +399,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'gst_item_total': (breakdown.itemGstTotal / numShops),
               'gst_delivery': (breakdown.deliveryGst / numShops),
               'gst_platform': (breakdown.platformFeeGst / numShops),
-              'zappy_commission': (breakdown.zappyGrossCommission / numShops),
+              'enything_commission': (breakdown.enythingGrossCommission / numShops),
               'seller_payout': (breakdown.sellerPayout / numShops) - shopTcs,
               'gateway_deduction': (breakdown.gatewayDeduction / numShops),
               // New GST compliance columns
-              's9_5_gst_amount': shopS9_5Gst, // Zappy remits to Govt
+              's9_5_gst_amount': shopS9_5Gst, // Enything remits to Govt
               'non_food_gst_amount': shopNonFoodGst, // Seller remits in GSTR-1
-              'tcs_amount': shopTcs, // Zappy files GSTR-8
+              'tcs_amount': shopTcs, // Enything files GSTR-8
               'grand_total_collected': shopGrandTotal,
               'gst_rate_snapshot': rateSnapshot, // Frozen rate map
               'prescription_urls': uploadedPrescriptionUrls,
@@ -445,7 +527,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: ZappyMap(
+                        child: EnythingMap(
                           center: location.currentLocation!,
                           zoom: 15,
                           interactive: false,
@@ -708,7 +790,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       'Small Cart Fee',
                       '+₹${cart.smallCartFee.toStringAsFixed(0)}',
                       hint:
-                          'For orders under ₹${PaymentConfig.smallCartThreshold.toInt()}',
+                          'For orders under ₹${PlatformConfigProvider.instance?.smallCartThreshold.toInt() ?? PaymentConfig.smallCartThreshold.toInt()}',
                       valueColor: Colors.orange.shade700,
                     ),
                   ],
@@ -718,7 +800,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       'Heavy Order Fee',
                       '+₹${heavyFee.toStringAsFixed(0)}',
                       hint:
-                          'For orders over ${PaymentConfig.heavyOrderThreshold.toInt()} kg',
+                          'For orders over ${PlatformConfigProvider.instance?.heavyOrderThresholdKg.toInt() ?? PaymentConfig.heavyOrderThreshold.toInt()} kg',
                       valueColor: Colors.orange.shade700,
                     ),
                   ],

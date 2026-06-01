@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/rbac_provider.dart';
+import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
 
 class OrdersAdminPage extends StatefulWidget {
@@ -77,6 +80,11 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
 
   @override
   Widget build(BuildContext context) {
+    final rbac = context.watch<RbacProvider>();
+    if (!rbac.can('orders.view') && !rbac.isSuperAdmin) {
+      return const ForbiddenPage(fullPage: false);
+    }
+
     return Column(
       children: [
         // ── Search bar ────────────────────────────────────────
@@ -451,7 +459,7 @@ class _OrderCardState extends State<_OrderCard> {
 
           // Action buttons
           Row(children: [
-            if (status != 'cancelled' && status != 'delivered')
+            if (status != 'cancelled' && status != 'delivered' && (context.read<RbacProvider>().can('orders.cancel') || context.read<RbacProvider>().isSuperAdmin))
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _actioning ? null : () => _cancelOrder(o['id'].toString()),
@@ -470,8 +478,9 @@ class _OrderCardState extends State<_OrderCard> {
             if (status != 'cancelled' && status != 'delivered') ...[
               const SizedBox(width: 10),
             ],
-            Expanded(
-              child: ElevatedButton.icon(
+            if (context.read<RbacProvider>().can('orders.refund') || context.read<RbacProvider>().isSuperAdmin)
+              Expanded(
+                child: ElevatedButton.icon(
                 onPressed: _actioning ? null : () => _issueRefund(o['id'].toString(), amount),
                 icon: const Icon(Icons.undo_rounded, size: 16),
                 label: Text('Issue Refund', style: AdminStyles.caption(color: Colors.white)),

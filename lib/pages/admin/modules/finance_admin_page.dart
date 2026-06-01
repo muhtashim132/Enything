@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/rbac_provider.dart';
+import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
 
 class FinanceAdminPage extends StatefulWidget {
@@ -23,6 +26,7 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
   double _riderEarnings = 0;
   int _pendingSettlements = 0;
   List<Map<String, dynamic>> _transactions = [];
+  List<Map<String, dynamic>> _withdrawals = [];
 
   @override
   void initState() {
@@ -40,7 +44,10 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
   Future<void> _fetch() async {
     try {
       final orders = await _db.from('orders').select(
-          'grand_total_collected, seller_payout, rider_payout, created_at, status, id');
+          'grand_total_collected, seller_payout, rider_payout, created_at, status, id, refund_id, refund_status, gst_item_total, gst_delivery, gst_platform');
+      
+      final wList = await _db.from('withdrawals').select('*, profiles:user_id(full_name)').order('requested_at', ascending: false);
+      _withdrawals = List<Map<String, dynamic>>.from(wList);
       _transactions = List<Map<String, dynamic>>.from(orders)
         ..sort((a, b) => (b['created_at'] ?? '').compareTo(a['created_at'] ?? ''));
       _gmv = orders.fold<double>(
@@ -59,6 +66,10 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
 
   @override
   Widget build(BuildContext context) {
+    final rbac = context.watch<RbacProvider>();
+    if (!rbac.isSuperAdmin && !rbac.can('finance.view')) {
+      return const ForbiddenPage(fullPage: false);
+    }
     final rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final fmt = NumberFormat.compact(locale: 'en_IN');
 
@@ -125,9 +136,9 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
             controller: _tabs,
             children: [
               _TransactionsTab(transactions: _transactions, loading: _loading),
-              const _ComingSoonTab('Withdrawals', Icons.account_balance_wallet_rounded),
-              const _ComingSoonTab('Refunds', Icons.undo_rounded),
-              const _ComingSoonTab('Tax Reports', Icons.receipt_long_rounded),
+              _WithdrawalsTab(withdrawals: _withdrawals, loading: _loading),
+              _RefundsTab(transactions: _transactions, loading: _loading),
+              _TaxesTab(transactions: _transactions, loading: _loading),
             ],
           ),
         ),
@@ -264,29 +275,206 @@ class _TransactionsTab extends StatelessWidget {
   }
 }
 
-class _ComingSoonTab extends StatelessWidget {
-  final String name;
-  final IconData icon;
-  const _ComingSoonTab(this.name, this.icon);
+class _WithdrawalsTab extends StatelessWidget {
+  final List<Map<String, dynamic>> withdrawals;
+  final bool loading;
+
+  const _WithdrawalsTab({required this.withdrawals, required this.loading});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AdminColors.cardBg,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AdminColors.cardBorder),
-          ),
-          child: Icon(icon, color: AdminColors.primary, size: 48),
-        ),
-        const SizedBox(height: 16),
-        Text('$name — Coming Soon', style: AdminStyles.title(size: 16)),
-        const SizedBox(height: 8),
-        Text('This module is under development.', style: AdminStyles.caption()),
-      ]),
-    ).animate().fadeIn().scale(begin: const Offset(0.9, 0.9));
+    if (loading) return _loadingSkeleton();
+
+    if (withdrawals.isEmpty) {
+      return const AdminEmptyState(icon: Icons.account_balance_wallet_rounded, message: 'No withdrawals yet');
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: withdrawals.length,
+      itemBuilder: (_, i) {
+        final w = withdrawals[i];
+        final amount = (w['amount'] as num?)?.toDouble() ?? 0;
+        final status = (w['status'] ?? 'pending') as String;
+        final role = (w['user_role'] ?? 'user') as String;
+        final name = (w['profiles']?['full_name'] ?? 'Unknown');
+        final time = w['requested_at'] != null
+            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(w['requested_at'].toString()).toLocal())
+            : '';
+        
+        final (statusColor, statusLabel) = switch (status) {
+          'approved' || 'processed' => (AdminColors.success, 'Processed'),
+          'rejected' => (AdminColors.danger, 'Rejected'),
+          _ => (AdminColors.warning, 'Pending'),
+        };
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: AdminDecorations.glassCard(),
+          child: Row(children: [
+            Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(color: AdminColors.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.money_rounded, color: AdminColors.primary, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(name, style: AdminStyles.body(size: 13)),
+                Text('$role • $time', style: AdminStyles.caption()),
+              ]),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('₹${amount.toStringAsFixed(0)}', style: AdminStyles.body(size: 14)),
+              const SizedBox(height: 4),
+              AdminBadge(label: statusLabel, color: statusColor),
+            ]),
+          ]),
+        ).animate().fadeIn(delay: Duration(milliseconds: i * 30)).slideY(begin: 0.08);
+      },
+    );
   }
+}
+
+class _RefundsTab extends StatelessWidget {
+  final List<Map<String, dynamic>> transactions;
+  final bool loading;
+
+  const _RefundsTab({required this.transactions, required this.loading});
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return _loadingSkeleton();
+
+    final refunds = transactions.where((t) => t['refund_id'] != null || t['refund_status'] != null).toList();
+
+    if (refunds.isEmpty) {
+      return const AdminEmptyState(icon: Icons.undo_rounded, message: 'No refunds yet');
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: refunds.length,
+      itemBuilder: (_, i) {
+        final t = refunds[i];
+        final amount = (t['grand_total_collected'] as num?)?.toDouble() ?? 0;
+        final status = (t['refund_status'] ?? 'processing') as String;
+        final time = t['created_at'] != null
+            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t['created_at'].toString()).toLocal())
+            : '';
+        
+        final (statusColor, statusLabel) = switch (status) {
+          'processed' => (AdminColors.success, 'Processed'),
+          'failed' => (AdminColors.danger, 'Failed'),
+          _ => (AdminColors.warning, 'Processing'),
+        };
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: AdminDecorations.glassCard(),
+          child: Row(children: [
+            Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(color: AdminColors.danger.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.undo_rounded, color: AdminColors.danger, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Order #${t['id'].toString().substring(0, 8).toUpperCase()}', style: AdminStyles.body(size: 13)),
+                Text(time, style: AdminStyles.caption()),
+              ]),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('₹${amount.toStringAsFixed(0)}', style: AdminStyles.body(size: 14)),
+              const SizedBox(height: 4),
+              AdminBadge(label: statusLabel, color: statusColor),
+            ]),
+          ]),
+        ).animate().fadeIn(delay: Duration(milliseconds: i * 30)).slideY(begin: 0.08);
+      },
+    );
+  }
+}
+
+class _TaxesTab extends StatelessWidget {
+  final List<Map<String, dynamic>> transactions;
+  final bool loading;
+
+  const _TaxesTab({required this.transactions, required this.loading});
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return _loadingSkeleton();
+
+    final taxable = transactions.where((t) => ((t['gst_item_total'] ?? 0) > 0 || (t['gst_delivery'] ?? 0) > 0 || (t['gst_platform'] ?? 0) > 0)).toList();
+
+    if (taxable.isEmpty) {
+      return const AdminEmptyState(icon: Icons.receipt_long_rounded, message: 'No tax records yet');
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: taxable.length,
+      itemBuilder: (_, i) {
+        final t = taxable[i];
+        final gstItem = (t['gst_item_total'] as num?)?.toDouble() ?? 0;
+        final gstDel = (t['gst_delivery'] as num?)?.toDouble() ?? 0;
+        final gstPlat = (t['gst_platform'] as num?)?.toDouble() ?? 0;
+        final totalGst = gstItem + gstDel + gstPlat;
+        final time = t['created_at'] != null
+            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t['created_at'].toString()).toLocal())
+            : '';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: AdminDecorations.glassCard(),
+          child: Row(children: [
+            Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(color: AdminColors.info.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.receipt_rounded, color: AdminColors.info, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Order #${t['id'].toString().substring(0, 8).toUpperCase()}', style: AdminStyles.body(size: 13)),
+                Text(time, style: AdminStyles.caption()),
+              ]),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('₹${totalGst.toStringAsFixed(2)}', style: AdminStyles.body(size: 14)),
+              const SizedBox(height: 4),
+              AdminBadge(label: 'GST Collected', color: AdminColors.info),
+            ]),
+          ]),
+        ).animate().fadeIn(delay: Duration(milliseconds: i * 30)).slideY(begin: 0.08);
+      },
+    );
+  }
+}
+
+Widget _loadingSkeleton() {
+  return ListView.builder(
+    padding: const EdgeInsets.all(16),
+    itemCount: 8,
+    itemBuilder: (_, i) => Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: AdminDecorations.glassCard(),
+      child: const Row(children: [
+        SkeletonBox(width: 38, height: 38, radius: 12),
+        SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SkeletonBox(width: 100, height: 13),
+          SizedBox(height: 6),
+          SkeletonBox(width: 70, height: 11),
+        ])),
+        SkeletonBox(width: 55, height: 20, radius: 10),
+      ]),
+    ).animate().shimmer(duration: 1500.ms),
+  );
 }

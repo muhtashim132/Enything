@@ -698,7 +698,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           ),
           const SizedBox(height: 20),
           _DarkField(
-              label: TaxConfig.isZappyDeemedSupplier(_shopCategory)
+              label: TaxConfig.isEnythingDeemedSupplier(_shopCategory)
                   ? 'GSTIN (Optional for Restaurants)'
                   : 'GSTIN Number (Optional)',
               controller: _gstCtrl,

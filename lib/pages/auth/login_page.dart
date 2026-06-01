@@ -267,6 +267,27 @@ class _LoginPageState extends State<LoginPage>
                         const SizedBox(height: 24),
                         // Feature badges
                         _buildFeatureBadges(),
+                        const SizedBox(height: 32),
+                        // Admin Invite Link
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: () => Navigator.pushNamed(context, AppRoutes.acceptAdminInvite),
+                            icon: const Icon(Icons.admin_panel_settings_outlined, size: 18, color: Color(0xFF0A2A9E)),
+                            label: const Text(
+                              'Have an Admin Invite Code?',
+                              style: TextStyle(
+                                color: Color(0xFF0A2A9E),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              backgroundColor: const Color(0xFF0A2A9E).withValues(alpha: 0.05),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
