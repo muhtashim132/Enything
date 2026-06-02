@@ -199,7 +199,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
         _buildSettingTile(
           icon: Icons.two_wheeler,
           title: 'Vehicle Information',
-          subtitle: 'Update vehicle type and reg no',
+          subtitle: 'View your vehicle type and reg no',
           isDark: isDark,
           onTap: _showVehicleDetailsDialog,
         ),
@@ -362,41 +362,67 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
       final res = await Supabase.instance.client.from('delivery_partners').select('id, vehicle_type, vehicle_reg_number').eq('id', auth.currentUserId ?? '').maybeSingle();
       if (mounted) Navigator.pop(context); // close loader
       if (res != null) {
-        final typeCtrl = TextEditingController(text: res['vehicle_type'] ?? '');
-        final regCtrl = TextEditingController(text: res['vehicle_reg_number'] ?? '');
         if (!mounted) return;
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-          builder: (ctx) => Padding(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Vehicle Information', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 20),
-                TextField(controller: typeCtrl, decoration: const InputDecoration(labelText: 'Vehicle Type')),
-                const SizedBox(height: 16),
-                TextField(controller: regCtrl, decoration: const InputDecoration(labelText: 'Registration Number')),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () async {
-                    await Supabase.instance.client.from('delivery_partners').update({'vehicle_type': typeCtrl.text.trim(), 'vehicle_reg_number': regCtrl.text.trim()}).eq('id', auth.currentUserId!);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
-                  child: const Text('Save Changes'),
-                ),
-              ],
-            ),
-          ),
+          builder: (ctx) {
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Vehicle Information', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 24),
+                  _buildReadOnlyField('Vehicle Type', res['vehicle_type'] ?? 'Not provided', isDark),
+                  const SizedBox(height: 16),
+                  _buildReadOnlyField('Registration Number', res['vehicle_reg_number'] ?? 'Not provided', isDark),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: Text('Close', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       }
     } catch (e) {
       if (mounted) Navigator.pop(context);
     }
+  }
+
+  Widget _buildReadOnlyField(String label, String value, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: GoogleFonts.outfit(color: isDark ? Colors.white54 : Colors.black54, fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(value, style: GoogleFonts.outfit(color: isDark ? Colors.white : Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
   }
 
   void _showAboutBottomSheet() {
