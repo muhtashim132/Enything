@@ -234,9 +234,30 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Top bar
+                                // Top bar (Icons at top right)
                                 Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    _headerIcon(
+                                        isDark
+                                            ? Icons.light_mode_outlined
+                                            : Icons.dark_mode_outlined,
+                                        () => themeProvider.toggleTheme()),
+                                    const NotificationBell(
+                                      iconColor: Colors.white70,
+                                      containerColor: Colors.transparent,
+                                      badgeColor: Color(0xFFFF6B6B),
+                                    ),
+                                    _headerIcon(
+                                        Icons.settings_outlined,
+                                        () => Navigator.pushNamed(
+                                            context, AppRoutes.settings)),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                // Avatar and Profile Info
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     _avatar(auth.user?.initials ?? 'S'),
                                     const SizedBox(width: 14),
@@ -244,33 +265,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Row(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                    'Hi, ${auth.user?.fullName.split(' ').first ?? 'Seller'}! 👋',
-                                                    style: GoogleFonts.outfit(
-                                                        color: Colors.white,
-                                                        fontSize: 20,
-                                                        fontWeight: FontWeight.w800)),
-                                              ),
-                                              _headerIcon(
-                                                  isDark
-                                                      ? Icons.light_mode_outlined
-                                                      : Icons.dark_mode_outlined,
-                                                  () => themeProvider.toggleTheme()),
-                                              const NotificationBell(
-                                                iconColor: Colors.white70,
-                                                containerColor: Colors.transparent,
-                                                badgeColor: Color(0xFFFF6B6B),
-                                              ),
-                                              _headerIcon(
-                                                  Icons.settings_outlined,
-                                                  () => Navigator.pushNamed(
-                                                      context, AppRoutes.settings)),
-                                            ],
-                                          ),
+                                          Text(
+                                              'Hi, ${auth.user?.fullName.split(' ').first ?? 'Seller'}! 👋',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.outfit(
+                                                  color: Colors.white,
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.w800)),
                                           const SizedBox(height: 4),
                                           Row(
                                             children: [
