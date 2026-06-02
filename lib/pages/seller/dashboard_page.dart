@@ -10,6 +10,7 @@ import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../widgets/common/notification_bell.dart';
+import 'package:shimmer/shimmer.dart';
 
 class SellerDashboardPage extends StatefulWidget {
   const SellerDashboardPage({super.key});
@@ -250,8 +251,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                                   fontSize: 20,
                                                   fontWeight: FontWeight.w800)),
                                           const SizedBox(height: 4),
-                                          _roleBadge('$_shopEmoji  $_shopBadgeName',
-                                              const Color(0xFFF4C542)),
+                                          Row(
+                                            children: [
+                                              _roleBadge('$_shopEmoji  $_shopBadgeName',
+                                                  const Color(0xFFF4C542)),
+                                              const SizedBox(width: 8),
+                                              _statusBadge(_shopIsActive),
+                                            ],
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -277,23 +284,48 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                   Row(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text('Total Revenue',
-                                                style: GoogleFonts.outfit(
-                                                    color: Colors.white
-                                                        .withValues(alpha: 0.65),
-                                                    fontSize: 13)),
-                                            Text(
-                                                '₹${(_stats['revenue'] as double).toStringAsFixed(0)}',
-                                                style: GoogleFonts.outfit(
-                                                    color: Colors.white,
-                                                    fontSize: 36,
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: -1)),
-                                          ]),
+                                      Expanded(
+                                        child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text('Total Revenue',
+                                                  style: GoogleFonts.outfit(
+                                                      color: Colors.white
+                                                          .withValues(alpha: 0.65),
+                                                      fontSize: 13)),
+                                              Row(
+                                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                                textBaseline: TextBaseline.alphabetic,
+                                                children: [
+                                                  Text(
+                                                      '₹${(_stats['revenue'] as double).toStringAsFixed(0)}',
+                                                      style: GoogleFonts.outfit(
+                                                          color: Colors.white,
+                                                          fontSize: 36,
+                                                          fontWeight: FontWeight.w900,
+                                                          letterSpacing: -1)),
+                                                  const SizedBox(width: 12),
+                                                  if (_shopRating != '--')
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white.withValues(alpha: 0.15),
+                                                        borderRadius: BorderRadius.circular(12),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          const Icon(Icons.star_rounded, color: Color(0xFFF4C542), size: 14),
+                                                          const SizedBox(width: 4),
+                                                          Text(_shopRating, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ]),
+                                      ),
                                     ],
                                   ),
                               ],
@@ -317,47 +349,92 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                     padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                     child: _isLoading
                         ? _buildShimmer()
-                        : Column(
-                            children: [
-                              Row(children: [
-                                Expanded(
-                                    child: _statCard(
-                                        'Rating',
-                                        '⭐ $_shopRating',
-                                        Icons.star_rounded,
-                                        const Color(0xFF51CF66),
-                                        const Color(0xFF2F9E44))),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                    child: _statCard(
-                                        'Pending',
-                                        '${_stats['pending_orders']}',
-                                        Icons.pending_actions_rounded,
-                                        const Color(0xFFFF8C42),
-                                        const Color(0xFFE8590C),
-                                        onTap: () => Navigator.pushNamed(context, AppRoutes.sellerOrders))),
-                              ]),
-                              const SizedBox(height: 14),
-                              Row(children: [
-                                Expanded(
-                                    child: _statCard(
-                                        'Orders',
-                                        '${_stats['total_orders']}',
-                                        Icons.receipt_long_rounded,
-                                        const Color(0xFF4C6EF5),
-                                        const Color(0xFF364FC7),
-                                        onTap: () => Navigator.pushNamed(context, AppRoutes.sellerOrders))),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                    child: _statCard(
-                                        'Products',
-                                        '${_stats['products']}',
-                                        Icons.inventory_2_rounded,
-                                        const Color(0xFFCC5DE8),
-                                        const Color(0xFF9C36B5),
-                                        onTap: () => Navigator.pushNamed(context, AppRoutes.manageProducts))),
-                              ]),
-                            ],
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isWide = constraints.maxWidth > 500;
+                              if (isWide) {
+                                return Row(
+                                  children: [
+                                    Expanded(
+                                        child: _statCard(
+                                            'Rating',
+                                            '⭐ $_shopRating',
+                                            Icons.star_rounded,
+                                            const Color(0xFF51CF66),
+                                            const Color(0xFF2F9E44))),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                        child: _statCard(
+                                            'Pending',
+                                            '${_stats['pending_orders']}',
+                                            Icons.pending_actions_rounded,
+                                            const Color(0xFFFF8C42),
+                                            const Color(0xFFE8590C),
+                                            onTap: () => Navigator.pushNamed(context, AppRoutes.sellerOrders))),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                        child: _statCard(
+                                            'Orders',
+                                            '${_stats['total_orders']}',
+                                            Icons.receipt_long_rounded,
+                                            const Color(0xFF4C6EF5),
+                                            const Color(0xFF364FC7),
+                                            onTap: () => Navigator.pushNamed(context, AppRoutes.sellerOrders))),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                        child: _statCard(
+                                            'Products',
+                                            '${_stats['products']}',
+                                            Icons.inventory_2_rounded,
+                                            const Color(0xFFCC5DE8),
+                                            const Color(0xFF9C36B5),
+                                            onTap: () => Navigator.pushNamed(context, AppRoutes.manageProducts))),
+                                  ],
+                                );
+                              }
+                              return Column(
+                                children: [
+                                  Row(children: [
+                                    Expanded(
+                                        child: _statCard(
+                                            'Rating',
+                                            '⭐ $_shopRating',
+                                            Icons.star_rounded,
+                                            const Color(0xFF51CF66),
+                                            const Color(0xFF2F9E44))),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                        child: _statCard(
+                                            'Pending',
+                                            '${_stats['pending_orders']}',
+                                            Icons.pending_actions_rounded,
+                                            const Color(0xFFFF8C42),
+                                            const Color(0xFFE8590C),
+                                            onTap: () => Navigator.pushNamed(context, AppRoutes.sellerOrders))),
+                                  ]),
+                                  const SizedBox(height: 14),
+                                  Row(children: [
+                                    Expanded(
+                                        child: _statCard(
+                                            'Orders',
+                                            '${_stats['total_orders']}',
+                                            Icons.receipt_long_rounded,
+                                            const Color(0xFF4C6EF5),
+                                            const Color(0xFF364FC7),
+                                            onTap: () => Navigator.pushNamed(context, AppRoutes.sellerOrders))),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                        child: _statCard(
+                                            'Products',
+                                            '${_stats['products']}',
+                                            Icons.inventory_2_rounded,
+                                            const Color(0xFFCC5DE8),
+                                            const Color(0xFF9C36B5),
+                                            onTap: () => Navigator.pushNamed(context, AppRoutes.manageProducts))),
+                                  ]),
+                                ],
+                              );
+                            },
                           ),
                   ),
                 ),
@@ -487,6 +564,17 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                 color: color, fontSize: 11, fontWeight: FontWeight.w700)),
       );
 
+  Widget _statusBadge(bool isActive) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+            color: (isActive ? Colors.green : Colors.red).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: (isActive ? Colors.green : Colors.red).withValues(alpha: 0.5))),
+        child: Text(isActive ? '● Open' : '● Closed',
+            style: GoogleFonts.outfit(
+                color: isActive ? Colors.greenAccent : Colors.redAccent, fontSize: 11, fontWeight: FontWeight.w700)),
+      );
+
   Widget _headerIcon(IconData icon, VoidCallback onTap) => IconButton(
         icon: Icon(icon, color: Colors.white70, size: 22),
         onPressed: onTap,
@@ -496,51 +584,67 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   Widget _statCard(
       String title, String value, IconData icon, Color light, Color dark, {VoidCallback? onTap}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Parse value for count-up animation if it's a number
+    final isNumber = int.tryParse(value) != null;
+    final intValue = isNumber ? int.parse(value) : null;
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141425) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-              color: light.withValues(alpha: 0.12),
-              blurRadius: 16,
-              offset: const Offset(0, 6))
-        ],
-        border: Border.all(color: light.withValues(alpha: isDark ? 0.15 : 0.08)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [light, dark]),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                  color: light.withValues(alpha: 0.4),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3))
-            ],
-          ),
-          child: Icon(icon, color: Colors.white, size: 20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF141425) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+                color: light.withValues(alpha: 0.12),
+                blurRadius: 16,
+                offset: const Offset(0, 6))
+          ],
+          border: Border.all(color: light.withValues(alpha: isDark ? 0.15 : 0.08)),
         ),
-        const SizedBox(height: 16),
-        Text(value,
-            style: GoogleFonts.outfit(
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                color: isDark ? Colors.white : const Color(0xFF0A0A14))),
-        const SizedBox(height: 2),
-        Text(title,
-            style: GoogleFonts.outfit(
-                fontSize: 12,
-                color: isDark ? Colors.white54 : Colors.grey.shade600,
-                fontWeight: FontWeight.w600)),
-      ]),
-    ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [light, dark]),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                    color: light.withValues(alpha: 0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3))
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(height: 16),
+          if (isNumber)
+            TweenAnimationBuilder<int>(
+              tween: IntTween(begin: 0, end: intValue!),
+              duration: const Duration(seconds: 1),
+              builder: (context, val, child) => Text(val.toString(),
+                  style: GoogleFonts.outfit(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : const Color(0xFF0A0A14))),
+            )
+          else
+            Text(value,
+                style: GoogleFonts.outfit(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : const Color(0xFF0A0A14))),
+          const SizedBox(height: 2),
+          Text(title,
+              style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  color: isDark ? Colors.white54 : Colors.grey.shade600,
+                  fontWeight: FontWeight.w600)),
+        ]),
+      ),
     );
   }
 
@@ -626,39 +730,45 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   Widget _buildShimmer() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final shimColor = isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade200;
-    return Column(children: [
-      Row(children: [
-        Expanded(
-            child: Container(
-                height: 110,
-                decoration: BoxDecoration(
-                    color: shimColor,
-                    borderRadius: BorderRadius.circular(24)))),
-        const SizedBox(width: 14),
-        Expanded(
-            child: Container(
-                height: 110,
-                decoration: BoxDecoration(
-                    color: shimColor,
-                    borderRadius: BorderRadius.circular(24)))),
+    final highlight = isDark ? const Color(0xFF2A2A3A) : Colors.grey.shade100;
+    
+    return Shimmer.fromColors(
+      baseColor: shimColor,
+      highlightColor: highlight,
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+              child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                      color: shimColor,
+                      borderRadius: BorderRadius.circular(24)))),
+          const SizedBox(width: 14),
+          Expanded(
+              child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                      color: shimColor,
+                      borderRadius: BorderRadius.circular(24)))),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(
+              child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                      color: shimColor,
+                      borderRadius: BorderRadius.circular(24)))),
+          const SizedBox(width: 14),
+          Expanded(
+              child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                      color: shimColor,
+                      borderRadius: BorderRadius.circular(24)))),
+        ]),
       ]),
-      const SizedBox(height: 14),
-      Row(children: [
-        Expanded(
-            child: Container(
-                height: 110,
-                decoration: BoxDecoration(
-                    color: shimColor,
-                    borderRadius: BorderRadius.circular(24)))),
-        const SizedBox(width: 14),
-        Expanded(
-            child: Container(
-                height: 110,
-                decoration: BoxDecoration(
-                    color: shimColor,
-                    borderRadius: BorderRadius.circular(24)))),
-      ]),
-    ]);
+    );
   }
 
   Widget _blob(double size, Color color, double opacity) => Opacity(

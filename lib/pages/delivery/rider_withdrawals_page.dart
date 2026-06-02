@@ -273,7 +273,7 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                       ),
                     )
                   else
-                    ..._history.map((w) => _WithdrawalCard(w)).toList(),
+                    ..._history.map((w) => _WithdrawalCard(w)),
                 ],
               ),
             ),

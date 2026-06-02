@@ -62,6 +62,10 @@ class OrderModel {
   final double? riderLng;
   final DateTime? riderLocationUpdatedAt;
 
+  // Shop location snapshotted at order accept for arrival geofencing
+  final double? shopLat;
+  final double? shopLng;
+
   // Prescription validation
   final List<String> prescriptionUrls;
 
@@ -142,6 +146,8 @@ class OrderModel {
     this.riderLat,
     this.riderLng,
     this.riderLocationUpdatedAt,
+    this.shopLat,
+    this.shopLng,
     // Financial snapshot fields
     this.gstItemTotal = 0.0,
     this.s9_5GstAmount = 0.0,
@@ -196,6 +202,8 @@ class OrderModel {
       riderLocationUpdatedAt: map['rider_location_updated_at'] != null
           ? DateTime.tryParse(map['rider_location_updated_at'])
           : null,
+      shopLat: (map['shop_lat'] as num?)?.toDouble(),
+      shopLng: (map['shop_lng'] as num?)?.toDouble(),
       // ── Financial snapshot — read from frozen DB values ────────────────
       gstItemTotal: (map['gst_item_total'] ?? 0.0).toDouble(),
       s9_5GstAmount: (map['s9_5_gst_amount'] ?? 0.0).toDouble(),
@@ -247,6 +255,8 @@ class OrderModel {
     double? riderLat,
     double? riderLng,
     DateTime? riderLocationUpdatedAt,
+    double? shopLat,
+    double? shopLng,
   }) {
     return OrderModel(
       id: id,
@@ -281,6 +291,8 @@ class OrderModel {
       riderLat: riderLat ?? this.riderLat,
       riderLng: riderLng ?? this.riderLng,
       riderLocationUpdatedAt: riderLocationUpdatedAt ?? this.riderLocationUpdatedAt,
+      shopLat: shopLat ?? this.shopLat,
+      shopLng: shopLng ?? this.shopLng,
       // Preserve frozen financial fields unchanged
       gstItemTotal: gstItemTotal,
       s9_5GstAmount: s9_5GstAmount,

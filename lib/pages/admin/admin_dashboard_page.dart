@@ -214,7 +214,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         data: NavigationBarThemeData(
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return AdminStyles.label(color: AdminColors.primary, size: 10).copyWith(fontWeight: FontWeight.w700);
+              return AdminStyles.label(color: AdminColors.primary, size: 10)
+                  .copyWith(fontWeight: FontWeight.w700);
             }
             return AdminStyles.label(color: AdminColors.textMuted, size: 10);
           }),
@@ -236,7 +237,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                             child: Icon(n.icon, color: AdminColors.textMuted),
                           )
                         : Icon(n.icon, color: AdminColors.textMuted),
-                    selectedIcon: Icon(n.activeIcon, color: AdminColors.primary),
+                    selectedIcon:
+                        Icon(n.activeIcon, color: AdminColors.primary),
                     label: n.label,
                   ))
               .toList(),
@@ -350,7 +352,8 @@ class _Aura extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
+          gradient:
+              RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
         ),
       ),
     );

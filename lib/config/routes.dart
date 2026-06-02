@@ -38,6 +38,9 @@ import '../pages/settings/faq_support_page.dart';
 import '../pages/legal/refund_policy_page.dart';
 import '../pages/seller/seller_withdrawals_page.dart';
 import '../pages/delivery/rider_withdrawals_page.dart';
+import '../pages/delivery/rider_insights_page.dart';
+import '../pages/customer/customer_order_map_page.dart';
+import '../pages/seller/seller_order_map_page.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -78,6 +81,9 @@ class AppRoutes {
   static const String refundPolicy       = '/legal/refund-policy';
   static const String sellerWithdrawals  = '/seller/withdrawals';
   static const String riderWithdrawals   = '/delivery/withdrawals';
+  static const String riderInsights      = '/delivery/insights';
+  static const String customerOrderMap   = '/customer/order-map';
+  static const String sellerOrderMap     = '/seller/order-map';
 
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
@@ -144,6 +150,8 @@ class AppRoutes {
         return _build(const CaReportPage(), routeSettings);
       case deliveryDashboard:
         return _build(const DeliveryDashboardPage(), routeSettings);
+      case riderInsights:
+        return _build(const RiderInsightsPage(), routeSettings);
       case earnings:
         return _build(const EarningsPage(), routeSettings);
       case shopManagement:
@@ -166,6 +174,23 @@ class AppRoutes {
         return _build(const SellerWithdrawalsPage(), routeSettings);
       case riderWithdrawals:
         return _build(const RiderWithdrawalsPage(), routeSettings);
+      case customerOrderMap:
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        if (a?['order'] == null) return _build(const SplashPage(), routeSettings);
+        return _build(
+          CustomerOrderMapPage(order: a!['order']),
+          routeSettings,
+        );
+      case sellerOrderMap:
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        if (a?['order'] == null) return _build(const SplashPage(), routeSettings);
+        return _build(
+          SellerOrderMapPage(
+            order: a!['order'],
+            shopName: a['shopName'] as String? ?? 'My Shop',
+          ),
+          routeSettings,
+        );
       default:
         return _build(const SplashPage(), routeSettings);
     }

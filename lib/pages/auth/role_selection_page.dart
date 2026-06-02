@@ -471,12 +471,14 @@ class _AnimatedRoleCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          title,
-                          style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),

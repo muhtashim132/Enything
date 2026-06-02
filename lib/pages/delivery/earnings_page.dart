@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../config/routes.dart';
 
 class EarningsPage extends StatefulWidget {
   const EarningsPage({super.key});
@@ -203,11 +204,7 @@ class _EarningsPageState extends State<EarningsPage> {
                               label: 'Withdraw',
                               color: AppColors.secondary,
                               onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Withdraw feature coming soon!')),
-                                );
+                                Navigator.pushNamed(context, AppRoutes.riderWithdrawals);
                               },
                             ),
                           ),
@@ -218,11 +215,7 @@ class _EarningsPageState extends State<EarningsPage> {
                               label: 'Insights',
                               color: Colors.blue,
                               onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Insights feature coming soon!')),
-                                );
+                                Navigator.pushNamed(context, AppRoutes.riderInsights);
                               },
                             ),
                           ),

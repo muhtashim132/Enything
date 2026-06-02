@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -43,6 +44,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   List<ProductModel> _products = [];
   String _searchQuery = '';
   final _searchController = TextEditingController();
+
+  // Banner carousel
+  final PageController _bannerController = PageController();
+  int _bannerIndex = 0;
+  Timer? _bannerTimer;
 
   /// True when a food-type tab is currently selected.
   bool get _isFoodTab {
@@ -92,7 +98,16 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     _startNotifications();
     // Subscribe to live GPS updates so distance filter stays accurate
     _startLiveLocationUpdates();
-    
+    // Auto-scroll banner every 4 seconds
+    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      final next = (_bannerIndex + 1) % 3;
+      _bannerController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+      );
+    });
     // Fetch favorites
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
@@ -138,6 +153,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     // Remove live location listener to avoid memory leaks
     context.read<LocationProvider>().removeListener(_onLocationChanged);
     _searchController.dispose();
+    _bannerController.dispose();
+    _bannerTimer?.cancel();
     super.dispose();
   }
 
@@ -410,13 +427,20 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
 
+    // Greeting based on time of day
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12 ? 'Good morning ☀️' : hour < 17 ? 'Good afternoon 🌤' : 'Good evening 🌙';
+    final firstName = context.read<AuthProvider>().user?.fullName.split(' ').first ?? '';
+    final w = MediaQuery.of(context).size.width;
+    final isWide = w >= 600;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Premium Modern AppBar ──────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 135,
+            expandedHeight: 165,
             floating: true,
             pinned: true,
             elevation: 0,
@@ -426,50 +450,28 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               background: Container(
                 padding: const EdgeInsets.fromLTRB(16, 50, 16, 0),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Row 1: Greeting + actions
                     Row(
                       children: [
                         Expanded(
-                          child: GestureDetector(
-                            onTap: () => _showLocationSheet(),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'DELIVERING TO',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textSecondary,
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                    const Icon(Icons.keyboard_arrow_down,
-                                        size: 16, color: AppColors.primary),
-                                  ],
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                firstName.isNotEmpty
+                                    ? '$greeting, $firstName!'
+                                    : '$greeting!',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark ? Colors.white : AppColors.textPrimary,
                                 ),
-                                Text(
-                                  locationProvider.hasLocation
-                                      ? locationProvider
-                                              .currentAddress.isNotEmpty
-                                          ? locationProvider.currentAddress
-                                          : 'Current Location'
-                                      : 'Set location...',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodyLarge
-                                        ?.color,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
                         NotificationBell(
@@ -493,6 +495,48 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                               Navigator.pushNamed(context, AppRoutes.settings),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Row 2: Location pill
+                    GestureDetector(
+                      onTap: () => _showLocationSheet(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF0F0F8),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark ? Colors.white10 : Colors.transparent,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.location_on_rounded, size: 14, color: AppColors.primary),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                locationProvider.hasLocation
+                                    ? locationProvider.currentAddress.isNotEmpty
+                                        ? locationProvider.currentAddress
+                                        : 'Current Location'
+                                    : 'Set location...',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white70 : AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.keyboard_arrow_down_rounded,
+                                size: 16,
+                                color: isDark ? Colors.white38 : AppColors.textSecondary),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -518,6 +562,15 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                             fontSize: 14),
                         prefixIcon:
                             const Icon(Icons.search, color: AppColors.primary),
+                        suffixIcon: _isSearching
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : null,
                         filled: true,
                         fillColor:
                             Theme.of(context).inputDecorationTheme.fillColor ??
@@ -525,6 +578,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
@@ -536,10 +593,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             ),
           ),
 
-          // ── Categories Horizontal List ──────────────────────────────
+          // ── Categories Horizontal List (pill style) ──────────────────
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 108,
+              height: 60,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -551,7 +608,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   return GestureDetector(
                     onTap: () {
                       if (_selectedTabIndex == index) {
-                        // Tap selected tab again → go back to All
                         setState(() => _selectedTabIndex = -1);
                         _loadAllData();
                       } else {
@@ -560,63 +616,54 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                       }
                     },
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 280),
-                      width: 76,
-                      margin: const EdgeInsets.only(right: 12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      margin: const EdgeInsets.only(right: 10, top: 8, bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        gradient: isSelected
+                            ? LinearGradient(
+                                colors: grad,
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight)
+                            : null,
+                        color: isSelected
+                            ? null
+                            : (isDark
+                                ? const Color(0xFF1E1E2E)
+                                : const Color(0xFFF0F0F8)),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                    color: grad.first.withValues(alpha: 0.35),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3))
+                              ]
+                            : [],
+                        border: isSelected
+                            ? null
+                            : Border.all(
+                                color: isDark ? Colors.white10 : Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 280),
-                            width: 58,
-                            height: 58,
-                            decoration: BoxDecoration(
-                              gradient: isSelected
-                                  ? LinearGradient(
-                                      colors: grad,
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight)
-                                  : null,
-                              color: isSelected
-                                  ? null
-                                  : (isDark
-                                      ? const Color(0xFF1E1E2E)
-                                      : const Color(0xFFF0F0F8)),
-                              shape: BoxShape.circle,
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                          color: grad.first.withValues(alpha: 0.4),
-                                          blurRadius: 12,
-                                          offset: const Offset(0, 4))
-                                    ]
-                                  : [],
-                            ),
-                            child: Center(
-                              child: (isSelected && cat['name'] == 'Grocery')
-                                  ? ColorFiltered(
-                                      colorFilter: const ColorFilter.mode(
-                                        Colors.black87,
-                                        BlendMode.srcIn,
-                                      ),
-                                      child: Text(cat['emoji'], style: const TextStyle(fontSize: 26)),
-                                    )
-                                  : Text(cat['emoji'], style: const TextStyle(fontSize: 26)),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
+                          Text(cat['emoji'],
+                              style: TextStyle(fontSize: isSelected ? 18 : 16)),
+                          const SizedBox(width: 6),
                           Text(
                             cat['name'],
                             style: GoogleFonts.outfit(
-                              fontSize: 11,
+                              fontSize: 13,
                               fontWeight: isSelected
                                   ? FontWeight.w800
-                                  : FontWeight.w500,
+                                  : FontWeight.w600,
                               color: isSelected
-                                  ? grad.first
+                                  ? Colors.white
                                   : (isDark
-                                      ? Colors.white54
-                                      : Colors.grey.shade600),
+                                      ? Colors.white70
+                                      : Colors.grey.shade700),
                             ),
                           ),
                         ],
@@ -823,122 +870,180 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   }
 
   Widget _buildFeaturedBanner() {
-    return Container(
-      width: double.infinity,
-      height: 170,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0A1260), Color(0xFF162AC4), Color(0xFF2444E8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-              color: const Color(0xFF162AC4).withValues(alpha: 0.4),
-              blurRadius: 24,
-              offset: const Offset(0, 12)),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Decorative circles
-          Positioned(
-              right: -30,
-              top: -30,
-              child: Container(
-                  width: 160,
-                  height: 160,
-                  decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.05)))),
-          Positioned(
-              right: 30,
-              bottom: -40,
-              child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFFF4C542).withValues(alpha: 0.12)))),
-          Positioned(
-              right: -10,
-              bottom: -10,
-              child: Icon(Icons.bolt_rounded,
-                  size: 140, color: Colors.white.withValues(alpha: 0.06))),
-          // Content
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF4C542),
-                    borderRadius: BorderRadius.circular(10),
+    final slides = [
+      {
+        'tag': '⚡ FAST DELIVERY',
+        'title': 'Delivered at the\nspeed of life!',
+        'sub': 'Supporting local sellers · 5% commission',
+        'icon': Icons.bolt_rounded,
+        'colors': [const Color(0xFF0A1260), const Color(0xFF162AC4), const Color(0xFF2444E8)],
+        'accent': const Color(0xFFF4C542),
+      },
+      {
+        'tag': '🏪 LOCAL SHOPS',
+        'title': 'Support your\ncommunity!',
+        'sub': 'Local shops near you · fresh & authentic',
+        'icon': Icons.storefront_rounded,
+        'colors': [const Color(0xFF0F4C1A), const Color(0xFF1A7A30), const Color(0xFF27AE60)],
+        'accent': const Color(0xFF7DEFA1),
+      },
+      {
+        'tag': '📍 LIVE TRACKING',
+        'title': 'Track your\norder live!',
+        'sub': 'Real-time GPS route · always in the know',
+        'icon': Icons.map_rounded,
+        'colors': [const Color(0xFF4A0080), const Color(0xFF7B1FA2), const Color(0xFFAB47BC)],
+        'accent': const Color(0xFFE1BEE7),
+      },
+    ];
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 170,
+          child: PageView.builder(
+            controller: _bannerController,
+            onPageChanged: (i) => setState(() => _bannerIndex = i),
+            itemCount: slides.length,
+            itemBuilder: (_, i) {
+              final s = slides[i];
+              final colors = s['colors'] as List<Color>;
+              final accent = s['accent'] as Color;
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 1),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: colors,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Text('⚡ FAST DELIVERY',
-                      style: GoogleFonts.outfit(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.black,
-                          letterSpacing: 0.5)),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                        color: colors[1].withValues(alpha: 0.4),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12)),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                Text('Delivered at the\nspeed of life!',
-                    style: GoogleFonts.outfit(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        height: 1.1)),
-                const SizedBox(height: 8),
-                Text('Supporting local sellers · 5% commission',
-                    style: GoogleFonts.outfit(
-                        fontSize: 12, color: Colors.white.withValues(alpha: 0.7))),
-              ],
-            ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                        right: -30, top: -30,
+                        child: Container(
+                            width: 160, height: 160,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.05)))),
+                    Positioned(
+                        right: -10, bottom: -10,
+                        child: Icon(s['icon'] as IconData,
+                            size: 140, color: Colors.white.withValues(alpha: 0.06))),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                            decoration: BoxDecoration(
+                                color: accent, borderRadius: BorderRadius.circular(10)),
+                            child: Text(s['tag'] as String,
+                                style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.black,
+                                    letterSpacing: 0.5)),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(s['title'] as String,
+                              style: GoogleFonts.outfit(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  height: 1.1)),
+                          const SizedBox(height: 8),
+                          Text(s['sub'] as String,
+                              style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  color: Colors.white.withValues(alpha: 0.75))),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        // Dot indicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(slides.length, (i) {
+            final active = _bannerIndex == i;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: active ? 18 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: active ? AppColors.primary : AppColors.textLight,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            );
+          }),
+        ),
+      ],
     );
   }
 
   Widget _buildSectionTitle(String title, {String? subtitle}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (subtitle != null)
+                Text(
+                  subtitle,
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              title,
+              'See all',
               style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
               ),
             ),
-            if (subtitle != null)
-              Text(
-                subtitle,
-                style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ),
+            const SizedBox(width: 2),
+            const Icon(Icons.arrow_forward_rounded,
+                size: 14, color: AppColors.primary),
           ],
-        ),
-        Text(
-          'See all',
-          style: GoogleFonts.outfit(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primary,
-          ),
         ),
       ],
     );
@@ -1020,7 +1125,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color:
               isSelected ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
@@ -1032,39 +1137,41 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(isSelected ? activeIcon : inactiveIcon,
-                    color: isSelected ? Colors.white : Colors.white54,
-                    size: 22),
-                if (badge > 0)
-                  Positioned(
-                    right: -7,
-                    top: -7,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: const BoxDecoration(
-                          color: Color(0xFFFF6B6B), shape: BoxShape.circle),
-                      child: Center(
-                          child: Text('$badge',
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold))),
+            AnimatedScale(
+              scale: isSelected ? 1.0 : 0.95,
+              duration: const Duration(milliseconds: 200),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(isSelected ? activeIcon : inactiveIcon,
+                      color: isSelected ? Colors.white : Colors.white54,
+                      size: 22),
+                  if (badge > 0)
+                    Positioned(
+                      right: -7,
+                      top: -7,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                            color: Color(0xFFFF6B6B), shape: BoxShape.circle),
+                        child: Center(
+                            child: Text('$badge',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold))),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-            if (isSelected) ...[
-              const SizedBox(height: 2),
-              Text(label,
-                  style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700))
-            ],
+            const SizedBox(height: 2),
+            Text(label,
+                style: GoogleFonts.outfit(
+                    color: isSelected ? Colors.white : Colors.white54,
+                    fontSize: 10,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
           ],
         ),
       ),
@@ -1107,19 +1214,65 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   Widget _buildShimmer() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade200;
+    final highlight = isDark ? const Color(0xFF2A2A3A) : Colors.grey.shade100;
     return Shimmer.fromColors(
-      baseColor: isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade200,
-      highlightColor: isDark ? const Color(0xFF2A2A3A) : Colors.grey.shade100,
+      baseColor: base,
+      highlightColor: highlight,
       child: Column(
         children: List.generate(
             3,
             (_) => Container(
                   margin: const EdgeInsets.only(bottom: 16),
-                  height: 130,
+                  height: 140,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Image placeholder
+                      Container(
+                        width: 110,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          color: base,
+                          borderRadius: const BorderRadius.horizontal(
+                              left: Radius.circular(24)),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 20, horizontal: 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                  height: 14, width: 120,
+                                  decoration: BoxDecoration(
+                                      color: base,
+                                      borderRadius: BorderRadius.circular(7))),
+                              const SizedBox(height: 10),
+                              Container(
+                                  height: 12, width: 80,
+                                  decoration: BoxDecoration(
+                                      color: base,
+                                      borderRadius: BorderRadius.circular(6))),
+                              const SizedBox(height: 10),
+                              Container(
+                                  height: 12, width: 60,
+                                  decoration: BoxDecoration(
+                                      color: base,
+                                      borderRadius: BorderRadius.circular(6))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 )),
       ),
@@ -1127,10 +1280,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   }
 
   void _showLocationSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       builder: (ctx) => Padding(
@@ -1142,12 +1296,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                    color: Colors.grey[300],
+                    color: isDark ? Colors.white24 : Colors.grey[300],
                     borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 24),
             Text('Delivery Location',
                 style: GoogleFonts.outfit(
-                    fontSize: 20, fontWeight: FontWeight.w700)),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : AppColors.textPrimary)),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: () {
@@ -1159,7 +1315,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               style: ElevatedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 56)),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: MediaQuery.of(ctx).padding.bottom + 8),
           ],
         ),
       ),

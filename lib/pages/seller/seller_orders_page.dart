@@ -8,6 +8,7 @@ import '../../models/order_model.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
+import '../../pages/seller/seller_order_map_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SellerOrdersPage extends StatefulWidget {
@@ -23,6 +24,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   List<OrderModel> _orders = [];
   bool _isLoading = true;
   late TabController _tabController;
+  // shopId → shop name for map page label
+  final Map<String, String> _shopNames = {};
 
   @override
   void initState() {
@@ -44,7 +47,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
       final shopsResp = await _supabase
           .from('shops')
-          .select('id')
+          .select('id, name')
           .eq('seller_id', auth.currentUserId ?? '');
 
       if ((shopsResp as List).isEmpty) {
@@ -52,8 +55,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         return;
       }
 
-      // Collect ALL shop IDs for this seller — not just the first one
+      // Collect ALL shop IDs and names for this seller
       final shopIds = (shopsResp as List).map((s) => s['id'] as String).toList();
+      final Map<String, String> shopNames = {
+        for (final s in shopsResp as List)
+          s['id'] as String: s['name'] as String? ?? 'My Shop'
+      };
 
       final response = await _supabase
           .from('orders')
@@ -63,6 +70,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
       if (mounted) {
         setState(() {
+          _shopNames
+            ..clear()
+            ..addAll(shopNames);
           _orders = (response as List).map((o) {
             final model = OrderModel.fromMap(o);
             final rawItems = o['order_items'] as List? ?? [];
@@ -267,47 +277,103 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text('Orders',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          tabs: [
-            Tab(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Pending', style: GoogleFonts.outfit()),
-                  if (pendingCount > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                          color: AppColors.danger,
-                          borderRadius: BorderRadius.circular(10)),
-                      child: Text('$pendingCount',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700)),
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return [
+            SliverAppBar(
+              expandedHeight: 120,
+              pinned: true,
+              elevation: 0,
+              backgroundColor: isDark ? const Color(0xFF141425) : Colors.white,
+              surfaceTintColor: Colors.transparent,
+              flexibleSpace: FlexibleSpaceBar(
+                titlePadding: const EdgeInsets.only(left: 20, bottom: 60),
+                title: Text('Orders',
+                    style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 24,
+                        color: isDark ? Colors.white : Colors.black)),
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF4C6EF5).withValues(alpha: 0.15),
+                        Colors.transparent,
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
-                  ],
-                ],
+                  ),
+                ),
+              ),
+              actions: const [
+                Padding(
+                  padding: EdgeInsets.only(right: 8.0, bottom: 48.0),
+                  child: NotificationBell(),
+                ),
+              ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(60),
+                child: Container(
+                  height: 60,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      indicator: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: isDark ? Colors.white54 : Colors.black54,
+                      dividerColor: Colors.transparent,
+                      tabs: [
+                        Tab(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('Pending', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                              if (pendingCount > 0) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                      color: AppColors.danger,
+                                      borderRadius: BorderRadius.circular(10)),
+                                  child: Text('$pendingCount',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800)),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Tab(child: Text('Active', style: GoogleFonts.outfit(fontWeight: FontWeight.w600))),
+                        Tab(child: Text('Done', style: GoogleFonts.outfit(fontWeight: FontWeight.w600))),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-            Tab(child: Text('Active', style: GoogleFonts.outfit())),
-            Tab(child: Text('Done', style: GoogleFonts.outfit())),
-          ],
-        ),
-        actions: const [
-          NotificationBell(),
-        ],
-      ),
-      body: _isLoading
+          ];
+        },
+        body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabController,
@@ -317,25 +383,61 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 _buildList(_doneOrders(), 'done'),
               ],
             ),
+      ),
     );
   }
 
   Widget _buildList(List<OrderModel> orders, String tab) {
     if (orders.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('📋', style: TextStyle(fontSize: 56)),
-            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  )
+                ]
+              ),
+              child: Icon(
+                tab == 'pending' ? Icons.inbox_outlined : 
+                tab == 'active' ? Icons.local_shipping_outlined : 
+                Icons.check_circle_outline,
+                size: 64,
+                color: AppColors.primary.withValues(alpha: 0.5),
+              ),
+            ),
+            const SizedBox(height: 24),
             Text(
               tab == 'pending'
-                  ? 'No new orders'
+                  ? 'No New Orders'
                   : tab == 'active'
-                      ? 'No active orders'
-                      : 'No completed orders',
+                      ? 'No Active Orders'
+                      : 'No Completed Orders',
               style: GoogleFonts.outfit(
-                  color: AppColors.textSecondary, fontSize: 16),
+                  color: isDark ? Colors.white : Colors.black87, 
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tab == 'pending'
+                  ? 'When customers place orders, they will appear here.'
+                  : tab == 'active'
+                      ? 'Orders in progress will be tracked here.'
+                      : 'Your past orders will be saved here.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                  color: AppColors.textSecondary, 
+                  fontSize: 14),
             ),
           ],
         ),
@@ -357,22 +459,42 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final statusColor = _statusColor(order);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)
-        ],
-        border: order.status == 'confirmed'
-            ? Border.all(color: AppColors.success, width: 1.5)
-            : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    bool isExpanded = false;
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                  color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.05), 
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ],
+            border: Border.all(
+                color: isDark ? Colors.white10 : Colors.transparent,
+                width: 1,
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: statusColor,
+                    width: 6,
+                  ),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
           // Header row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -406,46 +528,85 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             ],
           ),
 
-          // ── Order Items ─────────────────────────────────────────────────
+          // ── Order Items (Collapsible) ───────────────────────────────────
           if (order.items.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Items (${order.items.length})',
-                      style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  ...order.items.map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.circle, size: 5, color: AppColors.textSecondary),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                '${item.quantity}x ${item.productName}',
-                                style: GoogleFonts.outfit(fontSize: 12),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Text(
-                              '₹${item.totalPrice.toStringAsFixed(0)}',
-                              style: GoogleFonts.outfit(
-                                  fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                          ],
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: () {
+                setState(() {
+                  isExpanded = !isExpanded;
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2A2A3A) : AppColors.background,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Items (${order.items.length})',
+                            style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.white70 : AppColors.textSecondary)),
+                        Icon(
+                          isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          size: 20,
+                          color: isDark ? Colors.white54 : Colors.grey,
                         ),
-                      )),
-                ],
+                      ],
+                    ),
+                    if (isExpanded) ...[
+                      const SizedBox(height: 8),
+                      const Divider(height: 1),
+                      const SizedBox(height: 8),
+                      ...order.items.map((item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4, right: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '${item.quantity}x',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    item.productName,
+                                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                                Text(
+                                  '₹${item.totalPrice.toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 13, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          )),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -492,6 +653,42 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   ),
                 ),
             ]),
+          ],
+
+          // ── Track on Map button (active orders with coords) ──────────────
+          if (tab == 'active' &&
+              order.shopLat != null &&
+              order.shopLng != null &&
+              order.deliveryLat != null &&
+              order.deliveryLng != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SellerOrderMapPage(
+                      order: order,
+                      shopName: _shopNames[order.shopId] ?? 'My Shop',
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.map_outlined, size: 16),
+                label: Text(
+                  'Track on Map',
+                  style: GoogleFonts.outfit(
+                      fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
           ],
 
           if (order.prescriptionUrls.isNotEmpty) ...[
@@ -645,8 +842,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               ],
             ),
           ],
-        ],
-      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
