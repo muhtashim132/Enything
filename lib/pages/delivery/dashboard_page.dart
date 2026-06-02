@@ -726,6 +726,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                       ]),
                                     ),
                                   ),
+                                  ),
                                 ]),
                               ],
                             ),
