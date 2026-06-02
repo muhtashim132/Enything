@@ -595,7 +595,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                              'Hi, ${auth.user?.fullName.split(' ').first ?? 'Partner'}! 🚴',
+                                              'Hi, ${auth.user?.fullName.split(' ').first ?? 'Partner'}!',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: GoogleFonts.outfit(
                                                   color: Colors.white,
                                                   fontSize: 20,
