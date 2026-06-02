@@ -251,11 +251,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                                   fontSize: 20,
                                                   fontWeight: FontWeight.w800)),
                                           const SizedBox(height: 4),
-                                          Row(
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 4,
                                             children: [
                                               _roleBadge('$_shopEmoji  $_shopBadgeName',
                                                   const Color(0xFFF4C542)),
-                                              const SizedBox(width: 8),
                                               _statusBadge(_shopIsActive),
                                             ],
                                           ),
@@ -305,23 +306,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                                           fontSize: 36,
                                                           fontWeight: FontWeight.w900,
                                                           letterSpacing: -1)),
-                                                  const SizedBox(width: 12),
-                                                  if (_shopRating != '--')
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.white.withValues(alpha: 0.15),
-                                                        borderRadius: BorderRadius.circular(12),
-                                                      ),
-                                                      child: Row(
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        children: [
-                                                          const Icon(Icons.star_rounded, color: Color(0xFFF4C542), size: 14),
-                                                          const SizedBox(width: 4),
-                                                          Text(_shopRating, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-                                                        ],
-                                                      ),
-                                                    ),
+
                                                 ],
                                               ),
                                             ]),
