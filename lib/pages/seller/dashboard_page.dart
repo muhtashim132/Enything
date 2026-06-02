@@ -236,6 +236,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                               children: [
                                 // Top bar
                                 Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     _avatar(auth.user?.initials ?? 'S'),
                                     const SizedBox(width: 14),
@@ -251,14 +252,16 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                                   fontSize: 20,
                                                   fontWeight: FontWeight.w800)),
                                           const SizedBox(height: 4),
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 4,
-                                            children: [
-                                              _roleBadge('$_shopEmoji  $_shopBadgeName',
-                                                  const Color(0xFFF4C542)),
-                                              _statusBadge(_shopIsActive),
-                                            ],
+                                          SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: Row(
+                                              children: [
+                                                _roleBadge('$_shopEmoji  $_shopBadgeName',
+                                                    const Color(0xFFF4C542)),
+                                                const SizedBox(width: 8),
+                                                _statusBadge(_shopIsActive),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),
