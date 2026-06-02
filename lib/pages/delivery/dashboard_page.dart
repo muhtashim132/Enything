@@ -1881,48 +1881,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   },
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.black.withValues(alpha: 0.03),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ListTile(
-                  title: Row(
-                    children: [
-                      Text('Delivery Vehicle',
-                          style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.black)),
-                      if (_vehiclePending) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text('Pending',
-                              style: GoogleFonts.outfit(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold)),
-                        )
-                      ]
-                    ],
-                  ),
-                  subtitle: Text(_vehicleTypeLabel(_vehicleType),
-                      style: GoogleFonts.outfit(
-                          color: isDark ? Colors.white70 : Colors.black54)),
-                  leading: const Icon(Icons.two_wheeler_rounded,
-                      color: Colors.orange),
-                  trailing:
-                      const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showVehicleChangeSheet();
-                  },
-                ),
-              ),
               const SizedBox(height: 32),
             ],
           ),
