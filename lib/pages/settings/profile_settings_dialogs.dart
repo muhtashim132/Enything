@@ -421,48 +421,71 @@ void showDocumentsDialog(BuildContext context) {
   final auth = context.read<AuthProvider>();
   if (auth.currentUserId == null) return;
 
-  final aadharCtrl = TextEditingController();
-  final panCtrl = TextEditingController();
+  showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+  
+  Supabase.instance.client.from('delivery_partners').select('aadhar_number, pan_number, driving_license').eq('id', auth.currentUserId ?? '').maybeSingle().then((res) {
+    if (context.mounted) Navigator.pop(context); // close loader
+    if (res != null && context.mounted) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        builder: (ctx) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('KYC Documents', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 24),
+                _buildReadOnlyFieldDialog('Aadhaar Number', res['aadhar_number'] ?? 'Not provided', isDark),
+                const SizedBox(height: 16),
+                _buildReadOnlyFieldDialog('PAN Number', res['pan_number'] ?? 'Not provided', isDark),
+                const SizedBox(height: 16),
+                _buildReadOnlyFieldDialog('Driving License', res['driving_license'] ?? 'Not provided', isDark),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: Text('Close', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  }).catchError((_) {
+    if (context.mounted) Navigator.pop(context);
+  });
+}
 
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('KYC Documents',
-              style: GoogleFonts.outfit(
-                  fontSize: 20, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
-          TextField(
-              controller: aadharCtrl,
-              decoration: const InputDecoration(labelText: 'Aadhar Number')),
-          const SizedBox(height: 16),
-          TextField(
-              controller: panCtrl,
-              decoration:
-                  const InputDecoration(labelText: 'PAN/Insurance Number')),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () async {
-              await Supabase.instance.client.from('delivery_partners').update({
-                'aadhar_number': aadharCtrl.text.trim(),
-                'insurance_number': panCtrl.text.trim(),
-              }).eq('id', auth.currentUserId!);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 56)),
-            child: const Text('Save Documents'),
-          ),
-        ],
-      ),
+Widget _buildReadOnlyFieldDialog(String label, String value, bool isDark) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.outfit(color: isDark ? Colors.white54 : Colors.black54, fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(value, style: GoogleFonts.outfit(color: isDark ? Colors.white : Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+      ],
     ),
   );
 }

@@ -206,7 +206,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
         _buildSettingTile(
           icon: Icons.badge_outlined,
           title: 'Documents',
-          subtitle: 'License, Aadhar, and approvals',
+          subtitle: 'View License, Aadhaar, and PAN',
           isDark: isDark,
           onTap: () => showDocumentsDialog(context),
         ),
