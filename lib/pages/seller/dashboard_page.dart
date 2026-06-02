@@ -242,44 +242,47 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                     const SizedBox(width: 14),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                              'Hi, ${auth.user?.fullName.split(' ').first ?? 'Seller'}! 👋',
-                                              style: GoogleFonts.outfit(
-                                                  color: Colors.white,
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.w800)),
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                    'Hi, ${auth.user?.fullName.split(' ').first ?? 'Seller'}! 👋',
+                                                    style: GoogleFonts.outfit(
+                                                        color: Colors.white,
+                                                        fontSize: 20,
+                                                        fontWeight: FontWeight.w800)),
+                                              ),
+                                              _headerIcon(
+                                                  isDark
+                                                      ? Icons.light_mode_outlined
+                                                      : Icons.dark_mode_outlined,
+                                                  () => themeProvider.toggleTheme()),
+                                              const NotificationBell(
+                                                iconColor: Colors.white70,
+                                                containerColor: Colors.transparent,
+                                                badgeColor: Color(0xFFFF6B6B),
+                                              ),
+                                              _headerIcon(
+                                                  Icons.settings_outlined,
+                                                  () => Navigator.pushNamed(
+                                                      context, AppRoutes.settings)),
+                                            ],
+                                          ),
                                           const SizedBox(height: 4),
-                                          SingleChildScrollView(
-                                            scrollDirection: Axis.horizontal,
-                                            child: Row(
-                                              children: [
-                                                _roleBadge('$_shopEmoji  $_shopBadgeName',
-                                                    const Color(0xFFF4C542)),
-                                                const SizedBox(width: 8),
-                                                _statusBadge(_shopIsActive),
-                                              ],
-                                            ),
+                                          Row(
+                                            children: [
+                                              _roleBadge('$_shopEmoji  $_shopBadgeName',
+                                                  const Color(0xFFF4C542)),
+                                              const SizedBox(width: 8),
+                                              _statusBadge(_shopIsActive),
+                                            ],
                                           ),
                                         ],
                                       ),
                                     ),
-                                     _headerIcon(
-                                         isDark
-                                             ? Icons.light_mode_outlined
-                                             : Icons.dark_mode_outlined,
-                                         () => themeProvider.toggleTheme()),
-                                     const NotificationBell(
-                                       iconColor: Colors.white70,
-                                       containerColor: Colors.transparent,
-                                       badgeColor: Color(0xFFFF6B6B),
-                                     ),
-                                    _headerIcon(
-                                        Icons.settings_outlined,
-                                        () => Navigator.pushNamed(
-                                            context, AppRoutes.settings)),
                                   ],
                                 ),
                                 const SizedBox(height: 20),
