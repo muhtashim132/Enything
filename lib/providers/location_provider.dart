@@ -107,6 +107,14 @@ class LocationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setLocalAddressDetails({String? house, String? mark, String? pin, String? addressText}) {
+    if (house != null) _houseNumber = house;
+    if (mark != null) _landmark = mark;
+    if (pin != null) _pincode = pin;
+    if (addressText != null && addressText.isNotEmpty) _currentAddress = addressText;
+    notifyListeners();
+  }
+
   Future<void> updateAddressDetails(String userId, {String? house, String? mark, String? pin}) async {
     if (house != null) _houseNumber = house;
     if (mark != null) _landmark = mark;
@@ -115,12 +123,13 @@ class LocationProvider extends ChangeNotifier {
     
     try {
       final db = Supabase.instance.client;
-      await db.from('customers').update({
+      await db.from('customers').upsert({
+        'id': userId,
         if (house != null) 'address_home': {'house': house},
         if (mark != null) 'landmark': mark,
         if (pin != null) 'pincode': pin,
         'address': currentAddress,
-      }).eq('id', userId);
+      });
     } catch (e) {
       debugPrint('updateAddressDetails error: $e');
     }

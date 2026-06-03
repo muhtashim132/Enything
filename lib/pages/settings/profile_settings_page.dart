@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import 'profile_settings_dialogs.dart';
+import '../../config/routes.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
   const ProfileSettingsPage({super.key});
@@ -39,6 +40,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           children: [
             // Header Profile Info
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 CircleAvatar(
                   radius: 36,
@@ -52,21 +54,28 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(user.fullName, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 4),
-                      Text(user.phone, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
+                      if (user.phone.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(user.phone, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
+                      ],
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          user.sessionRoleDisplay,
-                          style: GoogleFonts.outfit(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              user.sessionRoleDisplay,
+                              style: GoogleFonts.outfit(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -102,10 +111,12 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               title: 'About Enything',
               subtitle: 'App version, Terms, Privacy Policy',
               isDark: isDark,
-              onTap: _showAboutBottomSheet,
+              onTap: () => Navigator.pushNamed(context, AppRoutes.aboutEnything),
             ),
 
             const SizedBox(height: 32),
+            _buildContactSupportButton(isDark),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -134,6 +145,81 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             ),
             const SizedBox(height: 40),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContactSupportButton(bool isDark) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryLight],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          )
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => Navigator.pushNamed(context, AppRoutes.faqSupport),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Need Help?',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Contact our 24/7 support team',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_forward_rounded, color: AppColors.primary, size: 16),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -426,52 +512,6 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           const SizedBox(height: 4),
           Text(value, style: GoogleFonts.outfit(color: isDark ? Colors.white : Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
         ],
-      ),
-    );
-  }
-
-  void _showAboutBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('About Enything',
-                style: GoogleFonts.outfit(
-                    fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: Text('Terms of Service', style: GoogleFonts.outfit()),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.pushNamed(context, '/legal/terms');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.privacy_tip_outlined),
-              title: Text('Privacy Policy', style: GoogleFonts.outfit()),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.pushNamed(context, '/legal/privacy');
-              },
-            ),
-            const SizedBox(height: 16),
-            Center(
-              child: Text('Version 1.0.0\nMade with ❤️ in India',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(color: Colors.grey, fontSize: 12)),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
       ),
     );
   }

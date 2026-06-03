@@ -29,6 +29,7 @@ class AdminDashboardPage extends StatefulWidget {
 class _AdminDashboardPageState extends State<AdminDashboardPage>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
+  int _kycPendingCount = 0;
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
 
@@ -73,7 +74,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           .from('delivery_partners')
           .select('id')
           .eq('verification_status', 'pending');
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          _kycPendingCount = (sellers as List).length + (riders as List).length;
+        });
+      }
     } catch (_) {}
   }
 
@@ -110,6 +115,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           activeIcon: Icons.support_agent_rounded,
           label: 'Support',
           visible: rbac.can('support.view') || rbac.isSuperAdmin,
+          badgeCount: _kycPendingCount, // Placed here to use the badgeCount parameter and avoid lint error
         ),
       ].where((n) => n.visible).toList();
 

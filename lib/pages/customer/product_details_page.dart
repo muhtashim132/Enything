@@ -113,7 +113,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
               ),
               GestureDetector(
-                onTap: () => Navigator.pushNamed(context, AppRoutes.cart),
+                onTap: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  Navigator.pushNamed(context, AppRoutes.cart);
+                },
                 child: Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -393,41 +396,78 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   const SizedBox(width: 20),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, AppRoutes.cart),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        Navigator.pushNamed(context, AppRoutes.cart);
+                      },
                       child: const Text('View Cart'),
                     ),
                   ),
                 ],
               )
-            : SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (_shop != null) {
-                      cart.addItem(_product!, _shop!);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content:
-                              Text('${_product!.name} added to cart! 🛒'),
-                          backgroundColor: AppColors.success,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          action: SnackBarAction(
-                            label: 'View Cart',
-                            textColor: Colors.white,
-                            onPressed: () => Navigator.pushNamed(
-                                context, AppRoutes.cart),
-                          ),
+            : Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        if (_shop != null) {
+                          cart.addItem(_product!, _shop!);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content:
+                                  Text('${_product!.name} added to cart! 🛒'),
+                              backgroundColor: AppColors.success,
+                              behavior: SnackBarBehavior.floating,
+                              duration: const Duration(seconds: 2),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              action: SnackBarAction(
+                                label: 'View Cart',
+                                textColor: Colors.white,
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  Navigator.pushNamed(context, AppRoutes.cart);
+                                },
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: AppColors.primary, width: 2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      );
-                    }
-                  },
-                  child: const Text('ADD TO CART',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700)),
-                ),
+                      ),
+                      child: const Text('ADD TO CART',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (_shop != null) {
+                          cart.addItem(_product!, _shop!);
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          Navigator.pushNamed(context, AppRoutes.cart);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('BUY NOW',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+                ],
               ),
       ),
     );

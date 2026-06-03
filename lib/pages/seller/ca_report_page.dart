@@ -173,7 +173,7 @@ Total GST in Orders             : ₹${_f(_nonFoodGst + _s9_5Gst)}
 ════════════════════════════════════════
 DOC 2 — COMMISSION INVOICE (for ITC)
 ════════════════════════════════════════
-Enything Commission (5% of base)   : ₹${_f(_commission)}
+Enything Commission                : ₹${_f(_commission)}
 GST on Commission (18%)         : ₹${_f(commGst)}
 Total Commission + GST          : ₹${_f(_commission + commGst)}
 → Claim ₹${_f(commGst)} as Input Tax Credit in GSTR-3B
@@ -282,7 +282,7 @@ Orders Delivered   : $_deliveredOrders''',
                   subtitle: 'Claim GST on commission as ITC in GSTR-3B',
                   accentColor: const Color(0xFFCC5DE8),
                   rows: [
-                    _row('Enything Commission (5%)', _commission),
+                    _row('Enything Commission', _commission),
                     _row('GST on Commission (18%)', _commission * 0.18,
                         color: const Color(0xFF51CF66), tag: 'CLAIM AS ITC'),
                     _divider(),

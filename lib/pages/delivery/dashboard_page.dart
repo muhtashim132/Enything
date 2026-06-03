@@ -10,10 +10,10 @@ import 'package:geolocator/geolocator.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../models/order_model.dart';
 import '../../models/shop_model.dart';
 import '../../theme/app_colors.dart';
-import '../../config/payment_config.dart';
 import '../../config/routes.dart';
 import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
@@ -31,6 +31,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   bool _isOnline = false;
   List<OrderModel> _availableOrders = [];
   List<OrderModel> _myOrders = [];
+  double _todayEarnings = 0.0;
+  double _totalKmsDriven = 0.0;
   bool _isLoading = false;
   // Bug #19: rider's current GPS position for geographic filtering
   double? _riderLat;
@@ -49,7 +51,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   bool _autoAccept = false;
   String _navApp = 'google_maps';
   String _vehicleType = 'motorcycle';
-  bool _vehiclePending = false;
   bool _isProcessingAutoAccept = false;
 
   @override
@@ -171,13 +172,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           if (partnerResp['auto_accept'] != null) _autoAccept = partnerResp['auto_accept'] as bool;
         }
 
-        final pendingVehicle = await _supabase
-            .from('vehicle_change_requests')
-            .select('id')
-            .eq('rider_id', auth.currentUserId!)
-            .eq('status', 'pending')
-            .maybeSingle();
-        _vehiclePending = pendingVehicle != null;
       }
 
 
@@ -186,7 +180,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .select('*, order_items(*), shops!shop_id(id, name, location)')
           .eq('seller_accepted', true)
           .isFilter('delivery_partner_id', null)
-          .inFilter('status', ['pending', 'confirmed']);
+          // Show orders where seller accepted but rider hasn't yet
+          .inFilter('status', ['awaiting_acceptance', 'pending']);
 
       final myOrders = await _supabase
           .from('orders')
@@ -195,7 +190,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .neq('status', 'delivered')
           .neq('status', 'cancelled')
           .neq('status', 'seller_rejected')
-          .neq('status', 'partner_rejected');
+          .neq('status', 'partner_rejected')
+          .neq('status', 'awaiting_acceptance'); // rider accepted but status not yet escalated
 
       // Populate _shopInfoCache from the joined shop data
       _shopInfoCache.clear();
@@ -233,7 +229,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               }
               final distM =
                   Geolocator.distanceBetween(_riderLat!, _riderLng!, lat, lng);
-              return distM / 1000 <= PaymentConfig.maxDeliveryRadiusKm;
+              return distM / 1000 <= (PlatformConfigProvider.instance?.maxDeliveryRadiusKm ?? 15.0);
             }).toList()
           : allAvailable; // no location → show all with a warning banner
 
@@ -246,6 +242,21 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               .toList();
           return model;
         }).toList();
+        
+        _todayEarnings = 0.0;
+        _totalKmsDriven = 0.0;
+        final today = DateTime.now();
+        for (final order in _myOrders) {
+          if (order.status == 'delivered') {
+            _totalKmsDriven += order.estimatedDistanceKm;
+            if (order.createdAt.year == today.year &&
+                order.createdAt.month == today.month &&
+                order.createdAt.day == today.day) {
+              _todayEarnings += order.riderEarnings + order.waitTimePenalty;
+            }
+          }
+        }
+        
         _isLoading = false;
       });
 
@@ -271,12 +282,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   Future<void> _acceptOrder(OrderModel order) async {
     final auth = context.read<AuthProvider>();
     try {
-      final newStatus = order.sellerAccepted ? 'confirmed' : 'pending';
       double? shopLat;
       double? shopLng;
       if (order.shopId != null) {
         try {
-          final shopResp = await _supabase.from('shops').select('location').eq('id', order.shopId!).maybeSingle();
+          final shopResp = await _supabase
+              .from('shops')
+              .select('location')
+              .eq('id', order.shopId!)
+              .maybeSingle();
           if (shopResp != null && shopResp['location'] != null) {
             final sm = ShopModel.fromMap(shopResp);
             shopLat = sm.location.latitude;
@@ -285,43 +299,57 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         } catch (_) {}
       }
 
+      // Both seller AND rider have accepted → move to awaiting_payment.
+      // Customer gets a push to open the app and complete payment.
+      // Payment deadline: 10 minutes from now.
+      final bothAccepted = order.sellerAccepted;
+      final newStatus = bothAccepted ? 'awaiting_payment' : 'awaiting_acceptance';
+      final paymentDeadline = bothAccepted
+          ? DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String()
+          : null;
+
       await _supabase.from('orders').update({
         'delivery_partner_id': auth.currentUserId,
         'partner_accepted': true,
         'status': newStatus,
+        if (paymentDeadline != null) 'payment_deadline': paymentDeadline,
         if (shopLat != null && shopLat != 0.0) 'shop_lat': shopLat,
         if (shopLng != null && shopLng != 0.0) 'shop_lng': shopLng,
       }).eq('id', order.id);
 
       if (mounted) {
-        final msg = order.sellerAccepted
-            ? '✅ Order confirmed! Both shop & rider accepted.'
-            : '✅ Saved. Waiting for shop to confirm.';
-        _showSnack(msg);
-        
-        // Notify customer
         final notifProv = context.read<NotificationProvider>();
-        if (order.sellerAccepted) {
+
+        if (bothAccepted) {
+          _showSnack('✅ Order accepted! Waiting for customer to pay.');
+          // Push customer to complete payment NOW
           notifProv.sendBackgroundPush(
             targetUserId: order.customerId,
-            title: '✅ Order Confirmed!',
-            body: 'Both the shop and rider have accepted your order.',
+            title: '✅ Shop & Rider Ready! Pay Now 💳',
+            body:
+                'Both the shop and rider accepted your order. Open the app and complete payment within 10 minutes.',
+            data: {'order_id': order.id, 'action': 'pay'},
           );
-        }
-        
-        // Notify shop
-        if (order.shopId != null && shopLat != null) {
-          // We need to fetch shop's seller ID if we can, but since we don't have it directly in OrderModel, 
-          // we'll fetch it from the database quickly
-          _supabase.from('shops').select('seller_id').eq('id', order.shopId!).maybeSingle().then((shopData) {
-            if (shopData != null && shopData['seller_id'] != null) {
-              notifProv.sendBackgroundPush(
-                targetUserId: shopData['seller_id'],
-                title: '✅ Rider Assigned',
-                body: 'A rider has accepted the order and will pick it up soon.',
-              );
-            }
-          });
+          // Notify seller: waiting for customer payment
+          if (order.shopId != null) {
+            _supabase
+                .from('shops')
+                .select('seller_id')
+                .eq('id', order.shopId!)
+                .maybeSingle()
+                .then((shopData) {
+              if (shopData != null && shopData['seller_id'] != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: shopData['seller_id'],
+                  title: '⌛ Waiting for Customer Payment',
+                  body:
+                      'Both you and the rider accepted. Customer is completing payment now.',
+                );
+              }
+            });
+          }
+        } else {
+          _showSnack('✅ Accepted! Waiting for the shop to also accept.');
         }
       }
       _loadOrders();
@@ -387,9 +415,21 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
         return;
       } else {
+        final updateData = <String, dynamic>{'status': status};
+        if (status == 'picked_up' && order.orderReadyTime == null) {
+          final readyTime = DateTime.now();
+          updateData['order_ready_time'] = readyTime.toIso8601String();
+          if (order.arrivedAtShopTime != null) {
+            final waitMins = readyTime.difference(order.arrivedAtShopTime!).inMinutes;
+            final prepLimit = order.shopPrepTimeSnapshot;
+            if (waitMins > prepLimit) {
+              updateData['wait_time_penalty'] = (waitMins - prepLimit) * 2.0;
+            }
+          }
+        }
         await _supabase
             .from('orders')
-            .update({'status': status}).eq('id', order.id);
+            .update(updateData).eq('id', order.id);
             
         if (mounted) {
           final notifProv = context.read<NotificationProvider>();
@@ -669,6 +709,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                     badgeColor: Color(0xFFFF6B6B),
                                   ),
                                   _iconBtn(
+                                      Icons.help_outline_rounded,
+                                      () => Navigator.pushNamed(
+                                          context, AppRoutes.faqSupport)),
+                                  _iconBtn(
                                       Icons.settings_outlined,
                                       () => Navigator.pushNamed(
                                           context, AppRoutes.settings)),
@@ -715,7 +759,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                                         color: Colors.white70,
                                                         fontSize: 12,
                                                         fontWeight: FontWeight.w600)),
-                                                Text('₹0', // TODO: connect to real daily earnings stat
+                                                Text('₹${_todayEarnings.toStringAsFixed(0)}',
                                                     style: GoogleFonts.outfit(
                                                         color: Colors.white,
                                                         fontSize: 18,
@@ -759,14 +803,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              Text('Deliveries',
+                                              Text('Total KMs Driven',
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
                                                   style: GoogleFonts.outfit(
                                                       color: Colors.white70,
                                                       fontSize: 12,
                                                       fontWeight: FontWeight.w600)),
-                                              Text('${_myOrders.where((o) => o.status == 'delivered').length}',
+                                              Text('${_totalKmsDriven.toStringAsFixed(1)} km',
                                                   style: GoogleFonts.outfit(
                                                       color: Colors.white,
                                                       fontSize: 18,
@@ -890,7 +934,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               }
                               if (val) _loadOrders();
                             },
-                            activeColor: Colors.white,
+                            activeThumbColor: Colors.white,
                             activeTrackColor: Colors.white.withValues(alpha: 0.3),
                             inactiveThumbColor: isDark ? Colors.white54 : Colors.grey.shade400,
                             inactiveTrackColor: isDark ? Colors.white10 : Colors.grey.shade300,
@@ -1144,7 +1188,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   children: [
                     const Icon(Icons.currency_rupee_rounded, color: Colors.white, size: 14),
                     Text(
-                        '${order.riderEarnings.toStringAsFixed(0)}',
+                        order.riderEarnings.toStringAsFixed(0),
                         style: GoogleFonts.outfit(
                             color: Colors.white,
                             fontSize: 14,
@@ -1471,6 +1515,35 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
+                ),
+              ),
+            ],
+            if (order.deliveryNotes != null && order.deliveryNotes!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.note_alt_outlined, size: 18, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Delivery Note', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
+                          const SizedBox(height: 4),
+                          Text(order.deliveryNotes!, style: GoogleFonts.outfit(fontSize: 13, color: isDark ? Colors.white : AppColors.textPrimary)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1883,7 +1956,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           fontWeight: FontWeight.bold,
                           color: isDark ? Colors.white : Colors.black)),
                   subtitle: Text(
-                      'Automatically accept orders within ${PaymentConfig.maxDeliveryRadiusKm.toInt()}km',
+                      'Automatically accept orders within ${PlatformConfigProvider.instance?.maxDeliveryRadiusKm.toInt() ?? 15}km',
                       style: GoogleFonts.outfit(
                           color: isDark ? Colors.white70 : Colors.black54)),
                   value: _autoAccept,
@@ -1985,7 +2058,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         'rider_id': auth.currentUserId!,
                         'requested_type': type,
                       });
-                      setState(() => _vehiclePending = true);
+
                       _showSnack('Vehicle change requested. Awaiting admin approval.');
                     } catch (e) {
                       _showSnack('Error requesting vehicle change', isError: true);

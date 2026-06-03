@@ -27,16 +27,17 @@ class RefundPolicyPage extends StatelessWidget {
           _Section(
             title: '1. Order Cancellation',
             content: [
-              _Para('Before Seller Accepts', 'You may cancel your order for a full refund at any time before the seller accepts your order. Go to Order History → tap your order → Cancel Order.'),
-              _Para('After Seller Accepts', 'Once a seller has accepted your order and started preparing it, cancellation is not available through the app. Please contact support immediately if you need assistance.'),
-              _Para('Auto-Cancellation', 'If a seller does not respond within 5 minutes, your order is automatically cancelled and a full refund is issued.'),
+              _Para('Before Confirmation (No Charge)', 'You may cancel your order at any time before both the shop and rider accept it. Because payment is only collected after confirmation, no money is deducted and no refund is needed.'),
+              _Para('After Confirmation & Payment', 'Once both parties accept and you complete payment, the shop begins preparation. At this stage, cancellation is not available through the app. Please contact support immediately if you need assistance.'),
+              _Para('Auto-Cancellation (2-Minute Rule)', 'If the shop or rider does not respond within 2 minutes, your order is automatically cancelled. You will not be charged.'),
+              _Para('Shop Rejection', 'If the shop is unable to fulfill your order, they may decline it. No payment is taken, and you can easily retry your order with a different shop.'),
             ],
           ),
 
           _Section(
             title: '2. Refund Eligibility',
             content: [
-              _Para('Pre-Paid Orders', 'Full refund is issued if:\n  • The order is cancelled before preparation starts.\n  • The seller rejects your order.\n  • The order was not delivered within the committed time frame.\n  • You received a wrong or defective item.'),
+              _Para('Pre-Paid Orders', 'Since payment is only collected after confirmation, full refunds apply primarily if:\n  • You paid, but the order was not delivered within the committed time frame.\n  • You received a wrong or defective item.\n  • The order was cancelled by support due to unforeseen issues after payment.'),
               _Para('Cash on Delivery (COD)', 'COD orders do not involve pre-payment, so no online refund applies. Disputes for COD orders are handled through our support team.'),
               _Para('Partial Refunds', 'If only part of your order is missing or incorrect, a partial refund equal to the affected item(s) value will be issued.'),
             ],

@@ -38,6 +38,12 @@ class OrderModel {
   final String? riderPhone;
   final String? paymentMethod;
 
+  // Cancellation metadata
+  final String? cancelledReason;    // 'shop_rejected' | 'no_rider' | 'timeout' | 'customer'
+  final String? rejectionMessage;   // seller's freetext message to customer
+  final String? cartGroupId;        // groups orders from same checkout (up to 3 shops)
+  final DateTime? acceptanceDeadline; // when the 2-min window expires
+
   // Dual-acceptance flags (stored in DB columns)
   bool sellerAccepted;
   bool partnerAccepted;
@@ -113,6 +119,12 @@ class OrderModel {
   /// Stored as JSON so future rate changes never affect historical orders.
   final Map<String, dynamic> gstRateSnapshot;
 
+  /// Estimated distance calculated at checkout for rider payout.
+  final double estimatedDistanceKm;
+
+  /// Frozen snapshot of shop's prep time at the time of order for wait time calculations.
+  final int shopPrepTimeSnapshot;
+
   OrderModel({
     required this.id,
     required this.customerId,
@@ -132,6 +144,10 @@ class OrderModel {
     this.shopPhone,
     this.riderPhone,
     this.paymentMethod,
+    this.cancelledReason,
+    this.rejectionMessage,
+    this.cartGroupId,
+    this.acceptanceDeadline,
     this.sellerAccepted = false,
     this.partnerAccepted = false,
     this.arrivedAtShopTime,
@@ -161,6 +177,8 @@ class OrderModel {
     this.grandTotalCollected = 0.0,
     this.gstRateSnapshot = const {},
     this.prescriptionUrls = const [],
+    this.estimatedDistanceKm = 0.0,
+    this.shopPrepTimeSnapshot = 30,
   });
 
   factory OrderModel.fromMap(Map<String, dynamic> map) {
@@ -182,6 +200,12 @@ class OrderModel {
       shopPhone: map['shop_phone'],
       riderPhone: map['rider_phone'],
       paymentMethod: map['payment_method'],
+      cancelledReason: map['cancelled_reason'],
+      rejectionMessage: map['rejection_message'],
+      cartGroupId: map['cart_group_id'],
+      acceptanceDeadline: map['acceptance_deadline'] != null
+          ? DateTime.tryParse(map['acceptance_deadline'])
+          : null,
       sellerAccepted: map['seller_accepted'] ?? false,
       partnerAccepted: map['partner_accepted'] ?? false,
       arrivedAtShopTime: map['arrived_at_shop_time'] != null
@@ -219,6 +243,8 @@ class OrderModel {
       prescriptionUrls: map['prescription_urls'] != null 
           ? List<String>.from(map['prescription_urls']) 
           : [],
+      estimatedDistanceKm: (map['estimated_distance_km'] ?? 0.0).toDouble(),
+      shopPrepTimeSnapshot: map['shop_prep_time_snapshot'] ?? 30,
     );
   }
 
@@ -277,6 +303,10 @@ class OrderModel {
       shopPhone: shopPhone ?? this.shopPhone,
       riderPhone: riderPhone ?? this.riderPhone,
       paymentMethod: paymentMethod,
+      cancelledReason: cancelledReason,
+      rejectionMessage: rejectionMessage,
+      cartGroupId: cartGroupId,
+      acceptanceDeadline: acceptanceDeadline,
       sellerAccepted: sellerAccepted ?? this.sellerAccepted,
       partnerAccepted: partnerAccepted ?? this.partnerAccepted,
       arrivedAtShopTime: arrivedAtShopTime,
@@ -306,6 +336,8 @@ class OrderModel {
       grandTotalCollected: grandTotalCollected,
       gstRateSnapshot: gstRateSnapshot,
       prescriptionUrls: prescriptionUrls,
+      estimatedDistanceKm: estimatedDistanceKm,
+      shopPrepTimeSnapshot: shopPrepTimeSnapshot,
     );
   }
 
@@ -315,6 +347,10 @@ class OrderModel {
         return 'Pending Prescription Verification';
       case 'verification_failed':
         return 'Prescription Rejected';
+      case 'awaiting_acceptance':
+        return 'Waiting for Confirmation';
+      case 'awaiting_payment':
+        return 'Pay Now';
       case 'pending':
         if (sellerAccepted && !partnerAccepted) return 'Awaiting Rider';
         if (!sellerAccepted && partnerAccepted) return 'Awaiting Shop';
@@ -332,11 +368,17 @@ class OrderModel {
       case 'delivered':
         return 'Delivered';
       case 'cancelled':
-        return 'Cancelled';
+        switch (cancelledReason) {
+          case 'shop_rejected': return 'Shop Declined';
+          case 'no_rider':      return 'No Rider Available';
+          case 'timeout':       return 'Order Expired';
+          case 'customer':      return 'Cancelled by You';
+          default:              return 'Cancelled';
+        }
       case 'seller_rejected':
-        return 'Rejected by Shop';
+        return 'Shop Declined';
       case 'partner_rejected':
-        return 'Rejected by Rider';
+        return 'Rider Declined';
       // Legacy statuses (backward compat)
       case 'seller_accepted':
         return 'Shop Accepted';

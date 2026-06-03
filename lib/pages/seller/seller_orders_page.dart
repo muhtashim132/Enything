@@ -91,37 +91,40 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   /// Seller presses Accept:
   ///   1. Set seller_accepted = true in DB
   ///   2. If partner_accepted is already true → move to 'confirmed'
-  ///   3. Otherwise stay 'pending' (displayed as "Awaiting Rider")
+  ///   3. Otherwise stay 'awaiting_acceptance'
   Future<void> _sellerAccept(OrderModel order) async {
     try {
-      // Determine what status to set
-      final newStatus = order.partnerAccepted ? 'confirmed' : 'pending';
-
+      // For awaiting_acceptance: mark seller_accepted. The order stays
+      // awaiting_acceptance until the rider also accepts (via delivery dashboard).
+      // When both have accepted, the Postgres function / app logic moves it to
+      // awaiting_payment and the customer gets a push to pay.
       await _supabase.from('orders').update({
         'seller_accepted': true,
-        'status': newStatus,
       }).eq('id', order.id);
+
+      // Push rider notification to come pick up
+      if (mounted) {
+        context.read<NotificationProvider>().sendBackgroundPush(
+          targetUserId: 'broadcast', // delivery dashboard picks it from Realtime
+          title: '🛵 Order Available!',
+          body: 'A shop accepted an order ₹${order.grandTotal.toStringAsFixed(0)}. Be the first rider to accept it!',
+          data: {'order_id': order.id, 'role': 'rider'},
+        );
+      }
 
       if (mounted) {
         final msg = order.partnerAccepted
-            ? '✅ Order confirmed! Both shop & rider accepted.'
+            ? '✅ Both you & rider accepted. Waiting for customer to pay.'
             : '✅ Your acceptance saved. Waiting for a delivery partner.';
         _showSnack(msg, isError: false);
-        
+
         final notifProv = context.read<NotificationProvider>();
-        if (newStatus == 'confirmed') {
-          notifProv.sendBackgroundPush(
-            targetUserId: order.customerId,
-            title: '✅ Order Confirmed!',
-            body: 'Both the shop and rider have accepted your order.',
-          );
-        } else {
-          notifProv.sendBackgroundPush(
-            targetUserId: order.customerId,
-            title: '🏪 Shop Accepted!',
-            body: 'The shop has accepted your order and is verifying the details. Waiting for a rider.',
-          );
-        }
+        // Notify customer that shop accepted (rider still pending)
+        notifProv.sendBackgroundPush(
+          targetUserId: order.customerId,
+          title: '🏪 Shop Accepted!',
+          body: 'The shop has accepted your order. Now waiting for a rider to also accept.',
+        );
       }
       _loadOrders();
     } catch (e) {
@@ -130,24 +133,118 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   }
 
   Future<void> _sellerReject(OrderModel order) async {
+    final messageController = TextEditingController();
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1A1A2E),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text('Decline Order',
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  )),
+              const SizedBox(height: 4),
+              Text('Send an optional message to the customer explaining why.',
+                  style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: messageController,
+                maxLines: 3,
+                style: GoogleFonts.outfit(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'e.g. "This item is currently out of stock"',
+                  hintStyle: GoogleFonts.outfit(color: Colors.white30, fontSize: 13),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.07),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(14),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white24),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: Text('Go Back',
+                          style: GoogleFonts.outfit(color: Colors.white70, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.danger,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: Text('Send & Decline',
+                          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
     try {
+      final msg = messageController.text.trim();
       await _supabase.from('orders').update({
         'status': order.prescriptionUrls.isNotEmpty ? 'verification_failed' : 'seller_rejected',
         'seller_accepted': false,
+        'cancelled_reason': 'shop_rejected',
+        if (msg.isNotEmpty) 'rejection_message': msg,
       }).eq('id', order.id);
-      
+
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
           targetUserId: order.customerId,
-          title: '😔 Order Rejected',
-          body: order.prescriptionUrls.isNotEmpty 
-            ? 'The medical store rejected your prescription. Order cancelled.'
-            : 'The shop could not accept your order.',
+          title: '🏪 Shop Declined',
+          body: msg.isNotEmpty
+              ? '"$msg" — You can retry or choose a different shop.'
+              : 'The shop could not accept your order. You can retry or choose a different shop.',
         );
       }
-      
+
       _loadOrders();
-      _showSnack('Order rejected.', isError: true);
+      _showSnack('Order declined.', isError: true);
     } catch (e) {
       debugPrint('Reject error: $e');
     }
@@ -204,7 +301,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     try {
       final updateData = <String, dynamic>{'status': status};
       if (status == 'ready_for_pickup') {
-        updateData['order_ready_time'] = DateTime.now().toIso8601String();
+        final readyTime = DateTime.now();
+        updateData['order_ready_time'] = readyTime.toIso8601String();
+        
+        if (order.arrivedAtShopTime != null) {
+          final waitMins = readyTime.difference(order.arrivedAtShopTime!).inMinutes;
+          final prepLimit = order.shopPrepTimeSnapshot;
+          if (waitMins > prepLimit) {
+            updateData['wait_time_penalty'] = (waitMins - prepLimit) * 2.0;
+          }
+        }
       }
 
       await _supabase.from('orders').update(updateData).eq('id', order.id);
@@ -305,20 +411,24 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   }
 
   // ── Tab filters ────────────────────────────────────────────────────────────
-  List<OrderModel> _pendingOrders() =>
-      _orders.where((o) => o.status == 'pending' && !o.sellerAccepted).toList();
+  List<OrderModel> _pendingOrders() => _orders
+      .where((o) =>
+          (o.status == 'awaiting_acceptance' || o.status == 'pending') &&
+          !o.sellerAccepted)
+      .toList();
 
   List<OrderModel> _activeOrders() => _orders
-      .where((o) =>
-          [
-            'pending', // seller accepted, awaiting partner (or vice versa)
+      .where((o) => [
+            'awaiting_acceptance', // seller accepted, waiting for rider
+            'awaiting_payment',    // both accepted, waiting for customer pay
+            'pending',             // legacy
             'confirmed',
             'preparing',
             'ready_for_pickup',
             'picked_up',
             'out_for_delivery',
           ].contains(o.status) &&
-          (o.sellerAccepted || o.status != 'pending'))
+          (o.sellerAccepted || !['awaiting_acceptance', 'pending'].contains(o.status)))
       .toList();
 
   List<OrderModel> _doneOrders() => _orders
@@ -666,6 +776,36 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     ],
                   ],
                 ),
+              ),
+            ),
+          ],
+
+          if (order.deliveryNotes != null && order.deliveryNotes!.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.note_alt_outlined, size: 18, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Customer Note', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
+                        const SizedBox(height: 4),
+                        Text(order.deliveryNotes!, style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textPrimary)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

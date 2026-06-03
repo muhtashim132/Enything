@@ -13,31 +13,31 @@ void showSavedAddressesDialog(BuildContext context) {
   final user = auth.user;
   if (user == null) return;
 
+  bool isLoading = true;
+  bool fetchingLocation = false;
+  int selectedIndex = 0; // 0 = Home, 1 = Work
+
+  final Map<int, Map<String, TextEditingController>> ctrls = {
+    0: {
+      'flat': TextEditingController(),
+      'address': TextEditingController(),
+      'landmark': TextEditingController(),
+      'pincode': TextEditingController(),
+    },
+    1: {
+      'flat': TextEditingController(),
+      'address': TextEditingController(),
+      'landmark': TextEditingController(),
+      'pincode': TextEditingController(),
+    }
+  };
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     builder: (ctx) {
-      bool isLoading = true;
-      bool fetchingLocation = false;
-      int selectedIndex = 0; // 0 = Home, 1 = Work
-
-      final Map<int, Map<String, TextEditingController>> ctrls = {
-        0: {
-          'flat': TextEditingController(),
-          'address': TextEditingController(),
-          'landmark': TextEditingController(),
-          'pincode': TextEditingController(),
-        },
-        1: {
-          'flat': TextEditingController(),
-          'address': TextEditingController(),
-          'landmark': TextEditingController(),
-          'pincode': TextEditingController(),
-        }
-      };
-
       return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
         if (isLoading) {
@@ -75,10 +75,11 @@ void showSavedAddressesDialog(BuildContext context) {
         return Padding(
           padding: EdgeInsets.fromLTRB(
               24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Text('Saved Addresses',
                   style: GoogleFonts.outfit(
                       fontSize: 20, fontWeight: FontWeight.w700)),
@@ -243,16 +244,37 @@ void showSavedAddressesDialog(BuildContext context) {
 
                   final activeMap = selectedIndex == 0 ? homeMap : workMap;
 
-                  await Supabase.instance.client.from('customers').update({
-                    'address_home': homeMap,
-                    'address_work': workMap,
-                    // Sync the active toggled address to the default fields so the app logic still works seamlessly
-                    'default_address': activeMap['address'],
-                    'landmark': activeMap['landmark'],
-                    'pincode': activeMap['pincode'],
-                  }).eq('id', user.id);
+                  try {
+                    await Supabase.instance.client.from('customers').upsert({
+                      'id': user.id,
+                      'address_home': homeMap,
+                      'address_work': workMap,
+                      'default_address': activeMap['address'],
+                      'landmark': activeMap['landmark'],
+                      'pincode': activeMap['pincode'],
+                    });
 
-                  if (ctx.mounted) Navigator.pop(ctx);
+                    if (ctx.mounted) {
+                      final locProv = ctx.read<LocationProvider>();
+                      locProv.setLocalAddressDetails(
+                        house: activeMap['flat'],
+                        mark: activeMap['landmark'],
+                        pin: activeMap['pincode'],
+                        addressText: activeMap['address'],
+                      );
+                      Navigator.pop(ctx);
+                    }
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to save address: $e'),
+                          backgroundColor: Colors.red,
+                          duration: const Duration(seconds: 8),
+                        ),
+                      );
+                    }
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 56)),
@@ -261,6 +283,7 @@ void showSavedAddressesDialog(BuildContext context) {
               ),
             ],
           ),
+         ),
         );
       });
     },

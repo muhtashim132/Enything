@@ -11,6 +11,7 @@ import '../../providers/cart_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../models/product_model.dart';
@@ -42,6 +43,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   List<ProductModel> _searchProductResults = [];
   Map<String, ShopModel> _searchProductShops = {};
   List<ProductModel> _products = [];
+  Map<String, ShopModel> _productShops = {};
   String _searchQuery = '';
   final _searchController = TextEditingController();
 
@@ -281,7 +283,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
       final productsResponse = await _supabase
           .from('products')
-          .select()
+          .select('*, shops(*)')
           .limit(100);
 
       if (mounted) {
@@ -317,15 +319,24 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             ..sort((a, b) => b.rating.compareTo(a.rating));
         }
 
-        final prods = (productsResponse as List)
-            .map((p) => ProductModel.fromMap(p))
-            .where((p) => p.isAvailable)
-            .toList()
-          ..sort((a, b) => b.rating.compareTo(a.rating));
+        final prods = <ProductModel>[];
+        final prodShops = <String, ShopModel>{};
+        
+        for (final p in productsResponse as List) {
+          final product = ProductModel.fromMap(p);
+          if (product.isAvailable) {
+            prods.add(product);
+            if (p['shops'] != null) {
+              prodShops[product.id] = ShopModel.fromMap(p['shops']);
+            }
+          }
+        }
+        prods.sort((a, b) => b.rating.compareTo(a.rating));
 
         setState(() {
           _shops = nearby;
           _products = prods;
+          _productShops = prodShops;
           _isLoading = false;
         });
       }
@@ -833,8 +844,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                 crossAxisSpacing: 16,
                               ),
                               itemCount: _products.length,
-                              itemBuilder: (context, index) =>
-                                  ProductCard(product: _products[index]),
+                              itemBuilder: (context, index) {
+                                final product = _products[index];
+                                final shop = _productShops[product.id];
+                                return ProductCard(product: product, shop: shop);
+                              },
                             ),
                           ],
                         ]),
@@ -870,11 +884,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   }
 
   Widget _buildFeaturedBanner() {
+    final config = context.watch<PlatformConfigProvider>();
     final slides = [
       {
         'tag': '⚡ FAST DELIVERY',
         'title': 'Delivered at the\nspeed of life!',
-        'sub': 'Supporting local sellers · 5% commission',
+        'sub': 'Supporting local sellers · ${config.commissionPercent.toStringAsFixed(0)}% commission',
         'icon': Icons.bolt_rounded,
         'colors': [const Color(0xFF0A1260), const Color(0xFF162AC4), const Color(0xFF2444E8)],
         'accent': const Color(0xFFF4C542),
@@ -1000,6 +1015,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   }
 
   Widget _buildSectionTitle(String title, {String? subtitle}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1013,7 +1029,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: isDark ? Colors.white : AppColors.textPrimary,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -1023,27 +1039,38 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   subtitle,
                   style: GoogleFonts.outfit(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: isDark ? Colors.white70 : AppColors.textSecondary,
                   ),
                 ),
             ],
           ),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'See all',
-              style: GoogleFonts.outfit(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
+        TextButton(
+          onPressed: () {},
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'See all',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.blue.shade300 : AppColors.primary,
+                ),
               ),
-            ),
-            const SizedBox(width: 2),
-            const Icon(Icons.arrow_forward_rounded,
-                size: 14, color: AppColors.primary),
-          ],
+              const SizedBox(width: 4),
+              Icon(
+                Icons.arrow_forward_rounded,
+                size: 16,
+                color: isDark ? Colors.blue.shade300 : AppColors.primary,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -1117,11 +1144,27 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       {int badge = 0}) {
     final isSelected = _navIndex == index;
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        if (index == 0) {
+          setState(() => _navIndex = 0);
+          return;
+        }
+
         setState(() => _navIndex = index);
-        if (index == 1) Navigator.pushNamed(context, AppRoutes.cart);
-        if (index == 2) Navigator.pushNamed(context, AppRoutes.orderHistory);
-        if (index == 3) Navigator.pushNamed(context, AppRoutes.favorites);
+        
+        if (!mounted) return;
+        
+        if (index == 1) {
+          await Navigator.pushNamed(context, AppRoutes.cart);
+        } else if (index == 2) {
+          await Navigator.pushNamed(context, AppRoutes.orderHistory);
+        } else if (index == 3) {
+          await Navigator.pushNamed(context, AppRoutes.favorites);
+        }
+        
+        if (mounted) {
+          setState(() => _navIndex = 0);
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),

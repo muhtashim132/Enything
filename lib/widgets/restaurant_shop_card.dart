@@ -29,6 +29,7 @@ class RestaurantShopCard extends StatelessWidget {
     final deliveryCharge =
         DeliveryCalculator.calculateDeliveryCharges(shop.distanceKm ?? 3.0, 0);
     final isFreeDelivery = deliveryCharge == 0;
+    final isOutOfRange = deliveryCharge < 0;
 
     return GestureDetector(
       onTap: onTap,
@@ -209,13 +210,17 @@ class RestaurantShopCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 10),
                       _metaChip(
-                        Icons.delivery_dining_outlined,
-                        isFreeDelivery
-                            ? 'Free delivery'
-                            : '₹${deliveryCharge.toStringAsFixed(0)} delivery',
-                        isFreeDelivery
-                            ? Colors.green.shade600
-                            : Colors.orange.shade700,
+                        isOutOfRange ? Icons.block_rounded : Icons.delivery_dining_outlined,
+                        isOutOfRange
+                            ? 'Out of range'
+                            : isFreeDelivery
+                                ? 'Free delivery'
+                                : '₹${deliveryCharge.toStringAsFixed(0)} delivery',
+                        isOutOfRange
+                            ? Colors.red.shade600
+                            : isFreeDelivery
+                                ? Colors.green.shade600
+                                : Colors.orange.shade700,
                       ),
                       const SizedBox(width: 10),
                       _metaChip(

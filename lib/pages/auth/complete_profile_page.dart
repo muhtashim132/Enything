@@ -9,6 +9,7 @@ import '../../providers/location_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../config/tax_config.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../widgets/seller/category_extra_fields.dart';
 
 enum _Role { customer, seller, delivery }
@@ -415,6 +416,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
 
   // ── Step 0: Role Selection ────────────────────────────────────────────────
   Widget _buildRoleSelect() {
+    final config = context.watch<PlatformConfigProvider>();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(
@@ -461,7 +463,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           _RoleCard(
             icon: '🏪',
             title: 'Seller',
-            subtitle: 'List your products — 5% commission on sales',
+            subtitle: 'List your products — ${config.commissionPercent.toStringAsFixed(0)}% commission on sales',
             selected: _role == _Role.seller,
             onTap: () => setState(() => _role = _Role.seller),
           ),

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/location_provider.dart';
@@ -16,6 +14,7 @@ import 'package:uuid/uuid.dart';
 import '../../config/payment_config.dart';
 import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
+import '../settings/profile_settings_dialogs.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -27,62 +26,21 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   bool _isProcessing = false;
   final _notesController = TextEditingController();
-  String? _selectedPaymentMethod = 'upi';
   final List<XFile> _prescriptions = [];
-
-  late Razorpay _razorpay;
-
-  // Stored while Razorpay sheet is open so we can use them in callbacks
-  double _pendingTotal = 0;
 
   @override
   void initState() {
     super.initState();
-    _razorpay = Razorpay();
-    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
-    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
   }
 
   @override
   void dispose() {
-    _razorpay.clear();
     _notesController.dispose();
     super.dispose();
   }
 
-  // ── Razorpay callbacks ────────────────────────────────────────────────────
-  void _onPaymentSuccess(PaymentSuccessResponse response) {
-    debugPrint('Razorpay success: paymentId=${response.paymentId} orderId=${response.orderId}');
-    _verifyAndCreateOrder(
-      paymentId:  response.paymentId  ?? '',
-      orderId:    response.orderId    ?? '',
-      signature:  response.signature  ?? '',
-    );
-  }
-
-  void _onPaymentError(PaymentFailureResponse response) {
-    setState(() => _isProcessing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Payment failed: ${response.message ?? "Unknown error"}'),
-        backgroundColor: AppColors.danger,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  void _onExternalWallet(ExternalWalletResponse response) {
-    setState(() => _isProcessing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('External wallet selected: ${response.walletName}'),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
+  // No Razorpay callbacks here — payment is triggered from TrackOrderPage
+  // after both seller & rider accept the order.
 
   Future<void> _pickPrescription() async {
     final picker = ImagePicker();
@@ -98,17 +56,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _prescriptions.removeAt(index));
   }
 
-  // ── Step 1: validate → (COD fast-path OR Razorpay order creation) ────────
+  // ── Step 1: Save order as awaiting_acceptance (NO payment yet) ────────────
+  // Payment is triggered ONLY after BOTH seller AND rider accept (within 1 min).
   Future<void> _placeOrder() async {
     setState(() => _isProcessing = true);
-    final cart     = context.read<CartProvider>();
+    final cart = context.read<CartProvider>();
     final location = context.read<LocationProvider>();
 
     // Prescription guard
     if (cart.requiresPrescription && _prescriptions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('A valid prescription is required for medicines in your cart.'),
+            content: Text(
+                'A valid prescription is required for medicines in your cart.'),
+            backgroundColor: AppColors.danger),
+      );
+      setState(() => _isProcessing = false);
+      return;
+    }
+
+    if (!location.hasLocation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please set your delivery location first.'),
             backgroundColor: AppColors.danger),
       );
       setState(() => _isProcessing = false);
@@ -116,143 +86,31 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     try {
-      double distanceKm = 3.0;
-      if (location.currentLocation != null && cart.shops.isNotEmpty) {
-        distanceKm = location.distanceTo(cart.shops.first.location);
-      }
-      final baseDelivery  = cart.calculateDeliveryCharges(distanceKm);
-      final surcharge     = cart.multiShopSurcharge;
-      final heavyFee      = cart.heavyOrderFee;
-      final discount      = cart.calculateDeliveryDiscount(distanceKm);
-      final effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
-      final riderEarnings = effectiveBase + surcharge + heavyFee;
-      final totalDelivery = riderEarnings + cart.smallCartFee - discount;
-
-      final breakdown = OrderTaxBreakdown.calculate(
-        items:         cart.taxBreakdownItems,
-        deliveryCharge: totalDelivery,
-        platformFee:   cart.platformFee,
-        paymentMethod: _selectedPaymentMethod!,
-      );
-      debugPrint(breakdown.toString());
-      _pendingTotal = breakdown.grandTotal;
-
-      // ── COD: skip Razorpay entirely ───────────────────────────────────────
-      final auth = context.read<AuthProvider>();
-      if (_selectedPaymentMethod == 'cod') {
-        await _createOrderInDb(razorpayPaymentId: null, razorpayOrderId: null);
-        return;
-      }
-
-      // ── Online Payment: create a server-side Razorpay order first ─────────
-      final supabase = Supabase.instance.client;
-      final amountInPaise = (_pendingTotal * 100).toInt();
-
-      final orderRes = await supabase.functions.invoke(
-        'create-razorpay-order',
-        body: {
-          'amount':   amountInPaise,
-          'currency': 'INR',
-          'receipt':  'enything_${auth.currentUserId}_${DateTime.now().millisecondsSinceEpoch}',
-        },
-      );
-
-      if (orderRes.status != 200) {
-        throw Exception('Could not create payment order: ${orderRes.data?['error'] ?? 'Unknown error'}');
-      }
-
-      final razorpayOrderId = orderRes.data['id'] as String;
-
-      // ── Open Razorpay checkout with the server-issued order_id ────────────
-      final razorpayKey = dotenv.maybeGet('RAZORPAY_KEY') ?? '';
-      final options = <String, dynamic>{
-        'key':         razorpayKey,
-        'amount':      amountInPaise,
-        'currency':    'INR',
-        'order_id':    razorpayOrderId,   // ← CRITICAL: required for production
-        'name':        'Enything',
-        'description': 'Order Payment',
-        'prefill': {
-          'contact': auth.user?.phone ?? '',
-          'name':    auth.user?.fullName ?? '',
-        },
-        'theme': {'color': '#4C6EF5'},
-      };
-      _razorpay.open(options);
-      // Callbacks (_onPaymentSuccess / _onPaymentError) handle the rest
+      await _createOrderInDb();
     } catch (e) {
-      debugPrint('Payment initiation error: $e');
+      debugPrint('Order placement error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open payment: ${e.toString().replaceAll('Exception: ', '')}'),
+            content: Text('Failed: $e'),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 5),
           ),
         );
-      }
-      setState(() => _isProcessing = false);
-    }
-  }
-
-  // ── Step 2 (online pay): verify signature server-side, then write order ──
-  Future<void> _verifyAndCreateOrder({
-    required String paymentId,
-    required String orderId,
-    required String signature,
-  }) async {
-    try {
-      final supabase = Supabase.instance.client;
-      final verifyRes = await supabase.functions.invoke(
-        'verify-razorpay-payment',
-        body: {
-          'razorpay_payment_id': paymentId,
-          'razorpay_order_id':   orderId,
-          'razorpay_signature':  signature,
-        },
-      );
-
-      final verified = verifyRes.data?['verified'] == true;
-      if (!verified) {
-        debugPrint('Signature verification failed: ${verifyRes.data}');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Payment verification failed. Please contact support if amount was deducted.'),
-              backgroundColor: AppColors.danger,
-              behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 6),
-            ),
-          );
-        }
         setState(() => _isProcessing = false);
-        return;
       }
-
-      // Signature verified — safe to record the order
-      await _createOrderInDb(
-        razorpayPaymentId: paymentId,
-        razorpayOrderId:   orderId,
-      );
-    } catch (e) {
-      debugPrint('Verify payment error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Payment confirmed but order save failed. Please contact support.'),
-            backgroundColor: AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 8),
-          ),
-        );
-      }
-      setState(() => _isProcessing = false);
     }
   }
 
-  // ── Step 3: write order to Supabase (COD: direct | Online: after verification) ──
-  Future<void> _createOrderInDb({String? razorpayPaymentId, String? razorpayOrderId}) async {
+  // Verification & payment completion is now handled in TrackOrderPage.
+
+  // ── Save order as 'awaiting_acceptance' — NO payment charged yet ──────────
+  // Financial snapshot is stored immediately for transparency.
+  // Razorpay is only opened from TrackOrderPage when both seller & rider accept.
+  Future<void> _createOrderInDb() async {
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
@@ -271,15 +129,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final riderEarnings = effectiveBase + surcharge + heavyFee;
       final totalDelivery = riderEarnings + cart.smallCartFee - discount;
 
+      // Payment method is always 'upi' now (COD removed)
+      const paymentMethod = 'upi';
       final breakdown = OrderTaxBreakdown.calculate(
         items: cart.taxBreakdownItems,
         deliveryCharge: totalDelivery,
         platformFee: cart.platformFee,
-        paymentMethod: _selectedPaymentMethod!,
+        paymentMethod: paymentMethod,
       );
 
       final cartGroupId = const Uuid().v4();
       final numShops = cart.shops.length;
+
+      // Acceptance deadline: 2 minutes from now (both seller & rider notified in parallel)
+      final acceptanceDeadline =
+          DateTime.now().toUtc().add(const Duration(minutes: 2));
 
       // Fetch customer phone
       String? customerPhone;
@@ -292,7 +156,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         if (profile != null) customerPhone = profile['phone'];
       } catch (_) {}
 
-      // Fetch shop phones (which are the sellers' phones)
+      // Fetch shop phones
       final shopPhones = <String, String?>{};
       for (final shop in cart.shops) {
         try {
@@ -323,31 +187,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final List<String> orderIds = [];
 
       for (final shop in cart.shops) {
-        final shopItems =
-            cart.items.where((i) => i.shop.id == shop.id).toList();
-        // Base subtotal for this shop (pre-GST)
-        final shopBaseSubtotal =
-            shopItems.fold(0.0, (sum, i) => sum + i.totalPrice);
+        final shopItems = cart.items.where((i) => i.shop.id == shop.id).toList();
+        final shopBaseSubtotal = shopItems.fold(0.0, (sum, i) => sum + i.totalPrice);
 
-        // Split fees evenly across grouped orders
         final shopDelivery = totalDelivery / numShops;
         final shopRiderEarnings = riderEarnings / numShops;
         final shopPlatformFee = cart.platformFee / numShops;
 
-        // ── Build frozen GST rate snapshot for this shop's items ─────────────
-        // Maps each unique category → rate used. Immutable for audit purposes.
         final Map<String, dynamic> rateSnapshot = {};
         for (final item in shopItems) {
           final cat = item.product.category;
           if (!rateSnapshot.containsKey(cat)) {
-            rateSnapshot[cat] = TaxConfig.gstRateForCategory(
-              cat,
-              itemPrice: item.product.price,
-            );
+            rateSnapshot[cat] =
+                TaxConfig.gstRateForCategory(cat, itemPrice: item.product.price);
           }
         }
 
-        // ── Per-shop GST split (S9(5) food vs non-food retail) ───────────────
         double shopS9_5Gst = 0;
         double shopNonFoodGst = 0;
         for (final item in shopItems) {
@@ -362,13 +217,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           }
         }
 
-        // ── TCS: 1% on net taxable supply per CGST §52 ───────────────────────
-        // TCS basis = seller's base subtotal (pre-GST). Rate = 0.5% CGST + 0.5% SGST = 1%.
         final shopTcs = shopBaseSubtotal * 0.01;
-
-        // ── True grand total collected from customer (for this shop's share) ─
         final shopGrandTotal = shopBaseSubtotal +
-            (shopS9_5Gst + shopNonFoodGst) + // item GST
+            (shopS9_5Gst + shopNonFoodGst) +
             shopDelivery +
             shopPlatformFee;
 
@@ -378,8 +229,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'cart_group_id': cartGroupId,
               'shop_id': shop.id,
               'customer_id': auth.currentUserId,
-              'status': 'pending',
-              // total_amount = BASE subtotal (seller's revenue, excl. GST)
+              // NEW STATUS — no money charged yet
+              'status': 'awaiting_acceptance',
+              'acceptance_deadline': acceptanceDeadline.toIso8601String(),
               'total_amount': shopBaseSubtotal,
               'delivery_charges': shopDelivery,
               'rider_earnings': shopRiderEarnings,
@@ -389,27 +241,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'delivery_lng': location.currentLocation?.longitude,
               'delivery_notes':
                   _notesController.text.isEmpty ? null : _notesController.text,
-              'payment_method': _selectedPaymentMethod,
-              'payment_status': razorpayPaymentId != null ? 'captured' : 'cod',
-              'razorpay_payment_id': razorpayPaymentId,
-              'razorpay_order_id':   razorpayOrderId,
+              'payment_method': paymentMethod,
+              'payment_status': 'pending',    // not captured yet
+              'razorpay_payment_id': null,
+              'razorpay_order_id': null,
               'customer_phone': customerPhone,
               'shop_phone': shopPhones[shop.id],
-              // ── Financial Snapshot — written ONCE, never recalculated ────
-              // Existing columns
               'gst_item_total': (breakdown.itemGstTotal / numShops),
               'gst_delivery': (breakdown.deliveryGst / numShops),
               'gst_platform': (breakdown.platformFeeGst / numShops),
               'enything_commission': (breakdown.enythingGrossCommission / numShops),
               'seller_payout': (breakdown.sellerPayout / numShops) - shopTcs,
               'gateway_deduction': (breakdown.gatewayDeduction / numShops),
-              // New GST compliance columns
-              's9_5_gst_amount': shopS9_5Gst, // Enything remits to Govt
-              'non_food_gst_amount': shopNonFoodGst, // Seller remits in GSTR-1
-              'tcs_amount': shopTcs, // Enything files GSTR-8
+              's9_5_gst_amount': shopS9_5Gst,
+              'non_food_gst_amount': shopNonFoodGst,
+              'tcs_amount': shopTcs,
               'grand_total_collected': shopGrandTotal,
-              'gst_rate_snapshot': rateSnapshot, // Frozen rate map
+              'gst_rate_snapshot': rateSnapshot,
               'prescription_urls': uploadedPrescriptionUrls,
+              'estimated_distance_km': distanceKm,
+              'shop_prep_time_snapshot': shop.prepTimeMinutes,
             })
             .select()
             .single();
@@ -427,15 +278,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   'weight_kg': item.weightKg,
                 })
             .toList();
-
         await supabase.from('order_items').insert(itemsToInsert);
 
+        // Notify seller: payment NOT charged yet — safe to accept or decline
         if (mounted) {
           context.read<NotificationProvider>().sendBackgroundPush(
-            targetUserId: shop.sellerId,
-            title: '🔔 New Order!',
-            body: 'You have a new order of ₹${shopBaseSubtotal.toStringAsFixed(0)} waiting for your acceptance.',
-          );
+                targetUserId: shop.sellerId,
+                title: '🔔 New Order! Accept now',
+                body:
+                    'Order ₹${shopGrandTotal.toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 1 min window.',
+                data: {'order_id': orderId, 'role': 'seller'},
+              );
         }
       }
 
@@ -449,7 +302,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             arguments: {'orderId': orderIds.first},
           );
         } else {
-          // Multi-shop order: send them to history to see all their concurrent orders
           Navigator.pushNamedAndRemoveUntil(
             context,
             AppRoutes.orderHistory,
@@ -459,17 +311,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
     } catch (e) {
       debugPrint('Order placement error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to place order. Please try again.'),
-            backgroundColor: AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
+      rethrow;
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -498,7 +340,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       items: cart.taxBreakdownItems,
       deliveryCharge: totalDelivery,
       platformFee: cart.platformFee,
-      paymentMethod: _selectedPaymentMethod ?? 'cod',
+      paymentMethod: 'upi',
     );
     // Grand total = base items + item GST + delivery + platform
     final total = gstBreakdown.grandTotal;
@@ -558,8 +400,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       const SizedBox(width: 8),
                       if (location.hasLocation)
                         OutlinedButton.icon(
-                          onPressed: () => _showEditAddressSheet(context, location),
-                          icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
+                          onPressed: () => showSavedAddressesDialog(context),
+                          icon: const Icon(Icons.edit_location_alt_outlined,
+                              size: 16),
                           label: const Text('Add/Edit Details'),
                           style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
@@ -648,7 +491,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               Icon(Icons.add_photo_alternate_outlined,
                                   color: AppColors.primary, size: 32),
                               SizedBox(height: 8),
-                              Text('Tap to upload prescription\n(Clear & readable image)',
+                              Text(
+                                  'Tap to upload prescription\n(Clear & readable image)',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                       color: AppColors.primary,
@@ -671,11 +515,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                   width: 100,
                                   margin: const EdgeInsets.only(right: 8),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.05),
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.05),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                        color:
-                                            AppColors.primary.withValues(alpha: 0.3)),
+                                        color: AppColors.primary
+                                            .withValues(alpha: 0.3)),
                                   ),
                                   child: const Center(
                                       child: Icon(Icons.add,
@@ -741,19 +586,41 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
             const SizedBox(height: 16),
 
-            // Payment Method
+            // Payment Info (no selector — always online, charged after acceptance)
             _sectionCard(
-              title: 'Payment Method',
-              icon: Icons.payments_outlined,
-              iconColor: AppColors.warning,
-              child: Column(
+              title: 'Payment',
+              icon: Icons.lock_outline_rounded,
+              iconColor: AppColors.success,
+              child: Row(
                 children: [
-                  _paymentOption(
-                    value: 'upi',
-                    icon: Icons.account_balance_wallet_outlined,
-                    label: 'UPI / Online',
-                    subtitle: 'Pay via any UPI app (GPay, PhonePe, etc.)',
-                    iconColor: AppColors.primary,
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.verified_user_outlined,
+                        color: AppColors.success, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Pay after confirmation',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: AppColors.textPrimary)),
+                        SizedBox(height: 2),
+                        Text(
+                          'No money is charged now. Payment via UPI/Card is only requested after the shop & rider both accept your order.',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -900,7 +767,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
-              height: 52,
               decoration: BoxDecoration(
                 gradient: AppColors.ctaGradient,
                 borderRadius: BorderRadius.circular(16),
@@ -913,10 +779,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ],
               ),
               child: ElevatedButton(
-                onPressed: (_isProcessing || _selectedPaymentMethod == null)
-                    ? null
-                    : _placeOrder,
+                onPressed: _isProcessing ? null : _placeOrder,
                 style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
                   shape: RoundedRectangleBorder(
@@ -929,12 +794,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2.5),
                       )
-                    : Text(
-                        _selectedPaymentMethod == null
-                            ? 'SELECT PAYMENT METHOD'
-                            : 'PLACE ORDER',
-                        style: const TextStyle(
+                    : const Text(
+                        'CONFIRM ORDER',
+                        style: TextStyle(
                             fontSize: 16,
+                            height: 1.2,
                             color: Colors.white,
                             fontWeight: FontWeight.w700),
                       ),
@@ -971,27 +835,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
           Row(
             children: [
               Icon(icon, size: 18, color: iconColor),
-                  const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (title == 'Delivery Address')
-                    TextButton(
-                      onPressed: () => _showEditAddressSheet(context, context.read<LocationProvider>()),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text('Edit', style: TextStyle(fontSize: 12)),
-                    ),
-                ],
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
+              const Spacer(),
+            ],
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -999,76 +853,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Widget _paymentOption({
-    required String value,
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required Color iconColor,
-  }) {
-    final isSelected = _selectedPaymentMethod == value;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedPaymentMethod = value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? iconColor.withValues(alpha: 0.07)
-              : AppColors.background,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? iconColor : AppColors.divider,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: isSelected ? iconColor : AppColors.textPrimary,
-                      )),
-                  Text(subtitle,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      )),
-                ],
-              ),
-            ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: isSelected
-                  ? Icon(Icons.check_circle_rounded,
-                      key: const ValueKey('checked'),
-                      color: iconColor,
-                      size: 22)
-                  : const Icon(Icons.radio_button_unchecked,
-                      key: ValueKey('unchecked'),
-                      color: AppColors.divider,
-                      size: 22),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _billRow(String label, String value,
       {bool isBold = false, Color? valueColor, String? hint}) {
@@ -1101,84 +885,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
               fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
             )),
       ],
-    );
-  }
-
-  void _showEditAddressSheet(BuildContext context, LocationProvider location) {
-    final houseCtrl = TextEditingController(text: location.houseNumber);
-    final landmarkCtrl = TextEditingController(text: location.landmark);
-    final pincodeCtrl = TextEditingController(text: location.pincode);
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Address Details',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: houseCtrl,
-              decoration: const InputDecoration(
-                labelText: 'House / Flat / Block No.',
-                prefixIcon: Icon(Icons.home_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: landmarkCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Landmark (Optional)',
-                prefixIcon: Icon(Icons.flag_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: pincodeCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Pincode',
-                prefixIcon: Icon(Icons.pin_drop_outlined),
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final auth = context.read<AuthProvider>();
-                  if (auth.currentUserId != null) {
-                    await location.updateAddressDetails(
-                      auth.currentUserId!,
-                      house: houseCtrl.text.trim(),
-                      mark: landmarkCtrl.text.trim(),
-                      pin: pincodeCtrl.text.trim(),
-                    );
-                  }
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('Save Details'),
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
     );
   }
 }

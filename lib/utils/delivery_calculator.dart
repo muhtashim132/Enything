@@ -1,28 +1,27 @@
 import 'dart:math' as math;
 import 'package:latlong2/latlong.dart';
 import '../models/shop_model.dart';
+import '../providers/platform_config_provider.dart';
 
 class DeliveryCalculator {
   /// Max delivery radius — shops beyond this won't be shown.
-  static const double maxRadiusKm = 9.0;
+  static double get maxRadiusKm =>
+      PlatformConfigProvider.instance?.maxDeliveryRadiusKm ?? 15.0;
 
-  /// Per-extra-shop rate: ₹7 per km, minimum ₹7 (i.e. the ≤1 km bucket).
-  static const double _ratePerKm = 7.0;
+  /// Rate per km — used for both base delivery AND multi-shop surcharge.
+  static double get _ratePerKm =>
+      PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10.0;
 
   // ---------------------------------------------------------------------------
   // Base delivery charge (customer ↔ nearest shop)
   // ---------------------------------------------------------------------------
 
-  /// Delivery charge slabs (flat per order, not per km):
-  ///   ≤ 3 km  → ₹25
-  ///   > 3–6 km → ₹35
-  ///   > 6–9 km → ₹45
-  ///   > 9 km  → -1 (out of delivery range)
+  /// Delivery charge: ceil(distanceKm) × ratePerKm.
+  /// Returns -1 if beyond maxRadiusKm.
   static double calculateDeliveryCharges(double distanceKm, double orderValue) {
-    if (distanceKm <= 3) return 25;
-    if (distanceKm <= 6) return 35;
-    if (distanceKm <= 9) return 45;
-    return -1; // beyond 9 km — out of range
+    if (distanceKm > maxRadiusKm) return -1;
+    final km = distanceKm.ceil().clamp(1, maxRadiusKm.ceil().toInt());
+    return km * _ratePerKm;
   }
 
   /// Returns the label string for the delivery charge.

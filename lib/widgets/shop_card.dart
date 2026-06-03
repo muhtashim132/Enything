@@ -201,33 +201,30 @@ class ShopCard extends StatelessWidget {
 
   Widget _buildDeliveryChip(double distanceKm) {
     final charge = DeliveryCalculator.calculateDeliveryCharges(distanceKm, 0);
-    String label;
-    Color bgColor;
-    Color textColor;
-
+    
+    if (charge < 0) {
+      return _buildChip(
+        icon: Icons.block_rounded,
+        label: 'Out of range',
+        color: Colors.red.shade50,
+        textColor: Colors.red.shade700,
+      );
+    }
+    
     if (charge == 0) {
-      label = 'Free delivery';
-      bgColor = Colors.green.shade50;
-      textColor = Colors.green.shade700;
-    } else if (charge == 25) {
-      label = '₹25 delivery';
-      bgColor = Colors.blue.shade50;
-      textColor = Colors.blue.shade700;
-    } else if (charge == 35) {
-      label = '₹35 delivery';
-      bgColor = Colors.amber.shade50;
-      textColor = Colors.amber.shade800;
-    } else {
-      label = '₹45 delivery';
-      bgColor = Colors.orange.shade50;
-      textColor = Colors.orange.shade800;
+      return _buildChip(
+        icon: Icons.delivery_dining_outlined,
+        label: 'Free delivery',
+        color: Colors.green.shade50,
+        textColor: Colors.green.shade700,
+      );
     }
 
     return _buildChip(
       icon: Icons.delivery_dining_outlined,
-      label: label,
-      color: bgColor,
-      textColor: textColor,
+      label: '₹${charge.toStringAsFixed(0)} delivery',
+      color: Colors.blue.shade50,
+      textColor: Colors.blue.shade700,
     );
   }
 

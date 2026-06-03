@@ -268,6 +268,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                                 badgeColor: Color(0xFFFF6B6B),
                                               ),
                                               _headerIcon(
+                                                  Icons.help_outline_rounded,
+                                                  () => Navigator.pushNamed(
+                                                      context, AppRoutes.faqSupport)),
+                                              _headerIcon(
                                                   Icons.settings_outlined,
                                                   () => Navigator.pushNamed(
                                                       context, AppRoutes.settings)),

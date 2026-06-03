@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../config/routes.dart';
+import '../../providers/platform_config_provider.dart';
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({super.key});
@@ -68,6 +70,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final config = context.watch<PlatformConfigProvider>();
 
     return Scaffold(
       body: AnimatedBuilder(
@@ -257,7 +260,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                           icon: '🏪',
                           title: 'Seller',
                           subtitle:
-                              'List your products & grow\nyour business — 5% commission',
+                              'List your products & grow\nyour business — ${config.commissionPercent.toStringAsFixed(0)}% commission',
                           accentColor: const Color(0xFFF4C542),
                           badge: 'Sell Now',
                           selected: _selectedRole == 'seller',

@@ -77,6 +77,8 @@
 //
 // ============================================================================
 
+import '../providers/platform_config_provider.dart';
+
 class TaxConfig {
   // ── Payment Gateway ────────────────────────────────────────────────────────
 
@@ -93,8 +95,8 @@ class TaxConfig {
   // ── Enything's Target Platform Commission ────────────────────────────────────
 
   /// Enything's pure commission % on base item subtotal.
-  /// Set to exactly 5% (0.05). Seller receives exactly 95%.
-  static const double enythingTargetMarginPercent = 0.05; // 5%
+  static double get enythingTargetMarginPercent =>
+      PlatformConfigProvider.instance?.commissionRate ?? 0.05; // default 5%
 
   /// We no longer gross up the commission. Enything charges exactly 5%
   /// and absorbs the gateway fee itself (covered by the platform fee).
@@ -338,6 +340,7 @@ class OrderTaxBreakdown {
     double itemGst = 0;
     double s9_5Gst = 0; // food/restaurant GST — Enything remits
     double nonFoodGst = 0; // retail GST — passed to seller
+    double enythingGross = 0; // total commission calculated per item
 
     for (final item in items) {
       final category = (item['category'] as String?) ?? 'Other';
@@ -349,6 +352,10 @@ class OrderTaxBreakdown {
 
       baseSubtotal += lineBase;
       itemGst += lineGst;
+
+      // Category-specific commission
+      final commissionRate = PlatformConfigProvider.instance?.getCommissionRateForCategory(category) ?? 0.05;
+      enythingGross += lineBase * commissionRate;
 
       if (TaxConfig.isEnythingDeemedSupplier(category)) {
         s9_5Gst += lineGst;
@@ -375,10 +382,7 @@ class OrderTaxBreakdown {
     // ── 5. Enything commission ───────────────────────────────────────────────────
     //   Commission is on BASE item subtotal only (delivery + platform are
     //   100% Enything's revenue — no commission formula needed there).
-    final grossRate = isOnline
-        ? TaxConfig.grossCommissionRateOnline
-        : TaxConfig.enythingTargetMarginPercent;
-    final enythingGross = baseSubtotal * grossRate;
+    //   (Note: enythingGross is now calculated dynamically per-item in the loop above)
 
     // ── 6. Gateway split (Enything absorbs 100%) ───────────────────────────────
     //   Under the 5% plan, seller pays NO gateway fees.

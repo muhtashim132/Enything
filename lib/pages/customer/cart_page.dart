@@ -5,6 +5,8 @@ import '../../providers/cart_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../config/payment_config.dart';
+import '../../providers/platform_config_provider.dart';
+import '../../providers/location_provider.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -12,6 +14,7 @@ class CartPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+    final location = context.watch<LocationProvider>();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -52,15 +55,23 @@ class CartPage extends StatelessWidget {
                     },
                   ),
                 ),
-                _buildSummary(context, cart),
+                _buildSummary(context, cart, location),
               ],
             ),
     );
   }
 
   Widget _buildCartItem(BuildContext context, item, CartProvider cart) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(
+          context,
+          AppRoutes.productDetails,
+          arguments: {'productId': item.product.id},
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -139,6 +150,7 @@ class CartPage extends StatelessWidget {
           _buildQtyControl(cart, item),
         ],
       ),
+     ),
     );
   }
 
@@ -230,22 +242,25 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSummary(BuildContext context, CartProvider cart) {
-    // Use a fixed 3 km base distance placeholder (real distance from location provider
-    // is resolved at checkout; cart page shows an estimate).
-    const baseDistanceKm = 3.0;
-    final baseCharge = cart.calculateDeliveryCharges(baseDistanceKm);
+  Widget _buildSummary(BuildContext context, CartProvider cart, LocationProvider location) {
+    double distanceKm = 3.0;
+    if (location.currentLocation != null && cart.shops.isNotEmpty) {
+      distanceKm = location.distanceTo(cart.shops.first.location);
+    }
+    final baseCharge = cart.calculateDeliveryCharges(distanceKm);
     final surcharge = cart.multiShopSurcharge;
     final heavyFee = cart.heavyOrderFee;
-    final discount = cart.calculateDeliveryDiscount(baseDistanceKm);
+    final discount = cart.calculateDeliveryDiscount(distanceKm);
     final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
     final totalDelivery =
         effectiveBase + surcharge + heavyFee + cart.smallCartFee - discount;
     final total = cart.subtotal + totalDelivery + cart.platformFee;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-      decoration: BoxDecoration(
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
@@ -293,7 +308,7 @@ class CartPage extends StatelessWidget {
               'Small Cart Fee',
               '+₹${cart.smallCartFee.toStringAsFixed(0)}',
               hint:
-                  'For orders under ₹${PaymentConfig.smallCartThreshold.toInt()}',
+                  'For orders under ₹${(PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold).toInt()}',
               valueColor: Colors.orange.shade700,
             ),
           ],
@@ -303,7 +318,7 @@ class CartPage extends StatelessWidget {
               'Heavy Order Fee',
               '+₹${heavyFee.toStringAsFixed(0)}',
               hint:
-                  'For orders over ${PaymentConfig.heavyOrderThreshold.toInt()} kg',
+                  'For orders over ${(PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold).toInt()} kg',
               valueColor: Colors.orange.shade700,
             ),
           ],
@@ -333,23 +348,25 @@ class CartPage extends StatelessWidget {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            height: 52,
             child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
               onPressed: cart.meetsMinimumOrder
                   ? () => Navigator.pushNamed(context, AppRoutes.checkout)
                   : null,
               child: cart.meetsMinimumOrder
                   ? Text('Proceed to Checkout • ₹${total.toStringAsFixed(0)}',
                       style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700))
+                          fontSize: 16, fontWeight: FontWeight.w700, height: 1.2))
                   : Text(
                       'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
-                      style: const TextStyle(fontSize: 14)),
+                      style: const TextStyle(fontSize: 14, height: 1.2)),
             ),
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _summaryRow(String label, String value,

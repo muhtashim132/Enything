@@ -41,6 +41,7 @@ import '../pages/delivery/rider_withdrawals_page.dart';
 import '../pages/delivery/rider_insights_page.dart';
 import '../pages/customer/customer_order_map_page.dart';
 import '../pages/seller/seller_order_map_page.dart';
+import '../pages/settings/about_enything_page.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -84,6 +85,7 @@ class AppRoutes {
   static const String riderInsights      = '/delivery/insights';
   static const String customerOrderMap   = '/customer/order-map';
   static const String sellerOrderMap     = '/seller/order-map';
+  static const String aboutEnything      = '/settings/about';
 
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
@@ -174,6 +176,8 @@ class AppRoutes {
         return _build(const SellerWithdrawalsPage(), routeSettings);
       case riderWithdrawals:
         return _build(const RiderWithdrawalsPage(), routeSettings);
+      case aboutEnything:
+        return _build(const AboutEnythingPage(), routeSettings);
       case customerOrderMap:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         if (a?['order'] == null) return _build(const SplashPage(), routeSettings);

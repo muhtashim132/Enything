@@ -125,12 +125,12 @@ class NotificationProvider extends ChangeNotifier {
             final sellerAcceptedNow = payload.newRecord['seller_accepted'] == true;
             final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
 
-            // Notify customer when the shop accepts the order (before rider assignment)
-            if (sellerAcceptedNow && !sellerAcceptedBefore && newStatus == 'pending') {
+            // Notify customer when the shop accepts (one down, rider still needed)
+            if (sellerAcceptedNow && !sellerAcceptedBefore && newStatus == 'awaiting_acceptance') {
               _add(AppNotification(
                 id: '${orderId}_shop_accepted',
                 title: '🏪 Shop Accepted!',
-                body: 'The shop has accepted your order and is verifying the details. Waiting for a rider.',
+                body: 'The shop accepted your order. Waiting for a rider now...',
                 orderId: orderId,
               ));
             }
@@ -158,13 +158,11 @@ class NotificationProvider extends ChangeNotifier {
             value: customerId,
           ),
           callback: (payload) {
-            // Order placed confirmation
             final orderId = payload.newRecord['id'] as String?;
             _add(AppNotification(
               id: '${orderId}_placed',
-              title: '🛍️ Order Placed!',
-              body:
-                  'Your order has been placed. Waiting for shop & rider to accept.',
+              title: '🛍️ Order Sent!',
+              body: 'Waiting for the shop & rider to accept. No charge yet — you pay only after both confirm.',
               orderId: orderId,
             ));
           },
@@ -388,10 +386,20 @@ class NotificationProvider extends ChangeNotifier {
 
   (String?, String?) _customerStatusMessage(String status, String? orderId) {
     switch (status) {
+      case 'awaiting_acceptance':
+        return (
+          '🛍️ Order Sent!',
+          'Waiting for shop & rider to accept. No charge yet — you pay only after both confirm.'
+        );
+      case 'awaiting_payment':
+        return (
+          '✅ Shop & Rider Ready! Pay Now',
+          'Both the shop and rider have accepted your order. Open the app to complete payment.'
+        );
       case 'confirmed':
         return (
-          '✅ Order Confirmed!',
-          'Both the shop and rider have accepted your order.'
+          '💳 Payment Confirmed!',
+          'Your payment was captured. Shop is preparing your order.'
         );
       case 'preparing':
         return (
@@ -413,9 +421,9 @@ class NotificationProvider extends ChangeNotifier {
       case 'delivered':
         return ('🎉 Order Delivered!', 'Your order has been delivered. Enjoy!');
       case 'cancelled':
-        return ('❌ Order Cancelled', 'Your order has been cancelled.');
+        return ('❌ Order Cancelled', 'Your order has been cancelled. No payment was taken.');
       case 'seller_rejected':
-        return ('😔 Order Rejected', 'The shop could not accept your order.');
+        return ('😔 Order Rejected', 'The shop could not accept your order. No payment was taken.');
       default:
         return (null, null);
     }
@@ -423,13 +431,18 @@ class NotificationProvider extends ChangeNotifier {
 
   (String?, String?) _sellerStatusMessage(String status, String? orderId) {
     switch (status) {
+      case 'awaiting_payment':
+        return (
+          '⌛ Waiting for Customer Payment',
+          'Both you and the rider accepted. Customer is completing payment now.'
+        );
       case 'confirmed':
         return (
-          '✅ Order Confirmed!',
-          'A rider has accepted the order. Start preparing.'
+          '💳 Payment Done! Start Packing',
+          'Customer payment captured. Pack the order now — rider is on the way!'
         );
       case 'cancelled':
-        return ('❌ Order Cancelled', 'A customer cancelled their order.');
+        return ('❌ Order Cancelled', 'This order has been cancelled.');
       case 'picked_up':
         return (
           '✅ Order Picked Up',
@@ -444,10 +457,20 @@ class NotificationProvider extends ChangeNotifier {
 
   (String?, String?) _deliveryStatusMessage(String status, String? orderId) {
     switch (status) {
+      case 'awaiting_payment':
+        return (
+          '⌛ Waiting for Customer Payment',
+          'Customer is completing payment. Stand by — you will be confirmed shortly!'
+        );
+      case 'confirmed':
+        return (
+          '💳 Payment Done! Go Pick Up 🛵',
+          'Customer paid. Head to the shop and pick up the order now!'
+        );
       case 'cancelled':
         return (
           '❌ Order Cancelled',
-          'The order you accepted has been cancelled by the customer.'
+          'The order you accepted has been cancelled.'
         );
       case 'preparing':
         return (

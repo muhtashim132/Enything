@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
+import '../../../providers/platform_config_provider.dart';
 import '../../../providers/rbac_provider.dart';
 import '../../../theme/admin_theme.dart';
 import 'orders_admin_page.dart';
@@ -50,8 +51,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
           (sum, o) =>
               sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
 
-      // Platform commission (5% of revenue estimate)
-      _commission = _totalRevenue * 0.05;
+      // Platform commission (dynamic based on config)
+      _commission = _totalRevenue * (PlatformConfigProvider.instance?.commissionRate ?? 0.05);
 
       // Users count
       final users = await _db.from('profiles').select('id');

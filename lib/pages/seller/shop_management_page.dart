@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../providers/platform_config_provider.dart';
 
 class ShopManagementPage extends StatefulWidget {
   const ShopManagementPage({super.key});
@@ -311,7 +312,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                                     ],
                                   ),
                                 ),
-                              Text('Update your shop location to your current GPS location so customers can find you within 9km.',
+                              Text('Update your shop location to your current GPS location so customers can find you within ${(PlatformConfigProvider.instance?.maxDeliveryRadiusKm ?? 15.0).toInt()}km.',
                                   style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary)),
                               const SizedBox(height: 12),
                               ElevatedButton.icon(

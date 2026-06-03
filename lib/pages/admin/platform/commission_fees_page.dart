@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../providers/platform_config_provider.dart';
 import '../../../../providers/rbac_provider.dart';
 import '../../../../theme/admin_theme.dart';
+import '../../../../config/app_categories.dart';
 
 class CommissionFeesPage extends StatefulWidget {
   const CommissionFeesPage({super.key});
@@ -108,6 +109,22 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   icon: Icons.two_wheeler_rounded,
                   color: AdminColors.info,
                   children: [
+                    _buildItem('delivery_rate_per_km', 'Delivery Rate', 'Charge per km (₹/km)', config.deliveryRatePerKm, '₹/km', config, rbac),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AdminColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AdminColors.cardBorder),
+                        ),
+                        child: Text(
+                          'Preview at ₹${config.deliveryRatePerKm.toInt()}/km: 1km=₹${(1 * config.deliveryRatePerKm).toInt()} · 5km=₹${(5 * config.deliveryRatePerKm).toInt()} · 10km=₹${(10 * config.deliveryRatePerKm).toInt()} · 15km=₹${(15 * config.deliveryRatePerKm).toInt()}',
+                          style: AdminStyles.caption(color: AdminColors.textPrimary),
+                        ),
+                      ),
+                    ),
                     _buildItem('max_delivery_radius_km', 'Max Delivery Radius', 'Furthest distance allowed', config.maxDeliveryRadiusKm, 'km', config, rbac),
                     _buildItem('delivery_discount_threshold', 'Discount Threshold', 'Orders above this get discount', config.deliveryDiscountThreshold, '₹', config, rbac),
                     _buildItem('delivery_discount_amount', 'Discount Amount', 'Flat discount applied to delivery', config.deliveryDiscountAmount, '₹', config, rbac),
@@ -120,6 +137,24 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   children: [
                     _buildItem('heavy_order_threshold_kg', 'Heavy Weight Threshold', 'Orders above this get penalty', config.heavyOrderThresholdKg, 'kg', config, rbac),
                     _buildItem('heavy_order_fee', 'Heavy Order Fee', 'Flat penalty for heavy orders', config.heavyOrderFee, '₹', config, rbac),
+                  ],
+                ),
+                _buildSection(
+                  title: 'Category Overrides',
+                  icon: Icons.category_rounded,
+                  color: AdminColors.success,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Text(
+                        'Leave empty when editing to fallback to the global Platform Commission (${config.commissionPercent}%).',
+                        style: AdminStyles.caption(color: AdminColors.textPrimary),
+                      ),
+                    ),
+                    ...AppCategories.names.map((cat) {
+                      final val = config.getCommissionPercentForCategory(cat);
+                      return _buildItem('commission_percent_$cat', cat, 'Override for $cat', val, '%', config, rbac);
+                    }),
                   ],
                 ),
               ],
