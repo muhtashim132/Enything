@@ -29,7 +29,7 @@ class AdminDashboardPage extends StatefulWidget {
 class _AdminDashboardPageState extends State<AdminDashboardPage>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
-  int _kycPendingCount = 0;
+  int _openTicketsCount = 0;
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
 
@@ -53,7 +53,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         context.read<RbacProvider>().loadCurrentAdmin(userId);
         context.read<NotificationProvider>().listenAsAdmin(userId);
       }
-      _loadKycPendingCount();
+      _loadBadges();
     });
   }
 
@@ -63,20 +63,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     super.dispose();
   }
 
-  Future<void> _loadKycPendingCount() async {
+  Future<void> _loadBadges() async {
     try {
       final supabase = Supabase.instance.client;
-      final sellers = await supabase
-          .from('shops')
-          .select('id')
-          .eq('verification_status', 'pending');
-      final riders = await supabase
-          .from('delivery_partners')
-          .select('id')
-          .eq('verification_status', 'pending');
+      int tickets = 0;
+      try {
+        final t = await supabase.from('support_tickets').select('id').eq('status', 'open');
+        tickets = (t as List).length;
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
-          _kycPendingCount = (sellers as List).length + (riders as List).length;
+          _openTicketsCount = tickets;
         });
       }
     } catch (_) {}
@@ -115,7 +113,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           activeIcon: Icons.support_agent_rounded,
           label: 'Support',
           visible: rbac.can('support.view') || rbac.isSuperAdmin,
-          badgeCount: _kycPendingCount, // Placed here to use the badgeCount parameter and avoid lint error
+          badgeCount: _openTicketsCount,
         ),
       ].where((n) => n.visible).toList();
 

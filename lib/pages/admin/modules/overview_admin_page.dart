@@ -43,10 +43,20 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
   Future<void> _loadData() async {
     try {
       // Orders count + revenue
-      final orders =
-          await _db.from('orders').select('grand_total_collected, created_at');
-      _totalOrders = orders.length;
-      _totalRevenue = orders.fold<double>(
+      final ordersRaw = await _db.from('orders').select('grand_total_collected, created_at, status, payment_status');
+      
+      final validOrders = ordersRaw.where((o) {
+        final st = o['status'];
+        final pst = o['payment_status'];
+        if (st == 'awaiting_acceptance' || st == 'awaiting_payment') return false;
+        if ((st == 'cancelled' || st == 'seller_rejected' || st == 'partner_rejected') && pst != 'captured') return false;
+        return true;
+      }).toList();
+
+      final paidOrders = ordersRaw.where((o) => o['payment_status'] == 'captured').toList();
+
+      _totalOrders = validOrders.length;
+      _totalRevenue = paidOrders.fold<double>(
           0,
           (sum, o) =>
               sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
@@ -82,12 +92,12 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
           .limit(10);
       _recentActivity = List<Map<String, dynamic>>.from(activity);
 
-      // 7-day revenue chart spots
+      // 7-day revenue chart spots (using paidOrders)
       final now = DateTime.now();
       final spots = <FlSpot>[];
       for (int i = 6; i >= 0; i--) {
         final day = now.subtract(Duration(days: i));
-        final dayRevenue = orders.where((o) {
+        final dayRevenue = paidOrders.where((o) {
           if (o['created_at'] == null) return false;
           final d = DateTime.tryParse(o['created_at'].toString());
           return d != null &&

@@ -44,7 +44,7 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
       // Try reading from a support_tickets or complaints table — graceful fallback
       final res = await _db
           .from('support_tickets')
-          .select('*, profiles:user_id(full_name, phone)')
+          .select('*')
           .order('created_at', ascending: false)
           .limit(50);
       _complaints = List<Map<String, dynamic>>.from(res);
@@ -248,7 +248,7 @@ class _ComplaintCard extends StatelessWidget {
                   const Icon(Icons.person_rounded,
                       color: AdminColors.textMuted, size: 14),
                   const SizedBox(width: 6),
-                  Text(profile?['full_name'] ?? 'Unknown',
+                  Text(complaint['user_name'] ?? profile?['full_name'] ?? 'Unknown',
                       style: AdminStyles.caption()),
                   const SizedBox(width: 12),
                   const Icon(Icons.phone_rounded,
