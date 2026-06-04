@@ -260,9 +260,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       if (_isOnline && _autoAccept && _availableOrders.isNotEmpty && !_isProcessingAutoAccept) {
         _isProcessingAutoAccept = true;
-        for (final order in _availableOrders) {
-          await _acceptOrder(order);
-        }
+        // BUG-10 FIX: Only accept the FIRST available order, do not loop all
+        await _acceptOrder(_availableOrders.first);
         _isProcessingAutoAccept = false;
       }
 

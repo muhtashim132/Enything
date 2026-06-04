@@ -190,6 +190,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           callback: (payload) {
             if (mounted && payload.newRecord.isNotEmpty) {
               final updatedOrder = OrderModel.fromMap(payload.newRecord);
+              // BUG-14 FIX: Preserve joined order_items which are omitted in real-time payloads
+              updatedOrder.items = _order?.items ?? [];
               final wasDelivered = _order?.status != 'delivered' &&
                   updatedOrder.status == 'delivered';
               final justReadyToPay = _order?.status != 'awaiting_payment' &&
@@ -322,6 +324,21 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
 
       if (mounted) {
+        // BUG-6 FIX: Notify seller and broadcast to riders on retry
+        final notifProv = context.read<NotificationProvider>();
+        notifProv.sendBackgroundPush(
+          targetUserId: _order!.shopId!, // Will be translated to seller_id by function
+          title: '🔔 New Order! Accept now',
+          body: 'Order ₹${_order!.grandTotal.toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
+          data: {'order_id': response['id'], 'role': 'seller'},
+        );
+        notifProv.sendBroadcastToAudience(
+          audience: 'Riders',
+          title: '🛵 New Order Nearby!',
+          body: 'A new order ₹${_order!.grandTotal.toStringAsFixed(0)} was placed near you. Shop is accepting now!',
+          data: {'action': 'new_order'},
+        );
+
         Navigator.pushReplacementNamed(
           context, AppRoutes.trackOrder,
           arguments: {'orderId': response['id']},
@@ -668,8 +685,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _startPaymentCountdown(OrderModel order) {
     _paymentCountdownTimer?.cancel();
-    // Calculate seconds remaining from payment_deadline if available
-    _paymentSecondsLeft = 600;
+    // BUG-9 FIX: Calculate seconds remaining from payment_deadline
+    if (order.paymentDeadline != null) {
+      final remaining = order.paymentDeadline!.difference(DateTime.now().toUtc()).inSeconds;
+      _paymentSecondsLeft = remaining.clamp(0, 600);
+    } else {
+      _paymentSecondsLeft = 600;
+    }
     _paymentCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();

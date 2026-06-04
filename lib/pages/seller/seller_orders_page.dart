@@ -27,6 +27,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   late TabController _tabController;
   // shopId → shop name for map page label
   final Map<String, String> _shopNames = {};
+  // BUG-15 FIX: preserve expanded state
+  final Set<String> _expandedOrderIds = {};
 
   @override
   void initState() {
@@ -252,7 +254,6 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       await _supabase.from('orders').update({
         'status': order.prescriptionUrls.isNotEmpty ? 'verification_failed' : 'seller_rejected',
         'seller_accepted': false,
-        'cancelled_reason': 'shop_rejected',
         if (msg.isNotEmpty) 'rejection_message': msg,
       }).eq('id', order.id);
 
@@ -441,17 +442,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       .toList();
 
   List<OrderModel> _activeOrders() => _orders
-      .where((o) => [
-            'awaiting_acceptance', // seller accepted, waiting for rider
-            'awaiting_payment',    // both accepted, waiting for customer pay
-            'pending',             // legacy
+      .where((o) =>
+          ((o.status == 'awaiting_acceptance' || o.status == 'pending') && o.sellerAccepted) ||
+          [
+            'awaiting_payment',
             'confirmed',
             'preparing',
             'ready_for_pickup',
             'picked_up',
             'out_for_delivery',
-          ].contains(o.status) &&
-          (o.sellerAccepted || !['awaiting_acceptance', 'pending'].contains(o.status)))
+          ].contains(o.status))
       .toList();
 
   List<OrderModel> _doneOrders() => _orders
@@ -653,7 +653,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final statusColor = _statusColor(order);
 
-    bool isExpanded = false;
+    bool isExpanded = _expandedOrderIds.contains(order.id);
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -728,6 +728,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             InkWell(
               onTap: () {
                 setState(() {
+                  if (isExpanded) {
+                    _expandedOrderIds.remove(order.id);
+                  } else {
+                    _expandedOrderIds.add(order.id);
+                  }
                   isExpanded = !isExpanded;
                 });
               },

@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 
 // Helper dialogs for Profile Settings Page
 
@@ -38,34 +38,38 @@ void showSavedAddressesDialog(BuildContext context) {
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     builder: (ctx) {
+      bool initialLoadStarted = false;
       return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
         if (isLoading) {
-          Supabase.instance.client
-              .from('customers')
-              .select()
-              .eq('id', user.id)
-              .maybeSingle()
-              .then((data) {
-            if (data != null && context.mounted) {
-              final home = data['address_home'] ?? {};
-              final work = data['address_work'] ?? {};
+          if (!initialLoadStarted) {
+            initialLoadStarted = true;
+            Supabase.instance.client
+                .from('customers')
+                .select()
+                .eq('id', user.id)
+                .maybeSingle()
+                .then((data) {
+              if (data != null && context.mounted) {
+                final home = data['address_home'] ?? {};
+                final work = data['address_work'] ?? {};
 
-              ctrls[0]!['flat']!.text = home['flat'] ?? '';
-              ctrls[0]!['address']!.text =
-                  home['address'] ?? data['default_address'] ?? '';
-              ctrls[0]!['landmark']!.text =
-                  home['landmark'] ?? data['landmark'] ?? '';
-              ctrls[0]!['pincode']!.text =
-                  home['pincode'] ?? data['pincode'] ?? '';
+                ctrls[0]!['flat']!.text = home['flat'] ?? '';
+                ctrls[0]!['address']!.text =
+                    home['address'] ?? data['default_address'] ?? '';
+                ctrls[0]!['landmark']!.text =
+                    home['landmark'] ?? data['landmark'] ?? '';
+                ctrls[0]!['pincode']!.text =
+                    home['pincode'] ?? data['pincode'] ?? '';
 
-              ctrls[1]!['flat']!.text = work['flat'] ?? '';
-              ctrls[1]!['address']!.text = work['address'] ?? '';
-              ctrls[1]!['landmark']!.text = work['landmark'] ?? '';
-              ctrls[1]!['pincode']!.text = work['pincode'] ?? '';
-            }
-            setState(() => isLoading = false);
-          });
+                ctrls[1]!['flat']!.text = work['flat'] ?? '';
+                ctrls[1]!['address']!.text = work['address'] ?? '';
+                ctrls[1]!['landmark']!.text = work['landmark'] ?? '';
+                ctrls[1]!['pincode']!.text = work['pincode'] ?? '';
+              }
+              setState(() => isLoading = false);
+            });
+          }
           return const SizedBox(
               height: 200, child: Center(child: CircularProgressIndicator()));
         }
@@ -326,8 +330,8 @@ void showBusinessHoursDialog(BuildContext context) {
           ElevatedButton(
             onPressed: () async {
               await Supabase.instance.client.from('shops').update({
-                'opening_time': openCtrl.text.trim(),
-                'closing_time': closeCtrl.text.trim()
+                // BUG-17 FIX: Schema expects a single 'opening_hours' string
+                'opening_hours': '${openCtrl.text.trim()} - ${closeCtrl.text.trim()}'
               }).eq('seller_id', auth.currentUserId!);
               if (ctx.mounted) Navigator.pop(ctx);
             },

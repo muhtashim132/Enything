@@ -36,6 +36,9 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _requiresPrescription = false;
   String _medicineType = 'General';
   String? _shopId;
+  // BUG-FIX: Only categories belonging to the shop's CategoryGroup are allowed.
+  // Prevents a restaurant seller from mis-categorising a product as Pharmacy etc.
+  late List<String> _allowedCategories = [_productCategory]; // secure fallback until shop loads
   List<XFile> _images = [];
   List<String> _existingImageUrls = [];
 
@@ -80,16 +83,41 @@ class _AddProductPageState extends State<AddProductPage> {
           .eq('seller_id', auth.currentUserId ?? '')
           .single();
 
-      final cat = resp['category'] ??
+      // Collect all category names associated with this shop
+      final shopCatNames = <String>{
+        if (resp['category'] != null) resp['category'] as String,
+        ...List<String>.from(resp['categories'] ?? []),
+      }.where((c) => c.isNotEmpty).toSet();
+
+      // Derive the union of CategoryGroups for this shop
+      final shopGroups = shopCatNames.map(AppCategories.groupFor).toSet();
+
+      // Only app-level categories whose group is within the shop's groups are allowed
+      // Exception: Supermarkets can sell anything.
+      final allowed = shopCatNames.contains('Supermarket / Hypermarket')
+          ? AppCategories.names
+          : AppCategories.names
+              .where((name) => shopGroups.contains(AppCategories.groupFor(name)))
+              .toList();
+
+      // Primary category to default to (shop's own declared category)
+      final primaryCat = resp['category'] ??
           (resp['categories'] != null && (resp['categories'] as List).isNotEmpty
               ? resp['categories'][0]
-              : 'Food');
+              : allowed.isNotEmpty ? allowed.first : 'Other');
 
       setState(() {
         _shopId = resp['id'];
-        if (_productCategory == 'Food' && cat != 'Food') {
-          _productCategory = cat;
+        _allowedCategories = allowed.isNotEmpty ? allowed : AppCategories.names;
+
+        // If editing an existing product whose category is already valid, keep it.
+        // Otherwise snap to the shop's primary category.
+        if (!_allowedCategories.contains(_productCategory)) {
+          _productCategory = _allowedCategories.contains(primaryCat)
+              ? primaryCat
+              : _allowedCategories.first;
         }
+
         _isFoodGroup =
             AppCategories.groupFor(_productCategory) == CategoryGroup.food ||
                 AppCategories.groupFor(_productCategory) ==
@@ -362,48 +390,68 @@ class _AddProductPageState extends State<AddProductPage> {
                 ],
               ),
               const SizedBox(height: 16),
-
               _card(
                 children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: AppCategories.names.contains(_productCategory)
-                        ? _productCategory
-                        : AppCategories.names.first,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Global App Category',
-                      prefixIcon: Icon(Icons.public_outlined),
+                  // BUG-FIX: Category is locked to the shop's group.
+                  // If the shop only belongs to one group (e.g. Restaurant → food),
+                  // the field is read-only. If multi-group (rare), a constrained
+                  // dropdown is shown — but never all 31 global categories.
+                  if (_allowedCategories.length == 1)
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Product Category',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        helperText: 'Determined by your shop type',
+                      ),
+                      child: Text(
+                        '${AppCategories.all.firstWhere((c) => c['name'] == _productCategory, orElse: () => {'emoji': '🏪'})['emoji']}  $_productCategory',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      initialValue: _allowedCategories.contains(_productCategory)
+                          ? _productCategory
+                          : _allowedCategories.first,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Product Category',
+                        prefixIcon: Icon(Icons.category_outlined),
+                        helperText: 'Limited to your shop\'s category group',
+                      ),
+                      items: _allowedCategories.map((cat) {
+                        final emoji = AppCategories.all.firstWhere(
+                            (c) => c['name'] == cat,
+                            orElse: () => {'emoji': '🏪'})['emoji'];
+                        return DropdownMenuItem(
+                          value: cat,
+                          child: Text('$emoji  $cat'),
+                        );
+                      }).toList(),
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() {
+                            _productCategory = v;
+                            _isFoodGroup =
+                                AppCategories.groupFor(v) == CategoryGroup.food ||
+                                    AppCategories.groupFor(v) ==
+                                        CategoryGroup.perishable;
+                            if (!_availableUnitTypes.contains(_unitType)) {
+                              _unitType = _availableUnitTypes.first;
+                            }
+                          });
+                        }
+                      },
                     ),
-                    items: AppCategories.names.map((cat) {
-                      final emoji = AppCategories.all.firstWhere(
-                          (c) => c['name'] == cat,
-                          orElse: () => {'emoji': '🏪'})['emoji'];
-                      return DropdownMenuItem(
-                        value: cat,
-                        child: Text('$emoji  $cat'),
-                      );
-                    }).toList(),
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() {
-                          _productCategory = v;
-                          _isFoodGroup =
-                              AppCategories.groupFor(v) == CategoryGroup.food ||
-                                  AppCategories.groupFor(v) ==
-                                      CategoryGroup.perishable;
-                          if (!_availableUnitTypes.contains(_unitType)) {
-                            _unitType = _availableUnitTypes.first;
-                          }
-                        });
-                      }
-                    },
-                  ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _menuCategoryController,
                     decoration: const InputDecoration(
                       labelText: 'Menu/Section Category (Optional)',
-                      hintText: 'e.g., Main Course, Beverages, Shirts',
+                      hintText: 'e.g. Main Course, Beverages, Shirts',
                       prefixIcon: Icon(Icons.category_outlined),
                     ),
                   ),

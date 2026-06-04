@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
@@ -96,8 +97,43 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     try {
       await _supabase
           .from('orders')
-          .update({'status': 'cancelled'})
+          .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
           .eq('id', order.id);
+
+      // BUG-4 FIX: Notify seller and rider that the customer cancelled
+      if (mounted) {
+        final notifProv = context.read<NotificationProvider>();
+
+        // Notify seller (lookup seller_id via shop_id)
+        if (order.shopId != null) {
+          _supabase
+              .from('shops')
+              .select('seller_id')
+              .eq('id', order.shopId!)
+              .maybeSingle()
+              .then((shopData) {
+            if (shopData != null && shopData['seller_id'] != null) {
+              notifProv.sendBackgroundPush(
+                targetUserId: shopData['seller_id'] as String,
+                title: '❌ Order Cancelled by Customer',
+                body: 'The customer cancelled their order. No further action needed.',
+                data: {'order_id': order.id},
+              );
+            }
+          });
+        }
+
+        // Notify assigned rider (if any)
+        if (order.deliveryPartnerId != null) {
+          notifProv.sendBackgroundPush(
+            targetUserId: order.deliveryPartnerId!,
+            title: '❌ Order Cancelled by Customer',
+            body: 'The customer cancelled their order. You are free for new deliveries.',
+            data: {'order_id': order.id},
+          );
+        }
+      }
+
       if (mounted) {
         setState(() {
           final idx = _orders.indexWhere((o) => o.id == order.id);
@@ -250,7 +286,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 Row(
                   children: [
                     // Cancel chip — only for pending orders
-                    if (order.status == 'pending') ...[
+                    // BUG-5 FIX: show cancel for awaiting_acceptance too (new order flow)
+                    if (order.status == 'awaiting_acceptance' || order.status == 'pending') ...[
                       _cancellingIds.contains(order.id)
                           ? const SizedBox(
                               width: 22,

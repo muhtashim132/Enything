@@ -287,7 +287,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 targetUserId: shop.sellerId,
                 title: '🔔 New Order! Accept now',
                 body:
-                    'Order ₹${shopGrandTotal.toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 1 min window.',
+                    'Order ₹${shopGrandTotal.toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
                 data: {'order_id': orderId, 'role': 'seller'},
               );
         }
@@ -368,9 +368,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Checkout')),
-      body: MaxWidthContainer(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: MaxWidthContainer(
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -745,6 +748,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             const SizedBox(height: 100),
           ],
         ),
+      ),
       ),
       ),
       bottomNavigationBar: SafeArea(

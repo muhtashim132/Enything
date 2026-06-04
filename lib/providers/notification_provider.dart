@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -36,6 +37,9 @@ class NotificationProvider extends ChangeNotifier {
   RealtimeChannel? _channel;
   String? _listeningUserId;
   String? _listeningRole;
+  
+  StreamSubscription? _fcmTokenSub;
+  StreamSubscription? _fcmMessageSub;
 
   List<AppNotification> get notifications =>
       List.unmodifiable(_notifications.reversed.toList());
@@ -69,7 +73,8 @@ class NotificationProvider extends ChangeNotifier {
       debugPrint('FCM token registered: ${token.substring(0, 20)}...');
 
       // Listen for token refresh and re-register
-      messaging.onTokenRefresh.listen((newToken) async {
+      _fcmTokenSub?.cancel();
+      _fcmTokenSub = messaging.onTokenRefresh.listen((newToken) async {
         await _supabase.from('device_tokens').upsert({
           'user_id': userId,
           'token': newToken,
@@ -80,7 +85,8 @@ class NotificationProvider extends ChangeNotifier {
       });
 
       // Handle foreground messages by adding them as in-app notifications
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      _fcmMessageSub?.cancel();
+      _fcmMessageSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         final notif = message.notification;
         if (notif == null) return;
         _notifications.add(AppNotification(
@@ -361,6 +367,12 @@ class NotificationProvider extends ChangeNotifier {
   void stopListening() {
     _channel?.unsubscribe();
     _channel = null;
+    
+    _fcmTokenSub?.cancel();
+    _fcmTokenSub = null;
+    _fcmMessageSub?.cancel();
+    _fcmMessageSub = null;
+    
     _listeningUserId = null;
     _listeningRole = null;
     _clearMemory(); // Clear RAM only — DB history is preserved per user

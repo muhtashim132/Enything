@@ -71,11 +71,20 @@ class NotificationService {
     String body = 'Checking status...';
 
     switch (status) {
-      case 'pending':
-        progress = 10;
-        title = 'Order Placed';
-        body = 'Waiting for shop & rider to accept';
-        break;
+      // PRE-PAYMENT STATES & TERMINAL STATES - CANCEL NOTIFICATION
+      case 'pending': // Legacy
+      case 'awaiting_acceptance':
+      case 'awaiting_payment':
+      case 'verification_failed':
+      case 'payment_failed':
+      case 'cancelled':
+      case 'seller_rejected':
+      case 'partner_rejected':
+      case 'delivered':
+        cancelOrderProgressNotification();
+        return;
+
+      // POST-PAYMENT FULFILLMENT STATES - SHOW/UPDATE NOTIFICATION
       case 'confirmed':
         progress = 25;
         title = 'Order Confirmed';
@@ -97,15 +106,8 @@ class NotificationService {
         title = 'Out for Delivery';
         body = 'Almost there! Rider is en-route 🛵';
         break;
-      case 'delivered':
-        progress = 100;
-        title = 'Delivered!';
-        body = 'Enjoy your order! 🎉';
-        cancelOrderProgressNotification(); // Optionally cancel or show completion
-        return;
-      case 'cancelled':
-      case 'seller_rejected':
-      case 'partner_rejected':
+      default:
+        // For any unknown edge cases, default to cancelling to prevent leaks
         cancelOrderProgressNotification();
         return;
     }

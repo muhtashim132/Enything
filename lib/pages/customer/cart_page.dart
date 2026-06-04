@@ -150,14 +150,14 @@ class CartPage extends StatelessWidget {
               ],
             ),
           ),
-          _buildQtyControl(cart, item),
+          _buildQtyControl(context, cart, item),
         ],
       ),
      ),
     );
   }
 
-  Widget _buildQtyControl(CartProvider cart, item) {
+  Widget _buildQtyControl(BuildContext context, CartProvider cart, item) {
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.divider),
@@ -180,7 +180,16 @@ class CartPage extends StatelessWidget {
             ),
           ),
           _qtyBtn(Icons.add, () {
-            cart.addItem(item.product, item.shop);
+            final err = cart.addItem(item.product, item.shop);
+            if (err != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(err),
+                  backgroundColor: AppColors.danger,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
           }),
         ],
       ),
@@ -257,7 +266,7 @@ class CartPage extends StatelessWidget {
     final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
     final totalDelivery =
         effectiveBase + surcharge + heavyFee + cart.smallCartFee - discount;
-    final total = cart.subtotal + totalDelivery + cart.platformFee;
+    final total = cart.subtotal + cart.itemGstTotal + totalDelivery + cart.platformFee;
 
     return SafeArea(
       top: false,
@@ -287,6 +296,11 @@ class CartPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _summaryRow('Subtotal', '₹${cart.subtotal.toStringAsFixed(0)}'),
+          if (cart.itemGstTotal > 0) ...[
+            const SizedBox(height: 6),
+            _summaryRow('Taxes (GST)', '+₹${cart.itemGstTotal.toStringAsFixed(0)}',
+                hint: 'Govt. taxes on items'),
+          ],
           const SizedBox(height: 6),
           _summaryRow(
             'Delivery Charges',

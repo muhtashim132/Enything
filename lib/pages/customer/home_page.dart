@@ -111,11 +111,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         curve: Curves.easeOutCubic,
       );
     });
-    // Fetch favorites
+    // Fetch favorites and saved address
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
       if (auth.currentUserId != null) {
         context.read<FavoritesProvider>().fetchFavorites(auth.currentUserId!);
+        context.read<LocationProvider>().loadAddressFromDb(auth.currentUserId!);
       }
     });
   }
@@ -278,6 +279,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     ],
     'Grocery': [
       'Grocery',
+      'Supermarket / Hypermarket',
       'Fruits & Vegs',
       'Dairy & Eggs',
       'Butcher',
@@ -293,6 +295,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       'Toys & Games',
       'Sports',
       'Pet Supplies',
+      'Cosmetics & Beauty',
       'Salon & Beauty',
       'Flowers',
       'Home Decor',
@@ -475,8 +478,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: CustomScrollView(
-        slivers: [
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: CustomScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          slivers: [
+
           // ── Premium Modern AppBar ──────────────────────────────────────
           SliverAppBar(
             expandedHeight: 165,
@@ -918,6 +925,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   ),
           ),
         ],
+      ),
       ),
 
       // ── Floating Action Bar (Bottom Nav Replacement) ────────────────

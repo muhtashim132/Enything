@@ -12,6 +12,7 @@ enum CategoryGroup {
 
 class AppCategories {
   static const List<Map<String, String>> all = [
+    {'name': 'Supermarket / Hypermarket', 'emoji': '🏬'},
     {'name': 'Grocery', 'emoji': '🛒'},
     {'name': 'Restaurant', 'emoji': '🍽️'},
     {'name': 'Fast Food', 'emoji': '🍔'},
@@ -34,6 +35,7 @@ class AppCategories {
     {'name': 'Toys & Games', 'emoji': '🧸'},
     {'name': 'Sports', 'emoji': '⚽'},
     {'name': 'Pet Supplies', 'emoji': '🐾'},
+    {'name': 'Cosmetics & Beauty', 'emoji': '💄'},
     {'name': 'Salon & Beauty', 'emoji': '💇'},
     {'name': 'Flowers', 'emoji': '🌸'},
     {'name': 'Home Decor', 'emoji': '🏠'},
@@ -64,6 +66,7 @@ class AppCategories {
     'Medical Store': CategoryGroup.pharmacy,
 
     // Perishable group
+    'Supermarket / Hypermarket': CategoryGroup.perishable,
     'Butcher': CategoryGroup.perishable,
     'Fish & Seafood': CategoryGroup.perishable,
     'Dairy & Eggs': CategoryGroup.perishable,

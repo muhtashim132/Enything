@@ -181,8 +181,8 @@ class CartProvider extends ChangeNotifier {
       return 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
     }
 
-    final tempItem = CartItem(product: product, shop: shop, quantity: quantity);
-    if (totalWeight + tempItem.weightKg > PaymentConfig.maxWeightKg) {
+    final unitWeightKg = CartItem(product: product, shop: shop, quantity: 1).weightKg;
+    if (totalWeight + (unitWeightKg * quantity) > PaymentConfig.maxWeightKg) {
       return 'Maximum weight of ${PaymentConfig.maxWeightKg} kg allowed per order';
     }
 

@@ -43,6 +43,7 @@ class OrderModel {
   final String? rejectionMessage;   // seller's freetext message to customer
   final String? cartGroupId;        // groups orders from same checkout (up to 3 shops)
   final DateTime? acceptanceDeadline; // when the 2-min window expires
+  final DateTime? paymentDeadline;    // when the 10-min payment window expires
 
   // Dual-acceptance flags (stored in DB columns)
   bool sellerAccepted;
@@ -148,6 +149,7 @@ class OrderModel {
     this.rejectionMessage,
     this.cartGroupId,
     this.acceptanceDeadline,
+    this.paymentDeadline,
     this.sellerAccepted = false,
     this.partnerAccepted = false,
     this.arrivedAtShopTime,
@@ -205,6 +207,9 @@ class OrderModel {
       cartGroupId: map['cart_group_id'],
       acceptanceDeadline: map['acceptance_deadline'] != null
           ? DateTime.tryParse(map['acceptance_deadline'])
+          : null,
+      paymentDeadline: map['payment_deadline'] != null
+          ? DateTime.tryParse(map['payment_deadline'])
           : null,
       sellerAccepted: map['seller_accepted'] ?? false,
       partnerAccepted: map['partner_accepted'] ?? false,
@@ -307,6 +312,7 @@ class OrderModel {
       rejectionMessage: rejectionMessage,
       cartGroupId: cartGroupId,
       acceptanceDeadline: acceptanceDeadline,
+      paymentDeadline: paymentDeadline,
       sellerAccepted: sellerAccepted ?? this.sellerAccepted,
       partnerAccepted: partnerAccepted ?? this.partnerAccepted,
       arrivedAtShopTime: arrivedAtShopTime,

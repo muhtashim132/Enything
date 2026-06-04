@@ -135,7 +135,27 @@ class LocationProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> loadAddressFromDb(String userId) async {
+    try {
+      final db = Supabase.instance.client;
+      final response = await db.from('customers').select('address_home, landmark, pincode').eq('id', userId).maybeSingle();
+      if (response != null) {
+        if (response['address_home'] != null && response['address_home'] is Map) {
+          _houseNumber = response['address_home']['house'] ?? '';
+        } else if (response['address_home'] is String) {
+          _houseNumber = response['address_home'];
+        }
+        _landmark = response['landmark'] ?? '';
+        _pincode = response['pincode'] ?? '';
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('loadAddressFromDb error: $e');
+    }
+  }
+
   double distanceTo(LatLng target) {
+
     if (_currentLocation == null) return 0;
     const distance = Distance();
     return distance(_currentLocation!, target) / 1000;
