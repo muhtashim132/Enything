@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/responsive_layout.dart';
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
@@ -119,7 +120,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Analytics')),
-      body: _isLoading
+      body: MaxWidthContainer(
+        child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -309,6 +311,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 ],
               ),
             ),
+        ),
     );
   }
 

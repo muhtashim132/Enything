@@ -11,7 +11,7 @@ import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
 import '../../pages/seller/seller_order_map_page.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import '../../utils/responsive_layout.dart';
 class SellerOrdersPage extends StatefulWidget {
   const SellerOrdersPage({super.key});
 
@@ -89,42 +89,65 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   }
 
   /// Seller presses Accept:
-  ///   1. Set seller_accepted = true in DB
-  ///   2. If partner_accepted is already true → move to 'confirmed'
-  ///   3. Otherwise stay 'awaiting_acceptance'
+  ///   - If rider already accepted (partner_accepted = true)
+  ///       → set seller_accepted + advance to awaiting_payment + push customer + push rider
+  ///   - If rider has NOT yet accepted
+  ///       → set seller_accepted + broadcast to riders + notify customer shop accepted
   Future<void> _sellerAccept(OrderModel order) async {
     try {
-      // For awaiting_acceptance: mark seller_accepted. The order stays
-      // awaiting_acceptance until the rider also accepts (via delivery dashboard).
-      // When both have accepted, the Postgres function / app logic moves it to
-      // awaiting_payment and the customer gets a push to pay.
+      final riderAlreadyAccepted = order.partnerAccepted;
+      final paymentDeadline = riderAlreadyAccepted
+          ? DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String()
+          : null;
+
+      // Update DB
       await _supabase.from('orders').update({
         'seller_accepted': true,
+        if (riderAlreadyAccepted) 'status': 'awaiting_payment',
+        if (paymentDeadline != null) 'payment_deadline': paymentDeadline,
       }).eq('id', order.id);
 
-      // Push rider notification to come pick up
       if (mounted) {
-        context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: 'broadcast', // delivery dashboard picks it from Realtime
-          title: '🛵 Order Available!',
-          body: 'A shop accepted an order ₹${order.grandTotal.toStringAsFixed(0)}. Be the first rider to accept it!',
-          data: {'order_id': order.id, 'role': 'rider'},
-        );
-      }
-
-      if (mounted) {
-        final msg = order.partnerAccepted
-            ? '✅ Both you & rider accepted. Waiting for customer to pay.'
-            : '✅ Your acceptance saved. Waiting for a delivery partner.';
-        _showSnack(msg, isError: false);
-
         final notifProv = context.read<NotificationProvider>();
-        // Notify customer that shop accepted (rider still pending)
-        notifProv.sendBackgroundPush(
-          targetUserId: order.customerId,
-          title: '🏪 Shop Accepted!',
-          body: 'The shop has accepted your order. Now waiting for a rider to also accept.',
-        );
+
+        if (riderAlreadyAccepted) {
+          // ── Both now accepted → push customer to pay NOW ──────────────
+          _showSnack('✅ Both you & rider accepted. Waiting for customer to pay.', isError: false);
+
+          notifProv.sendBackgroundPush(
+            targetUserId: order.customerId,
+            title: '✅ Shop & Rider Ready! Pay Now 💳',
+            body: 'Both the shop and rider accepted your order. Complete payment within 10 minutes.',
+            data: {'order_id': order.id, 'action': 'pay'},
+          );
+
+          // Notify rider: seller is in, customer is paying
+          if (order.deliveryPartnerId != null) {
+            notifProv.sendBackgroundPush(
+              targetUserId: order.deliveryPartnerId!,
+              title: '⌛ Waiting for Customer Payment',
+              body: 'The shop accepted. Both of you are confirmed — customer is completing payment now.',
+            );
+          }
+        } else {
+          // ── Seller accepted first → broadcast riders + notify customer ─
+          _showSnack('✅ Your acceptance saved. Waiting for a delivery partner.', isError: false);
+
+          // Broadcast ALL riders that this order is now available
+          notifProv.sendBroadcastToAudience(
+            audience: 'Riders',
+            title: '🛵 Order Available!',
+            body: 'A shop accepted an order ₹${order.grandTotal.toStringAsFixed(0)}. Be the first rider to accept it!',
+            data: {'order_id': order.id, 'role': 'rider'},
+          );
+
+          // Notify customer that shop accepted, waiting for rider
+          notifProv.sendBackgroundPush(
+            targetUserId: order.customerId,
+            title: '🏪 Shop Accepted!',
+            body: 'The shop accepted your order. Now waiting for a rider to also confirm.',
+          );
+        }
       }
       _loadOrders();
     } catch (e) {
@@ -446,8 +469,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
+      body: MaxWidthContainer(
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
           return [
             SliverAppBar(
@@ -552,6 +576,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 _buildList(_doneOrders(), 'done'),
               ],
             ),
+        ),
       ),
     );
   }

@@ -206,18 +206,22 @@ class PlatformConfigProvider extends ChangeNotifier {
     String? title;
     String? body;
 
-    switch (key) {
-      case 'commission_percent':
-        audience = 'Sellers';
-        title = '📢 Commission Rate Updated';
-        body = 'Platform commission has changed from $oldVal% to $newVal%. '
-               'New orders will use the updated rate.';
-        break;
-      case 'platform_fee':
-        audience = 'Customers';
-        title = '📢 Handling Fee Updated';
-        body = 'The platform handling fee is now ₹$newVal per order.';
-        break;
+    if (key.startsWith('commission_percent')) {
+      audience = 'Sellers';
+      String catSuffix = '';
+      if (key.startsWith('commission_percent_')) {
+        catSuffix = ' for ${key.replaceFirst('commission_percent_', '')}';
+      }
+      title = '📢 Commission Rate Updated';
+      body = 'Platform commission$catSuffix has changed from $oldVal% to $newVal%. '
+             'New orders will use the updated rate.';
+    } else {
+      switch (key) {
+        case 'platform_fee':
+          audience = 'Customers';
+          title = '📢 Handling Fee Updated';
+          body = 'The platform handling fee is now ₹$newVal per order.';
+          break;
       case 'delivery_rate_per_km':
         audience = 'Customers';
         title = '📢 Delivery Rates Updated';
@@ -236,6 +240,7 @@ class PlatformConfigProvider extends ChangeNotifier {
         break;
       default:
         return;
+      }
     }
 
     try {

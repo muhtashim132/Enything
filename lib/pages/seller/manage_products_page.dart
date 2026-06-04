@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/product_model.dart';
 import '../../theme/app_colors.dart';
-
+import '../../utils/responsive_layout.dart';
 class ManageProductsPage extends StatefulWidget {
   const ManageProductsPage({super.key});
 
@@ -97,7 +97,8 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
       appBar: AppBar(
         title: const Text('Manage Products'),
       ),
-      body: _isLoading
+      body: MaxWidthContainer(
+        child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _products.isEmpty
               ? const Center(
@@ -244,6 +245,7 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
                     );
                   },
                 ),
+        ),
     );
   }
 }

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
-import '../../models/shop_model.dart';
 import '../../models/product_model.dart';
+import '../../models/shop_model.dart';
+import '../../utils/responsive_layout.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
@@ -72,8 +73,9 @@ class _RestaurantPageState extends State<RestaurantPage> {
     final isFav = favs.isShopFavorite(_shop!.id);
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
+      body: MaxWidthContainer(
+        child: CustomScrollView(
+          slivers: [
           SliverAppBar(
             expandedHeight: 220,
             pinned: true,
@@ -322,6 +324,7 @@ class _RestaurantPageState extends State<RestaurantPage> {
             ),
           const SliverToBoxAdapter(child: SizedBox(height: 32)),
         ],
+      ),
       ),
     );
   }

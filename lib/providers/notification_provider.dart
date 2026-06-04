@@ -168,6 +168,9 @@ class NotificationProvider extends ChangeNotifier {
           },
         )
         .subscribe();
+
+    // Restore persisted notification history for this user
+    _loadFromDb();
   }
 
   /// Seller: watches orders for their shops (new orders arriving).
@@ -229,6 +232,9 @@ class NotificationProvider extends ChangeNotifier {
           },
         )
         .subscribe();
+
+    // Restore persisted notification history for this user
+    _loadFromDb();
   }
 
   /// Delivery partner: watches for new available orders and their active ones.
@@ -289,6 +295,9 @@ class NotificationProvider extends ChangeNotifier {
           },
         )
         .subscribe();
+
+    // Restore persisted notification history for this user
+    _loadFromDb();
   }
 
   /// Admin: watches for new KYC applications and complaints.
@@ -342,6 +351,9 @@ class NotificationProvider extends ChangeNotifier {
           },
         )
         .subscribe();
+
+    // Restore persisted notification history for this user
+    _loadFromDb();
   }
 
   // ── Stop listening ────────────────────────────────────────────────────────
@@ -351,6 +363,7 @@ class NotificationProvider extends ChangeNotifier {
     _channel = null;
     _listeningUserId = null;
     _listeningRole = null;
+    _clearMemory(); // Clear RAM only — DB history is preserved per user
   }
 
   // ── Manage notifications ──────────────────────────────────────────────────
@@ -360,6 +373,7 @@ class NotificationProvider extends ChangeNotifier {
     if (idx != -1) {
       _notifications[idx].isRead = true;
       notifyListeners();
+      _markReadInDb(notificationId); // sync to DB (fire and forget)
     }
   }
 
@@ -368,9 +382,20 @@ class NotificationProvider extends ChangeNotifier {
       n.isRead = true;
     }
     notifyListeners();
+    _markAllReadInDb(); // sync to DB (fire and forget)
   }
 
+  /// Clears notifications from memory AND from the DB for this user.
+  /// Called when the user taps "Clear All" in the notification panel.
   void clearAll() {
+    _notifications.clear();
+    notifyListeners();
+    _clearFromDb(); // delete from DB (fire and forget)
+  }
+
+  /// Clears only the in-memory list. DB history is NOT touched.
+  /// Used internally when switching roles so history can be reloaded.
+  void _clearMemory() {
     _notifications.clear();
     notifyListeners();
   }
@@ -380,17 +405,109 @@ class NotificationProvider extends ChangeNotifier {
     if (_notifications.any((n) => n.id == notification.id)) return;
     _notifications.add(notification);
     notifyListeners();
+    _persistToDb(notification); // persist to DB (fire and forget)
+  }
+
+  // ── DB Persistence Helpers ────────────────────────────────────────────────
+
+  /// Loads the last 50 notifications for the currently logged-in user from
+  /// the DB and merges them into the in-memory list (dedup by notif_key).
+  /// Called automatically at the start of every listenAs*() setup.
+  Future<void> _loadFromDb() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final rows = await _supabase
+          .from('notifications')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: true)
+          .limit(50);
+      for (final row in (rows as List)) {
+        final notif = AppNotification(
+          id: row['notif_key'] as String,
+          title: row['title'] as String,
+          body: row['body'] as String,
+          orderId: row['order_id'] as String?,
+          createdAt: DateTime.parse(row['created_at'] as String),
+          isRead: row['is_read'] as bool,
+        );
+        if (!_notifications.any((n) => n.id == notif.id)) {
+          _notifications.add(notif);
+        }
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to load notifications from DB: $e');
+    }
+  }
+
+  /// Persists a single notification to DB using upsert (safe on duplicates).
+  Future<void> _persistToDb(AppNotification notif) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _supabase.from('notifications').upsert({
+        'user_id': userId,
+        'notif_key': notif.id,
+        'title': notif.title,
+        'body': notif.body,
+        if (notif.orderId != null) 'order_id': notif.orderId,
+        'is_read': notif.isRead,
+      }, onConflict: 'user_id,notif_key');
+    } catch (e) {
+      debugPrint('Failed to persist notification to DB: $e');
+    }
+  }
+
+  /// Marks a single notification as read in the DB.
+  Future<void> _markReadInDb(String notifKey) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _supabase
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('user_id', userId)
+          .eq('notif_key', notifKey);
+    } catch (e) {
+      debugPrint('Failed to mark notification read in DB: $e');
+    }
+  }
+
+  /// Marks all notifications as read in the DB for the current user.
+  Future<void> _markAllReadInDb() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _supabase
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('user_id', userId)
+          .eq('is_read', false);
+    } catch (e) {
+      debugPrint('Failed to mark all notifications read in DB: $e');
+    }
+  }
+
+  /// Deletes all notifications from the DB for the current user.
+  Future<void> _clearFromDb() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _supabase
+          .from('notifications')
+          .delete()
+          .eq('user_id', userId);
+    } catch (e) {
+      debugPrint('Failed to clear notifications from DB: $e');
+    }
   }
 
   // ── Status message helpers ────────────────────────────────────────────────
 
   (String?, String?) _customerStatusMessage(String status, String? orderId) {
     switch (status) {
-      case 'awaiting_acceptance':
-        return (
-          '🛍️ Order Sent!',
-          'Waiting for shop & rider to accept. No charge yet — you pay only after both confirm.'
-        );
       case 'awaiting_payment':
         return (
           '✅ Shop & Rider Ready! Pay Now',
@@ -506,6 +623,29 @@ class NotificationProvider extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('Error sending background push: $e');
+    }
+  }
+
+  /// Broadcasts a push notification to ALL devices registered under a given
+  /// audience role. Use this instead of [sendBackgroundPush] when you need
+  /// to reach every rider, seller, or customer.
+  ///
+  /// [audience] must be one of: `'All Users'`, `'Customers'`, `'Sellers'`, `'Riders'`
+  Future<void> sendBroadcastToAudience({
+    required String audience,
+    required String title,
+    required String body,
+    Map<String, String>? data,
+  }) async {
+    try {
+      await _supabase.functions.invoke('send-broadcast', body: {
+        'audience': audience,
+        'title': title,
+        'body': body,
+        if (data != null) 'data': data,
+      });
+    } catch (e) {
+      debugPrint('Error sending broadcast push [$audience]: $e');
     }
   }
 

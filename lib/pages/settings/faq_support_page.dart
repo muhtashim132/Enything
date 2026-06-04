@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/responsive_layout.dart';
 
 class FaqSupportPage extends StatefulWidget {
   const FaqSupportPage({super.key});
@@ -291,13 +292,15 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildFaqTab(isDark),
-          _buildSupportTab(isDark),
-          _buildMyTicketsTab(isDark),
-        ],
+      body: MaxWidthContainer(
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildFaqTab(isDark),
+            _buildSupportTab(isDark),
+            _buildMyTicketsTab(isDark),
+          ],
+        ),
       ),
       floatingActionButton: _tabController.index == 2 
         ? FloatingActionButton.extended(

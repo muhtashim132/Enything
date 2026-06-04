@@ -15,6 +15,7 @@ import '../../config/payment_config.dart';
 import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../settings/profile_settings_dialogs.dart';
+import '../../utils/responsive_layout.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -292,6 +293,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
+      // Broadcast to ALL online riders immediately — same moment sellers are notified.
+      // Riders can only see/accept once a seller confirms (seller_accepted = true),
+      // but this early alert lets them move towards the area in anticipation.
+      if (mounted && orderIds.isNotEmpty) {
+        final totalGrand = cart.shops.fold(0.0, (sum, shop) {
+          final shopItems = cart.items.where((i) => i.shop.id == shop.id).toList();
+          final shopBase = shopItems.fold(0.0, (s, i) => s + i.totalPrice);
+          return sum + shopBase;
+        });
+        context.read<NotificationProvider>().sendBroadcastToAudience(
+          audience: 'Riders',
+          title: '🛵 New Order${orderIds.length > 1 ? 's' : ''} Nearby!',
+          body: orderIds.length > 1
+              ? '${orderIds.length} new orders placed in your area. Stand by — shops are accepting now!'
+              : 'A new order ₹${totalGrand.toStringAsFixed(0)} was placed near you. Shop is accepting now!',
+          data: {'action': 'new_order'},
+        );
+      }
+
       cart.clear();
       if (mounted) {
         if (orderIds.length == 1) {
@@ -348,8 +368,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Checkout')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: MaxWidthContainer(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -725,8 +746,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: MaxWidthContainer(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
@@ -806,6 +830,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
           ],
         ),
+      ),
+      ),
       ),
     );
   }

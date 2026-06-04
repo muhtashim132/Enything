@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
+import '../../utils/responsive_layout.dart';
 
 class AboutEnythingPage extends StatelessWidget {
   const AboutEnythingPage({super.key});
@@ -39,8 +40,9 @@ class AboutEnythingPage extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
       ),
       extendBodyBehindAppBar: true,
-      body: SingleChildScrollView(
-        child: Column(
+      body: MaxWidthContainer(
+        child: SingleChildScrollView(
+          child: Column(
           children: [
             // Hero Header
             Container(
@@ -192,6 +194,7 @@ class AboutEnythingPage extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

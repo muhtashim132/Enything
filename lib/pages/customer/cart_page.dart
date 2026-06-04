@@ -7,6 +7,7 @@ import '../../config/routes.dart';
 import '../../config/payment_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../providers/location_provider.dart';
+import '../../utils/responsive_layout.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -41,11 +42,12 @@ class CartPage extends StatelessWidget {
             ),
         ],
       ),
-      body: cart.isEmpty
-          ? _buildEmptyCart(context)
-          : Column(
-              children: [
-                Expanded(
+      body: MaxWidthContainer(
+        child: cart.isEmpty
+            ? _buildEmptyCart(context)
+            : Column(
+                children: [
+                  Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: cart.items.length,
@@ -58,6 +60,7 @@ class CartPage extends StatelessWidget {
                 _buildSummary(context, cart, location),
               ],
             ),
+      ),
     );
   }
 

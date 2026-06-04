@@ -6,6 +6,7 @@ import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
+import '../../utils/responsive_layout.dart';
 
 class OrderHistoryPage extends StatefulWidget {
   const OrderHistoryPage({super.key});
@@ -132,9 +133,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('My Orders')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _orders.isEmpty
+      body: MaxWidthContainer(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _orders.isEmpty
               ? _buildEmptyState()
               : RefreshIndicator(
                   onRefresh: _fetchOrders,
@@ -147,6 +149,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     },
                   ),
                 ),
+      ),
     );
   }
 

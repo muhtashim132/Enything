@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
+import '../../utils/responsive_layout.dart';
 
 class OtpVerifyPage extends StatefulWidget {
   const OtpVerifyPage({super.key});
@@ -366,8 +367,9 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
               right: -60,
               child: _blob(300, const Color(0xFF5E20D4), 0.16)),
           SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: MaxWidthContainer(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Column(
                 children: [
                   const SizedBox(height: 48),
@@ -512,6 +514,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                 ],
               ),
             ),
+            ),
           ),
         ],
       ),
@@ -569,8 +572,9 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
               right: -60,
               child: _blob(300, const Color(0xFF5E20D4), 0.14)),
           SafeArea(
-            child: SingleChildScrollView(
-              child: Padding(
+            child: MaxWidthContainer(
+              child: SingleChildScrollView(
+                child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 28),
                 child: Column(
                   children: [
@@ -723,6 +727,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                   ],
                 ),
               ),
+            ),
             ),
           ),
         ],

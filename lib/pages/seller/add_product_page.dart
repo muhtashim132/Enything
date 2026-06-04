@@ -8,7 +8,7 @@ import '../../config/app_categories.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/validators.dart';
 import '../../models/product_model.dart';
-
+import '../../utils/responsive_layout.dart';
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
   const AddProductPage({super.key, this.existingProduct});
@@ -203,8 +203,9 @@ class _AddProductPageState extends State<AddProductPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: Text(widget.existingProduct != null ? 'Edit Product' : 'Add Product')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: MaxWidthContainer(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
@@ -577,6 +578,7 @@ class _AddProductPageState extends State<AddProductPage> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

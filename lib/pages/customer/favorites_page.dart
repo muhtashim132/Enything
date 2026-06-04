@@ -10,6 +10,7 @@ import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
 import '../../config/routes.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../utils/responsive_layout.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -147,9 +148,10 @@ class _FavoritesPageState extends State<FavoritesPage>
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
+      body: MaxWidthContainer(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : TabBarView(
               controller: _tabController,
               children: [
                 // Products Tab
@@ -221,6 +223,7 @@ class _FavoritesPageState extends State<FavoritesPage>
                       ),
               ],
             ),
+      ),
     );
   }
 }

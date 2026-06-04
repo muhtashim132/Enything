@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/responsive_layout.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_colors.dart';
 
@@ -154,8 +155,9 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
       ),
       body: _loadingHistory
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+          : MaxWidthContainer(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -294,6 +296,7 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
                 ],
               ),
             ),
+          ),
     );
   }
 

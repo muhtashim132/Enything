@@ -11,6 +11,7 @@ import '../../config/app_categories.dart';
 import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../widgets/seller/category_extra_fields.dart';
+import '../../utils/responsive_layout.dart';
 
 enum _Role { customer, seller, delivery }
 
@@ -338,7 +339,9 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
                 right: -60,
                 child: _blob(300, const Color(0xFF5E20D4), 0.14)),
             SafeArea(
-              child: _step == 0 ? _buildRoleSelect() : _buildDetailsForm(),
+              child: MaxWidthContainer(
+                child: _step == 0 ? _buildRoleSelect() : _buildDetailsForm(),
+              ),
             ),
           ],
         ),

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
+import '../../utils/responsive_layout.dart';
 
 class PhoneAuthPage extends StatefulWidget {
   const PhoneAuthPage({super.key});
@@ -144,8 +145,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                 child: _blob(350, const Color(0xFF5E20D4), 0.15)),
 
             SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: MaxWidthContainer(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -392,6 +394,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                     const SizedBox(height: 32),
                   ],
                 ),
+              ),
               ),
             ),
           ],

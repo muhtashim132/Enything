@@ -11,7 +11,7 @@ import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../widgets/common/notification_bell.dart';
 import 'package:shimmer/shimmer.dart';
-
+import '../../utils/responsive_layout.dart';
 class SellerDashboardPage extends StatefulWidget {
   const SellerDashboardPage({super.key});
   @override
@@ -184,8 +184,9 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
       child: Scaffold(
         backgroundColor:
             isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
-        body: CustomScrollView(
-          slivers: [
+        body: MaxWidthContainer(
+          child: CustomScrollView(
+            slivers: [
             // ── Animated Hero Header ──────────────────────────────────────
             SliverAppBar(
               expandedHeight: 200,
@@ -521,6 +522,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
               ),
             ),
           ],
+          ),
         ),
       ),
     );

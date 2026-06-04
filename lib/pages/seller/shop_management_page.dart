@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../utils/responsive_layout.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../theme/app_colors.dart';
@@ -205,9 +206,10 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                       style: GoogleFonts.outfit(
                           color: AppColors.textSecondary, fontSize: 15)),
                 )
-              : RefreshIndicator(
-                  onRefresh: _loadShop,
-                  child: SingleChildScrollView(
+              : MaxWidthContainer(
+                  child: RefreshIndicator(
+                    onRefresh: _loadShop,
+                    child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(20),
                     child: Column(
@@ -470,6 +472,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                       ],
                     ),
                   ),
+                ),
                 ),
     );
   }

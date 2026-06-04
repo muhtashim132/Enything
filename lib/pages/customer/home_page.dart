@@ -18,6 +18,7 @@ import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
 import '../../config/app_categories.dart';
 import '../../utils/delivery_calculator.dart';
+import '../../utils/responsive_layout.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
@@ -102,7 +103,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     _startLiveLocationUpdates();
     // Auto-scroll banner every 4 seconds
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (!mounted) return;
+      if (!mounted || !_bannerController.hasClients) return;
       final next = (_bannerIndex + 1) % 3;
       _bannerController.animateToPage(
         next,
@@ -138,14 +139,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     }
   }
 
-
   void _startNotifications() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userId = _supabase.auth.currentUser?.id;
       if (userId != null) {
         final notifProvider = context.read<NotificationProvider>();
         notifProvider.listenAsCustomer(userId);
-        notifProvider.registerFcmToken(userId, 'customer'); // Register push token
+        notifProvider.registerFcmToken(
+            userId, 'customer'); // Register push token
       }
     });
   }
@@ -159,7 +160,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     _bannerTimer?.cancel();
     super.dispose();
   }
-
 
   /// Runs a Supabase text search for shops by name across all categories.
   Future<void> _searchShops(String query) async {
@@ -179,12 +179,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     });
     try {
       final locationProvider = context.read<LocationProvider>();
-      
+
       final shopsResponse =
           await _supabase.from('shops').select().ilike('name', '%$query%');
 
-      final productsResponse = 
-          await _supabase.from('products').select('*, shops(*)').ilike('name', '%$query%');
+      final productsResponse = await _supabase
+          .from('products')
+          .select('*, shops(*)')
+          .ilike('name', '%$query%');
 
       final allShops =
           (shopsResponse as List).map((s) => ShopModel.fromMap(s)).toList();
@@ -199,16 +201,19 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           }
         }
         shopResults = allShops
-            .where((s) => s.distanceKm == null || DeliveryCalculator.isWithinRange(s.distanceKm!))
+            .where((s) =>
+                s.distanceKm == null ||
+                DeliveryCalculator.isWithinRange(s.distanceKm!))
             .toList()
-          ..sort((a, b) => (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity));
+          ..sort((a, b) => (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity));
       } else {
         shopResults = allShops;
       }
 
       final List<ProductModel> prodResults = [];
       final Map<String, ShopModel> prodShops = {};
-      
+
       for (final p in productsResponse as List) {
         final product = ProductModel.fromMap(p);
         prodResults.add(product);
@@ -219,7 +224,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
       // Ensure that if a shop matches because of a product, we don't accidentally
       // have it in `shopResults` unless its name actually matches the query.
-      // But the Supabase query `ilike('name', '%$query%')` on `shops` already guarantees 
+      // But the Supabase query `ilike('name', '%$query%')` on `shops` already guarantees
       // it only matches by name.
 
       if (mounted) {
@@ -261,12 +266,40 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   /// Maps broad tab name → actual DB category values
   static const Map<String, List<String>> _tabCategories = {
-    'Food': ['Restaurant', 'Fast Food', 'Bakery', 'Sweets & Mithai', 'Tea & Coffee', 'Ice Cream', 'Paan Shop', 'Beverages'],
-    'Grocery': ['Grocery', 'Fruits & Vegs', 'Dairy & Eggs', 'Butcher', 'Fish & Seafood', 'Organic'],
+    'Food': [
+      'Restaurant',
+      'Fast Food',
+      'Bakery',
+      'Sweets & Mithai',
+      'Tea & Coffee',
+      'Ice Cream',
+      'Paan Shop',
+      'Beverages'
+    ],
+    'Grocery': [
+      'Grocery',
+      'Fruits & Vegs',
+      'Dairy & Eggs',
+      'Butcher',
+      'Fish & Seafood',
+      'Organic'
+    ],
     'Pharmacy': ['Pharmacy', 'Medical Store'],
     'Clothing': ['Clothing', 'Footwear', 'Jewellery'],
     'Electronics': ['Electronics', 'Mobile & Repair'],
-    'More': ['Hardware Store', 'Stationery', 'Toys & Games', 'Sports', 'Pet Supplies', 'Salon & Beauty', 'Flowers', 'Home Decor', 'Furniture', 'Auto Parts', 'Other'],
+    'More': [
+      'Hardware Store',
+      'Stationery',
+      'Toys & Games',
+      'Sports',
+      'Pet Supplies',
+      'Salon & Beauty',
+      'Flowers',
+      'Home Decor',
+      'Furniture',
+      'Auto Parts',
+      'Other'
+    ],
   };
 
   /// Fetch ALL active shops & products, sorted by rating then total_orders.
@@ -277,14 +310,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       final locationProvider = context.read<LocationProvider>();
 
       // Fetch all shops, then filter is_active locally to bypass any RLS column blocks
-      final shopsResponse = await _supabase
-          .from('shops')
-          .select();
+      final shopsResponse = await _supabase.from('shops').select();
 
-      final productsResponse = await _supabase
-          .from('products')
-          .select('*, shops(*)')
-          .limit(100);
+      final productsResponse =
+          await _supabase.from('products').select('*, shops(*)').limit(100);
 
       if (mounted) {
         final allShops = (shopsResponse as List)
@@ -311,17 +340,17 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               final ratingCmp = (b.rating).compareTo(a.rating);
               if (ratingCmp != 0) return ratingCmp;
               // Secondary: closer distance first
-              return (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity);
+              return (a.distanceKm ?? double.infinity)
+                  .compareTo(b.distanceKm ?? double.infinity);
             });
         } else {
           // No GPS yet — show all active shops sorted by rating
-          nearby = allShops
-            ..sort((a, b) => b.rating.compareTo(a.rating));
+          nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
         }
 
         final prods = <ProductModel>[];
         final prodShops = <String, ShopModel>{};
-        
+
         for (final p in productsResponse as List) {
           final product = ProductModel.fromMap(p);
           if (product.isAvailable) {
@@ -363,15 +392,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       final subcategories = _tabCategories[tabName] ?? [tabName];
 
       // Build OR filter for all subcategories in this tab
-      final catFilter = subcategories
-          .map((c) => 'category.eq.$c')
-          .join(',');
+      final catFilter = subcategories.map((c) => 'category.eq.$c').join(',');
 
       // Fetch all, filter locally
-      final shopsResponse = await _supabase
-          .from('shops')
-          .select()
-          .or(catFilter);
+      final shopsResponse =
+          await _supabase.from('shops').select().or(catFilter);
 
       final productsResponse = await _supabase
           .from('products')
@@ -399,10 +424,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   s.distanceKm == null ||
                   DeliveryCalculator.isWithinRange(s.distanceKm!))
               .toList()
-            ..sort((a, b) => (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity));
+            ..sort((a, b) => (a.distanceKm ?? double.infinity)
+                .compareTo(b.distanceKm ?? double.infinity));
         } else {
-          nearby = allShops
-            ..sort((a, b) => b.rating.compareTo(a.rating));
+          nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
         }
 
         final prods = (productsResponse as List)
@@ -440,10 +465,13 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
     // Greeting based on time of day
     final hour = DateTime.now().hour;
-    final greeting = hour < 12 ? 'Good morning ☀️' : hour < 17 ? 'Good afternoon 🌤' : 'Good evening 🌙';
-    final firstName = context.read<AuthProvider>().user?.fullName.split(' ').first ?? '';
-    final w = MediaQuery.of(context).size.width;
-    final isWide = w >= 600;
+    final greeting = hour < 12
+        ? 'Good morning ☀️'
+        : hour < 17
+            ? 'Good afternoon 🌤'
+            : 'Good evening 🌙';
+    final firstName =
+        context.read<AuthProvider>().user?.fullName.split(' ').first ?? '';
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -477,7 +505,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                 style: GoogleFonts.outfit(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w800,
-                                  color: isDark ? Colors.white : AppColors.textPrimary,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -512,9 +542,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                     GestureDetector(
                       onTap: () => _showLocationSheet(),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF0F0F8),
+                          color: isDark
+                              ? const Color(0xFF1E1E2E)
+                              : const Color(0xFFF0F0F8),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isDark ? Colors.white10 : Colors.transparent,
@@ -523,7 +556,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.location_on_rounded, size: 14, color: AppColors.primary),
+                            const Icon(Icons.location_on_rounded,
+                                size: 14, color: AppColors.primary),
                             const SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -535,7 +569,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                 style: GoogleFonts.outfit(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white70 : AppColors.textPrimary,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : AppColors.textPrimary,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -544,7 +580,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                             const SizedBox(width: 4),
                             Icon(Icons.keyboard_arrow_down_rounded,
                                 size: 16,
-                                color: isDark ? Colors.white38 : AppColors.textSecondary),
+                                color: isDark
+                                    ? Colors.white38
+                                    : AppColors.textSecondary),
                           ],
                         ),
                       ),
@@ -577,8 +615,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                             ? const Padding(
                                 padding: EdgeInsets.all(12),
                                 child: SizedBox(
-                                  width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               )
                             : null,
@@ -592,7 +632,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                          borderSide: const BorderSide(
+                              color: AppColors.primary, width: 1.5),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
@@ -629,7 +670,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeOutCubic,
-                      margin: const EdgeInsets.only(right: 10, top: 8, bottom: 8),
+                      margin:
+                          const EdgeInsets.only(right: 10, top: 8, bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
                         gradient: isSelected
@@ -655,7 +697,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         border: isSelected
                             ? null
                             : Border.all(
-                                color: isDark ? Colors.white10 : Colors.grey.shade200),
+                                color: isDark
+                                    ? Colors.white10
+                                    : Colors.grey.shade200),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -695,109 +739,60 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 ? SliverToBoxAdapter(child: _buildShimmer())
                 : SliverList(
                     delegate: SliverChildListDelegate([
-                          // Featured Banner
-                          _buildFeaturedBanner(),
-                          const SizedBox(height: 24),
+                      // Featured Banner
+                      _buildFeaturedBanner(),
+                      const SizedBox(height: 24),
 
-                          // Shops Section
-                          // ── Search Results (Supabase live search) ──────
-                          if (_searchQuery.isNotEmpty) ...[
-                            _buildSectionTitle(
-                              'Search results',
-                              subtitle: _isSearching
-                                  ? 'Searching...'
-                                  : '${_searchResults.length + _searchProductResults.length} result${(_searchResults.length + _searchProductResults.length) == 1 ? '' : 's'}',
+                      // Shops Section
+                      // ── Search Results (Supabase live search) ──────
+                      if (_searchQuery.isNotEmpty) ...[
+                        _buildSectionTitle(
+                          'Search results',
+                          subtitle: _isSearching
+                              ? 'Searching...'
+                              : '${_searchResults.length + _searchProductResults.length} result${(_searchResults.length + _searchProductResults.length) == 1 ? '' : 's'}',
+                        ),
+                        const SizedBox(height: 16),
+                        if (_isSearching)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: CircularProgressIndicator(),
                             ),
-                            const SizedBox(height: 16),
-                            if (_isSearching)
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 24),
-                                  child: CircularProgressIndicator(),
-                                ),
-                              )
-                            else if (_searchResults.isEmpty && _searchProductResults.isEmpty)
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 32),
-                                child: Center(
-                                  child: Column(
-                                    children: [
-                                      const Text('🔍',
-                                          style: TextStyle(fontSize: 48)),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'No results found for "$_searchQuery"',
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.outfit(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textSecondary),
-                                      ),
-                                    ],
+                          )
+                        else if (_searchResults.isEmpty &&
+                            _searchProductResults.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 32),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  const Text('🔍',
+                                      style: TextStyle(fontSize: 48)),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No results found for "$_searchQuery"',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textSecondary),
                                   ),
-                                ),
-                              )
-                            else ...[
-                              if (_searchResults.isNotEmpty) ...[
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: Text('Shops & Restaurants', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                                ),
-                                ..._searchResults.map((shop) {
-                                  final isFood =
-                                      AppCategories.groupFor(shop.category) ==
-                                          CategoryGroup.food;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 16),
-                                    child: isFood
-                                        ? RestaurantShopCard(
-                                            shop: shop,
-                                            onTap: () => Navigator.pushNamed(
-                                              context,
-                                              AppRoutes.restaurantDashboard,
-                                              arguments: {'shopId': shop.id},
-                                            ),
-                                          )
-                                        : ShopCard(
-                                            shop: shop,
-                                            onTap: () => Navigator.pushNamed(
-                                              context,
-                                              AppRoutes.restaurant,
-                                              arguments: {'shopId': shop.id},
-                                            ),
-                                          ),
-                                  );
-                                }),
-                              ],
-                              if (_searchProductResults.isNotEmpty) ...[
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 12, top: 8),
-                                  child: Text('Items & Products', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                                ),
-                                ..._searchProductResults.map((product) {
-                                  final shop = _searchProductShops[product.id];
-                                  if (shop == null) return const SizedBox.shrink();
-                                  return ProductSearchCard(
-                                    product: product,
-                                    shop: shop,
-                                  );
-                                }),
-                              ],
-                            ],
-                          ] else if (_shops.isNotEmpty) ...[
-                            // ── Normal category browse ───────────────────
-                            _buildSectionTitle(
-                              _selectedTabIndex < 0
-                                  ? 'All stores near you'
-                                  : _isFoodTab
-                                      ? 'Restaurants near you'
-                                      : 'Shops near you',
-                              subtitle:
-                                  '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 16),
-                            ..._shops.map((shop) {
+                          )
+                        else ...[
+                          if (_searchResults.isNotEmpty) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text('Shops & Restaurants',
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary)),
+                            ),
+                            ..._searchResults.map((shop) {
                               final isFood =
                                   AppCategories.groupFor(shop.category) ==
                                       CategoryGroup.food;
@@ -820,45 +815,117 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                           arguments: {'shopId': shop.id},
                                         ),
                                       ),
-                                );
-                              }),
-                          ] else if (!_isLoading) ...[
-                            locationProvider.hasLocation
-                                ? _buildNoShopsNearby()
-                                : _buildLocationRequired(),
+                              );
+                            }),
                           ],
-
-                          // Products Section
-                          if (_products.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            _buildSectionTitle('Popular in your area'),
-                            const SizedBox(height: 16),
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                childAspectRatio: 0.65,
-                                mainAxisSpacing: 16,
-                                crossAxisSpacing: 16,
-                              ),
-                              itemCount: _products.length,
-                              itemBuilder: (context, index) {
-                                final product = _products[index];
-                                final shop = _productShops[product.id];
-                                return ProductCard(product: product, shop: shop);
-                              },
+                          if (_searchProductResults.isNotEmpty) ...[
+                            Padding(
+                              padding:
+                                  const EdgeInsets.only(bottom: 12, top: 8),
+                              child: Text('Items & Products',
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary)),
                             ),
+                            ..._searchProductResults.map((product) {
+                              final shop = _searchProductShops[product.id];
+                              if (shop == null) return const SizedBox.shrink();
+                              return ProductSearchCard(
+                                product: product,
+                                shop: shop,
+                              );
+                            }),
                           ],
-                        ]),
-                      ),
+                        ],
+                      ] else if (_shops.isNotEmpty) ...[
+                        // ── Normal category browse ───────────────────
+                        _buildSectionTitle(
+                          _selectedTabIndex < 0
+                              ? 'All stores near you'
+                              : _isFoodTab
+                                  ? 'Restaurants near you'
+                                  : 'Shops near you',
+                          subtitle:
+                              '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
+                        ),
+                        const SizedBox(height: 16),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 1, tablet: 2, desktop: 3);
+                            final spacing = 16.0;
+                            final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
+
+                            return Wrap(
+                              spacing: spacing,
+                              runSpacing: 0,
+                              children: _shops.map((shop) {
+                                final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
+                                return SizedBox(
+                                  width: itemWidth,
+                                  child: isFood
+                                      ? RestaurantShopCard(
+                                          shop: shop,
+                                          onTap: () => Navigator.pushNamed(
+                                            context,
+                                            AppRoutes.restaurantDashboard,
+                                            arguments: {'shopId': shop.id},
+                                          ),
+                                        )
+                                      : ShopCard(
+                                          shop: shop,
+                                          onTap: () => Navigator.pushNamed(
+                                            context,
+                                            AppRoutes.restaurant,
+                                            arguments: {'shopId': shop.id},
+                                          ),
+                                        ),
+                                );
+                              }).toList(),
+                            );
+                          },
+                        ),
+                      ] else if (!_isLoading) ...[
+                        locationProvider.hasLocation
+                            ? _buildNoShopsNearby()
+                            : _buildLocationRequired(),
+                      ],
+
+                      // Products Section
+                      if (_products.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildSectionTitle('Popular in your area'),
+                        const SizedBox(height: 16),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5),
+                            childAspectRatio: 0.65,
+                            mainAxisSpacing: 16,
+                            crossAxisSpacing: 16,
+                          ),
+                          itemCount: _products.length,
+                          itemBuilder: (context, index) {
+                            final product = _products[index];
+                            final shop = _productShops[product.id];
+                            return ProductCard(product: product, shop: shop);
+                          },
+                        ),
+                      ],
+                    ]),
+                  ),
           ),
         ],
       ),
 
       // ── Floating Action Bar (Bottom Nav Replacement) ────────────────
-      bottomNavigationBar: _buildFloatingBottomNav(cartProvider),
+      bottomNavigationBar: MaxWidthContainer(
+        maxWidth: 600,
+        alignment: Alignment.bottomCenter,
+        child: _buildFloatingBottomNav(cartProvider),
+      ),
     );
   }
 
@@ -889,9 +956,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       {
         'tag': '⚡ FAST DELIVERY',
         'title': 'Delivered at the\nspeed of life!',
-        'sub': 'Supporting local sellers · ${config.commissionPercent.toStringAsFixed(0)}% commission',
+        'sub':
+            'Supporting local sellers · ${config.commissionPercent.toStringAsFixed(0)}% commission',
         'icon': Icons.bolt_rounded,
-        'colors': [const Color(0xFF0A1260), const Color(0xFF162AC4), const Color(0xFF2444E8)],
+        'colors': [
+          const Color(0xFF0A1260),
+          const Color(0xFF162AC4),
+          const Color(0xFF2444E8)
+        ],
         'accent': const Color(0xFFF4C542),
       },
       {
@@ -899,7 +971,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         'title': 'Support your\ncommunity!',
         'sub': 'Local shops near you · fresh & authentic',
         'icon': Icons.storefront_rounded,
-        'colors': [const Color(0xFF0F4C1A), const Color(0xFF1A7A30), const Color(0xFF27AE60)],
+        'colors': [
+          const Color(0xFF0F4C1A),
+          const Color(0xFF1A7A30),
+          const Color(0xFF27AE60)
+        ],
         'accent': const Color(0xFF7DEFA1),
       },
       {
@@ -907,7 +983,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         'title': 'Track your\norder live!',
         'sub': 'Real-time GPS route · always in the know',
         'icon': Icons.map_rounded,
-        'colors': [const Color(0xFF4A0080), const Color(0xFF7B1FA2), const Color(0xFFAB47BC)],
+        'colors': [
+          const Color(0xFF4A0080),
+          const Color(0xFF7B1FA2),
+          const Color(0xFFAB47BC)
+        ],
         'accent': const Color(0xFFE1BEE7),
       },
     ];
@@ -943,16 +1023,20 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 child: Stack(
                   children: [
                     Positioned(
-                        right: -30, top: -30,
+                        right: -30,
+                        top: -30,
                         child: Container(
-                            width: 160, height: 160,
+                            width: 160,
+                            height: 160,
                             decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white.withValues(alpha: 0.05)))),
                     Positioned(
-                        right: -10, bottom: -10,
+                        right: -10,
+                        bottom: -10,
                         child: Icon(s['icon'] as IconData,
-                            size: 140, color: Colors.white.withValues(alpha: 0.06))),
+                            size: 140,
+                            color: Colors.white.withValues(alpha: 0.06))),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
                       child: Column(
@@ -960,9 +1044,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 5),
                             decoration: BoxDecoration(
-                                color: accent, borderRadius: BorderRadius.circular(10)),
+                                color: accent,
+                                borderRadius: BorderRadius.circular(10)),
                             child: Text(s['tag'] as String,
                                 style: GoogleFonts.outfit(
                                     fontSize: 10,
@@ -1151,9 +1237,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         }
 
         setState(() => _navIndex = index);
-        
+
         if (!mounted) return;
-        
+
         if (index == 1) {
           await Navigator.pushNamed(context, AppRoutes.cart);
         } else if (index == 2) {
@@ -1161,7 +1247,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         } else if (index == 3) {
           await Navigator.pushNamed(context, AppRoutes.favorites);
         }
-        
+
         if (mounted) {
           setState(() => _navIndex = 0);
         }
@@ -1170,8 +1256,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color:
-              isSelected ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+          color: isSelected
+              ? Colors.white.withValues(alpha: 0.15)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(22),
           border: isSelected
               ? Border.all(color: Colors.white.withValues(alpha: 0.2))
@@ -1214,7 +1301,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 style: GoogleFonts.outfit(
                     color: isSelected ? Colors.white : Colors.white54,
                     fontSize: 10,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
+                    fontWeight:
+                        isSelected ? FontWeight.w700 : FontWeight.w500)),
           ],
         ),
       ),
@@ -1295,19 +1383,22 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                  height: 14, width: 120,
+                                  height: 14,
+                                  width: 120,
                                   decoration: BoxDecoration(
                                       color: base,
                                       borderRadius: BorderRadius.circular(7))),
                               const SizedBox(height: 10),
                               Container(
-                                  height: 12, width: 80,
+                                  height: 12,
+                                  width: 80,
                                   decoration: BoxDecoration(
                                       color: base,
                                       borderRadius: BorderRadius.circular(6))),
                               const SizedBox(height: 10),
                               Container(
-                                  height: 12, width: 60,
+                                  height: 12,
+                                  width: 60,
                                   decoration: BoxDecoration(
                                       color: base,
                                       borderRadius: BorderRadius.circular(6))),

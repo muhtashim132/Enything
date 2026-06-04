@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
+import '../../utils/responsive_layout.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -74,8 +75,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
+      body: MaxWidthContainer(
+        child: CustomScrollView(
+          slivers: [
           SliverAppBar(
             expandedHeight: 320,
             pinned: true,
@@ -358,10 +360,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      bottomNavigationBar: SafeArea(
+        child: MaxWidthContainer(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
@@ -469,6 +474,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   ),
                 ],
               ),
+            ),
+          ),
       ),
     );
   }

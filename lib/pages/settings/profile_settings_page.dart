@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import 'profile_settings_dialogs.dart';
 import '../../config/routes.dart';
+import '../../utils/responsive_layout.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
   const ProfileSettingsPage({super.key});
@@ -33,8 +34,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      body: MaxWidthContainer(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -146,6 +148,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             const SizedBox(height: 40),
           ],
         ),
+      ),
       ),
     );
   }

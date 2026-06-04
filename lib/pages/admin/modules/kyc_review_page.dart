@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/rbac_provider.dart';
+import '../../../providers/notification_provider.dart';
 import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
 
@@ -87,6 +88,16 @@ class _KycReviewPageState extends State<KycReviewPage>
         'kyc_status': 'approved',
         'verification_status': 'verified',
       }).eq('id', sellerId);
+
+      // Push seller: KYC approved
+      if (mounted) {
+        context.read<NotificationProvider>().sendBackgroundPush(
+          targetUserId: sellerId,
+          title: '✅ KYC Approved!',
+          body: 'Congratulations! Your shop KYC has been verified. You can now start accepting orders.',
+        );
+      }
+
       _showSnack('✅ Seller approved!', isError: false);
       _loadSellers();
     } catch (e) {
@@ -107,6 +118,16 @@ class _KycReviewPageState extends State<KycReviewPage>
         'kyc_status': 'rejected',
         'verification_status': 'rejected',
       }).eq('id', sellerId);
+
+      // Push seller: KYC rejected with reason
+      if (mounted) {
+        context.read<NotificationProvider>().sendBackgroundPush(
+          targetUserId: sellerId,
+          title: '❌ KYC Application Rejected',
+          body: 'Reason: $reason. Please re-upload your documents and reapply.',
+        );
+      }
+
       _showSnack('Seller rejected.', isError: true);
       _loadSellers();
     } catch (e) {
@@ -124,6 +145,16 @@ class _KycReviewPageState extends State<KycReviewPage>
         'kyc_status': 'approved',
         'verification_status': 'verified',
       }).eq('id', riderId);
+
+      // Push rider: KYC approved
+      if (mounted) {
+        context.read<NotificationProvider>().sendBackgroundPush(
+          targetUserId: riderId,
+          title: '✅ KYC Approved!',
+          body: 'Congratulations! Your rider KYC has been verified. You can now go online and start earning.',
+        );
+      }
+
       _showSnack('✅ Rider approved!', isError: false);
       _loadRiders();
     } catch (e) {
@@ -143,6 +174,16 @@ class _KycReviewPageState extends State<KycReviewPage>
         'kyc_status': 'rejected',
         'verification_status': 'rejected',
       }).eq('id', riderId);
+
+      // Push rider: KYC rejected with reason
+      if (mounted) {
+        context.read<NotificationProvider>().sendBackgroundPush(
+          targetUserId: riderId,
+          title: '❌ KYC Application Rejected',
+          body: 'Reason: $reason. Please re-upload your documents and reapply.',
+        );
+      }
+
       _showSnack('Rider rejected.', isError: true);
       _loadRiders();
     } catch (e) {

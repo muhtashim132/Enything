@@ -15,11 +15,13 @@ import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../pages/customer/customer_order_map_page.dart';
 import '../../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
+import '../../providers/notification_provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/notification_service.dart';
+import '../../utils/responsive_layout.dart';
 
 class TrackOrderPage extends StatefulWidget {
   final String orderId;
@@ -403,6 +405,41 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           .from('orders')
           .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
           .eq('id', widget.orderId);
+
+      // Notify seller and rider that the customer cancelled
+      if (mounted && _order != null) {
+        final notifProv = context.read<NotificationProvider>();
+
+        // Notify seller
+        if (_order!.shopId != null) {
+          _supabase
+              .from('shops')
+              .select('seller_id')
+              .eq('id', _order!.shopId!)
+              .maybeSingle()
+              .then((shopData) {
+            if (shopData != null && shopData['seller_id'] != null) {
+              notifProv.sendBackgroundPush(
+                targetUserId: shopData['seller_id'] as String,
+                title: '❌ Order Cancelled by Customer',
+                body: 'The customer cancelled their order. No further action needed.',
+                data: {'order_id': widget.orderId},
+              );
+            }
+          });
+        }
+
+        // Notify assigned rider (if any)
+        if (_order!.deliveryPartnerId != null) {
+          notifProv.sendBackgroundPush(
+            targetUserId: _order!.deliveryPartnerId!,
+            title: '❌ Order Cancelled by Customer',
+            body: 'The customer cancelled their order. You are free for new deliveries.',
+            data: {'order_id': widget.orderId},
+          );
+        }
+      }
+
       if (mounted) {
         setState(() => _order = _order?.copyWith(status: 'cancelled'));
         ScaffoldMessenger.of(context).showSnackBar(
@@ -883,8 +920,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             ),
           ),
         ),
-        body: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safeBottom),
+        body: MaxWidthContainer(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safeBottom),
           child: Column(
             children: [
               // Map Section — tappable route preview
@@ -1422,6 +1460,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               const SizedBox(height: 16),
             ],
           ),
+        ),
         ),
       ),
     );

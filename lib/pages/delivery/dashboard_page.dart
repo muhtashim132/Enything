@@ -178,9 +178,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       final available = await _supabase
           .from('orders')
           .select('*, order_items(*), shops!shop_id(id, name, location)')
-          .eq('seller_accepted', true)
-          .isFilter('delivery_partner_id', null)
-          // Show orders where seller accepted but rider hasn't yet
+          .isFilter('delivery_partner_id', null)   // no rider assigned yet
           .inFilter('status', ['awaiting_acceptance', 'pending']);
 
       final myOrders = await _supabase
@@ -190,8 +188,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .neq('status', 'delivered')
           .neq('status', 'cancelled')
           .neq('status', 'seller_rejected')
-          .neq('status', 'partner_rejected')
-          .neq('status', 'awaiting_acceptance'); // rider accepted but status not yet escalated
+          .neq('status', 'partner_rejected');
+          // awaiting_acceptance is INCLUDED: rider accepted first, waiting for seller
 
       // Populate _shopInfoCache from the joined shop data
       _shopInfoCache.clear();
@@ -349,7 +347,34 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             });
           }
         } else {
+          // Rider accepted FIRST — seller has not yet accepted
           _showSnack('✅ Accepted! Waiting for the shop to also accept.');
+
+          // Push seller: a rider is already waiting — accept quickly!
+          if (order.shopId != null) {
+            _supabase
+                .from('shops')
+                .select('seller_id')
+                .eq('id', order.shopId!)
+                .maybeSingle()
+                .then((shopData) {
+              if (shopData != null && shopData['seller_id'] != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: shopData['seller_id'] as String,
+                  title: '🛵 A Rider is Ready!',
+                  body: 'A rider already accepted this order ₹${order.grandTotal.toStringAsFixed(0)}. Accept now to confirm!',
+                  data: {'order_id': order.id},
+                );
+              }
+            });
+          }
+
+          // Push customer: rider is on standby, waiting for shop
+          notifProv.sendBackgroundPush(
+            targetUserId: order.customerId,
+            title: '🛵 Rider is Ready!',
+            body: 'A rider accepted your order and is on standby. Waiting for the shop to also confirm.',
+          );
         }
       }
       _loadOrders();
@@ -393,6 +418,40 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           'wait_time_penalty': penalty,
           'wait_time_disputed': status == 'reassign_disputed',
         }).eq('id', order.id);
+
+        // Notify customer and seller that the rider dropped the order
+        if (mounted) {
+          final notifProv = context.read<NotificationProvider>();
+
+          // Push customer
+          notifProv.sendBackgroundPush(
+            targetUserId: order.customerId,
+            title: '🛵 Rider Dropped Your Order',
+            body: 'Your previous rider is unavailable. We are looking for a new rider now.',
+            data: {'order_id': order.id},
+          );
+
+          // Push seller
+          if (order.shopId != null) {
+            _supabase
+                .from('shops')
+                .select('seller_id')
+                .eq('id', order.shopId!)
+                .maybeSingle()
+                .then((shopData) {
+              if (shopData != null && shopData['seller_id'] != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: shopData['seller_id'] as String,
+                  title: '🛵 Rider Dropped the Order',
+                  body: status == 'reassign_disputed'
+                      ? 'Rider reported a dispute and dropped the order. Looking for a new rider.'
+                      : 'The rider dropped the order. Looking for a new rider.',
+                  data: {'order_id': order.id},
+                );
+              }
+            });
+          }
+        }
       } else if (status == 'delivered') {
         await _supabase.from('orders').update({
           'status': status,

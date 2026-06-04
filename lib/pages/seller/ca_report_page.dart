@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/responsive_layout.dart';
 
 // ============================================================================
 // CA Report Page — Monthly GST & Payout Report for Chartered Accountant
@@ -228,7 +229,8 @@ Gateway Fees                    : ₹${_f(_gatewayFees)}
           ),
         ],
       ),
-      body: _isLoading
+      body: MaxWidthContainer(
+        child: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF4C6EF5)))
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
@@ -384,6 +386,7 @@ Gateway Fees       : ₹${_f(_gatewayFees)}''',
                 ),
               ],
             ),
+        ),
     );
   }
 
