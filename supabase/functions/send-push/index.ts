@@ -145,8 +145,14 @@ serve(async (req) => {
             notification: { title, body },
             ...(data ? { data } : {}),
             android: {
+              priority: 'high',
               notification: {
+                channel_id: 'zappy_push_channel',
                 sound: 'default',
+                default_sound: true,
+                default_vibrate_timings: true,
+                notification_priority: 'PRIORITY_MAX',
+                visibility: 'PUBLIC',
                 click_action: 'FLUTTER_NOTIFICATION_CLICK',
               },
             },
