@@ -37,13 +37,13 @@ async function getFcmAccessToken(sa: Record<string, string>): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const enc = new TextEncoder();
 
-  const header  = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
   const payload = b64url(enc.encode(JSON.stringify({
-    iss:   sa.client_email,
+    iss: sa.client_email,
     scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud:   'https://oauth2.googleapis.com/token',
-    iat:   now,
-    exp:   now + 3600,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
   })));
 
   const signingInput = `${header}.${payload}`;
@@ -59,12 +59,12 @@ async function getFcmAccessToken(sa: Record<string, string>): Promise<string> {
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(signingInput));
   const jwt = `${signingInput}.${b64url(new Uint8Array(sig))}`;
 
-  const res  = await fetch('https://oauth2.googleapis.com/token', {
-    method:  'POST',
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    new URLSearchParams({
+    body: new URLSearchParams({
       grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion:  jwt,
+      assertion: jwt,
     }),
   });
 
@@ -82,10 +82,10 @@ serve(async (req) => {
 
   try {
     const rawBody = await req.json();
-    
+
     // Support BOTH direct HTTP calls and Supabase Database Webhooks
     let user_id, title, body, data;
-    
+
     if (rawBody.type === 'INSERT' && rawBody.record) {
       // It's a Supabase Webhook payload from the `notifications` table!
       user_id = rawBody.record.user_id;
@@ -111,7 +111,7 @@ serve(async (req) => {
 
     // Admin Supabase client to read device tokens
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')             ?? '',
+      Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
@@ -122,7 +122,6 @@ serve(async (req) => {
 
     if (dbErr) throw dbErr;
     if (!rows || rows.length === 0) {
-      console.log(`No device tokens found for user_id: ${user_id}`);
       return new Response(
         JSON.stringify({ message: 'No device tokens for user', sent: 0 }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -130,10 +129,10 @@ serve(async (req) => {
     }
 
     // Parse service account & get OAuth2 token
-    const sa         = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
-    const projectId  = sa.project_id ?? Deno.env.get('FIREBASE_PROJECT_ID') ?? '';
+    const sa = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
+    const projectId = sa.project_id ?? Deno.env.get('FIREBASE_PROJECT_ID') ?? '';
     const accessToken = await getFcmAccessToken(sa);
-    const fcmUrl      = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+    const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
 
     let sent = 0;
     const errors: string[] = [];
@@ -147,7 +146,7 @@ serve(async (req) => {
             ...(data ? { data } : {}),
             android: {
               notification: {
-                sound:        'default',
+                sound: 'default',
                 click_action: 'FLUTTER_NOTIFICATION_CLICK',
               },
             },
@@ -155,9 +154,9 @@ serve(async (req) => {
         };
 
         const fcmRes = await fetch(fcmUrl, {
-          method:  'POST',
+          method: 'POST',
           headers: {
-            Authorization:  `Bearer ${accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(message),
@@ -178,14 +177,12 @@ serve(async (req) => {
       }
     }
 
-    console.log(`FCM Push Results: Sent ${sent}/${rows.length} tokens. Errors:`, errors);
     return new Response(
       JSON.stringify({ sent, total: rows.length, errors }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
 
   } catch (error) {
-    console.log(`Edge function crashed:`, error);
     return new Response(
       JSON.stringify({ error: String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 
 import 'theme/app_theme.dart';
@@ -74,17 +75,35 @@ void main() async {
 @pragma('vm:entry-point')
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  await NotificationService().init();
-  
-  if (message.data.containsKey('type') && message.data['type'] == 'order_status_update') {
-    final status = message.data['status'];
-    if (status != null) {
-      NotificationService().updateOrderNotificationFromStatus(status);
-    }
+
+  // Show a local notification banner so the user's phone actually buzzes
+  final title = message.notification?.title ?? message.data['title'] ?? 'Zappy';
+  final body = message.notification?.body ?? message.data['body'] ?? '';
+
+  if (title.isNotEmpty && body.isNotEmpty) {
+    final plugin = FlutterLocalNotificationsPlugin();
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await plugin.initialize(const InitializationSettings(android: androidSettings));
+
+    const androidDetails = AndroidNotificationDetails(
+      'zappy_push_channel',
+      'Zappy Notifications',
+      channelDescription: 'Push notifications for orders and updates',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+    );
+    await plugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      const NotificationDetails(android: androidDetails),
+    );
   }
 
-  // No UI work here — just log or store the notification if needed
-  debugPrint('FCM background: ${message.notification?.title}');
+  debugPrint('FCM background: $title — $body');
 }
 
 class EnythingApp extends StatelessWidget {
