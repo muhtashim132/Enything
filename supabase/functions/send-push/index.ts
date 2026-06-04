@@ -81,12 +81,24 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { user_id, title, body, data } = await req.json() as {
-      user_id: string;
-      title:   string;
-      body:    string;
-      data?:   Record<string, string>;
-    };
+    const rawBody = await req.json();
+    
+    // Support BOTH direct HTTP calls and Supabase Database Webhooks
+    let user_id, title, body, data;
+    
+    if (rawBody.type === 'INSERT' && rawBody.record) {
+      // It's a Supabase Webhook payload from the `notifications` table!
+      user_id = rawBody.record.user_id;
+      title = rawBody.record.title;
+      body = rawBody.record.body;
+      data = { order_id: rawBody.record.order_id };
+    } else {
+      // It's a direct API call (from Dart)
+      user_id = rawBody.user_id;
+      title = rawBody.title;
+      body = rawBody.body;
+      data = rawBody.data;
+    }
 
     if (!user_id || !title || !body) {
       return new Response(
