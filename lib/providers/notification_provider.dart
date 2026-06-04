@@ -55,14 +55,17 @@ class NotificationProvider extends ChangeNotifier {
       final messaging = FirebaseMessaging.instance;
 
       // Request permission (required for iOS; no-op on Android)
-      await messaging.requestPermission(
+      final settings = await messaging.requestPermission(
         alert: true, badge: true, sound: true,
       );
+      debugPrint('FCM permission: ${settings.authorizationStatus}');
 
       final token = await messaging.getToken();
+      debugPrint('FCM token obtained: ${token == null ? "NULL - FAILED" : token.substring(0, 20) + "..."}');
       if (token == null) return;
 
-      await _supabase.from('device_tokens').upsert({
+      // Try upsert first, then plain insert as fallback
+      final response = await _supabase.from('device_tokens').upsert({
         'user_id': userId,
         'token': token,
         'platform': 'android',
@@ -70,7 +73,28 @@ class NotificationProvider extends ChangeNotifier {
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id,token');
 
-      debugPrint('FCM token registered: ${token.substring(0, 20)}...');
+      debugPrint('FCM token upsert done. Response: $response');
+
+      // Verify it was actually saved
+      final check = await _supabase
+          .from('device_tokens')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('token', token)
+          .maybeSingle();
+      if (check == null) {
+        // Upsert silently failed — try plain insert
+        debugPrint('FCM token NOT found after upsert - trying plain INSERT...');
+        final insertRes = await _supabase.from('device_tokens').insert({
+          'user_id': userId,
+          'token': token,
+          'platform': 'android',
+          'role': role,
+        });
+        debugPrint('FCM plain INSERT result: $insertRes');
+      } else {
+        debugPrint('FCM token confirmed saved in DB: ${check['id']}');
+      }
 
       // Listen for token refresh and re-register
       _fcmTokenSub?.cancel();
