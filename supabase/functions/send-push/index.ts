@@ -91,7 +91,9 @@ serve(async (req) => {
       user_id = rawBody.record.user_id;
       title = rawBody.record.title;
       body = rawBody.record.body;
-      data = { order_id: rawBody.record.order_id };
+      if (rawBody.record.order_id) {
+        data = { order_id: String(rawBody.record.order_id) };
+      }
     } else {
       // It's a direct API call (from Dart)
       user_id = rawBody.user_id;
