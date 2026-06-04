@@ -72,38 +72,58 @@ void main() async {
 }
 
 /// Background FCM handler — MUST be a top-level function (not a closure).
+/// Called by FCM when a DATA-ONLY message arrives and the app is killed/backgrounded.
 @pragma('vm:entry-point')
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 
-  // Show a local notification banner so the user's phone actually buzzes
-  final title = message.notification?.title ?? message.data['title'] ?? 'Zappy';
-  final body = message.notification?.body ?? message.data['body'] ?? '';
+  // For data-only messages, title/body come from message.data
+  final title = message.data['title'] as String? ??
+      message.notification?.title ??
+      'Zappy';
+  final body = message.data['body'] as String? ??
+      message.notification?.body ??
+      '';
 
-  if (title.isNotEmpty && body.isNotEmpty) {
-    final plugin = FlutterLocalNotificationsPlugin();
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await plugin.initialize(const InitializationSettings(android: androidSettings));
+  if (title.isEmpty || body.isEmpty) return;
 
-    const androidDetails = AndroidNotificationDetails(
+  final plugin = FlutterLocalNotificationsPlugin();
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  await plugin.initialize(const InitializationSettings(android: androidSettings));
+
+  // Create the channel here too — background isolate may not have it yet
+  final androidPlugin = plugin.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
+  await androidPlugin?.createNotificationChannel(
+    const AndroidNotificationChannel(
       'zappy_push_channel',
       'Zappy Notifications',
-      channelDescription: 'Push notifications for orders and updates',
+      description: 'Push notifications for orders and updates',
       importance: Importance.max,
-      priority: Priority.high,
       playSound: true,
       enableVibration: true,
-      icon: '@mipmap/ic_launcher',
-    );
-    await plugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      const NotificationDetails(android: androidDetails),
-    );
-  }
+      showBadge: true,
+    ),
+  );
 
-  debugPrint('FCM background: $title — $body');
+  await plugin.show(
+    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'zappy_push_channel',
+        'Zappy Notifications',
+        channelDescription: 'Push notifications for orders and updates',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        icon: '@mipmap/ic_launcher',
+      ),
+    ),
+  );
+  debugPrint('FCM background shown: $title');
 }
 
 class EnythingApp extends StatelessWidget {

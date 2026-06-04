@@ -142,19 +142,17 @@ serve(async (req) => {
         const message = {
           message: {
             token,
-            notification: { title, body },
-            ...(data ? { data } : {}),
+            // DATA-ONLY message: no 'notification' key.
+            // This forces Android to always wake up _fcmBackgroundHandler
+            // in Flutter, which then shows the notification via
+            // flutter_local_notifications with full sound + vibration control.
+            data: {
+              title,
+              body,
+              ...(data ?? {}),
+            },
             android: {
               priority: 'high',
-              notification: {
-                channel_id: 'zappy_push_channel',
-                sound: 'default',
-                default_sound: true,
-                default_vibrate_timings: true,
-                notification_priority: 'PRIORITY_MAX',
-                visibility: 'PUBLIC',
-                click_action: 'FLUTTER_NOTIFICATION_CLICK',
-              },
             },
           },
         };
