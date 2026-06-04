@@ -142,9 +142,7 @@ serve(async (req) => {
         const message = {
           message: {
             token,
-            // Notification key: shown automatically by FCM SDK even when app is killed
-            notification: { title, body },
-            // Data key: available in background/foreground handlers
+            // DATA-ONLY message: forces Android to wake up _fcmBackgroundHandler
             data: {
               title,
               body,
@@ -152,13 +150,6 @@ serve(async (req) => {
             },
             android: {
               priority: 'high',
-              notification: {
-                channel_id: 'zappy_push_channel',
-                default_sound: true,
-                default_vibrate_timings: true,
-                notification_priority: 'PRIORITY_MAX',
-                visibility: 'PUBLIC',
-              },
             },
           },
         };
