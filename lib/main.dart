@@ -88,7 +88,7 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   if (title.isEmpty || body.isEmpty) return;
 
   final plugin = FlutterLocalNotificationsPlugin();
-  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidSettings = AndroidInitializationSettings('ic_launcher');
   await plugin.initialize(const InitializationSettings(android: androidSettings));
 
   // Create the channel here too — background isolate may not have it yet
@@ -119,7 +119,7 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
         priority: Priority.high,
         playSound: true,
         enableVibration: true,
-        icon: '@mipmap/ic_launcher',
+        icon: 'ic_launcher',
       ),
     ),
   );
