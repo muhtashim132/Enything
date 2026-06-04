@@ -155,7 +155,7 @@ serve(async (req) => {
             android: {
               priority: 'high',
               notification: {
-                channel_id: 'zappy_push_channel',
+                channel_id: 'enything_push_channel',
                 icon: 'ic_notification',
                 default_sound: true,
                 default_vibrate_timings: true,

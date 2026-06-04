@@ -96,8 +96,8 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       AndroidFlutterLocalNotificationsPlugin>();
   await androidPlugin?.createNotificationChannel(
     const AndroidNotificationChannel(
-      'zappy_push_channel',
-      'Zappy Notifications',
+      'enything_push_channel',
+      'Enything Notifications',
       description: 'Push notifications for orders and updates',
       importance: Importance.max,
       playSound: true,
@@ -112,8 +112,8 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     body,
     const NotificationDetails(
       android: AndroidNotificationDetails(
-        'zappy_push_channel',
-        'Zappy Notifications',
+        'enything_push_channel',
+        'Enything Notifications',
         channelDescription: 'Push notifications for orders and updates',
         importance: Importance.max,
         priority: Priority.high,

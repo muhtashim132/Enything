@@ -47,7 +47,7 @@
         <!-- Default FCM notification channel — required for Android 8+ to buzz/sound -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="zappy_push_channel"/>
+            android:value="enything_push_channel"/>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_color"/>
