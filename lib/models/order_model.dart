@@ -288,6 +288,7 @@ class OrderModel {
     DateTime? riderLocationUpdatedAt,
     double? shopLat,
     double? shopLng,
+    String? cancelledReason,
   }) {
     return OrderModel(
       id: id,
@@ -308,7 +309,7 @@ class OrderModel {
       shopPhone: shopPhone ?? this.shopPhone,
       riderPhone: riderPhone ?? this.riderPhone,
       paymentMethod: paymentMethod,
-      cancelledReason: cancelledReason,
+      cancelledReason: cancelledReason ?? this.cancelledReason,
       rejectionMessage: rejectionMessage,
       cartGroupId: cartGroupId,
       acceptanceDeadline: acceptanceDeadline,
