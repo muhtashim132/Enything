@@ -41,6 +41,7 @@ dependencies:
   supabase_client: ^0.0.33
   flutter_local_notifications: ^17.1.2
   crypto: ^3.0.7
+  dotenv: ^4.2.0
 
 dev_dependencies:
   flutter_test:

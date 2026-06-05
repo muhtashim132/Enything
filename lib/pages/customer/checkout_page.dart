@@ -142,7 +142,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final cartGroupId = const Uuid().v4();
       final numShops = cart.shops.length;
 
-      // Acceptance deadline: 2 minutes from now (both seller & rider notified in parallel)
+      // Acceptance deadline: 2 minutes from now (enforces 2-minute cancellation rule)
       final acceptanceDeadline =
           DateTime.now().toUtc().add(const Duration(minutes: 2));
 
@@ -294,8 +294,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       // Broadcast to ALL online riders immediately — same moment sellers are notified.
-      // Riders can only see/accept once a seller confirms (seller_accepted = true),
-      // but this early alert lets them move towards the area in anticipation.
+      // Riders can see/accept at the same time as the seller within the 2-min window.
       if (mounted && orderIds.isNotEmpty) {
         final totalGrand = cart.shops.fold(0.0, (sum, shop) {
           final shopItems = cart.items.where((i) => i.shop.id == shop.id).toList();
@@ -306,7 +305,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           audience: 'Riders',
           title: '🛵 New Order${orderIds.length > 1 ? 's' : ''} Nearby!',
           body: orderIds.length > 1
-              ? '${orderIds.length} new orders placed in your area. Stand by — shops are accepting now!'
+              ? '${orderIds.length} new orders placed in your area. Shop is accepting now!'
               : 'A new order ₹${totalGrand.toStringAsFixed(0)} was placed near you. Shop is accepting now!',
           data: {'action': 'new_order'},
         );

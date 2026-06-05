@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
 
 class SellerKycUploadPage extends StatefulWidget {
@@ -145,6 +147,16 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
       }).eq('seller_id', userId);
 
       if (mounted) {
+        final notifProvider = context.read<NotificationProvider>();
+        final adminRows = await _db.from('admin_users').select('id').eq('is_active', true);
+        for (final admin in (adminRows as List)) {
+          notifProvider.sendBackgroundPush(
+            targetUserId: admin['id'] as String,
+            title: '🏪 New Shop KYC!',
+            body: 'A seller has submitted their KYC documents for review.',
+          );
+        }
+
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.sellerPendingVerification, (_) => false);
       }

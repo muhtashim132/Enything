@@ -277,41 +277,24 @@ class NotificationProvider extends ChangeNotifier {
 
     _channel = _supabase
         .channel('notif-delivery-$partnerId')
-        // New orders becoming available (seller accepted, no partner yet)
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'delivery_partner_id',
+            value: partnerId,
+          ),
           callback: (payload) {
             if (payload.newRecord.isEmpty) return;
             final newRecord = payload.newRecord;
             final oldRecord = payload.oldRecord;
 
-            final sellerAcceptedNow = newRecord['seller_accepted'] == true;
-            final sellerAcceptedBefore = oldRecord['seller_accepted'] == true;
-            final partnerIdNow = newRecord['delivery_partner_id'];
             final orderId = newRecord['id'] as String?;
             final newStatus = newRecord['status'] as String?;
             final oldStatus = oldRecord['status'] as String?;
 
-            // A new order just became available for delivery partners
-            if (sellerAcceptedNow &&
-                !sellerAcceptedBefore &&
-                partnerIdNow == null) {
-              final amount = (newRecord['total_amount'] ?? 0.0).toDouble();
-              _add(AppNotification(
-                id: '${orderId}_available',
-                title: '🚚 New Delivery Available!',
-                body:
-                    'An order of ₹${amount.toStringAsFixed(0)} is waiting for a rider. Tap to accept!',
-                orderId: orderId,
-              ));
-              return;
-            }
-
-            // Status changes for orders assigned to this partner
-            final deliveryPartnerId = newRecord['delivery_partner_id'];
-            if (deliveryPartnerId != partnerId) return;
             if (newStatus == null || newStatus == oldStatus) return;
 
             final (title, body) = _deliveryStatusMessage(newStatus, orderId);

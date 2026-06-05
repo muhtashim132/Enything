@@ -117,9 +117,15 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           await _supabase.from('products').select('id').eq('shop_id', shopId);
 
       final pending =
-          (ordersResp as List).where((o) => o['status'] == 'pending').length;
-      final revenue =
-          ordersResp.fold<double>(0, (s, o) => s + (o['total_amount'] ?? 0.0));
+          (ordersResp as List).where((o) =>
+              o['status'] == 'pending' ||
+              o['status'] == 'awaiting_acceptance').length;
+      final revenue = ordersResp.fold<double>(
+        0,
+        (s, o) => o['status'] == 'delivered'
+            ? s + (o['total_amount'] ?? 0.0)
+            : s,
+      );
 
       if (mounted) {
         setState(() {

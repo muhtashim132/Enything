@@ -52,6 +52,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       if (userId != null) {
         context.read<RbacProvider>().loadCurrentAdmin(userId);
         context.read<NotificationProvider>().listenAsAdmin(userId);
+        context.read<NotificationProvider>().registerFcmToken(userId, 'admin');
       }
       _loadBadges();
     });

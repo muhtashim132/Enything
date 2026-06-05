@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -30,17 +32,82 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   // BUG-15 FIX: preserve expanded state
   final Set<String> _expandedOrderIds = {};
 
+  // Realtime channel for live order updates
+  RealtimeChannel? _realtimeChannel;
+  // FCM foreground message subscription
+  StreamSubscription? _fcmSub;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadOrders();
+    _setupRealtimeAndFcm();
   }
 
   @override
   void dispose() {
+    _realtimeChannel?.unsubscribe();
+    _fcmSub?.cancel();
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Sets up both:
+  /// 1. Supabase Realtime — auto-reload when any order for this seller changes
+  /// 2. FCM foreground listener — reload when a push arrives while app is open
+  void _setupRealtimeAndFcm() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      final userId = auth.currentUserId;
+      if (userId == null) return;
+
+      // Get the seller's shop IDs for filtering realtime events
+      try {
+        final shopsResp = await _supabase
+            .from('shops')
+            .select('id')
+            .eq('seller_id', userId);
+        final shops = shopsResp as List;
+        if (shops.isEmpty) return;
+        final shopId = shops.first['id'] as String;
+
+        // Subscribe to INSERT and UPDATE on orders for this shop
+        _realtimeChannel = _supabase
+            .channel('seller-orders-$shopId')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.insert,
+              schema: 'public',
+              table: 'orders',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'shop_id',
+                value: shopId,
+              ),
+              callback: (_) => _loadOrders(),
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.update,
+              schema: 'public',
+              table: 'orders',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'shop_id',
+                value: shopId,
+              ),
+              callback: (_) => _loadOrders(),
+            )
+            .subscribe();
+      } catch (e) {
+        debugPrint('Seller orders realtime setup error: $e');
+      }
+
+      // Also reload when any FCM push arrives in foreground
+      _fcmSub = FirebaseMessaging.onMessage.listen((_) {
+        if (mounted) _loadOrders();
+      });
+    });
   }
 
   Future<void> _loadOrders() async {
@@ -48,20 +115,25 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
 
-      final shopsResp = await _supabase
+      final shopsRaw = await _supabase
           .from('shops')
           .select('id, name')
           .eq('seller_id', auth.currentUserId ?? '');
 
-      if ((shopsResp as List).isEmpty) {
+      // FIX: Assign to typed list once — avoid multiple 'as List' casts
+      final shopsList = shopsRaw as List;
+      if (shopsList.isEmpty) {
+        try {
+          await _supabase.from('app_logs').insert({'message': 'Seller order load: shopsList is empty for user ${auth.currentUserId}'});
+        } catch (_) {}
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
       // Collect ALL shop IDs and names for this seller
-      final shopIds = (shopsResp as List).map((s) => s['id'] as String).toList();
+      final shopIds = shopsList.map((s) => s['id'] as String).toList();
       final Map<String, String> shopNames = {
-        for (final s in shopsResp as List)
+        for (final s in shopsList)
           s['id'] as String: s['name'] as String? ?? 'My Shop'
       };
 
@@ -85,7 +157,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, stacktrace) {
+      debugPrint('Seller _loadOrders error: $e');
+      try {
+        await _supabase.from('app_logs').insert({'message': 'Seller order load error: $e\n$stacktrace'});
+      } catch (_) {}
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -154,6 +230,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       _loadOrders();
     } catch (e) {
       debugPrint('Seller accept error: $e');
+      _showSnack('Failed to accept: $e', isError: true);
     }
   }
 
@@ -271,6 +348,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       _showSnack('Order declined.', isError: true);
     } catch (e) {
       debugPrint('Reject error: $e');
+      _showSnack('Failed to reject: $e', isError: true);
     }
   }
 

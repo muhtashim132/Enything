@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../config/routes.dart';
 import '../../providers/auth_provider.dart';
 
+import '../../providers/notification_provider.dart';
+
 class DeliveryPendingVerificationPage extends StatefulWidget {
   const DeliveryPendingVerificationPage({super.key});
 
@@ -20,6 +22,15 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
     super.initState();
     _animCtrl = AnimationController(duration: const Duration(seconds: 2), vsync: this)..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 1.0, end: 1.08).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut));
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      final userId = auth.currentUserId;
+      if (userId != null) {
+        context.read<NotificationProvider>().registerFcmToken(userId, 'delivery');
+      }
+    });
   }
 
   @override

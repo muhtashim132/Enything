@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
 
 class DeliveryKycUploadPage extends StatefulWidget {
@@ -97,7 +100,7 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
     setState(() => _loading = true);
 
     try {
-      final userId = _db.auth.currentUser?.id;
+      final userId = context.read<AuthProvider>().currentUserId;
       if (userId == null) throw Exception('User not logged in');
 
       // Upload Images
@@ -134,6 +137,16 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
       }).eq('id', userId);
 
       if (mounted) {
+        final notifProvider = context.read<NotificationProvider>();
+        final adminRows = await _db.from('admin_users').select('id').eq('is_active', true);
+        for (final admin in (adminRows as List)) {
+          notifProvider.sendBackgroundPush(
+            targetUserId: admin['id'] as String,
+            title: '🛵 New Rider KYC!',
+            body: 'A delivery partner has submitted their KYC documents for review.',
+          );
+        }
+        
         Navigator.pushNamedAndRemoveUntil(context, AppRoutes.deliveryPendingVerification, (_) => false);
       }
     } catch (e) {
@@ -440,7 +453,7 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
                       child: const Icon(Icons.add_a_photo_rounded, color: Colors.white54, size: 24),
                     ),
                     const SizedBox(height: 10),
-                    Text(label + '\n(Clear & readable)', textAlign: TextAlign.center, style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500)),
+                    Text('$label\n(Clear & readable)', textAlign: TextAlign.center, style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),

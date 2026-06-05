@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -65,10 +66,51 @@ void main() async {
   // Initialize Notification Service
   await NotificationService().init();
 
+  // Deep linking: Handle notification tap when app is in background
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    _handleNotificationClick(message.data);
+  });
+
+  // Deep linking: Handle notification tap when app is terminated
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleNotificationClick(initialMessage.data);
+    });
+  }
+
   runApp(EnythingApp(
     cartProvider: cartProvider,
     configProvider: configProvider,
   ));
+}
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+void _handleNotificationClick(Map<String, dynamic> data) {
+  final role = data['role'] as String?;
+  final action = data['action'] as String?;
+
+  if (role == 'seller') {
+    // Go directly to the Seller Orders page (Pending tab is tab 0 by default)
+    // pushNamedAndRemoveUntil keeps the seller dashboard as the base so back works
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        AppRoutes.sellerDashboard, (route) => false);
+    // Then push the orders page on top so the seller sees the Pending list immediately
+    Future.microtask(() {
+      navigatorKey.currentState?.pushNamed(AppRoutes.sellerOrders);
+    });
+  } else if (role == 'rider' || action == 'new_order') {
+    // Go to Delivery Dashboard — Available Orders section shows new orders
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        AppRoutes.deliveryDashboard, (route) => false);
+  } else if (data['order_id'] != null) {
+    // Customer tap → go directly to their order tracking page
+    navigatorKey.currentState?.pushNamed(
+      AppRoutes.trackOrder,
+      arguments: {'orderId': data['order_id']},
+    );
+  }
 }
 
 /// Background FCM handler — MUST be a top-level function (not a closure).
@@ -76,6 +118,13 @@ void main() async {
 @pragma('vm:entry-point')
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+
+  // If the message contains a notification payload, Google Play Services will automatically
+  // display a system notification. We should NOT create a duplicate local notification.
+  if (message.notification != null) {
+    debugPrint('FCM background: OS handling notification');
+    return;
+  }
 
   // For data-only messages, title/body come from message.data
   final title = message.data['title'] as String? ??
@@ -122,6 +171,7 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
         icon: 'ic_notification',
       ),
     ),
+    payload: jsonEncode(message.data),
   );
   debugPrint('FCM background shown: $title');
 }
@@ -154,6 +204,7 @@ class EnythingApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
           return MaterialApp(
+            navigatorKey: navigatorKey,
             title: 'Enything',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,

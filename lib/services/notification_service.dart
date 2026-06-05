@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../main.dart';
+import '../config/routes.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -21,7 +24,28 @@ class NotificationService {
     await _flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification tap if needed
+        if (response.payload != null && response.payload!.isNotEmpty) {
+          try {
+            final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+            final role = data['role'] as String?;
+            final action = data['action'] as String?;
+            
+            if (role == 'seller') {
+              navigatorKey.currentState?.pushNamedAndRemoveUntil(
+                  AppRoutes.sellerDashboard, (route) => false);
+            } else if (role == 'rider' || action == 'new_order') {
+              navigatorKey.currentState?.pushNamedAndRemoveUntil(
+                  AppRoutes.deliveryDashboard, (route) => false);
+            } else if (data['order_id'] != null) {
+              navigatorKey.currentState?.pushNamed(
+                AppRoutes.trackOrder,
+                arguments: {'orderId': data['order_id']},
+              );
+            }
+          } catch (e) {
+            debugPrint('Error parsing notification payload: $e');
+          }
+        }
       },
     );
 

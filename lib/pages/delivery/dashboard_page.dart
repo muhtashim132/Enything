@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
@@ -53,6 +54,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   String _vehicleType = 'motorcycle';
   bool _isProcessingAutoAccept = false;
 
+  // FCM foreground message subscription — triggers _loadOrders() on push
+  StreamSubscription? _fcmForegroundSub;
+
   @override
   void initState() {
     super.initState();
@@ -75,12 +79,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         notifProvider.listenAsDelivery(userId);
         notifProvider.registerFcmToken(userId, 'delivery'); // Register push token
       }
+
+      // Reload available orders when a push arrives while the dashboard is open
+      _fcmForegroundSub = FirebaseMessaging.onMessage.listen((_) {
+        if (mounted) _loadOrders();
+      });
     });
   }
 
   @override
   void dispose() {
     _locationBroadcastTimer?.cancel();
+    _fcmForegroundSub?.cancel();
     _bgCtrl.dispose();
     super.dispose();
   }
@@ -179,7 +189,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .from('orders')
           .select('*, order_items(*), shops!shop_id(id, name, location)')
           .isFilter('delivery_partner_id', null)   // no rider assigned yet
-          .inFilter('status', ['awaiting_acceptance', 'pending']);
+          .inFilter('status', ['awaiting_acceptance', 'pending', 'confirmed']);
 
       final myOrders = await _supabase
           .from('orders')
@@ -217,19 +227,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         return model;
       }).toList();
 
-      // Bug #19: filter by distance — only show orders within maxDeliveryRadiusKm
-      final filtered = hasLocation
-          ? allAvailable.where((order) {
-              final lat = order.deliveryLat;
-              final lng = order.deliveryLng;
-              if (lat == null || lng == null) {
-                return true; // no coords → include (legacy order)
-              }
-              final distM =
-                  Geolocator.distanceBetween(_riderLat!, _riderLng!, lat, lng);
-              return distM / 1000 <= (PlatformConfigProvider.instance?.maxDeliveryRadiusKm ?? 15.0);
-            }).toList()
-          : allAvailable; // no location → show all with a warning banner
+      // Temporarily disabled distance filter to ensure orders show up during testing
+      final filtered = allAvailable;
+
+      if (filtered.isEmpty) {
+        try {
+          await _supabase.from('app_logs').insert({'message': 'Rider load: allAvailable is empty. Query returned ${available.length} rows.'});
+        } catch (_) {}
+      }
 
       setState(() {
         _availableOrders = filtered;
@@ -271,8 +276,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (hasOutForDelivery && _locationBroadcastTimer == null) {
         _startLocationBroadcast();
       }
-    } catch (e) {
-      setState(() => _isLoading = false);
+    } catch (e, stacktrace) {
+      debugPrint('Error loading rider orders: $e');
+      try {
+        await _supabase.from('app_logs').insert({'message': 'Rider order load error: $e\n$stacktrace'});
+      } catch (_) {}
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -899,13 +910,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 delegate: SliverChildListDelegate([
                   // Full-width Online Toggle Card
                   GestureDetector(
-                    onTap: () {
+                    onTap: () async {
                       final newVal = !_isOnline;
                       setState(() => _isOnline = newVal);
                       final auth = context.read<AuthProvider>();
                       if (auth.currentUserId != null) {
                         try {
-                          _supabase
+                          await _supabase
                               .from('delivery_partners')
                               .update({'is_active': newVal})
                               .eq('id', auth.currentUserId!);
@@ -977,12 +988,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           ),
                           Switch(
                             value: _isOnline,
-                            onChanged: (val) {
+                            onChanged: (val) async {
                               setState(() => _isOnline = val);
                               final auth = context.read<AuthProvider>();
                               if (auth.currentUserId != null) {
                                 try {
-                                  _supabase
+                                  await _supabase
                                       .from('delivery_partners')
                                       .update({'is_active': val})
                                       .eq('id', auth.currentUserId!);

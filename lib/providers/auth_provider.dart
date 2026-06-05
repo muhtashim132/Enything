@@ -323,6 +323,17 @@ class AuthProvider extends ChangeNotifier {
   Future<void> switchSessionRole(String role) async {
     if (_user == null) return;
     if (!_user!.activeRoles.contains(role)) return;
+
+    // Auto-deactivate delivery toggle when switching away from rider role
+    if (_user!.activeSessionRole == 'delivery_partner' && role != 'delivery_partner') {
+      try {
+        await _supabase.from('delivery_partners')
+            .update({'is_active': false})
+            .eq('id', _user!.id);
+      } catch (e) {
+        debugPrint('Failed to deactivate delivery partner: $e');
+      }
+    }
     
     String verificationStatus = 'verified'; // Default
     try {

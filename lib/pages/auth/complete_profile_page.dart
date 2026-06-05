@@ -747,10 +747,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
               hint: 'e.g. INS12345678',
               caps: true),
           const SizedBox(height: 16),
-          _DarkField(
-              label: 'Landmark (Home Base)',
-              controller: _landmarkCtrl,
-              hint: 'e.g. Near City Mall'),
+          _buildAddressAndLocation('Landmark (Home Base) *', _landmarkCtrl),
           const SizedBox(height: 16),
           _DarkField(
               label: 'Pincode (Operational Area) *',
