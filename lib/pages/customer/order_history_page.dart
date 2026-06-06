@@ -123,7 +123,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 targetUserId: shopData['seller_id'] as String,
                 title: '❌ Order Cancelled by Customer',
                 body: 'The customer cancelled their order. No further action needed.',
-                data: {'order_id': order.id},
+                data: {'order_id': order.id, 'role': 'seller'},
               );
             }
           });
@@ -135,7 +135,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             targetUserId: order.deliveryPartnerId!,
             title: '❌ Order Cancelled by Customer',
             body: 'The customer cancelled their order. You are free for new deliveries.',
-            data: {'order_id': order.id},
+            data: {'order_id': order.id, 'role': 'rider'},
           );
         }
       }

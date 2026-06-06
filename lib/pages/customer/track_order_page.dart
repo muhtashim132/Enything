@@ -499,7 +499,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 title: '❌ Order Cancelled by Customer',
                 body:
                     'The customer cancelled their order. No further action needed.',
-                data: {'order_id': widget.orderId},
+                data: {'order_id': widget.orderId, 'role': 'seller'},
               );
             }
           });
@@ -512,7 +512,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             title: '❌ Order Cancelled by Customer',
             body:
                 'The customer cancelled their order. You are free for new deliveries.',
-            data: {'order_id': widget.orderId},
+            data: {'order_id': widget.orderId, 'role': 'rider'},
           );
         }
       }

@@ -205,6 +205,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               targetUserId: order.deliveryPartnerId!,
               title: '⌛ Waiting for Customer Payment',
               body: 'The shop accepted. Both of you are confirmed — customer is completing payment now.',
+              data: {'order_id': order.id, 'role': 'rider'},
             );
           }
         } else {
@@ -224,6 +225,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             targetUserId: order.customerId,
             title: '🏪 Shop Accepted!',
             body: 'The shop accepted your order. Now waiting for a rider to also confirm.',
+            data: {'order_id': order.id, 'role': 'customer'},
           );
         }
         
@@ -344,6 +346,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           body: msg.isNotEmpty
               ? '"$msg" — You can retry or choose a different shop.'
               : 'The shop could not accept your order. You can retry or choose a different shop.',
+          data: {'order_id': order.id, 'role': 'customer'},
         );
       }
 
@@ -427,12 +430,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             targetUserId: order.customerId,
             title: '👨‍🍳 Order Being Prepared',
             body: 'The shop is now preparing your order.',
+            data: {'order_id': order.id, 'role': 'customer'},
           );
           if (order.deliveryPartnerId != null) {
             notifProv.sendBackgroundPush(
               targetUserId: order.deliveryPartnerId!,
               title: '👨‍🍳 Shop Preparing',
               body: 'The shop has started preparing the order. Head over!',
+              data: {'order_id': order.id, 'role': 'rider'},
             );
           }
         } else if (status == 'ready_for_pickup') {
@@ -440,12 +445,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             targetUserId: order.customerId,
             title: '📦 Ready for Pickup',
             body: 'Your order is packed and waiting for the rider.',
+            data: {'order_id': order.id, 'role': 'customer'},
           );
           if (order.deliveryPartnerId != null) {
             notifProv.sendBackgroundPush(
               targetUserId: order.deliveryPartnerId!,
               title: '📦 Ready for Pickup!',
               body: 'The order is ready. Go pick it up now!',
+              data: {'order_id': order.id, 'role': 'rider'},
             );
           }
         }

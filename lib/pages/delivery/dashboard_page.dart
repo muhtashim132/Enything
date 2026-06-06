@@ -260,19 +260,28 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               .toList();
           return model;
         }).toList();
-        
         _todayEarnings = 0.0;
         _totalKmsDriven = 0.0;
         final today = DateTime.now();
-        for (final order in _myOrders) {
-          if (order.status == 'delivered') {
-            _totalKmsDriven += order.estimatedDistanceKm;
-            if (order.createdAt.year == today.year &&
-                order.createdAt.month == today.month &&
-                order.createdAt.day == today.day) {
-              _todayEarnings += order.riderEarnings + order.waitTimePenalty;
+        
+        // Fetch delivered orders separately to compute earnings (they are excluded from myOrders)
+        if (auth.currentUserId != null) {
+          try {
+            final deliveredResp = await _supabase
+                .from('orders')
+                .select('rider_earnings, wait_time_penalty, estimated_distance_km, created_at')
+                .eq('delivery_partner_id', auth.currentUserId!)
+                .eq('status', 'delivered');
+            for (var row in deliveredResp as List) {
+              _totalKmsDriven += (row['estimated_distance_km'] ?? 0.0).toDouble();
+              final created = DateTime.tryParse(row['created_at'] ?? '')?.toLocal() ?? DateTime.now();
+              if (created.year == today.year &&
+                  created.month == today.month &&
+                  created.day == today.day) {
+                _todayEarnings += (row['rider_earnings'] ?? 0.0).toDouble() + (row['wait_time_penalty'] ?? 0.0).toDouble();
+              }
             }
-          }
+          } catch (_) {}
         }
         
         _isLoading = false;
@@ -453,7 +462,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             targetUserId: order.customerId,
             title: '🛵 Rider Dropped Your Order',
             body: 'Your previous rider is unavailable. We are looking for a new rider now.',
-            data: {'order_id': order.id},
+            data: {'order_id': order.id, 'role': 'customer'},
           );
 
           // Push seller
@@ -471,7 +480,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   body: status == 'reassign_disputed'
                       ? 'Rider reported a dispute and dropped the order. Looking for a new rider.'
                       : 'The rider dropped the order. Looking for a new rider.',
-                  data: {'order_id': order.id},
+                  data: {'order_id': order.id, 'role': 'seller'},
                 );
               }
             });
@@ -487,6 +496,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             targetUserId: order.customerId,
             title: '🎉 Order Delivered!',
             body: 'Your order has been delivered. Enjoy!',
+            data: {'order_id': order.id, 'role': 'customer'},
           );
         }
 
@@ -522,12 +532,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               targetUserId: order.customerId,
               title: '🛵 Rider Picked Up',
               body: 'Your order is on its way!',
+              data: {'order_id': order.id, 'role': 'customer'},
             );
           } else if (status == 'out_for_delivery') {
             notifProv.sendBackgroundPush(
               targetUserId: order.customerId,
               title: '🚀 Out for Delivery!',
               body: 'Your order is almost there. Get ready!',
+              data: {'order_id': order.id, 'role': 'customer'},
             );
           }
         }
