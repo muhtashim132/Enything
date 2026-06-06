@@ -251,6 +251,30 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         } catch (_) {}
       }
 
+      double tempTodayEarnings = 0.0;
+      double tempTotalKmsDriven = 0.0;
+      final today = DateTime.now();
+      
+      // Fetch delivered orders separately to compute earnings (they are excluded from myOrders)
+      if (auth.currentUserId != null) {
+        try {
+          final deliveredResp = await _supabase
+              .from('orders')
+              .select('rider_earnings, wait_time_penalty, estimated_distance_km, created_at')
+              .eq('delivery_partner_id', auth.currentUserId!)
+              .eq('status', 'delivered');
+          for (var row in deliveredResp as List) {
+            tempTotalKmsDriven += (row['estimated_distance_km'] ?? 0.0).toDouble();
+            final created = DateTime.tryParse(row['created_at'] ?? '')?.toLocal() ?? DateTime.now();
+            if (created.year == today.year &&
+                created.month == today.month &&
+                created.day == today.day) {
+              tempTodayEarnings += (row['rider_earnings'] ?? 0.0).toDouble() + (row['wait_time_penalty'] ?? 0.0).toDouble();
+            }
+          }
+        } catch (_) {}
+      }
+
       setState(() {
         _availableOrders = filtered;
         _myOrders = (myOrders as List).map((o) {
@@ -260,29 +284,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               .toList();
           return model;
         }).toList();
-        _todayEarnings = 0.0;
-        _totalKmsDriven = 0.0;
-        final today = DateTime.now();
-        
-        // Fetch delivered orders separately to compute earnings (they are excluded from myOrders)
-        if (auth.currentUserId != null) {
-          try {
-            final deliveredResp = await _supabase
-                .from('orders')
-                .select('rider_earnings, wait_time_penalty, estimated_distance_km, created_at')
-                .eq('delivery_partner_id', auth.currentUserId!)
-                .eq('status', 'delivered');
-            for (var row in deliveredResp as List) {
-              _totalKmsDriven += (row['estimated_distance_km'] ?? 0.0).toDouble();
-              final created = DateTime.tryParse(row['created_at'] ?? '')?.toLocal() ?? DateTime.now();
-              if (created.year == today.year &&
-                  created.month == today.month &&
-                  created.day == today.day) {
-                _todayEarnings += (row['rider_earnings'] ?? 0.0).toDouble() + (row['wait_time_penalty'] ?? 0.0).toDouble();
-              }
-            }
-          } catch (_) {}
-        }
+        _todayEarnings = tempTodayEarnings;
+        _totalKmsDriven = tempTotalKmsDriven;
         
         _isLoading = false;
       });
