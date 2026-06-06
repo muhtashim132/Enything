@@ -127,8 +127,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         (s, o) {
           if (o['status'] != 'delivered') return s;
           final createdAt = DateTime.tryParse(o['created_at'] ?? '')?.toLocal();
-          if (createdAt != null && createdAt.isAfter(todayStart) || createdAt?.isAtSameMomentAs(todayStart) == true) {
-            return s + (o['seller_payout'] ?? 0.0);
+          if (createdAt != null && (createdAt.isAfter(todayStart) || createdAt.isAtSameMomentAs(todayStart))) {
+            return s + ((o['seller_payout'] as num?)?.toDouble() ?? 0.0);
           }
           return s;
         },
@@ -198,9 +198,13 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         backgroundColor:
             isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
         body: MaxWidthContainer(
-          child: CustomScrollView(
-            slivers: [
-            // ── Animated Hero Header ──────────────────────────────────────
+          child: RefreshIndicator(
+            onRefresh: _loadStats,
+            color: const Color(0xFF4C6EF5),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+              // ── Animated Hero Header ──────────────────────────────────────
             SliverAppBar(
               expandedHeight: 200,
               pinned: true,
