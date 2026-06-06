@@ -1510,7 +1510,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(order.statusDisplay,
+                  child: Text(order.status == 'awaiting_payment' ? 'Waiting for Payment' : order.statusDisplay,
                       style: GoogleFonts.outfit(
                           color: Colors.white,
                           fontSize: 11,

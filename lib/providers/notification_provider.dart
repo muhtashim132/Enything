@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../services/notification_service.dart';
 
 /// A single in-app notification entry.
 class AppNotification {
@@ -120,6 +122,14 @@ class NotificationProvider extends ChangeNotifier {
           body: notif.body ?? '',
           orderId: message.data['order_id'] as String?,
         ));
+        
+        // Show a heads-up buzz notification even when app is open!
+        NotificationService().showNotification(
+          title: notif.title ?? 'Zappy',
+          body: notif.body ?? '',
+          payload: jsonEncode(message.data),
+        );
+        
         notifyListeners();
       });
     } catch (e) {
@@ -424,6 +434,14 @@ class NotificationProvider extends ChangeNotifier {
     // Deduplicate by id
     if (_notifications.any((n) => n.id == notification.id)) return;
     _notifications.add(notification);
+    
+    // Buzz notification in the foreground!
+    NotificationService().showNotification(
+      title: notification.title,
+      body: notification.body,
+      payload: notification.orderId != null ? jsonEncode({'order_id': notification.orderId}) : null,
+    );
+
     notifyListeners();
     _persistToDb(notification); // persist to DB (fire and forget)
   }

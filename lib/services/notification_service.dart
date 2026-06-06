@@ -101,6 +101,34 @@ class NotificationService {
     );
   }
 
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'enything_push_channel',
+      'Enything Notifications',
+      channelDescription: 'Push notifications for orders and updates',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      icon: 'ic_notification',
+    );
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    await _flutterLocalNotificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch % 100000,
+      title,
+      body,
+      platformChannelSpecifics,
+      payload: payload,
+    );
+  }
+
   Future<void> cancelOrderProgressNotification() async {
     await _flutterLocalNotificationsPlugin.cancel(_orderNotificationId);
   }

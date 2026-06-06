@@ -226,6 +226,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             body: 'The shop accepted your order. Now waiting for a rider to also confirm.',
           );
         }
+        
+        // Auto-switch to Active tab
+        _tabController.animateTo(1);
       }
       _loadOrders();
     } catch (e) {
@@ -796,7 +799,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     fontWeight: FontWeight.w800,
                     color: AppColors.primary),
               ),
-              _statusBadge(order, statusColor),
+              order.status == 'awaiting_payment'
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                      ),
+                      child: Text('Waiting for Payment', style: GoogleFonts.outfit(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.w700)),
+                    )
+                  : _statusBadge(order, statusColor),
             ],
           ),
 

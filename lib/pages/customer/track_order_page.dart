@@ -158,6 +158,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         // Start acceptance countdown if still waiting
         if (order.status == 'awaiting_acceptance') {
           _startAcceptanceCountdown(order);
+        } else if (order.status == 'awaiting_payment') {
+          _startPaymentCountdown(order);
+          // Only auto-open if not already processing
+          if (!_isProcessingPayment) {
+            Future.delayed(const Duration(milliseconds: 800), () {
+              if (mounted) _openRazorpay(order);
+            });
+          }
         }
 
         // Fetch sibling orders if multi-shop checkout
