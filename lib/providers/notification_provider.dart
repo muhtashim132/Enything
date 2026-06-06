@@ -463,7 +463,10 @@ class NotificationProvider extends ChangeNotifier {
     NotificationService().showNotification(
       title: notification.title,
       body: notification.body,
-      payload: notification.orderId != null ? jsonEncode({'order_id': notification.orderId}) : null,
+      payload: jsonEncode({
+        if (notification.orderId != null) 'order_id': notification.orderId,
+        if (_listeningRole != null) 'role': _listeningRole,
+      }),
     );
 
     notifyListeners();

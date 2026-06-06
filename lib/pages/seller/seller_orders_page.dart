@@ -180,7 +180,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   ///       → set seller_accepted + broadcast to riders + notify customer shop accepted
   Future<void> _sellerAccept(OrderModel order) async {
     try {
-      final riderAlreadyAccepted = order.partnerAccepted;
+      // Fetch latest state to prevent race conditions (TOCTOU)
+      final latest = await _supabase.from('orders').select('partner_accepted').eq('id', order.id).maybeSingle();
+      final riderAlreadyAccepted = latest?['partner_accepted'] == true;
+
       final paymentDeadline = riderAlreadyAccepted
           ? DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String()
           : null;

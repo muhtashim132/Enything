@@ -347,10 +347,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         } catch (_) {}
       }
 
-      // Both seller AND rider have accepted → move to awaiting_payment.
-      // Customer gets a push to open the app and complete payment.
-      // Payment deadline: 10 minutes from now.
-      final bothAccepted = order.sellerAccepted;
+      // Fetch latest state to prevent race conditions (TOCTOU)
+      final latest = await _supabase.from('orders').select('seller_accepted').eq('id', order.id).maybeSingle();
+      final bothAccepted = latest?['seller_accepted'] == true;
+
       final newStatus = bothAccepted ? 'awaiting_payment' : 'awaiting_acceptance';
       final paymentDeadline = bothAccepted
           ? DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String()
