@@ -55,7 +55,7 @@ class _EarningsPageState extends State<EarningsPage> {
         final charge =
             (d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0).toDouble();
         final createdAt =
-            DateTime.tryParse(d['created_at'] ?? '') ?? DateTime(2000);
+            DateTime.tryParse(d['created_at'] ?? '')?.toLocal() ?? DateTime(2000);
         total += charge;
         if (createdAt.isAfter(DateTime.parse(todayStart))) today += charge;
         // weekly breakdown
@@ -269,9 +269,7 @@ class _EarningsPageState extends State<EarningsPage> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final item = _recentDeliveries[index];
-                              final date =
-                                  DateTime.tryParse(item['date'] ?? '') ??
-                                      DateTime.now();
+                              final date = (DateTime.tryParse(item['date'] ?? '')?.toLocal()) ?? DateTime.now();
                               return Container(
                                 margin:
                                     const EdgeInsets.fromLTRB(20, 0, 20, 12),

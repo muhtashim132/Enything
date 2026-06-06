@@ -99,7 +99,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
         final day = now.subtract(Duration(days: i));
         final dayRevenue = paidOrders.where((o) {
           if (o['created_at'] == null) return false;
-          final d = DateTime.tryParse(o['created_at'].toString());
+          final d = DateTime.tryParse(o['created_at'].toString())?.toLocal();
           return d != null &&
               d.year == day.year &&
               d.month == day.month &&

@@ -68,7 +68,7 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
       final hourMap = <int, int>{};
       for (final o in orders) {
         if (o['created_at'] == null) continue;
-        final d = DateTime.tryParse(o['created_at'].toString());
+        final d = DateTime.tryParse(o['created_at'].toString())?.toLocal();
         if (d != null && now.difference(d).inDays <= 7) {
           hourMap[d.hour] = (hourMap[d.hour] ?? 0) + 1;
         }

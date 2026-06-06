@@ -56,7 +56,8 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
       };
 
       for (var o in orders) {
-        final createdAt = DateTime.tryParse(o['created_at']);
+        final createdAtStr = o['created_at'];
+        final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr)?.toLocal() : null;
         if (createdAt != null) {
           // Heatmap data
           final dow = createdAt.weekday;

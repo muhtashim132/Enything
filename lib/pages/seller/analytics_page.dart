@@ -85,7 +85,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           
           final createdAtStr = order['created_at'];
           if (createdAtStr != null) {
-            final createdAt = DateTime.tryParse(createdAtStr) ?? now;
+            final createdAt = DateTime.tryParse(createdAtStr)?.toLocal() ?? now;
             final orderDate = DateTime(createdAt.year, createdAt.month, createdAt.day);
             if (dailyRevenue.containsKey(orderDate)) {
               dailyRevenue[orderDate] = dailyRevenue[orderDate]! + amount;
