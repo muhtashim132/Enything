@@ -543,6 +543,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
             ),
           ],
           ),
+          ),
         ),
       ),
     );
