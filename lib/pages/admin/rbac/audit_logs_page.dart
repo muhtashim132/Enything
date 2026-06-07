@@ -8,6 +8,7 @@ import '../../../providers/audit_provider.dart';
 import '../../../models/rbac/audit_log_model.dart';
 import '../../../widgets/rbac/rbac_widgets.dart';
 import '../../../pages/admin/rbac/forbidden_page.dart';
+import '../../../utils/time_utils.dart';
 
 class AuditLogsPage extends StatefulWidget {
   const AuditLogsPage({super.key});
@@ -193,7 +194,7 @@ class _AuditLogsPageState extends State<AuditLogsPage> {
                       color: Colors.white38, size: 12),
                   const SizedBox(width: 6),
                   Text(
-                    '${DateFormat('dd MMM').format(_from!)} – ${DateFormat('dd MMM yyyy').format(_to ?? _from!)}',
+                    '${DateFormat('dd MMM').format(_from!.toIST())} – ${DateFormat('dd MMM yyyy').format(_to ?? _from!.toIST())}',
                     style:
                         GoogleFonts.outfit(color: Colors.white38, fontSize: 11),
                   ),
@@ -400,7 +401,7 @@ class _LogCardState extends State<_LogCard> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        fmt.format(log.createdAt.toLocal()),
+                        fmt.format(log.createdAt.toIST()),
                         style: GoogleFonts.outfit(
                             color: Colors.white24, fontSize: 10),
                       ),

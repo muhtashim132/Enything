@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/rbac_provider.dart';
 import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
+import '../../../utils/time_utils.dart';
 
 class FinanceAdminPage extends StatefulWidget {
   const FinanceAdminPage({super.key});
@@ -236,7 +237,7 @@ class _TransactionsTab extends StatelessWidget {
         final status = (t['status'] ?? 'placed') as String;
         final time = t['created_at'] != null
             ? DateFormat('dd MMM, hh:mm a')
-                .format(DateTime.parse(t['created_at'].toString()).toLocal())
+                .format(DateTime.parse(t['created_at'].toString()).toIST())
             : '';
         final (statusColor, statusLabel) = switch (status) {
           'delivered' => (AdminColors.success, 'Delivered'),
@@ -300,7 +301,7 @@ class _WithdrawalsTab extends StatelessWidget {
         final role = (w['user_role'] ?? 'user') as String;
         final name = (w['profiles']?['full_name'] ?? 'Unknown');
         final time = w['requested_at'] != null
-            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(w['requested_at'].toString()).toLocal())
+            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(w['requested_at'].toString()).toIST())
             : '';
         
         final (statusColor, statusLabel) = switch (status) {
@@ -362,7 +363,7 @@ class _RefundsTab extends StatelessWidget {
         final amount = (t['grand_total_collected'] as num?)?.toDouble() ?? 0;
         final status = (t['refund_status'] ?? 'processing') as String;
         final time = t['created_at'] != null
-            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t['created_at'].toString()).toLocal())
+            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t['created_at'].toString()).toIST())
             : '';
         
         final (statusColor, statusLabel) = switch (status) {
@@ -426,7 +427,7 @@ class _TaxesTab extends StatelessWidget {
         final gstPlat = (t['gst_platform'] as num?)?.toDouble() ?? 0;
         final totalGst = gstItem + gstDel + gstPlat;
         final time = t['created_at'] != null
-            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t['created_at'].toString()).toLocal())
+            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t['created_at'].toString()).toIST())
             : '';
 
         return Container(

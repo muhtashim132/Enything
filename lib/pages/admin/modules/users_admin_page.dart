@@ -8,6 +8,7 @@ import '../../../providers/rbac_provider.dart';
 import '../../../models/rbac/role_model.dart';
 import '../../../widgets/admin/kyc_verification_dialog.dart';
 import '../rbac/forbidden_page.dart';
+import '../../../utils/time_utils.dart';
 
 void _showKycDialog(BuildContext context, Map<String, dynamic> data, String title, String tableName, String idColumn, VoidCallback onRefresh) {
   showDialog(
@@ -293,7 +294,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                         itemBuilder: (_, i) {
                           final u = _filtered[i];
                           final joined = u['created_at'] != null
-                              ? DateFormat('dd MMM yy').format(DateTime.parse(u['created_at'].toString()))
+                              ? DateFormat('dd MMM yy').format(DateTime.parse(u['created_at'].toString()).toIST())
                               : '';
                           return _UserCard(
                             name: u['full_name'] ?? 'Unknown',

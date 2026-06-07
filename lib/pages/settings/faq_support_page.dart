@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/time_utils.dart';
 
 class FaqSupportPage extends StatefulWidget {
   const FaqSupportPage({super.key});
@@ -581,7 +582,7 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
   String _formatDate(String? isoString) {
     if (isoString == null) return '';
     try {
-      final date = DateTime.parse(isoString).toLocal();
+      final date = DateTime.parse(isoString).toIST();
       return '${date.day}/${date.month}/${date.year}';
     } catch (_) {
       return '';

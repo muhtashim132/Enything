@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../theme/admin_theme.dart';
+import '../../../utils/time_utils.dart';
 
 class AnalyticsAdminPage extends StatefulWidget {
   const AnalyticsAdminPage({super.key});
@@ -68,7 +69,7 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
       final hourMap = <int, int>{};
       for (final o in orders) {
         if (o['created_at'] == null) continue;
-        final d = DateTime.tryParse(o['created_at'].toString())?.toLocal();
+        final d = DateTime.tryParse(o['created_at'].toString())?.toIST();
         if (d != null && now.difference(d).inDays <= 7) {
           hourMap[d.hour] = (hourMap[d.hour] ?? 0) + 1;
         }
@@ -114,7 +115,7 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
       _churnRisk = _totalOrders > 0 ? (_cancelledOrders / _totalOrders) * 100 : 0;
 
       // New users today
-      final today = DateFormat('yyyy-MM-dd').format(now);
+      final today = DateFormat('yyyy-MM-dd').format(now.toIST());
       final todayUsers = await _db
           .from('profiles')
           .select('id')

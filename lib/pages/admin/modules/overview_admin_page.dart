@@ -11,6 +11,7 @@ import 'orders_admin_page.dart';
 import 'users_admin_page.dart';
 import 'kyc_review_page.dart';
 import 'finance_admin_page.dart';
+import '../../../utils/time_utils.dart';
 
 class OverviewAdminPage extends StatefulWidget {
   final String adminName;
@@ -99,7 +100,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
         final day = now.subtract(Duration(days: i));
         final dayRevenue = paidOrders.where((o) {
           if (o['created_at'] == null) return false;
-          final d = DateTime.tryParse(o['created_at'].toString())?.toLocal();
+          final d = DateTime.tryParse(o['created_at'].toString())?.toIST();
           return d != null &&
               d.year == day.year &&
               d.month == day.month &&
@@ -306,7 +307,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                   (o['grand_total_collected'] as num?)?.toDouble() ?? 0;
               final time = o['created_at'] != null
                   ? DateFormat('dd MMM, hh:mm a').format(
-                      DateTime.parse(o['created_at'].toString()).toLocal())
+                      DateTime.parse(o['created_at'].toString()).toIST())
                   : '';
 
               final (color, label) = switch (status) {
@@ -419,7 +420,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      DateFormat('EEE').format(day),
+                      DateFormat('EEE').format(day.toIST()),
                       style: TextStyle(
                         color: isToday ? Colors.white : AdminColors.textSecondary,
                         fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,

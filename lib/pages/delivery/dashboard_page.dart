@@ -19,6 +19,7 @@ import '../../config/routes.dart';
 import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
 import 'order_route_map_page.dart';
+import '../../utils/time_utils.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
   const DeliveryDashboardPage({super.key});
@@ -278,7 +279,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               .eq('status', 'delivered');
           for (var row in deliveredResp as List) {
             tempTotalKmsDriven += (row['estimated_distance_km'] ?? 0.0).toDouble();
-            final created = DateTime.tryParse(row['created_at'] ?? '')?.toLocal() ?? DateTime.now();
+            final created = DateTime.tryParse(row['created_at'] ?? '')?.toIST() ?? DateTime.now();
             if (created.year == today.year &&
                 created.month == today.month &&
                 created.day == today.day) {

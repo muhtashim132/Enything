@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../../providers/rbac_provider.dart';
 import '../../../../theme/admin_theme.dart';
+import '../../../utils/time_utils.dart';
 
 class CouponManagementPage extends StatefulWidget {
   const CouponManagementPage({super.key});
@@ -163,7 +164,7 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
     
     DateTime? validUntil;
     if (coupon['valid_until'] != null) {
-      validUntil = DateTime.parse(coupon['valid_until']).toLocal();
+      validUntil = DateTime.parse(coupon['valid_until']).toIST();
     }
     final isExpired = validUntil != null && validUntil.isBefore(DateTime.now());
     
@@ -236,7 +237,7 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  validUntil != null ? 'Ends ${DateFormat('MMM d, yyyy').format(validUntil)}' : 'No Expiry',
+                  validUntil != null ? 'Ends ${DateFormat('MMM d, yyyy').format(validUntil.toIST())}' : 'No Expiry',
                   style: AdminStyles.caption(color: AdminColors.textMuted),
                 ),
                 Row(
@@ -460,7 +461,7 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _validUntil == null ? 'Valid Until (Optional)' : 'Ends: ${DateFormat('MMM d, yyyy').format(_validUntil!)}',
+                      _validUntil == null ? 'Valid Until (Optional)' : 'Ends: ${DateFormat('MMM d, yyyy').format(_validUntil!.toIST())}',
                       style: AdminStyles.body(color: _validUntil == null ? AdminColors.textMuted : Colors.white),
                     ),
                     const Icon(Icons.calendar_today_rounded, color: AdminColors.textMuted, size: 20),

@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../utils/responsive_layout.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/time_utils.dart';
 
 class SellerWithdrawalsPage extends StatefulWidget {
   const SellerWithdrawalsPage({super.key});
@@ -353,7 +354,7 @@ class _WithdrawalCard extends StatelessWidget {
       _           => Colors.orangeAccent,
     };
     final date = w['requested_at'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(w['requested_at']).toLocal())
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(w['requested_at'].toIST()).toIST())
         : '';
 
     return Container(

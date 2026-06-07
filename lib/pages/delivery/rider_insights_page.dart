@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/time_utils.dart';
 
 class RiderInsightsPage extends StatefulWidget {
   const RiderInsightsPage({super.key});
@@ -57,7 +58,7 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
 
       for (var o in orders) {
         final createdAtStr = o['created_at'];
-        final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr)?.toLocal() : null;
+        final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr)?.toIST() : null;
         if (createdAt != null) {
           // Heatmap data
           final dow = createdAt.weekday;

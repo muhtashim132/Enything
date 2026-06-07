@@ -9,6 +9,7 @@ import '../../../models/rbac/admin_user_model.dart';
 import '../../../models/rbac/role_model.dart';
 import '../../../widgets/rbac/rbac_widgets.dart';
 import '../../../widgets/rbac/invite_admin_dialog.dart';
+import '../../../utils/time_utils.dart';
 
 class TeamMembersPage extends StatefulWidget {
   const TeamMembersPage({super.key});
@@ -423,7 +424,7 @@ class _MemberCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final team = context.read<TeamProvider>();
     final lastLogin = member.lastLoginAt != null
-        ? DateFormat('dd MMM yy').format(member.lastLoginAt!)
+        ? DateFormat('dd MMM yy').format(member.lastLoginAt!.toIST())
         : 'Never';
 
     return Container(

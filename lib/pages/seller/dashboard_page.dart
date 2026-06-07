@@ -12,6 +12,7 @@ import '../../config/app_categories.dart';
 import '../../widgets/common/notification_bell.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/time_utils.dart';
 class SellerDashboardPage extends StatefulWidget {
   const SellerDashboardPage({super.key});
   @override
@@ -126,7 +127,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         0,
         (s, o) {
           if (o['status'] != 'delivered') return s;
-          final createdAt = DateTime.tryParse(o['created_at'] ?? '')?.toLocal();
+          final createdAt = DateTime.tryParse(o['created_at'] ?? '')?.toIST();
           if (createdAt != null && (createdAt.isAfter(todayStart) || createdAt.isAtSameMomentAs(todayStart))) {
             return s + ((o['seller_payout'] as num?)?.toDouble() ?? 0.0);
           }

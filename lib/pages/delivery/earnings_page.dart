@@ -7,6 +7,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
+import '../../utils/time_utils.dart';
 
 class EarningsPage extends StatefulWidget {
   const EarningsPage({super.key});
@@ -55,7 +56,7 @@ class _EarningsPageState extends State<EarningsPage> {
         final charge =
             (d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0).toDouble();
         final createdAt =
-            DateTime.tryParse(d['created_at'] ?? '')?.toLocal() ?? DateTime(2000);
+            DateTime.tryParse(d['created_at'] ?? '')?.toIST() ?? DateTime(2000);
         total += charge;
         if (createdAt.isAfter(DateTime.parse(todayStart))) today += charge;
         // weekly breakdown
@@ -269,7 +270,7 @@ class _EarningsPageState extends State<EarningsPage> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final item = _recentDeliveries[index];
-                              final date = (DateTime.tryParse(item['date'] ?? '')?.toLocal()) ?? DateTime.now();
+                              final date = (DateTime.tryParse(item['date'] ?? '')?.toIST()) ?? DateTime.now();
                               return Container(
                                 margin:
                                     const EdgeInsets.fromLTRB(20, 0, 20, 12),
@@ -367,7 +368,7 @@ class _EarningsPageState extends State<EarningsPage> {
 
     final dayLabels = List.generate(7, (i) {
       final dt = DateTime.now().subtract(Duration(days: 6 - i));
-      return DateFormat('E').format(dt); // Mon, Tue...
+      return DateFormat('E').format(dt.toIST()); // Mon, Tue...
     });
 
     return Padding(

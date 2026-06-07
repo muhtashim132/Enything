@@ -23,7 +23,7 @@ INSERT INTO platform_config (key, value, label, description) VALUES
   ('heavy_order_threshold_kg', '10', 'Heavy Order Threshold (kg)', 'Weight above which the heavy order fee applies'),
   ('delivery_discount_threshold', '999', 'Delivery Discount Threshold (₹)', 'Orders above this get a delivery discount'),
   ('delivery_discount_amount', '15', 'Delivery Discount Amount (₹)', 'Discount applied on qualifying orders'),
-  ('max_delivery_radius_km', '9', 'Max Delivery Radius (km)', 'Maximum delivery range from shop'),
+  ('max_delivery_radius_km', '15', 'Max Delivery Radius (km)', 'Maximum delivery range from shop'),
   ('referral_bonus_amount', '50', 'Referral Bonus (₹)', 'Wallet credit given to both referrer and referee')
 ON CONFLICT (key) DO NOTHING;
 

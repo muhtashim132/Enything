@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/rbac_provider.dart';
 import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
+import '../../../utils/time_utils.dart';
 
 class OrdersAdminPage extends StatefulWidget {
   const OrdersAdminPage({super.key});
@@ -270,7 +271,7 @@ class _OrderCardState extends State<_OrderCard> {
         (o['grand_total_collected'] as num?)?.toDouble() ?? (o['total_amount'] as num?)?.toDouble() ?? 0.0;
     final time = o['created_at'] != null
         ? DateFormat('dd MMM, hh:mm a')
-            .format(DateTime.parse(o['created_at'].toString()).toLocal())
+            .format(DateTime.parse(o['created_at'].toString()).toIST())
         : '';
 
     final (statusColor, statusLabel) = _statusStyle(status);

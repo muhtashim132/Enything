@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/time_utils.dart';
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
@@ -85,7 +86,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           
           final createdAtStr = order['created_at'];
           if (createdAtStr != null) {
-            final createdAt = DateTime.tryParse(createdAtStr)?.toLocal() ?? now;
+            final createdAt = DateTime.tryParse(createdAtStr)?.toIST() ?? now;
             final orderDate = DateTime(createdAt.year, createdAt.month, createdAt.day);
             if (dailyRevenue.containsKey(orderDate)) {
               dailyRevenue[orderDate] = dailyRevenue[orderDate]! + amount;

@@ -14,6 +14,7 @@ import '../../widgets/common/notification_bell.dart';
 import '../../pages/seller/seller_order_map_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/time_utils.dart';
 class SellerOrdersPage extends StatefulWidget {
   const SellerOrdersPage({super.key});
 
@@ -822,7 +823,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     fontWeight: FontWeight.w700, fontSize: 14),
               ),
               Text(
-                DateFormat('hh:mm a').format(order.createdAt),
+                DateFormat('hh:mm a').format(order.createdAt.toIST()),
                 style: GoogleFonts.outfit(
                     color: AppColors.textSecondary, fontSize: 12),
               ),

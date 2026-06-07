@@ -7,6 +7,7 @@ import '../../../providers/rbac_provider.dart';
 import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
 import '../../../widgets/common/star_rating_display.dart';
+import '../../../utils/time_utils.dart';
 
 class ComplaintsAdminPage extends StatefulWidget {
   const ComplaintsAdminPage({super.key});
@@ -200,7 +201,7 @@ class _ComplaintCard extends StatelessWidget {
     final body = (complaint['body'] ?? complaint['message'] ?? '') as String;
     final time = complaint['created_at'] != null
         ? DateFormat('dd MMM, hh:mm a')
-            .format(DateTime.parse(complaint['created_at'].toString()).toLocal())
+            .format(DateTime.parse(complaint['created_at'].toString()).toIST())
         : '';
 
     final (priorityColor, priorityLabel) = switch (priority) {
@@ -409,7 +410,7 @@ class _ReviewsTab extends StatelessWidget {
             final comment = (r['comment'] ?? r['review'] ?? '') as String;
             final time = r['created_at'] != null
                 ? DateFormat('dd MMM yy')
-                    .format(DateTime.parse(r['created_at'].toString()).toLocal())
+                    .format(DateTime.parse(r['created_at'].toString()).toIST())
                 : '';
 
             return Container(

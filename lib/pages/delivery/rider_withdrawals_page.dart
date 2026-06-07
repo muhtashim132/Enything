@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/time_utils.dart';
 
 /// Rider withdrawal page — mirrors SellerWithdrawalsPage but reads
 /// earnings from the delivery_partners earnings column instead of orders.
@@ -332,7 +333,7 @@ class _WithdrawalCard extends StatelessWidget {
       _           => Colors.orangeAccent,
     };
     final date = w['requested_at'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(w['requested_at']).toLocal())
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(w['requested_at'].toIST()).toIST())
         : '';
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

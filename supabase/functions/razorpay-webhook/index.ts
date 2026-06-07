@@ -16,18 +16,17 @@
 //   ✅ refund.created     → Log refund
 // =============================================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { hmac } from "https://deno.land/x/hmac@v2.0.1/mod.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { createHmac } from "node:crypto";
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   try {
     const webhookSecret = Deno.env.get("RAZORPAY_WEBHOOK_SECRET") ?? "";
     const rawBody = await req.text();
 
     // ── 1. Validate webhook signature ─────────────────────────────────────────
     const receivedSignature = req.headers.get("X-Razorpay-Signature") ?? "";
-    const expectedSignature  = hmac("sha256", webhookSecret, rawBody, "utf8", "hex");
+    const expectedSignature  = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
 
     if (webhookSecret && receivedSignature !== expectedSignature) {
       console.warn("Webhook signature mismatch — possible spoofing attempt.");
