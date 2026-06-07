@@ -221,11 +221,11 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
               ),
             Row(
               children: [
-                Icon(Icons.shopping_bag_outlined, size: 14, color: AdminColors.textMuted),
+                const Icon(Icons.shopping_bag_outlined, size: 14, color: AdminColors.textMuted),
                 const SizedBox(width: 4),
                 Text('Min: ₹${coupon['min_order_value']}', style: AdminStyles.caption(color: AdminColors.textMuted)),
                 const SizedBox(width: 16),
-                Icon(Icons.people_outline, size: 14, color: AdminColors.textMuted),
+                const Icon(Icons.people_outline, size: 14, color: AdminColors.textMuted),
                 const SizedBox(width: 4),
                 Text('Used: ${coupon['usage_count']}${coupon['usage_limit'] != null ? '/${coupon['usage_limit']}' : ''}', style: AdminStyles.caption(color: AdminColors.textMuted)),
               ],

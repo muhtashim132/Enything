@@ -48,13 +48,13 @@ class AboutEnythingPage extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 56 + 24, 24, 40),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [AppColors.primaryDark, AppColors.primaryLight],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
               ),
               child: Column(
                 children: [

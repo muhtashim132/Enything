@@ -402,6 +402,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           data: {'action': 'new_order'},
         );
 
+        if (!mounted) return;
         Navigator.pushReplacementNamed(
           context,
           AppRoutes.trackOrder,
@@ -738,12 +739,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (isDelivered) return 'Enjoy your order! Thank you 🎉';
     switch (_order?.status) {
       case 'awaiting_acceptance':
-        if (_acceptanceSecondsLeft <= 0)
+        if (_acceptanceSecondsLeft <= 0) {
           return 'Time limit reached. Cancelling...';
+        }
         return 'Shop & rider have ${(_acceptanceSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_acceptanceSecondsLeft % 60).toString().padLeft(2, '0')} to accept — No charge yet!';
       case 'awaiting_payment':
-        if (_paymentSecondsLeft <= 0)
+        if (_paymentSecondsLeft <= 0) {
           return 'Payment time expired. Cancelling...';
+        }
         return 'Both confirmed! Please complete payment now 💳';
       case 'pending':
         return 'Waiting for shop & rider to accept...';

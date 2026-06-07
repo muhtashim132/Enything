@@ -125,7 +125,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final baseDelivery = cart.calculateDeliveryCharges(distanceKm);
       final surcharge = cart.multiShopSurcharge;
       final heavyFee = cart.heavyOrderFee;
-      final discount = cart.calculateDeliveryDiscount(distanceKm);
       final effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
       final riderEarnings = effectiveBase + surcharge + heavyFee;
       final totalDelivery = cart.totalDeliveryCharges(distanceKm);

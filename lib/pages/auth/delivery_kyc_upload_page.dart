@@ -147,6 +147,7 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
           );
         }
         
+        if (!mounted) return;
         Navigator.pushNamedAndRemoveUntil(context, AppRoutes.deliveryPendingVerification, (_) => false);
       }
     } catch (e) {

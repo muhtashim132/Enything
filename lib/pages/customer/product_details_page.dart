@@ -101,7 +101,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 },
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),

@@ -67,7 +67,7 @@ class NotificationProvider extends ChangeNotifier {
       debugPrint('FCM permission: ${settings.authorizationStatus}');
 
       final token = await messaging.getToken();
-      debugPrint('FCM token obtained: ${token == null ? "NULL - FAILED" : token.substring(0, 20) + "..."}');
+      debugPrint('FCM token obtained: ${token == null ? "NULL - FAILED" : "${token.substring(0, 20)}..."}');
       if (token == null) return;
 
       final prefs = await SharedPreferences.getInstance();
@@ -180,7 +180,6 @@ class NotificationProvider extends ChangeNotifier {
           callback: (payload) {
             if (payload.newRecord.isEmpty) return;
             final newStatus = payload.newRecord['status'] as String?;
-            final oldStatus = payload.oldRecord['status'] as String?;
             final orderId = payload.newRecord['id'] as String?;
             
             final sellerAcceptedNow = payload.newRecord['seller_accepted'] == true;
@@ -281,7 +280,6 @@ class NotificationProvider extends ChangeNotifier {
           callback: (payload) {
             if (payload.newRecord.isEmpty) return;
             final newStatus = payload.newRecord['status'] as String?;
-            final oldStatus = payload.oldRecord['status'] as String?;
             final orderId = payload.newRecord['id'] as String?;
             if (orderId == null || newStatus == null) return;
 
@@ -327,7 +325,6 @@ class NotificationProvider extends ChangeNotifier {
           callback: (payload) {
             if (payload.newRecord.isEmpty) return;
             final newRecord = payload.newRecord;
-            final oldRecord = payload.oldRecord;
 
             final orderId = newRecord['id'] as String?;
             final newStatus = newRecord['status'] as String?;

@@ -157,7 +157,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [AppColors.primary, AppColors.primaryLight],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
@@ -214,7 +214,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                 ),
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
@@ -494,7 +494,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Permission denied: Ask admin to grant SELECT on vehicle columns.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission denied: Ask admin to grant SELECT on vehicle columns.')));
       }
     }
   }

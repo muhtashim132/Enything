@@ -24,7 +24,7 @@ class RefundPolicyPage extends StatelessWidget {
               style: TextStyle(color: Colors.white38, fontSize: 12)),
           const SizedBox(height: 20),
 
-          _Section(
+          const _Section(
             title: '1. Order Cancellation',
             content: [
               _Para('Before Confirmation (No Charge)', 'You may cancel your order at any time before both the shop and rider accept it. Because payment is only collected after confirmation, no money is deducted and no refund is needed.'),
@@ -34,7 +34,7 @@ class RefundPolicyPage extends StatelessWidget {
             ],
           ),
 
-          _Section(
+          const _Section(
             title: '2. Refund Eligibility',
             content: [
               _Para('Pre-Paid Orders', 'Since payment is only collected after confirmation, full refunds apply primarily if:\n  • You paid, but the order was not delivered within the committed time frame.\n  • You received a wrong or defective item.\n  • The order was cancelled by support due to unforeseen issues after payment.'),
@@ -43,7 +43,7 @@ class RefundPolicyPage extends StatelessWidget {
             ],
           ),
 
-          _Section(
+          const _Section(
             title: '3. Refund Processing Timeline',
             content: [
               _Para('Online Payments (UPI / Card / Wallet)', 'Approved refunds are processed within 5–7 business days. The refund will appear in your original payment source (bank account, UPI ID, or card).'),
@@ -52,7 +52,7 @@ class RefundPolicyPage extends StatelessWidget {
             ],
           ),
 
-          _Section(
+          const _Section(
             title: '4. How to Request a Refund',
             content: [
               _Para('Step 1', 'Open the app → Go to Order History.'),
@@ -62,21 +62,21 @@ class RefundPolicyPage extends StatelessWidget {
             ],
           ),
 
-          _Section(
+          const _Section(
             title: '5. Non-Refundable Cases',
             content: [
               _Para('Not Eligible', '• Orders cancelled after preparation has started.\n• Orders where incorrect address was provided by the customer.\n• Orders refused at the time of delivery without valid reason.\n• Items consumed partially and then returned.'),
             ],
           ),
 
-          _Section(
+          const _Section(
             title: '6. Delivery Partner Disputes',
             content: [
               _Para('Delivery Issues', 'If your order was marked delivered but not received, contact support within 1 hour of the marked delivery time. We will investigate with our delivery partner and issue a refund if the complaint is validated.'),
             ],
           ),
 
-          _Section(
+          const _Section(
             title: '7. Contact Us',
             content: [
               _Para('Email', 'support@enything.in'),

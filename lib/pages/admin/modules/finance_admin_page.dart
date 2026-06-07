@@ -450,7 +450,7 @@ class _TaxesTab extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('₹${totalGst.toStringAsFixed(2)}', style: AdminStyles.body(size: 14)),
               const SizedBox(height: 4),
-              AdminBadge(label: 'GST Collected', color: AdminColors.info),
+              const AdminBadge(label: 'GST Collected', color: AdminColors.info),
             ]),
           ]),
         ).animate().fadeIn(delay: Duration(milliseconds: i * 30)).slideY(begin: 0.08);

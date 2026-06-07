@@ -293,7 +293,7 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
                       ),
                     )
                   else
-                    ..._history.map((w) => _WithdrawalCard(w)).toList(),
+                    ..._history.map((w) => _WithdrawalCard(w)),
                 ],
               ),
             ),

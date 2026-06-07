@@ -76,6 +76,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         if (shops.isEmpty) return;
         final shopIds = shops.map((s) => s['id'] as String).toList();
         
+        if (!mounted) return;
         final notifProvider = context.read<NotificationProvider>();
         
         for (final shopId in shopIds) {
@@ -292,17 +293,21 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   RadioListTile<String>(
                     title: Text('Prescription Issue', style: GoogleFonts.outfit(color: Colors.white)),
                     value: 'prescription',
+                    // ignore: deprecated_member_use
                     groupValue: rejectReason,
                     activeColor: AppColors.primary,
                     contentPadding: EdgeInsets.zero,
+                    // ignore: deprecated_member_use
                     onChanged: (val) => setState(() => rejectReason = val!),
                   ),
                   RadioListTile<String>(
                     title: Text('Other Reason (e.g. Out of stock)', style: GoogleFonts.outfit(color: Colors.white)),
                     value: 'other',
+                    // ignore: deprecated_member_use
                     groupValue: rejectReason,
                     activeColor: AppColors.primary,
                     contentPadding: EdgeInsets.zero,
+                    // ignore: deprecated_member_use
                     onChanged: (val) => setState(() => rejectReason = val!),
                   ),
                   const SizedBox(height: 12),

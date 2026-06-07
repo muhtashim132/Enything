@@ -879,7 +879,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         LayoutBuilder(
                           builder: (context, constraints) {
                             final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 1, tablet: 2, desktop: 3);
-                            final spacing = 16.0;
+                            const spacing = 16.0;
                             final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
 
                             return Wrap(
