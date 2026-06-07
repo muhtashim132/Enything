@@ -27,8 +27,8 @@ import 'services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Allow runtime fetching so fresh installs on new devices can download the fonts if needed.
-  GoogleFonts.config.allowRuntimeFetching = true;
+  // Disable runtime fetching. We have bundled the fonts locally in pubspec.yaml to prevent ANR.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   await dotenv.load(fileName: '.env');
 

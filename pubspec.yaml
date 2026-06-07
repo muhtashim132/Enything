@@ -59,4 +59,25 @@ flutter:
     - assets/animations/
     - assets/google_fonts/
     - logo/
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/google_fonts/Outfit-Regular.ttf
+        - asset: assets/google_fonts/Outfit-Medium.ttf
+          weight: 500
+        - asset: assets/google_fonts/Outfit-SemiBold.ttf
+          weight: 600
+        - asset: assets/google_fonts/Outfit-Bold.ttf
+          weight: 700
+        - asset: assets/google_fonts/Outfit-ExtraBold.ttf
+          weight: 800
+        - asset: assets/google_fonts/Outfit-Black.ttf
+          weight: 900
+    - family: Inter
+      fonts:
+        - asset: assets/google_fonts/Inter-Regular.ttf
+        - asset: assets/google_fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/google_fonts/Inter-SemiBold.ttf
+          weight: 600
 
