@@ -59,9 +59,9 @@ void main() async {
   final cartProvider = CartProvider();
   await cartProvider.loadCart();
 
-  // Load platform config
+  // Load platform config asynchronously to avoid blocking the Splash Screen (blank screen issue)
   final configProvider = PlatformConfigProvider();
-  await configProvider.load();
+  configProvider.load();
 
   // Initialize Notification Service
   await NotificationService().init();
