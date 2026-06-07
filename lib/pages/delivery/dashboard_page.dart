@@ -20,6 +20,7 @@ import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
 import 'order_route_map_page.dart';
 import '../../utils/time_utils.dart';
+import '../../models/order_group.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
   const DeliveryDashboardPage({super.key});
@@ -31,8 +32,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     with TickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
   bool _isOnline = false;
-  List<OrderModel> _availableOrders = [];
-  List<OrderModel> _myOrders = [];
+  List<OrderGroup> _availableGroups = [];
+  List<OrderGroup> _myGroups = [];
   double _todayEarnings = 0.0;
   double _totalKmsDriven = 0.0;
   bool _isLoading = false;
@@ -147,7 +148,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       // Also update orders that the rider is actively handling
       final activeStatuses = ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'];
-      final activeOrders = _myOrders.where((o) => activeStatuses.contains(o.status)).toList();
+      final activeOrders = _myGroups.expand((g) => g.orders).where((o) => activeStatuses.contains(o.status)).toList();
       
       for (final order in activeOrders) {
         try {
@@ -202,6 +203,19 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       debugPrint('Rider location error: $e');
     }
     return false;
+  }
+
+  List<OrderGroup> _groupOrders(List<OrderModel> orders) {
+    final groups = <String, OrderGroup>{};
+    for (var o in orders) {
+      // Group by customerId so all orders for a single customer become a "collected order"
+      final gid = o.customerId;
+      if (!groups.containsKey(gid)) {
+        groups[gid] = OrderGroup(gid, []);
+      }
+      groups[gid]!.orders.add(o);
+    }
+    return groups.values.toList();
   }
 
   Future<void> _loadOrders() async {
@@ -304,24 +318,24 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
 
       setState(() {
-        _availableOrders = filtered;
-        _myOrders = (myOrders as List).map((o) {
+        _availableGroups = _groupOrders(filtered);
+        
+        final myRawOrders = (myOrders as List).map((o) {
           final model = OrderModel.fromMap(o);
-          model.items = (o['order_items'] as List? ?? [])
-              .map((i) => OrderItem.fromMap(i))
-              .toList();
+          model.items = (o['order_items'] as List? ?? []).map((i) => OrderItem.fromMap(i)).toList();
           return model;
         }).toList();
+        _myGroups = _groupOrders(myRawOrders);
+
         _todayEarnings = tempTodayEarnings;
         _totalKmsDriven = tempTotalKmsDriven;
         
         _isLoading = false;
       });
 
-      if (_isOnline && _autoAccept && _availableOrders.isNotEmpty && !_isProcessingAutoAccept) {
+      if (_isOnline && _autoAccept && _availableGroups.isNotEmpty && !_isProcessingAutoAccept) {
         _isProcessingAutoAccept = true;
-        // BUG-10 FIX: Only accept the FIRST available order, do not loop all
-        await _acceptOrder(_availableOrders.first);
+        await _acceptOrderGroup(_availableGroups.first);
         _isProcessingAutoAccept = false;
       }
 
@@ -340,7 +354,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }
   }
 
-  Future<void> _acceptOrder(OrderModel order) async {
+  Future<void> _acceptOrderGroup(OrderGroup group) async {
+    setState(() => _isLoading = true);
+    for (int i = 0; i < group.orders.length; i++) {
+      await _acceptOrder(group.orders[i], skipReload: true, notifyCustomer: i == 0);
+    }
+    _loadOrders();
+  }
+
+  Future<void> _acceptOrder(OrderModel order, {bool skipReload = false, bool notifyCustomer = true}) async {
     final auth = context.read<AuthProvider>();
     try {
       double? shopLat;
@@ -433,20 +455,22 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           }
 
           // Push customer: rider is on standby, waiting for shop
-          notifProv.sendBackgroundPush(
-            targetUserId: order.customerId,
-            title: '🛵 Rider is Ready!',
-            body: 'A rider accepted your order and is on standby. Waiting for the shop to also confirm.',
-          );
+          if (notifyCustomer) {
+            notifProv.sendBackgroundPush(
+              targetUserId: order.customerId,
+              title: '🛵 Rider is Ready!',
+              body: 'A rider accepted your order and is on standby. Waiting for the shop to also confirm.',
+            );
+          }
         }
       }
-      _loadOrders();
+      if (!skipReload) _loadOrders();
     } catch (e) {
       debugPrint('Accept error: $e');
     }
   }
 
-  Future<void> _updateStatus(OrderModel order, String status) async {
+  Future<void> _updateStatus(OrderModel order, String status, {bool skipReload = false}) async {
     try {
       if (status == 'arrived') {
         if (order.shopLat == null || order.shopLng == null || order.shopLat == 0.0 || order.shopLng == 0.0) {
@@ -530,7 +554,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
 
         _stopLocationBroadcast();
-        _loadOrders();
+        if (!skipReload) _loadOrders();
         // Show rating prompt after delivering
         if (mounted && !order.hasDeliveryRated) {
           Future.delayed(const Duration(milliseconds: 500),
@@ -577,7 +601,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (status == 'out_for_delivery') {
         _startLocationBroadcast();
       }
-      _loadOrders();
+      if (!skipReload) _loadOrders();
     } catch (e) {
       debugPrint('Status update error: $e');
     }
@@ -702,18 +726,22 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   // ── Route Map Launcher ─────────────────────────────────────────────────────
 
-  void _openRouteMap(OrderModel order) {
+  void _openRouteMapForGroup(OrderGroup group) {
     // Resolve shop coords: prefer joined cache, fall back to snapshot on order
-    final shopInfo = _shopInfoCache[order.shopId];
-    final sLat = shopInfo?.lat ?? order.shopLat;
-    final sLng = shopInfo?.lng ?? order.shopLng;
-    final sName = shopInfo?.name ?? 'Shop';
+    final shops = group.orders.map((order) {
+      final shopInfo = _shopInfoCache[order.shopId];
+      final sLat = shopInfo?.lat ?? order.shopLat;
+      final sLng = shopInfo?.lng ?? order.shopLng;
+      final sName = shopInfo?.name ?? 'Shop';
+      return (lat: sLat ?? 0.0, lng: sLng ?? 0.0, name: sName);
+    }).toList();
 
-    if (sLat == null || sLng == null) {
-      _showSnack('Map not available — shop location missing', isError: true);
+    if (shops.any((s) => s.lat == 0.0 || s.lng == 0.0)) {
+      _showSnack('Map not available — shop location missing for one or more shops', isError: true);
       return;
     }
-    if (order.deliveryLat == null || order.deliveryLng == null) {
+    final primaryOrder = group.orders.first;
+    if (primaryOrder.deliveryLat == null || primaryOrder.deliveryLng == null) {
       _showSnack('Map not available — customer location missing', isError: true);
       return;
     }
@@ -722,17 +750,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       context,
       MaterialPageRoute(
         builder: (_) => OrderRouteMapPage(
-          order: order,
+          group: group,
           riderLat: _riderLat,
           riderLng: _riderLng,
-          shopLat: sLat,
-          shopLng: sLng,
-          shopName: sName,
-          customerLat: order.deliveryLat!,
-          customerLng: order.deliveryLng!,
+          shops: shops,
           onAccept: () {
             Navigator.pop(context);
-            _acceptOrder(order);
+            _acceptOrderGroup(group);
           },
         ),
       ),
@@ -1102,18 +1126,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   const SizedBox(height: 24),
 
                   // Active deliveries
-                  if (_myOrders.isNotEmpty) ...[
+                  if (_myGroups.isNotEmpty) ...[
                     _sectionHeader('🚗 My Active Deliveries',
-                        '${_myOrders.length}', const Color(0xFF4C6EF5), isDark),
+                        '${_myGroups.length}', const Color(0xFF4C6EF5), isDark),
                     const SizedBox(height: 14),
-                    ..._myOrders.map((o) => _activeOrderCard(o, isDark)),
+                    ..._myGroups.map((g) => _activeOrderGroupCard(g, isDark)),
                     const SizedBox(height: 24),
                   ],
 
                   // Available orders
                   _sectionHeader(
                       '📦 Available Orders',
-                      '${_availableOrders.length}',
+                      '${_availableGroups.length}',
                       const Color(0xFFFF8C42),
                       isDark),
                   const SizedBox(height: 14),
@@ -1174,11 +1198,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     ))
                   else if (!_isOnline)
                     _offlineState(isDark)
-                  else if (_availableOrders.isEmpty)
+                  else if (_availableGroups.isEmpty)
                     _emptyState(isDark)
                   else
-                    ..._availableOrders
-                        .map((o) => _availableOrderCard(o, isDark)),
+                    ..._availableGroups
+                        .map((g) => _availableOrderGroupCard(g, isDark)),
                 ]),
               ),
             ),
@@ -1255,216 +1279,260 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     );
   }
 
-  Widget _availableOrderCard(OrderModel order, bool isDark) {
-    final pickupKm = _pickupDistKm(order);
-    final deliveryKm = _deliveryDistKm(order);
+  Widget _availableOrderGroupCard(OrderGroup group, bool isDark) {
+    final totalEarnings = group.orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
+    bool isExpanded = false;
 
-    return GestureDetector(
-      onTap: () => _openRouteMap(order),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF121222) : Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-                blurRadius: 16,
-                offset: const Offset(0, 6))
-          ],
-          border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.transparent),
-        ),
-        child: Column(children: [
-          // ── Header strip ────────────────────────────────────────────
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [Color(0xFF0D2137), Color(0xFF1A3A5C)]),
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(22)),
-            ),
-            child: Row(children: [
-              const Icon(Icons.storefront_outlined,
-                  color: Colors.white70, size: 16),
-              const SizedBox(width: 8),
-              Text('Order #${order.id.substring(0, 8).toUpperCase()}',
-                  style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                    color: const Color(0xFF2ECC71),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF2ECC71).withValues(alpha: 0.4),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.currency_rupee_rounded, color: Colors.white, size: 14),
-                    Text(
-                        order.riderEarnings.toStringAsFixed(0),
-                        style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800)),
-                  ],
-                ),
-              ),
-              // Map hint icon
-              const SizedBox(width: 8),
-              const Icon(Icons.map_outlined,
-                  color: Colors.white38, size: 16),
-            ]),
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF121222) : Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6))
+            ],
+            border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.transparent),
           ),
-          // ── Body ────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Address row
-                  Row(children: [
-                    const Icon(Icons.location_on_outlined,
-                        size: 16, color: AppColors.danger),
-                    const SizedBox(width: 6),
-                    Expanded(
-                        child: Text(order.address ?? 'Address not set',
-                            style: GoogleFonts.outfit(
-                                color: isDark
-                                    ? Colors.white60
-                                    : Colors.grey.shade600,
-                                fontSize: 13),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis)),
-                  ]),
-
-                  // ── Distance chips row ───────────────────────────────
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    _distanceChip(
-                      color: const Color(0xFFFF8C42), // amber — pickup
-                      icon: Icons.storefront_rounded,
-                      label: 'Pickup',
-                      km: pickupKm,
-                    ),
-                    const SizedBox(width: 8),
-                    _distanceChip(
-                      color: const Color(0xFF00B4D8), // cyan — delivery
-                      icon: Icons.location_on_rounded,
-                      label: 'Delivery',
-                      km: deliveryKm,
-                    ),
-                  ]),
-
-                  // Order items
-                  if (order.items.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: (isDark ? Colors.white : Colors.black)
-                            .withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Items (${order.items.length})',
-                              style: GoogleFonts.outfit(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.grey.shade600)),
-                          const SizedBox(height: 4),
-                          ...order.items.map((item) => Padding(
-                                padding: const EdgeInsets.only(bottom: 2),
-                                child: Text(
-                                    '${item.quantity}x ${item.productName}',
-                                    style: GoogleFonts.outfit(
-                                        fontSize: 12,
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Colors.black87),
-                                    overflow: TextOverflow.ellipsis),
-                              )),
+          child: Column(children: [
+            GestureDetector(
+              onTap: () => setState(() => isExpanded = !isExpanded),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(colors: [Color(0xFF0D2137), Color(0xFF1A3A5C)]),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.storefront_outlined, color: Colors.white70, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Collected Order (${group.orders.length} Shops)',
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF2ECC71),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF2ECC71).withValues(alpha: 0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
                         ],
-                      ),
                     ),
-                  ],
-                  const SizedBox(height: 14),
-
-                  // ── Bottom row: total + actions ──────────────────────
-                  Row(children: [
-                    Text('₹${order.grandTotal.toStringAsFixed(0)}',
-                        style: GoogleFonts.outfit(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            color: isDark
-                                ? Colors.white
-                                : const Color(0xFF0A0A14))),
-                    const Spacer(),
-                    // View-map icon button
-                    OutlinedButton(
-                      onPressed: () => _openRouteMap(order),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF4C6EF5),
-                        side: const BorderSide(
-                            color: Color(0xFF4C6EF5), width: 1.2),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Icon(Icons.map_rounded, size: 18),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.currency_rupee_rounded, color: Colors.white, size: 14),
+                        Text(totalEarnings.toStringAsFixed(0),
+                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    // Accept button
-                    ElevatedButton(
-                      onPressed: () => _acceptOrder(order),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.success,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                        elevation: 4,
-                        shadowColor:
-                            AppColors.success.withValues(alpha: 0.4),
-                      ),
-                      child: Text('Accept',
-                          style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w800, fontSize: 14)),
-                    ),
-                  ]),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white70),
                 ]),
-          ),
-        ]),
-      ),
+              ),
+            ),
+            if (isExpanded)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Icon(Icons.location_on_outlined, size: 16, color: AppColors.danger),
+                        const SizedBox(width: 6),
+                        Expanded(
+                            child: Text(group.customerAddress,
+                                style: GoogleFonts.outfit(
+                                    color: isDark ? Colors.white60 : Colors.grey.shade600, fontSize: 13),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis)),
+                      ]),
+                      const SizedBox(height: 10),
+                      Text('Contains items from ${group.orders.length} shops', 
+                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.amber)),
+                      const SizedBox(height: 6),
+                      ...group.orders.map((o) {
+                        final shopName = _shopInfoCache[o.shopId]?.name ?? 'Shop';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.circle, size: 6, color: Colors.amber),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(shopName, style: GoogleFonts.outfit(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87))),
+                            ],
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        OutlinedButton(
+                          onPressed: () => _openRouteMapForGroup(group),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF4C6EF5),
+                            side: const BorderSide(color: Color(0xFF4C6EF5), width: 1.2),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Icon(Icons.map_rounded, size: 18),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => _acceptOrderGroup(group),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.success,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              elevation: 4,
+                              shadowColor: AppColors.success.withValues(alpha: 0.4),
+                            ),
+                            child: Text('Accept Group', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
+                          ),
+                        ),
+                      ]),
+                    ]),
+              ),
+          ]),
+        );
+      }
     );
   }
 
-  Widget _activeOrderCard(OrderModel order, bool isDark) {
+  Widget _activeOrderGroupCard(OrderGroup group, bool isDark) {
+    final totalEarnings = group.orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
+    final statusGradient = group.groupStatus == 'out_for_delivery'
+        ? [const Color(0xFF4C6EF5), const Color(0xFF364FC7)]
+        : group.groupStatus == 'picked_up'
+            ? [const Color(0xFF51CF66), const Color(0xFF2F9E44)]
+            : [const Color(0xFFFF8C42), const Color(0xFFE8590C)];
+
+    bool isExpanded = true; // active groups expanded by default makes sense, but we can make it false if there are many. Let's default to false if > 1 shop, otherwise true.
+    if (group.orders.length > 1) {
+      isExpanded = false;
+    }
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF121222) : Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: statusGradient.first.withValues(alpha: 0.3), width: 1.5),
+            boxShadow: [BoxShadow(color: statusGradient.first.withValues(alpha: 0.15), blurRadius: 16, offset: const Offset(0, 6))],
+          ),
+          child: Column(children: [
+            // Header
+            GestureDetector(
+              onTap: () => setState(() => isExpanded = !isExpanded),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: statusGradient),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Row(children: [
+                  Text('Collected Order (${group.orders.length})',
+                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
+                    child: Text(group.groupStatus.toUpperCase(),
+                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white70),
+                ]),
+              ),
+            ),
+            // Body
+            if (isExpanded)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(children: [
+                  // Destination
+                  Row(children: [
+                    const Icon(Icons.location_on_outlined, size: 16, color: AppColors.danger),
+                    const SizedBox(width: 6),
+                    Expanded(
+                        child: Text(group.customerAddress,
+                            style: GoogleFonts.outfit(color: isDark ? Colors.white60 : Colors.grey.shade600, fontSize: 13),
+                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ]),
+                  const SizedBox(height: 12),
+                  if (group.customerPhone != null)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _callPhone(group.customerPhone!),
+                        icon: const Icon(Icons.phone_outlined, size: 16),
+                        label: Text('Call Customer', style: GoogleFonts.outfit(fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  
+                  // Render individual shop pickup cards
+                  ...group.orders.map((o) => _buildShopPickupTile(o, isDark)),
+
+                  // Master Actions
+                  if (group.allPickedUp && !group.allOutForDelivery)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          for (var o in group.orders) await _updateStatus(o, 'out_for_delivery');
+                        },
+                        icon: const Icon(Icons.rocket_launch, size: 18),
+                        label: Text('Mark All Out for Delivery', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4C6EF5), foregroundColor: Colors.white),
+                      ),
+                    ),
+                  if (group.allOutForDelivery && group.groupStatus != 'delivered')
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          for (var o in group.orders) await _updateStatus(o, 'delivered');
+                        },
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: Text('Mark All Delivered', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white),
+                      ),
+                    ),
+                ]),
+              ),
+          ]),
+        );
+      }
+    );
+  }
+
+  Widget _buildShopPickupTile(OrderModel order, bool isDark) {
     String? nextStatus;
     String? nextLabel;
-
-    // Wait-time variables
     final now = DateTime.now();
     bool showWaitTimer = false;
     int waitMinutes = 0;
@@ -1472,11 +1540,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     bool canReassign = false;
 
     if (order.arrivedAtShopTime != null) {
-      if (order.status == 'confirmed' ||
-          order.status == 'preparing' ||
-          order.status == 'ready_for_pickup') {
+      if (order.status == 'confirmed' || order.status == 'preparing' || order.status == 'ready_for_pickup') {
         showWaitTimer = true;
-        // If shop marked ready, calculate wait time up to orderReadyTime. Else up to now.
         final endTime = order.orderReadyTime ?? now;
         waitMinutes = endTime.difference(order.arrivedAtShopTime!).inMinutes;
         final paidMinutes = math.max(0, math.min(10, waitMinutes - 10));
@@ -1488,295 +1553,96 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     if (order.status == 'confirmed' || order.status == 'preparing') {
       if (order.arrivedAtShopTime == null) {
         nextStatus = 'arrived';
-        nextLabel = '📍 Mark Arrived at Shop';
+        nextLabel = '📍 Mark Arrived';
       } else {
         if (canReassign) {
           nextStatus = 'reassign';
           nextLabel = '⚠️ Wait Time Exceeded - Reassign';
         } else {
           nextLabel = 'Waiting for Shop to Pack...';
-          nextStatus = null; // disabled
+          nextStatus = null;
         }
       }
     } else if (order.status == 'ready_for_pickup') {
       nextStatus = 'picked_up';
-      nextLabel = '✅ Confirm Received (Mark Picked Up)';
-    } else if (order.status == 'picked_up') {
-      nextStatus = 'out_for_delivery';
-      nextLabel = '🚀 Out for Delivery';
-    } else if (order.status == 'out_for_delivery') {
-      nextStatus = 'delivered';
-      nextLabel = '✅ Mark Delivered';
+      nextLabel = '✅ Confirm Received';
     }
 
-    final statusGradient = order.status == 'out_for_delivery'
-        ? [const Color(0xFF4C6EF5), const Color(0xFF364FC7)]
-        : order.status == 'picked_up'
-            ? [const Color(0xFF51CF66), const Color(0xFF2F9E44)]
-            : [const Color(0xFFFF8C42), const Color(0xFFE8590C)];
+    final shopInfo = _shopInfoCache[order.shopId];
+    final shopName = shopInfo?.name ?? 'Shop';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF121222) : Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-            color: statusGradient.first.withValues(alpha: 0.3), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-              color: statusGradient.first.withValues(alpha: 0.15),
-              blurRadius: 16,
-              offset: const Offset(0, 6))
+        color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.storefront_rounded, size: 16, color: AppColors.accent),
+              const SizedBox(width: 6),
+              Expanded(child: Text(shopName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13))),
+              Text(order.statusDisplay, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey)),
+            ],
+          ),
+          if (order.shopPhone != null) ...[
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: () => _callPhone(order.shopPhone!),
+              child: Text('📞 Call Shop', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.accent, decoration: TextDecoration.underline)),
+            )
+          ],
+          if (showWaitTimer) ...[
+            const SizedBox(height: 8),
+            Text('Wait Time: $waitMinutes mins (+₹${waitPenalty.toStringAsFixed(1)})', 
+                style: GoogleFonts.outfit(fontSize: 12, color: waitMinutes >= 10 ? Colors.orange : Colors.blue)),
+          ],
+          if (nextLabel != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: nextStatus == null
+                    ? null
+                    : () {
+                        if (nextStatus == 'arrived') {
+                          _showSnack('📍 GPS verified: At Shop');
+                          _updateStatus(order, nextStatus!);
+                        } else if (nextStatus == 'reassign') {
+                          _showDisputeDialog(order);
+                        } else {
+                          _updateStatus(order, nextStatus!);
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: nextStatus == 'reassign' ? AppColors.danger : AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  elevation: 0,
+                ),
+                child: Text(nextLabel, style: GoogleFonts.outfit(fontSize: 12)),
+              ),
+            ),
+          ],
+          if (showWaitTimer || order.status == 'ready_for_pickup' || order.status == 'preparing') ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => _showDisputeDialog(order),
+              icon: const Icon(Icons.report_problem_outlined, color: AppColors.danger, size: 16),
+              label: Text(
+                  order.orderReadyTime != null
+                      ? 'Shop Lied - Items Not Received'
+                      : 'Shop Lied / Items Not Given',
+                  style: GoogleFonts.outfit(color: AppColors.danger, fontSize: 12)),
+            ),
+          ],
         ],
       ),
-      child: Column(children: [
-        // 5-step status progress strip
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: statusGradient),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Text('Order #${order.id.substring(0, 8).toUpperCase()}',
-                    style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(order.status == 'awaiting_payment' ? 'Waiting for Payment' : order.statusDisplay,
-                      style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ]),
-              const SizedBox(height: 12),
-              // Simplified 4-step progress visualizer
-              Row(
-                children: [
-                  _progressStep(icon: Icons.storefront_rounded, isActive: true),
-                  _progressLine(isActive: order.arrivedAtShopTime != null),
-                  _progressStep(icon: Icons.done_all_rounded, isActive: order.arrivedAtShopTime != null),
-                  _progressLine(isActive: order.status == 'picked_up' || order.status == 'out_for_delivery'),
-                  _progressStep(icon: Icons.local_shipping_rounded, isActive: order.status == 'picked_up' || order.status == 'out_for_delivery'),
-                  _progressLine(isActive: order.status == 'out_for_delivery'),
-                  _progressStep(icon: Icons.home_rounded, isActive: order.status == 'out_for_delivery'),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            Row(children: [
-              const Icon(Icons.location_on_outlined,
-                  size: 16, color: AppColors.danger),
-              const SizedBox(width: 6),
-              Expanded(
-                  child: Text(order.address ?? 'Address not set',
-                      style: GoogleFonts.outfit(
-                          color: isDark ? Colors.white60 : Colors.grey.shade600,
-                          fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis)),
-            ]),
-            const SizedBox(height: 12),
-            Row(children: [
-              if (order.customerPhone != null)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _callPhone(order.customerPhone!),
-                    icon: const Icon(Icons.phone_outlined, size: 16),
-                    label: Text('Customer',
-                        style: GoogleFonts.outfit(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              if (order.customerPhone != null && order.shopPhone != null)
-                const SizedBox(width: 8),
-              if (order.shopPhone != null)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _callPhone(order.shopPhone!),
-                    icon: const Icon(Icons.store_outlined, size: 16),
-                    label:
-                        Text('Shop', style: GoogleFonts.outfit(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.accent,
-                      side: const BorderSide(color: AppColors.accent),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-            ]),
-            if (order.status == 'confirmed' || order.status == 'preparing' || order.status == 'ready_for_pickup' || order.status == 'picked_up' || order.status == 'out_for_delivery') ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => _launchNavigation(order),
-                  icon: const Icon(Icons.map_outlined, size: 18),
-                  label: Text('Navigate 🗺️', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF4C6EF5),
-                    side: const BorderSide(color: Color(0xFF4C6EF5)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ),
-            ],
-            if (order.deliveryNotes != null && order.deliveryNotes!.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.note_alt_outlined, size: 18, color: Colors.orange),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Delivery Note', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
-                          const SizedBox(height: 4),
-                          Text(order.deliveryNotes!, style: GoogleFonts.outfit(fontSize: 13, color: isDark ? Colors.white : AppColors.textPrimary)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (showWaitTimer) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: waitMinutes >= 10
-                      ? Colors.orange.withValues(alpha: 0.1)
-                      : Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: waitMinutes >= 10 ? Colors.orange : Colors.blue),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.timer_outlined,
-                        color: waitMinutes >= 10 ? Colors.orange : Colors.blue),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Wait Time: $waitMinutes mins',
-                              style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.bold,
-                                  color: waitMinutes >= 10
-                                      ? Colors.orange
-                                      : Colors.blue)),
-                          Text(
-                              order.orderReadyTime != null
-                                  ? 'Timer stopped by shop'
-                                  : (waitMinutes < 10
-                                      ? 'Grace period (10 mins)'
-                                      : 'Earning ₹1.5/min delay penalty'),
-                              style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.black87)),
-                        ],
-                      ),
-                    ),
-                    Text('+₹${waitPenalty.toStringAsFixed(1)}',
-                        style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: AppColors.success)),
-                  ],
-                ),
-              ),
-            ],
-            if (nextLabel != null) ...[
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: nextStatus == null
-                      ? null
-                      : () {
-                          if (nextStatus == 'arrived') {
-                            // Geofence mock: within 100 meters
-                            _showSnack('📍 GPS verified: At Shop');
-                            _updateStatus(order, nextStatus!);
-                          } else if (nextStatus == 'reassign') {
-                            _showDisputeDialog(order);
-                          } else {
-                            _updateStatus(order, nextStatus!);
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: nextStatus == 'reassign'
-                        ? AppColors.danger
-                        : statusGradient.first,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor:
-                        isDark ? Colors.white10 : Colors.grey.shade300,
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  child: Text(nextLabel,
-                      style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w700, fontSize: 14)),
-                ),
-              ),
-            ],
-            if (showWaitTimer || order.status == 'ready_for_pickup' || order.status == 'preparing') ...[
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () => _showDisputeDialog(order),
-                icon: const Icon(Icons.report_problem_outlined,
-                    color: AppColors.danger, size: 16),
-                label: Text(
-                    order.orderReadyTime != null
-                        ? 'Shop Lied - Items Not Received'
-                        : 'Shop Lied / Items Not Given',
-                    style: GoogleFonts.outfit(
-                        color: AppColors.danger, fontSize: 12)),
-              ),
-            ],
-          ]),
-        ),
-      ]),
     );
   }
 

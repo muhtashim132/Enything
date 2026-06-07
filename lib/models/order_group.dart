@@ -1,0 +1,42 @@
+import 'order_model.dart';
+
+class OrderGroup {
+  final String groupId; // Usually cart_group_id, or order.id if cart_group_id is null
+  final List<OrderModel> orders;
+
+  OrderGroup(this.groupId, this.orders);
+
+  double get totalGrand => orders.fold(0.0, (sum, o) => sum + o.grandTotalCollected);
+  double get totalEarnings => orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
+  
+  String get customerAddress => orders.first.address ?? 'Address not set';
+  String? get customerPhone => orders.first.customerPhone;
+  String? get customerName => orders.first.customerId; // actually we don't store customer name in order model?
+
+  // Delivery coords (assumed identical for all orders in a group)
+  double? get deliveryLat => orders.first.deliveryLat;
+  double? get deliveryLng => orders.first.deliveryLng;
+
+  // Has multi-shop?
+  bool get isMultiShop => orders.length > 1;
+
+  // Lowest status representation (e.g. if one is pending, the group is pending)
+  // For rider progress: Arrived -> Picked Up -> Out for Delivery -> Delivered
+  bool get allArrived => orders.every((o) => o.arrivedAtShopTime != null);
+  bool get allPickedUp => orders.every((o) => o.status == 'picked_up' || o.status == 'out_for_delivery' || o.status == 'delivered');
+  bool get allOutForDelivery => orders.every((o) => o.status == 'out_for_delivery' || o.status == 'delivered');
+
+  // The dominant group status for UI display
+  String get groupStatus {
+    if (orders.every((o) => o.status == 'delivered')) return 'delivered';
+    if (orders.every((o) => o.status == 'out_for_delivery')) return 'out_for_delivery';
+    if (allPickedUp) return 'picked_up'; // ready to go out for delivery
+    
+    // Check if any is still pending/preparing
+    if (orders.any((o) => o.status == 'pending')) return 'pending';
+    if (orders.any((o) => o.status == 'awaiting_payment')) return 'awaiting_payment';
+    
+    // Otherwise it's in the pickup phase
+    return 'pickup_in_progress';
+  }
+}
