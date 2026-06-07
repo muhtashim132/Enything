@@ -305,20 +305,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       cart.clear();
       if (mounted) {
-        if (orderIds.length == 1) {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            AppRoutes.trackOrder,
-            (route) => route.settings.name == AppRoutes.customerHome,
-            arguments: {'orderId': orderIds.first},
-          );
-        } else {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            AppRoutes.orderHistory,
-            (route) => route.settings.name == AppRoutes.customerHome,
-          );
-        }
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.trackOrder,
+          (route) => route.settings.name == AppRoutes.customerHome,
+          arguments: {'orderId': orderIds.first},
+        );
       }
     } catch (e) {
       debugPrint('Order placement error: $e');

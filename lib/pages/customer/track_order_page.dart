@@ -53,8 +53,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Timer? _acceptanceCountdownTimer;
   int _acceptanceSecondsLeft = 120;
 
-  // Sibling orders (same cart_group_id) for multi-shop display (up to 3 shops)
-  List<Map<String, dynamic>> _siblingOrders = [];
   bool _isRetrying = false;
 
   final List<Map<String, dynamic>> _steps = [
@@ -123,7 +121,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _fetchOrder();
-    _subscribeToOrder();
   }
 
   @override
@@ -135,6 +132,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _channel?.unsubscribe();
     super.dispose();
   }
+
+  List<OrderModel> _groupOrders = [];
 
   Future<void> _fetchOrder() async {
     try {
@@ -149,33 +148,35 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         order.items = (response['order_items'] as List? ?? [])
             .map((i) => OrderItem.fromMap(i))
             .toList();
+        // Fetch sibling orders if multi-shop checkout
+        List<OrderModel> group = [order];
+        if (order.cartGroupId != null) {
+          final groupResp = await _supabase
+              .from('orders')
+              .select('*, order_items(*)')
+              .eq('cart_group_id', order.cartGroupId!);
+          group = (groupResp as List).map((o) {
+            final m = OrderModel.fromMap(o);
+            m.items = (o['order_items'] as List? ?? [])
+                .map((i) => OrderItem.fromMap(i))
+                .toList();
+            return m;
+          }).toList();
+        }
+
         setState(() {
           _order = order;
+          _groupOrders = group;
           _isLoading = false;
           if (order.riderLat != null && order.riderLng != null) {
             _riderLatLng = LatLng(order.riderLat!, order.riderLng!);
           }
         });
 
-        NotificationService().updateOrderNotificationFromStatus(order.status);
+        _subscribeToOrder();
 
-        // Start acceptance countdown if still waiting
-        if (order.status == 'awaiting_acceptance') {
-          _startAcceptanceCountdown(order);
-        } else if (order.status == 'awaiting_payment') {
-          _startPaymentCountdown(order);
-          // Only auto-open if not already processing
-          if (!_isProcessingPayment) {
-            Future.delayed(const Duration(milliseconds: 800), () {
-              if (mounted) _openRazorpay(order);
-            });
-          }
-        }
-
-        // Fetch sibling orders if multi-shop checkout
-        if (order.cartGroupId != null) {
-          _fetchSiblingOrders(order.cartGroupId!);
-        }
+        // Compute aggregate status for countdowns/payments
+        _handleAggregateStatusChange();
 
         // If already delivered and not yet rated, show rating prompt
         if (order.status == 'delivered' && !order.hasCustomerRated) {
@@ -189,65 +190,204 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   void _subscribeToOrder() {
+    if (_order == null) return;
+    _channel?.unsubscribe();
+    
+    final filter = _order!.cartGroupId != null
+        ? PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'cart_group_id',
+            value: _order!.cartGroupId!,
+          )
+        : PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: widget.orderId,
+          );
+
     _channel = _supabase
-        .channel('order-${widget.orderId}')
+        .channel('group-${_order!.cartGroupId ?? widget.orderId}')
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'orders',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'id',
-            value: widget.orderId,
-          ),
+          filter: filter,
           callback: (payload) {
             if (mounted && payload.newRecord.isNotEmpty) {
               final updatedOrder = OrderModel.fromMap(payload.newRecord);
-              // BUG-14 FIX: Preserve joined order_items which are omitted in real-time payloads
-              updatedOrder.items = _order?.items ?? [];
-              final wasDelivered = _order?.status != 'delivered' &&
-                  updatedOrder.status == 'delivered';
-              final justReadyToPay = _order?.status != 'awaiting_payment' &&
-                  updatedOrder.status == 'awaiting_payment';
-              final justAccepting = _order?.status != 'awaiting_acceptance' &&
-                  updatedOrder.status == 'awaiting_acceptance';
-
+              
               setState(() {
-                _order = updatedOrder;
-                if (updatedOrder.riderLat != null &&
-                    updatedOrder.riderLng != null) {
-                  _riderLatLng =
-                      LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
+                // Update in group list
+                final idx = _groupOrders.indexWhere((o) => o.id == updatedOrder.id);
+                if (idx != -1) {
+                  updatedOrder.items = _groupOrders[idx].items; // preserve items
+                  _groupOrders[idx] = updatedOrder;
                 }
-                if (updatedOrder.status == 'delivered') _riderLatLng = null;
+                
+                // If it's the primary order, update _order
+                if (updatedOrder.id == widget.orderId) {
+                  _order = updatedOrder;
+                  if (updatedOrder.riderLat != null && updatedOrder.riderLng != null) {
+                    _riderLatLng = LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
+                  }
+                  if (updatedOrder.status == 'delivered') _riderLatLng = null;
+                } else if (_order != null && updatedOrder.riderLat != null && updatedOrder.riderLng != null) {
+                  // If sibling order provides rider location
+                  _riderLatLng = LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
+                }
               });
 
-              NotificationService()
-                  .updateOrderNotificationFromStatus(updatedOrder.status);
-
-              // Start/stop acceptance countdown
-              if (justAccepting) {
-                _startAcceptanceCountdown(updatedOrder);
-              } else if (updatedOrder.status != 'awaiting_acceptance') {
-                _acceptanceCountdownTimer?.cancel();
-              }
-
-              // Auto-open Razorpay when both seller & rider have accepted
-              if (justReadyToPay) {
-                _startPaymentCountdown(updatedOrder);
-                Future.delayed(const Duration(milliseconds: 800), () {
-                  if (mounted) _openRazorpay(updatedOrder);
-                });
-              }
-
-              if (wasDelivered && !updatedOrder.hasCustomerRated) {
-                Future.delayed(
-                    const Duration(milliseconds: 600), _showRatingFlow);
-              }
+              _handleAggregateStatusChange();
             }
           },
         )
         .subscribe();
+  }
+
+  String get _aggregateStatus {
+    if (_groupOrders.isEmpty) return _order?.status ?? 'pending';
+    
+    final activeOrders = _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    if (activeOrders.isEmpty) return 'cancelled';
+
+    // Priority 1: awaiting_acceptance
+    if (activeOrders.any((o) => o.status == 'awaiting_acceptance')) return 'awaiting_acceptance';
+    
+    // Priority 2: awaiting_payment
+    // If NO order is awaiting_acceptance, and ANY order is awaiting_payment, then we are ready for payment!
+    // Wait, we need ALL active orders to have moved past awaiting_acceptance. 
+    // If they have, and some are awaiting_payment, we are awaiting_payment.
+    if (activeOrders.any((o) => o.status == 'awaiting_payment')) return 'awaiting_payment';
+
+    // Priority 3: pending
+    if (activeOrders.any((o) => o.status == 'pending')) return 'pending';
+
+    // Priority 4: out_for_delivery
+    if (activeOrders.any((o) => o.status == 'out_for_delivery')) return 'out_for_delivery';
+
+    // Priority 5: picked_up
+    if (activeOrders.any((o) => o.status == 'picked_up')) return 'picked_up';
+
+    // Priority 6: preparing / ready_for_pickup
+    if (activeOrders.any((o) => o.status == 'preparing' || o.status == 'ready_for_pickup')) return 'preparing';
+
+    // Priority 7: confirmed
+    if (activeOrders.any((o) => o.status == 'confirmed')) return 'confirmed';
+
+    // Priority 8: delivered
+    if (activeOrders.every((o) => o.status == 'delivered')) return 'delivered';
+
+    return activeOrders.first.status;
+  }
+
+  String get _aggregateStatusDisplay {
+    final s = _aggregateStatus;
+    switch (s) {
+      case 'awaiting_acceptance':
+        return 'Awaiting Acceptance';
+      case 'awaiting_payment':
+        return 'Awaiting Payment';
+      case 'pending':
+        return 'Order Pending';
+      case 'confirmed':
+        return 'Order Confirmed';
+      case 'preparing':
+        return 'Preparing Order';
+      case 'ready_for_pickup':
+        return 'Ready for Pickup';
+      case 'picked_up':
+        return 'Picked Up';
+      case 'out_for_delivery':
+        return 'Out for Delivery';
+      case 'delivered':
+        return 'Delivered';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'seller_rejected':
+        return 'Shop Rejected';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  bool get _isCancelled => _aggregateStatus == 'cancelled' || _aggregateStatus == 'seller_rejected';
+  bool get _isDelivered => _aggregateStatus == 'delivered';
+
+  double _computeGroupTotalAmount() {
+    final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    return active.fold(0.0, (sum, o) => sum + o.totalAmount);
+  }
+
+  double _computeGroupDeliveryCharges() {
+    final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    return active.fold(0.0, (sum, o) => sum + o.deliveryCharges);
+  }
+
+  double _computeGroupPlatformFee() {
+    final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    return active.fold(0.0, (sum, o) => sum + o.platformFee);
+  }
+
+  double _computeGroupGstItemTotal() {
+    final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    return active.fold(0.0, (sum, o) => sum + o.gstItemTotal);
+  }
+
+  double _computeGroupGrandTotal() {
+    final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    return active.fold(0.0, (sum, o) => sum + (o.grandTotalCollected > 0 ? o.grandTotalCollected : o.grandTotal));
+  }
+
+  bool get _allSellersAccepted {
+    if (_groupOrders.isEmpty) return _order?.sellerAccepted ?? false;
+    final active = _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    if (active.isEmpty) return false;
+    return active.every((o) => o.sellerAccepted);
+  }
+
+  bool get _partnerAccepted {
+    if (_groupOrders.isEmpty) return _order?.partnerAccepted ?? false;
+    final active = _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    if (active.isEmpty) return false;
+    return active.every((o) => o.partnerAccepted);
+  }
+
+  String _lastAggStatus = '';
+
+  void _handleAggregateStatusChange() {
+    if (!mounted || _order == null) return;
+    final aggStatus = _aggregateStatus;
+    
+    if (aggStatus != _lastAggStatus) {
+      _lastAggStatus = aggStatus;
+      NotificationService().updateOrderNotificationFromStatus(aggStatus);
+
+      if (aggStatus == 'awaiting_acceptance') {
+        _startAcceptanceCountdown(_order!);
+      } else {
+        _acceptanceCountdownTimer?.cancel();
+      }
+
+      if (aggStatus == 'awaiting_payment') {
+        // Find the deadline from any active awaiting_payment order
+        final awaitingPayOrder = _groupOrders.firstWhere(
+            (o) => o.status == 'awaiting_payment',
+            orElse: () => _order!);
+        _startPaymentCountdown(awaitingPayOrder);
+        
+        if (!_isProcessingPayment) {
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (mounted) _openRazorpay();
+          });
+        }
+      } else {
+        _paymentCountdownTimer?.cancel();
+      }
+      
+      if (aggStatus == 'delivered' && !_order!.hasCustomerRated) {
+        Future.delayed(const Duration(milliseconds: 600), _showRatingFlow);
+      }
+    }
   }
 
   // ── Acceptance countdown timer ───────────────────────────────────────────
@@ -301,21 +441,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     } catch (e) {
       debugPrint('Auto-cancel error: $e');
     }
-  }
-
-  // ── Fetch sibling orders (same cart_group_id, up to 3 shops) ─────────────
-  Future<void> _fetchSiblingOrders(String cartGroupId) async {
-    try {
-      final data = await _supabase
-          .from('orders')
-          .select('id, status, shop_id, cancelled_reason, rejection_message')
-          .eq('cart_group_id', cartGroupId)
-          .neq('id', widget.orderId);
-      if (mounted) {
-        setState(() =>
-            _siblingOrders = List<Map<String, dynamic>>.from(data as List));
-      }
-    } catch (_) {}
   }
 
   // ── Retry: create a fresh awaiting_acceptance copy of the current order ───
@@ -843,14 +968,20 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     });
   }
 
-  Future<void> _openRazorpay(OrderModel order) async {
-    if (_isProcessingPayment) return;
+  Future<void> _openRazorpay() async {
+    if (_isProcessingPayment || _order == null) return;
     setState(() => _isProcessingPayment = true);
     try {
-      final grandTotal = order.grandTotalCollected > 0
-          ? order.grandTotalCollected
-          : order.grandTotal;
-      final amountInPaise = (grandTotal * 100).toInt();
+      final activeOrders = _groupOrders.isEmpty 
+          ? [_order!] 
+          : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+
+      double totalAmount = 0.0;
+      for (var o in activeOrders) {
+        totalAmount += (o.grandTotalCollected > 0 ? o.grandTotalCollected : o.grandTotal);
+      }
+      
+      final amountInPaise = (totalAmount * 100).toInt();
 
       final razorpayKeyId = dotenv.maybeGet('RAZORPAY_KEY_ID') ?? '';
       final razorpayKeySecret = dotenv.maybeGet('RAZORPAY_KEY_SECRET') ?? '';
@@ -870,7 +1001,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         body: jsonEncode({
           'amount': amountInPaise,
           'currency': 'INR',
-          'receipt': 'enything_${order.id.substring(0, 8)}',
+          'receipt': _order!.cartGroupId != null 
+              ? 'enything_group_${_order!.cartGroupId!.substring(0, 8)}' 
+              : 'enything_${_order!.id.substring(0, 8)}',
         }),
       );
 
@@ -951,13 +1084,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         return;
       }
 
-      // Signature verified — mark order as confirmed
-      await _supabase.from('orders').update({
-        'status': 'confirmed',
-        'payment_status': 'captured',
-        'razorpay_payment_id': paymentId,
-        'razorpay_order_id': razorpayOrderId,
-      }).eq('id', widget.orderId);
+      // Signature verified — mark all awaiting_payment orders as confirmed
+      if (_order?.cartGroupId != null) {
+        await _supabase.from('orders').update({
+          'status': 'confirmed',
+          'payment_status': 'captured',
+          'razorpay_payment_id': paymentId,
+          'razorpay_order_id': razorpayOrderId,
+        }).eq('cart_group_id', _order!.cartGroupId!).eq('status', 'awaiting_payment');
+      } else {
+        await _supabase.from('orders').update({
+          'status': 'confirmed',
+          'payment_status': 'captured',
+          'razorpay_payment_id': paymentId,
+          'razorpay_order_id': razorpayOrderId,
+        }).eq('id', widget.orderId);
+      }
 
       _paymentCountdownTimer?.cancel();
       setState(() => _isProcessingPayment = false);
@@ -1000,11 +1142,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
 
     final currentStep = _getCurrentStep();
-    final isDelivered = _order!.status == 'delivered';
-    final isCancelled = _order!.status == 'cancelled' ||
-        _order!.status == 'seller_rejected' ||
-        _order!.status == 'partner_rejected';
-    final isLive = _order!.status == 'out_for_delivery';
+    final isDelivered = _isDelivered;
+    final isCancelled = _isCancelled;
+    final isLive = _aggregateStatus == 'out_for_delivery';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
@@ -1110,7 +1250,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 400),
                   child: Container(
-                    key: ValueKey(_order!.status),
+                    key: ValueKey(_aggregateStatus),
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -1142,8 +1282,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     child: Column(
                       children: [
                         // Countdown ring for awaiting_acceptance
-
-                        if (_order!.status == 'awaiting_acceptance')
+                        if (_aggregateStatus == 'awaiting_acceptance')
                           Stack(
                             alignment: Alignment.center,
                             children: [
@@ -1222,7 +1361,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            _order!.statusDisplay,
+                            _aggregateStatusDisplay,
                             style: GoogleFonts.outfit(
                               color: Colors.white,
                               fontSize: 22,
@@ -1241,19 +1380,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           ),
                         ),
                         // Per-party acceptance chips (awaiting_acceptance only)
-                        if (_order!.status == 'awaiting_acceptance') ...[
+                        if (_aggregateStatus == 'awaiting_acceptance') ...[
                           const SizedBox(height: 14),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               _acceptanceChip(
-                                label: '🏪 Shop',
-                                accepted: _order!.sellerAccepted,
+                                label: '🏪 Shop${_groupOrders.length > 1 ? 's' : ''}',
+                                accepted: _allSellersAccepted,
                               ),
                               const SizedBox(width: 10),
                               _acceptanceChip(
                                 label: '🛵 Rider',
-                                accepted: _order!.partnerAccepted,
+                                accepted: _partnerAccepted,
                               ),
                             ],
                           ),
@@ -1400,22 +1539,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       ]),
                       const SizedBox(height: 16),
                       _billRow('Item Subtotal',
-                          '₹${_order!.totalAmount.toStringAsFixed(0)}',
+                          '₹${_computeGroupTotalAmount().toStringAsFixed(0)}',
                           isDark: isDark),
                       const SizedBox(height: 8),
                       _billRow('Delivery Fee',
-                          '₹${_order!.deliveryCharges.toStringAsFixed(0)}',
+                          '₹${_computeGroupDeliveryCharges().toStringAsFixed(0)}',
                           isDark: isDark),
-                      if (_order!.platformFee > 0) ...[
+                      if (_computeGroupPlatformFee() > 0) ...[
                         const SizedBox(height: 8),
                         _billRow('Handling Fee',
-                            '₹${_order!.platformFee.toStringAsFixed(0)}',
+                            '₹${_computeGroupPlatformFee().toStringAsFixed(0)}',
                             isDark: isDark),
                       ],
-                      if (_order!.gstItemTotal > 0) ...[
+                      if (_computeGroupGstItemTotal() > 0) ...[
                         const SizedBox(height: 8),
                         _billRow('GST on Items',
-                            '₹${_order!.gstItemTotal.toStringAsFixed(0)}',
+                            '₹${_computeGroupGstItemTotal().toStringAsFixed(0)}',
                             isDark: isDark),
                       ],
                       Divider(
@@ -1426,7 +1565,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       ),
                       _billRow(
                         'Total Paid',
-                        '₹${(_order!.grandTotalCollected > 0 ? _order!.grandTotalCollected : _order!.grandTotal).toStringAsFixed(0)}',
+                        '₹${_computeGroupGrandTotal().toStringAsFixed(0)}',
                         isBold: true,
                         isDark: isDark,
                       ),
@@ -1458,7 +1597,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   ),
 
                 // ── PAY NOW BUTTON (when both seller & rider accepted) ────────
-                if (_order!.status == 'awaiting_payment') ...[
+                if (_aggregateStatus == 'awaiting_payment') ...[
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -1518,7 +1657,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           child: ElevatedButton(
                             onPressed: _isProcessingPayment
                                 ? null
-                                : () => _openRazorpay(_order!),
+                                : () => _openRazorpay(),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: const Color(0xFF0F9B58),
@@ -1533,7 +1672,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2))
                                 : Text(
-                                    'PAY NOW \u20b9${(_order!.grandTotalCollected > 0 ? _order!.grandTotalCollected : _order!.grandTotal).toStringAsFixed(0)}',
+                                    'PAY NOW \u20b9${_computeGroupGrandTotal().toStringAsFixed(0)}',
                                     style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16)),
@@ -1544,78 +1683,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   ),
                 ],
 
-                // ── Sibling orders banner (multi-shop checkout, up to 3 shops) ─
-                if (_siblingOrders.isNotEmpty) ...{
-                  const SizedBox(height: 16),
-                  ..._siblingOrders.map((sibling) {
-                    final sibStatus = sibling['status'] as String? ?? '';
-                    final isActive = sibStatus != 'cancelled' &&
-                        sibStatus != 'seller_rejected' &&
-                        sibStatus != 'partner_rejected';
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: GestureDetector(
-                        onTap: () => Navigator.pushNamed(
-                          context,
-                          AppRoutes.trackOrder,
-                          arguments: {'orderId': sibling['id']},
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? AppColors.primary
-                                    .withValues(alpha: isDark ? 0.18 : 0.08)
-                                : AppColors.danger
-                                    .withValues(alpha: isDark ? 0.12 : 0.06),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isActive
-                                  ? AppColors.primary.withValues(alpha: 0.35)
-                                  : AppColors.danger.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                isActive
-                                    ? Icons.store_rounded
-                                    : Icons.store_mall_directory_outlined,
-                                color: isActive
-                                    ? AppColors.primary
-                                    : AppColors.danger,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  isActive
-                                      ? 'Your other shop order is active → tap to track'
-                                      : 'Another shop order was also cancelled',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: isActive
-                                        ? AppColors.primary
-                                        : AppColors.danger,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: isActive
-                                    ? AppColors.primary
-                                    : AppColors.danger,
-                                size: 18,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                },
+
 
                 // ── Smart Cancellation Recovery Panel ─────────────────────────
                 if (isCancelled) ...{
@@ -1625,8 +1693,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
                 // ── Cancel button (only for awaiting_acceptance / pending) ────
                 if (!isCancelled &&
-                    (_order!.status == 'awaiting_acceptance' ||
-                        _order!.status == 'pending')) ...[
+                    (_aggregateStatus == 'awaiting_acceptance' ||
+                        _aggregateStatus == 'pending')) ...[
                   const SizedBox(height: 12),
                   _isCancelling
                       ? const SizedBox(
