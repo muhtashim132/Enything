@@ -45,7 +45,7 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
   Future<void> _fetch() async {
     try {
       final orders = await _db.from('orders').select(
-          'grand_total_collected, seller_payout, rider_earnings, enything_commission, created_at, status, id, refund_id, refund_status, gst_item_total, gst_delivery, gst_platform, payment_status, platform_fee, delivery_charges, multi_shop_surcharge, gateway_deduction');
+          'grand_total_collected, seller_payout, rider_earnings, enything_commission, created_at, status, id, refund_id, refund_status, gst_item_total, gst_delivery, gst_platform, payment_status, platform_fee, delivery_charges, gateway_deduction');
       
       final wList = await _db.from('withdrawals').select('*, profiles:user_id(full_name)').order('requested_at', ascending: false);
       _withdrawals = List<Map<String, dynamic>>.from(wList);
