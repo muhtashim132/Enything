@@ -126,6 +126,24 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       final allRoles = auth.user?.activeRoles ?? [];
 
 
+      // ── Admin Override: Admins always get the role picker or dashboard directly ──
+      if (allRoles.contains('admin')) {
+        final Set<String> adminRolesToShow = {'admin'};
+        if (_requestedRole != null && allRoles.contains(_requestedRole)) {
+          adminRolesToShow.add(_requestedRole!);
+        }
+
+        if (adminRolesToShow.length > 1) {
+          setState(() {
+            _showRolePicker = true;
+            _availableRoles = adminRolesToShow.toList();
+          });
+        } else {
+          _goToWelcomeThenDashboard('admin');
+        }
+        return;
+      }
+
       // ── Case 1: They requested a new role they don't have yet ────────
       if (_requestedRole != null && !allRoles.contains(_requestedRole)) {
         Navigator.pushReplacementNamed(
@@ -145,16 +163,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
         return;
       }
 
-      // ── Case 3: User has multiple roles and didn't request a specific one ────────
-      if (allRoles.length > 1) {
-        setState(() {
-          _showRolePicker = true;
-          _availableRoles = allRoles;
-        });
-        return;
-      }
-
-      // Fallback: No specific role requested, user has exactly 1 role
+      // Fallback: No specific role requested, just use their active session role
       final role = auth.user?.activeSessionRole ?? 'customer';
       _goToWelcomeThenDashboard(role);
     } else if (result == 'new') {

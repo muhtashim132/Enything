@@ -121,12 +121,26 @@ class AuthProvider extends ChangeNotifier {
     if (userId == null || _adminData == null) return false;
 
     try {
-      final isVerified = await _supabase.rpc(
-        'verify_admin_password',
-        params: {'p_admin_id': userId, 'p_password': password.trim()},
-      );
+      bool isVerified = false;
+      try {
+        final res = await _supabase.rpc(
+          'verify_admin_password',
+          params: {'p_admin_id': userId, 'p_password': password.trim()},
+        );
+        isVerified = res == true;
+      } catch (_) {
+        final response = await _supabase
+            .from('admin_users')
+            .select('admin_password')
+            .eq('id', userId)
+            .maybeSingle();
+        final storedPassword = response?['admin_password'] as String?;
+        if (storedPassword != null && storedPassword == password.trim()) {
+          isVerified = true;
+        }
+      }
 
-      if (isVerified == true) {
+      if (isVerified) {
         _isAdminVerified = true;
 
         // ── Create admin session ──
@@ -506,17 +520,24 @@ class AuthProvider extends ChangeNotifier {
         return null;
       }
 
-      // 3️⃣ Check if this user already has a profile
+      // 3️⃣ Check if this user already has a profile or is an admin
       final existing = await _supabase
           .from('profiles')
           .select('id, role')
           .eq('id', userId)
           .maybeSingle();
 
+      final isAdmin = await _supabase
+          .from('admin_users')
+          .select('id')
+          .eq('id', userId)
+          .eq('is_active', true)
+          .maybeSingle();
+
       _isLoading = false;
       notifyListeners();
 
-      if (existing != null || preferredRole == 'admin') {
+      if (existing != null || preferredRole == 'admin' || isAdmin != null) {
         await _fetchProfile(preferredRole: preferredRole);
         return 'existing';
       }

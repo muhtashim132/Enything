@@ -42,7 +42,7 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
     try {
       final res = await _db
           .from('orders')
-          .select('*, profiles:user_id(full_name, phone), shops:shop_id(shop_name)')
+          .select('*, profiles:customer_id(full_name, phone), shops:shop_id(shop_name)')
           .order('created_at', ascending: false)
           .limit(80);
       _orders = List<Map<String, dynamic>>.from(res);

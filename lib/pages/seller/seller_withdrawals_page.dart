@@ -64,10 +64,10 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
           .limit(50);
       _history = List<Map<String, dynamic>>.from(histRes);
 
-      // Calculate total paid out so far
+      // Calculate total requested so far (processed + pending + approved)
       double totalPaid = 0;
       for (final w in _history) {
-        if (w['status'] == 'processed') {
+        if (w['status'] != 'rejected') {
           totalPaid += (w['amount'] as num).toDouble();
         }
       }
@@ -182,7 +182,7 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
                           style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
-                        const Text('From delivered orders (minus processed withdrawals)',
+                        const Text('From delivered orders (minus requested withdrawals)',
                             style: TextStyle(color: Colors.white54, fontSize: 11)),
                       ],
                     ),

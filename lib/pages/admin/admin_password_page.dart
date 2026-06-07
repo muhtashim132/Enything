@@ -319,22 +319,25 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
             controller: _passwordCtrl,
             focusNode: _focusNode,
             obscureText: _obscure,
+            obscuringCharacter: '*',
+            cursorColor: AdminColors.primary,
             style: GoogleFonts.poppins(
                 color: AdminColors.textPrimary,
                 fontSize: 17,
-                letterSpacing: 3),
+                letterSpacing: _obscure ? 4 : 0),
             decoration: InputDecoration(
-              hintText: '• • • • • • • •',
+              hintText: '* * * * * * * *',
               hintStyle: AdminStyles.body(
                   size: 16, color: AdminColors.textMuted),
               border: InputBorder.none,
+              filled: false,
             ),
             onSubmitted: (_) => _verifyPassword(),
           ),
         ),
         IconButton(
           icon: Icon(
-            _obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+            _obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded,
             color: AdminColors.textMuted,
             size: 20,
           ),

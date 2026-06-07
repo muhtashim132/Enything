@@ -472,10 +472,12 @@ class _AnimatedRoleCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          Text(
                             title,
                             style: GoogleFonts.outfit(
                               color: Colors.white,
@@ -483,28 +485,28 @@ class _AnimatedRoleCard extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (selected)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: accentColor,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              badge,
-                              style: GoogleFonts.outfit(
-                                color: title == 'Seller'
-                                    ? Colors.black
-                                    : Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
+                          const SizedBox(width: 8),
+                          if (selected)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: accentColor,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                badge,
+                                style: GoogleFonts.outfit(
+                                  color: title == 'Seller'
+                                      ? Colors.black
+                                      : Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
