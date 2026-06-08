@@ -11,7 +11,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../providers/platform_config_provider.dart';
 import '../../models/order_model.dart';
 import '../../models/shop_model.dart';
 import '../../theme/app_colors.dart';
@@ -785,7 +784,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   // ── Route Map Launcher ─────────────────────────────────────────────────────
 
-  void _openRouteMapForGroup(OrderGroup group) {
+  void _openRouteMapForGroup(OrderGroup group, {bool isViewOnly = false}) {
     // Resolve shop coords: prefer joined cache, fall back to snapshot on order
     final shops = group.orders.map((order) {
       final shopInfo = _shopInfoCache[order.shopId];
@@ -813,6 +812,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           riderLat: _riderLat,
           riderLng: _riderLng,
           shops: shops,
+          isViewOnly: isViewOnly,
           onAccept: () {
             Navigator.pop(context);
             _acceptOrderGroup(group);
@@ -1052,7 +1052,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     onTap: () async {
                       final newVal = !_isOnline;
                       setState(() => _isOnline = newVal);
-                      if (newVal) _startLocationBroadcast(); else _stopLocationBroadcast();
+                      if (newVal) {
+                        _startLocationBroadcast();
+                      } else {
+                        _stopLocationBroadcast();
+                      }
                       final auth = context.read<AuthProvider>();
                       if (auth.currentUserId != null) {
                         try {
@@ -1130,7 +1134,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             value: _isOnline,
                             onChanged: (val) async {
                               setState(() => _isOnline = val);
-                              if (val) _startLocationBroadcast(); else _stopLocationBroadcast();
+                              if (val) {
+                                _startLocationBroadcast();
+                              } else {
+                                _stopLocationBroadcast();
+                              }
                               final auth = context.read<AuthProvider>();
                               if (auth.currentUserId != null) {
                                 try {
@@ -1459,7 +1467,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   Widget _activeOrderGroupCard(OrderGroup group, bool isDark) {
-    final totalEarnings = group.orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
     final statusGradient = group.groupStatus == 'out_for_delivery'
         ? [const Color(0xFF4C6EF5), const Color(0xFF364FC7)]
         : group.groupStatus == 'picked_up'
@@ -1527,7 +1534,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      if (group.customerPhone != null) ...[
+                      if (group.customerPhone != null && group.customerPhone!.isNotEmpty) ...[
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () => _callPhone(group.customerPhone!),
@@ -1545,7 +1552,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       ],
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _openRouteMapForGroup(group),
+                          onPressed: () => _openRouteMapForGroup(group, isViewOnly: true),
                           icon: const Icon(Icons.map_outlined, size: 16),
                           label: Text('See Route', style: GoogleFonts.outfit(fontSize: 12)),
                           style: OutlinedButton.styleFrom(
@@ -1569,7 +1576,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          for (var o in group.orders) await _updateStatus(o, 'out_for_delivery');
+                          for (var o in group.orders) {
+                            await _updateStatus(o, 'out_for_delivery');
+                          }
                         },
                         icon: const Icon(Icons.rocket_launch, size: 18),
                         label: Text('Mark All Out for Delivery', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
@@ -1662,7 +1671,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               Text(order.statusDisplay, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey)),
             ],
           ),
-          if (order.shopPhone != null) ...[
+          if (order.shopPhone != null && order.shopPhone!.isNotEmpty) ...[
             const SizedBox(height: 6),
             InkWell(
               onTap: () => _callPhone(order.shopPhone!),
@@ -1992,7 +2001,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   onChanged: (val) async {
                     setSheetState(() => _isOnline = val);
                     setState(() => _isOnline = val);
-                    if (val) _startLocationBroadcast(); else _stopLocationBroadcast();
+                    if (val) {
+                      _startLocationBroadcast();
+                    } else {
+                      _stopLocationBroadcast();
+                    }
                     final auth = context.read<AuthProvider>();
                     if (auth.currentUserId != null) {
                       try {

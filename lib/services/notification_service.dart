@@ -66,6 +66,19 @@ class NotificationService {
         showBadge: true,
       ),
     );
+
+    // CRITICAL: Create the order tracking channel for the persistent live tracking notification
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'order_tracking_channel',
+        'Order Tracking',
+        description: 'Shows real-time order progress',
+        importance: Importance.max,
+        playSound: false,
+        enableVibration: false,
+        showBadge: false,
+      ),
+    );
   }
 
 

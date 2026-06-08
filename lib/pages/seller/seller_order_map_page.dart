@@ -772,10 +772,10 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                         const SizedBox(height: 16),
 
                         // Call buttons
-                        if (order.customerPhone != null ||
-                            order.riderPhone != null) ...[
+                        if ((order.customerPhone != null && order.customerPhone!.isNotEmpty) ||
+                            (order.riderPhone != null && order.riderPhone!.isNotEmpty)) ...[
                           Row(children: [
-                            if (order.customerPhone != null)
+                            if (order.customerPhone != null && order.customerPhone!.isNotEmpty)
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () =>
@@ -798,10 +798,10 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                                   ),
                                 ),
                               ),
-                            if (order.customerPhone != null &&
-                                order.riderPhone != null)
+                            if ((order.customerPhone != null && order.customerPhone!.isNotEmpty) &&
+                                (order.riderPhone != null && order.riderPhone!.isNotEmpty))
                               const SizedBox(width: 10),
-                            if (order.riderPhone != null)
+                            if (order.riderPhone != null && order.riderPhone!.isNotEmpty)
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () => _call(order.riderPhone!),

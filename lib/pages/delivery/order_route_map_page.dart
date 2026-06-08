@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../models/order_group.dart';
 import '../../theme/app_colors.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const _kPickupColor = Color(0xFF2ECC71); // green  — rider → shop
 const _kDeliveryColor = Color(0xFFFF8C42); // orange — shop  → customer
@@ -191,6 +192,37 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     try {
       _mapCtrl.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)));
     } catch (_) {}
+  }
+
+  Future<void> _openInExternalMap() async {
+    final origin = (widget.riderLat != null && widget.riderLng != null && widget.riderLat != 0.0)
+        ? '${widget.riderLat},${widget.riderLng}'
+        : widget.shops.isNotEmpty
+            ? '${widget.shops.first.lat},${widget.shops.first.lng}'
+            : '';
+
+    final destination = (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
+        ? '${widget.group.deliveryLat},${widget.group.deliveryLng}'
+        : widget.shops.isNotEmpty
+            ? '${widget.shops.last.lat},${widget.shops.last.lng}'
+            : '';
+
+    if (origin.isEmpty || destination.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot open map: Missing location data.')));
+      }
+      return;
+    }
+
+    final waypoints = widget.shops.map((s) => '${s.lat},${s.lng}').toList();
+    
+    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&waypoints=${waypoints.join('|')}');
+    
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open map.')));
+      }
+    }
   }
 
   Widget _mapMarker(Color color, IconData icon, String label) {
@@ -386,8 +418,23 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _openInExternalMap,
+                            icon: const Icon(Icons.map_rounded, size: 20),
+                            label: Text('Open in Google Maps', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF4C6EF5),
+                              side: const BorderSide(color: Color(0xFF4C6EF5), width: 1.5),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ),
                         if (!widget.isViewOnly) ...[
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(

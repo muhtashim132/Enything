@@ -1589,10 +1589,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 // ── Glass Contact Buttons ─────────────────────────────────────
 
                 if (!isCancelled &&
-                    (_order!.shopPhone != null ||
-                        _order!.riderPhone != null)) ...[
+                    ((_order!.shopPhone != null && _order!.shopPhone!.isNotEmpty) ||
+                        (_order!.riderPhone != null && _order!.riderPhone!.isNotEmpty))) ...[
                   Row(children: [
-                    if (_order!.shopPhone != null)
+                    if (_order!.shopPhone != null && _order!.shopPhone!.isNotEmpty)
                       Expanded(
                           child: _glassContactBtn(
                         icon: Icons.store_rounded,
@@ -1607,9 +1607,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           }
                         },
                       )),
-                    if (_order!.shopPhone != null && _order!.riderPhone != null)
+                    if ((_order!.shopPhone != null && _order!.shopPhone!.isNotEmpty) &&
+                        (_order!.riderPhone != null && _order!.riderPhone!.isNotEmpty))
                       const SizedBox(width: 12),
-                    if (_order!.riderPhone != null)
+                    if (_order!.riderPhone != null && _order!.riderPhone!.isNotEmpty)
                       Expanded(
                           child: _glassContactBtn(
                         icon: Icons.delivery_dining_rounded,

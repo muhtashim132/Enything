@@ -1000,10 +1000,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           ],
 
           // Contact Buttons
-          if (order.customerPhone != null || order.riderPhone != null) ...[
+          if ((order.customerPhone != null && order.customerPhone!.isNotEmpty) || 
+              (order.riderPhone != null && order.riderPhone!.isNotEmpty)) ...[
             const SizedBox(height: 12),
             Row(children: [
-              if (order.customerPhone != null)
+              if (order.customerPhone != null && order.customerPhone!.isNotEmpty)
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _callPhone(order.customerPhone!),
@@ -1017,9 +1018,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     ),
                   ),
                 ),
-              if (order.customerPhone != null && order.riderPhone != null)
+              if ((order.customerPhone != null && order.customerPhone!.isNotEmpty) && 
+                  (order.riderPhone != null && order.riderPhone!.isNotEmpty))
                 const SizedBox(width: 8),
-              if (order.riderPhone != null)
+              if (order.riderPhone != null && order.riderPhone!.isNotEmpty)
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _callPhone(order.riderPhone!),

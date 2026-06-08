@@ -311,7 +311,9 @@ class AuthProvider extends ChangeNotifier {
       _user = UserModel.fromMap({
         ...data,
         'email': _supabase.auth.currentUser?.email ?? '',
-        'phone': _supabase.auth.currentUser?.phone ?? data['phone'] ?? '',
+        'phone': (_supabase.auth.currentUser?.phone?.isNotEmpty == true) 
+            ? _supabase.auth.currentUser!.phone! 
+            : (data['phone'] ?? ''),
         'activeRoles': allRoles,
         'activeSessionRole': sessionRole,
         'verification_status': verificationStatus,
