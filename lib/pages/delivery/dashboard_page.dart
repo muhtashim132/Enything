@@ -51,10 +51,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
 
-  bool _autoAccept = false;
   String _navApp = 'google_maps';
   String _vehicleType = 'motorcycle';
-  bool _isProcessingAutoAccept = false;
 
   // Track collapsed state so it doesn't reset on timer/realtime updates
   final Set<String> _collapsedAvailableGroups = {};
@@ -212,8 +210,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   List<OrderGroup> _groupOrders(List<OrderModel> orders) {
     final groups = <String, OrderGroup>{};
     for (var o in orders) {
-      // Group by customerId so all orders for a single customer become a "collected order"
-      final gid = o.customerId;
+      // Group by cart_group_id so multi-shop orders for a single cart become a "collected order"
+      final gid = o.cartGroupId ?? o.id;
       if (!groups.containsKey(gid)) {
         groups[gid] = OrderGroup(gid, []);
       }
@@ -233,18 +231,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (auth.currentUserId != null) {
         final partnerResp = await _supabase
             .from('delivery_partners')
-            .select('is_active, preferred_nav_app, vehicle_type, auto_accept')
+            .select('is_active, preferred_nav_app, vehicle_type')
             .eq('id', auth.currentUserId!)
             .maybeSingle();
         if (partnerResp != null) {
           if (partnerResp['is_active'] != null) _isOnline = partnerResp['is_active'] as bool;
           if (partnerResp['preferred_nav_app'] != null) _navApp = partnerResp['preferred_nav_app'] as String;
           if (partnerResp['vehicle_type'] != null) _vehicleType = partnerResp['vehicle_type'] as String;
-          if (partnerResp['auto_accept'] != null) _autoAccept = partnerResp['auto_accept'] as bool;
         }
-
       }
-
 
       final available = await _supabase
           .from('orders')
@@ -337,11 +332,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         _isLoading = false;
       });
 
-      if (_isOnline && _autoAccept && _availableGroups.isNotEmpty && !_isProcessingAutoAccept) {
-        _isProcessingAutoAccept = true;
-        await _acceptOrderGroup(_availableGroups.first);
-        _isProcessingAutoAccept = false;
-      }
 
       // Auto-start broadcast if rider is online
       if (_isOnline && _locationBroadcastTimer == null) {
@@ -402,7 +392,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         if (paymentDeadline != null) 'payment_deadline': paymentDeadline,
         if (shopLat != null && shopLat != 0.0) 'shop_lat': shopLat,
         if (shopLng != null && shopLng != 0.0) 'shop_lng': shopLng,
-      }).eq('id', order.id);
+        'rider_phone': auth.user?.phone ?? '',
+      }).eq('id', order.id).isFilter('delivery_partner_id', null);
 
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
@@ -410,13 +401,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         if (bothAccepted) {
           _showSnack('✅ Order accepted! Waiting for customer to pay.');
           // Push customer to complete payment NOW
-          notifProv.sendBackgroundPush(
-            targetUserId: order.customerId,
-            title: '✅ Shop & Rider Ready! Pay Now 💳',
-            body:
-                'Both the shop and rider accepted your order. Open the app and complete payment within 10 minutes.',
-            data: {'order_id': order.id, 'action': 'pay'},
-          );
+          if (notifyCustomer) {
+            notifProv.sendBackgroundPush(
+              targetUserId: order.customerId,
+              title: '✅ Shop & Rider Ready! Pay Now 💳',
+              body:
+                  'Both the shop and rider accepted your order. Open the app and complete payment within 10 minutes.',
+              data: {'order_id': order.id, 'action': 'pay'},
+            );
+          }
           // Notify seller: waiting for customer payment
           if (order.shopId != null) {
             _supabase
@@ -474,7 +467,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }
   }
 
-  Future<void> _updateStatus(OrderModel order, String status, {bool skipReload = false}) async {
+  Future<void> _updateStatus(OrderModel order, String status, {bool skipReload = false, bool skipRating = false}) async {
     try {
       if (status == 'arrived') {
         if (order.shopLat == null || order.shopLng == null || order.shopLat == 0.0 || order.shopLng == 0.0) {
@@ -560,7 +553,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         _stopLocationBroadcast();
         if (!skipReload) _loadOrders();
         // Show rating prompt after delivering
-        if (mounted && !order.hasDeliveryRated) {
+        if (mounted && !order.hasDeliveryRated && !skipRating) {
           Future.delayed(const Duration(milliseconds: 500),
               () => _showDeliveryRatingFlow(order));
         }
@@ -654,6 +647,68 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               ),
             );
           }
+        },
+      ),
+    );
+  }
+
+  void _showGroupDeliveryRatingFlow(OrderGroup group) {
+    if (!mounted || group.orders.isEmpty) return;
+    
+    int currentShopIndex = 0;
+    
+    void rateNextShop() {
+      if (currentShopIndex < group.orders.length) {
+        final orderToRate = group.orders[currentShopIndex];
+        currentShopIndex++;
+        
+        if (mounted) {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.white,
+            shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+            builder: (_) => RatingBottomSheet(
+              title: group.orders.length > 1 ? 'Rate Shop $currentShopIndex 🏪' : 'Rate the Shop 🏪',
+              subtitle: 'How was your wait time and experience at the shop?',
+              onSubmit: (r, rv) async {
+                await _submitDeliveryRating(
+                  orderId: orderToRate.id,
+                  rateeId: null,
+                  shopId: orderToRate.shopId,
+                  rateeRole: 'seller',
+                  rating: r,
+                  review: rv,
+                  markRated: true,
+                );
+                rateNextShop();
+              },
+            ),
+          );
+        }
+      }
+    }
+
+    // First rate customer
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (_) => RatingBottomSheet(
+        title: 'Rate the Customer 👤',
+        subtitle: 'How was the pickup/drop experience?',
+        onSubmit: (rating, review) async {
+          await _submitDeliveryRating(
+            orderId: group.orders.first.id,
+            rateeId: group.orders.first.customerId,
+            rateeRole: 'customer',
+            rating: rating,
+            review: review,
+          );
+          rateNextShop();
         },
       ),
     );
@@ -1146,29 +1201,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       isDark),
                   const SizedBox(height: 14),
 
-                  // Auto-accept banner
-                  if (_isOnline && _autoAccept)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.bolt_rounded, color: AppColors.success, size: 20),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '⚡ Auto-Accept is Active',
-                            style: GoogleFonts.outfit(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ]),
-                    ),
 
-                  // Bug #19: warn rider if location is unavailable (showing unfiltered orders)
+                  // Location unavailable warning (kept):
                   if (_locationUnavailable && _isOnline)
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -1547,7 +1581,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          for (var o in group.orders) await _updateStatus(o, 'delivered');
+                          for (var o in group.orders) {
+                            await _updateStatus(o, 'delivered', skipReload: true, skipRating: true);
+                          }
+                          _loadOrders();
+                          if (mounted) {
+                            _showGroupDeliveryRatingFlow(group);
+                          }
                         },
                         icon: const Icon(Icons.check_circle_outline, size: 18),
                         label: Text('Mark All Delivered', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
@@ -1969,39 +2009,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 ),
               ),
               const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.black.withValues(alpha: 0.03),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: SwitchListTile(
-                  title: Text('Auto-Accept Orders',
-                      style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black)),
-                  subtitle: Text(
-                      'Automatically accept orders within ${PlatformConfigProvider.instance?.maxDeliveryRadiusKm.toInt() ?? 15}km',
-                      style: GoogleFonts.outfit(
-                          color: isDark ? Colors.white70 : Colors.black54)),
-                  value: _autoAccept,
-                  activeThumbColor: AppColors.primary,
-                  secondary: Icon(Icons.flash_on_rounded,
-                      color: _autoAccept ? AppColors.primary : Colors.grey),
-                  onChanged: (val) async {
-                    setSheetState(() => _autoAccept = val);
-                    setState(() => _autoAccept = val);
-                    final auth = context.read<AuthProvider>();
-                    if (auth.currentUserId != null) {
-                      await _supabase
-                          .from('delivery_partners')
-                          .update({'auto_accept': val}).eq('id', auth.currentUserId!);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
+              // Navigation App setting follows below
               Container(
                 decoration: BoxDecoration(
                   color: isDark

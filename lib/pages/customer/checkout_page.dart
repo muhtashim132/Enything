@@ -118,16 +118,39 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final supabase = Supabase.instance.client;
 
     try {
-      double distanceKm = 3.0;
-      if (location.currentLocation != null && cart.shops.isNotEmpty) {
-        distanceKm = location.distanceTo(cart.shops.first.location);
+      // Stock Validation
+      final productIds = cart.items.map((i) => i.product.id).toList();
+      final latestProducts = await supabase.from('products').select('id, name, is_available, total_quantity').inFilter('id', productIds);
+      
+      for (var cartItem in cart.items) {
+        final dbProduct = latestProducts.where((p) => p['id'] == cartItem.product.id).firstOrNull;
+        if (dbProduct == null) {
+          throw Exception("\${cartItem.product.name} is no longer available.");
+        }
+        if (dbProduct['is_available'] == false) {
+          throw Exception("\${cartItem.product.name} is currently out of stock.");
+        }
+        if (dbProduct['total_quantity'] != null && dbProduct['total_quantity'] < cartItem.quantity) {
+          throw Exception("Only \${dbProduct['total_quantity']} units of \${cartItem.product.name} are available.");
+        }
       }
-      final baseDelivery = cart.calculateDeliveryCharges(distanceKm);
+
+      double maxDistanceKm = 0.0;
+      if (location.currentLocation != null && cart.shops.isNotEmpty) {
+        for (var s in cart.shops) {
+          final d = location.distanceTo(s.location);
+          if (d > maxDistanceKm) maxDistanceKm = d;
+        }
+      }
+      final baseDelivery = cart.calculateDeliveryCharges(maxDistanceKm);
+      if (baseDelivery < 0) {
+        throw Exception('Your delivery address is outside our delivery zone.');
+      }
       final surcharge = cart.multiShopSurcharge;
       final heavyFee = cart.heavyOrderFee;
       final effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
       final riderEarnings = effectiveBase + surcharge + heavyFee;
-      final totalDelivery = cart.totalDeliveryCharges(distanceKm);
+      final totalDelivery = cart.totalDeliveryCharges(maxDistanceKm);
 
       // Payment method is always 'upi' now (COD removed)
       const paymentMethod = 'upi';
@@ -183,6 +206,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       for (final shop in cart.shops) {
         final shopItems = cart.items.where((i) => i.shop.id == shop.id).toList();
         final shopBaseSubtotal = shopItems.fold(0.0, (sum, i) => sum + i.totalPrice);
+
+        double shopDistanceKm = 3.0;
+        if (location.currentLocation != null) {
+          shopDistanceKm = location.distanceTo(shop.location);
+        }
 
         final shopDelivery = totalDelivery / numShops;
         final shopRiderEarnings = riderEarnings / numShops;
@@ -252,7 +280,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'grand_total_collected': shopGrandTotal,
               'gst_rate_snapshot': rateSnapshot,
               'prescription_urls': uploadedPrescriptionUrls,
-              'estimated_distance_km': distanceKm,
+              'estimated_distance_km': shopDistanceKm,
               'shop_prep_time_snapshot': shop.prepTimeMinutes,
             })
             .select()
@@ -269,6 +297,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   'quantity': item.quantity,
                   'price': item.product.price,
                   'weight_kg': item.weightKg,
+                  // BUG-23 FIX: Persist prescription flag so seller knows
+                  // which item requires a valid prescription.
+                  'requires_prescription': item.product.requiresPrescription,
+                  'special_instructions': item.specialInstructions,
                 })
             .toList();
         await supabase.from('order_items').insert(itemsToInsert);
@@ -327,7 +359,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
-      distanceKm = location.distanceTo(cart.shops.first.location);
+      for (var s in cart.shops) {
+        final d = location.distanceTo(s.location);
+        if (d > distanceKm) distanceKm = d;
+      }
     }
 
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);

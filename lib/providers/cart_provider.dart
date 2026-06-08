@@ -34,6 +34,8 @@ Map<String, dynamic> _productToJson(ProductModel p) => {
   'special_tags': p.specialTags,
   'is_available': p.isAvailable,
   'rating': p.rating,
+  'requires_prescription': p.requiresPrescription,
+  'medicine_type': p.medicineType,
 };
 
 ProductModel _productFromJson(Map<String, dynamic> m) => ProductModel.fromMap({

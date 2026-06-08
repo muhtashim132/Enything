@@ -31,8 +31,9 @@ const _kRiderMarkerColor = Color(0xFF2ECC71); // green — live rider dot
 // ─────────────────────────────────────────────────────────────────────────────
 class CustomerOrderMapPage extends StatefulWidget {
   final OrderModel order;
+  final List<OrderModel>? groupOrders;
 
-  const CustomerOrderMapPage({super.key, required this.order});
+  const CustomerOrderMapPage({super.key, required this.order, this.groupOrders});
 
   @override
   State<CustomerOrderMapPage> createState() => _CustomerOrderMapPageState();
@@ -44,7 +45,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   final _supabase = Supabase.instance.client;
 
   // Route data
-  List<LatLng> _deliveryRoute = [];
+  List<List<LatLng>> _deliveryRoutes = [];
   bool _loadingRoutes = true;
   double? _deliveryKm;
 
@@ -82,23 +83,26 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   @override
   void dispose() {
     _pulseCtrl.dispose();
-    _channel?.unsubscribe();
+    if (_channel != null) _supabase.removeChannel(_channel!);
     super.dispose();
   }
 
   // ── Supabase Realtime ────────────────────────────────────────────────────
 
   void _subscribeToRider() {
+    final cartGroupId = widget.order.cartGroupId;
+    final channelName = cartGroupId != null ? 'customer-map-group-$cartGroupId' : 'customer-map-${widget.order.id}';
+
     _channel = _supabase
-        .channel('customer-map-${widget.order.id}')
+        .channel(channelName)
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'orders',
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
-            column: 'id',
-            value: widget.order.id,
+            column: cartGroupId != null ? 'cart_group_id' : 'id',
+            value: cartGroupId ?? widget.order.id,
           ),
           callback: (payload) {
             if (!mounted || payload.newRecord.isEmpty) return;
@@ -157,36 +161,48 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   Future<void> _fetchRoutes() async {
     setState(() => _loadingRoutes = true);
 
-    final shopLat = widget.order.shopLat;
-    final shopLng = widget.order.shopLng;
     final custLat = widget.order.deliveryLat;
     final custLng = widget.order.deliveryLng;
 
-    if (shopLat == null || shopLng == null || custLat == null || custLng == null) {
+    if (custLat == null || custLng == null || custLat == 0.0) {
       if (mounted) setState(() => _loadingRoutes = false);
       return;
     }
-
-    final shopPt = LatLng(shopLat, shopLng);
     final custPt = LatLng(custLat, custLng);
 
-    final route = await _fetchORSRoute(shopPt, custPt);
+    final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
+        ? widget.groupOrders!
+        : [widget.order];
 
-    double km = 0;
-    for (int i = 1; i < route.length; i++) {
-      km += Geolocator.distanceBetween(
-            route[i - 1].latitude,
-            route[i - 1].longitude,
-            route[i].latitude,
-            route[i].longitude,
-          ) /
-          1000;
+    List<List<LatLng>> allRoutes = [];
+    double totalKm = 0;
+
+    for (final shop in shops) {
+      if (shop.shopLat != null && shop.shopLng != null && shop.shopLat != 0.0) {
+        final shopPt = LatLng(shop.shopLat!, shop.shopLng!);
+        final route = await _fetchORSRoute(shopPt, custPt);
+        allRoutes.add(route);
+
+        double km = 0;
+        for (int i = 1; i < route.length; i++) {
+          km += Geolocator.distanceBetween(
+                route[i - 1].latitude,
+                route[i - 1].longitude,
+                route[i].latitude,
+                route[i].longitude,
+              ) /
+              1000;
+        }
+        // Actually, taking max distance is more accurate for a multi-shop ETA than summing them, 
+        // since we just draw separate lines to customer.
+        if (km > totalKm) totalKm = km;
+      }
     }
 
     if (mounted) {
       setState(() {
-        _deliveryRoute = route;
-        _deliveryKm = km > 0 ? km : null;
+        _deliveryRoutes = allRoutes;
+        _deliveryKm = totalKm > 0 ? totalKm : null;
         _loadingRoutes = false;
       });
       _fitMapBounds();
@@ -195,12 +211,20 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
   void _fitMapBounds() {
     final pts = <LatLng>[
-      if (widget.order.shopLat != null && widget.order.shopLng != null)
-        LatLng(widget.order.shopLat!, widget.order.shopLng!),
-      if (widget.order.deliveryLat != null && widget.order.deliveryLng != null)
+      if (widget.order.deliveryLat != null && widget.order.deliveryLng != null && widget.order.deliveryLat != 0.0)
         LatLng(widget.order.deliveryLat!, widget.order.deliveryLng!),
-      if (_riderLatLng != null) _riderLatLng!,
+      if (_riderLatLng != null && _riderLatLng!.latitude != 0.0) _riderLatLng!,
     ];
+    
+    final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
+        ? widget.groupOrders!
+        : [widget.order];
+    for (final shop in shops) {
+      if (shop.shopLat != null && shop.shopLng != null && shop.shopLat != 0.0) {
+        pts.add(LatLng(shop.shopLat!, shop.shopLng!));
+      }
+    }
+
     if (pts.isEmpty) return;
 
     double minLat = pts.first.latitude, maxLat = pts.first.latitude;
@@ -399,24 +423,41 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final isOutForDelivery = order.status == 'out_for_delivery';
     final showRiderLocation = ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(order.status) && _riderLatLng != null;
 
-    final shopLat = order.shopLat;
-    final shopLng = order.shopLng;
     final custLat = order.deliveryLat;
     final custLng = order.deliveryLng;
 
+    final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
+        ? widget.groupOrders!
+        : [order];
+
+    final seenCoords = <String>{};
+    LatLng applyJitter(double lat, double lng) {
+      double jLat = lat;
+      double jLng = lng;
+      int attempts = 0;
+      while (seenCoords.contains('${jLat.toStringAsFixed(5)}_${jLng.toStringAsFixed(5)}') && attempts < 5) {
+        jLat += 0.00015;
+        jLng += 0.00015;
+        attempts++;
+      }
+      seenCoords.add('${jLat.toStringAsFixed(5)}_${jLng.toStringAsFixed(5)}');
+      return LatLng(jLat, jLng);
+    }
+
     final markers = <Marker>[
-      // Shop pin
-      if (shopLat != null && shopLng != null)
-        Marker(
-          point: LatLng(shopLat, shopLng),
-          width: 80,
-          height: 70,
-          child: _mapMarker(_kShopMarkerColor, Icons.storefront_rounded, 'Shop'),
-        ),
+      // Shop pins
+      for (final shop in shops)
+        if (shop.shopLat != null && shop.shopLng != null)
+          Marker(
+            point: applyJitter(shop.shopLat!, shop.shopLng!),
+            width: 80,
+            height: 70,
+            child: _mapMarker(_kShopMarkerColor, Icons.storefront_rounded, 'Shop'),
+          ),
       // Customer home pin
       if (custLat != null && custLng != null)
         Marker(
-          point: LatLng(custLat, custLng),
+          point: applyJitter(custLat, custLng),
           width: 80,
           height: 70,
           child: _mapMarker(
@@ -425,7 +466,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
       // Live rider marker (when rider is assigned and position is known)
       if (showRiderLocation)
         Marker(
-          point: _riderLatLng!,
+          point: applyJitter(_riderLatLng!.latitude, _riderLatLng!.longitude),
           width: 80,
           height: 72,
           child: _riderMarker(),
@@ -435,8 +476,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     // Map initial centre — prefer customer address
     final mapCenter = (custLat != null && custLng != null)
         ? LatLng(custLat, custLng)
-        : (shopLat != null && shopLng != null)
-            ? LatLng(shopLat, shopLng)
+        : (shops.isNotEmpty && shops.first.shopLat != null && shops.first.shopLng != null)
+            ? LatLng(shops.first.shopLat!, shops.first.shopLng!)
             : const LatLng(28.6139, 77.2090);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -463,18 +504,16 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                   userAgentPackageName: 'com.enything.app',
                 ),
 
-                // Shop → Customer delivery route (orange)
-                if (_deliveryRoute.isNotEmpty)
+                // Shop → Customer delivery routes (orange)
+                if (_deliveryRoutes.isNotEmpty)
                   PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: _deliveryRoute,
-                        color: _kDeliveryColor,
-                        strokeWidth: 5.0,
-                        borderStrokeWidth: 1.5,
-                        borderColor: Colors.white.withValues(alpha: 0.6),
-                      ),
-                    ],
+                    polylines: _deliveryRoutes.map((route) => Polyline(
+                      points: route,
+                      color: _kDeliveryColor,
+                      strokeWidth: 5.0,
+                      borderStrokeWidth: 1.5,
+                      borderColor: Colors.white.withValues(alpha: 0.6),
+                    )).toList(),
                   ),
 
                 MarkerLayer(markers: markers),

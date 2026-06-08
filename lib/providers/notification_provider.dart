@@ -185,10 +185,12 @@ class NotificationProvider extends ChangeNotifier {
             final sellerAcceptedNow = payload.newRecord['seller_accepted'] == true;
             final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
 
+            final cartGroupId = payload.newRecord['cart_group_id'] as String?;
+
             // Notify customer when the shop accepts (one down, rider still needed)
             if (sellerAcceptedNow && !sellerAcceptedBefore && newStatus == 'awaiting_acceptance') {
               _add(AppNotification(
-                id: '${orderId}_shop_accepted',
+                id: '${orderId}_shop_accepted', // Keep per-order
                 title: '🏪 Shop Accepted!',
                 body: 'The shop accepted your order. Waiting for a rider now...',
                 orderId: orderId,
@@ -203,8 +205,17 @@ class NotificationProvider extends ChangeNotifier {
 
             final (title, body) = _customerStatusMessage(newStatus, orderId);
             if (title != null) {
+              // For statuses that happen to the whole group at once, deduplicate using cart_group_id
+              final isGroupStatus = newStatus == 'confirmed' || 
+                                    newStatus == 'out_for_delivery' || 
+                                    newStatus == 'delivered' || 
+                                    newStatus == 'cancelled';
+              final notifId = (isGroupStatus && cartGroupId != null) 
+                  ? '${cartGroupId}_$newStatus' 
+                  : '${orderId}_$newStatus';
+
               _add(AppNotification(
-                id: '${orderId}_$newStatus',
+                id: notifId,
                 title: title,
                 body: body!,
                 orderId: orderId,
@@ -223,8 +234,10 @@ class NotificationProvider extends ChangeNotifier {
           ),
           callback: (payload) {
             final orderId = payload.newRecord['id'] as String?;
+            final cartGroupId = payload.newRecord['cart_group_id'] as String?;
+            
             _add(AppNotification(
-              id: '${orderId}_placed',
+              id: cartGroupId != null ? '${cartGroupId}_placed' : '${orderId}_placed',
               title: '🛍️ Order Sent!',
               body: 'Waiting for the shop & rider to accept. No charge yet — you pay only after both confirm.',
               orderId: orderId,
@@ -303,6 +316,82 @@ class NotificationProvider extends ChangeNotifier {
     // Restore persisted notification history for this user
     _loadFromDb();
   }
+
+  /// Seller: watches orders for MULTIPLE shops at once.
+  void listenAsSellerMultiShop(List<String> shopIds) {
+    if (shopIds.isEmpty) return;
+    
+    // Create a deterministic key for the channel and checking if already listening
+    final sortedIds = List<String>.from(shopIds)..sort();
+    final listeningKey = sortedIds.join('-');
+    
+    if (_listeningUserId == listeningKey && _listeningRole == 'seller') return;
+    stopListening();
+    _listeningUserId = listeningKey;
+    _listeningRole = 'seller';
+
+    var chan = _supabase.channel('notif-seller-$listeningKey');
+    
+    for (final shopId in shopIds) {
+      chan = chan.onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'orders',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'shop_id',
+          value: shopId,
+        ),
+        callback: (payload) {
+          final orderId = payload.newRecord['id'] as String?;
+          final amount =
+              (payload.newRecord['total_amount'] ?? 0.0).toDouble();
+          _add(AppNotification(
+            id: '${orderId}_new',
+            title: '🔔 New Order!',
+            body:
+                'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
+            orderId: orderId,
+          ));
+        },
+      ).onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'orders',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'shop_id',
+          value: shopId,
+        ),
+        callback: (payload) {
+          if (payload.newRecord.isEmpty) return;
+          final newStatus = payload.newRecord['status'] as String?;
+          final orderId = payload.newRecord['id'] as String?;
+          if (orderId == null || newStatus == null) return;
+
+          final lastStatus = _lastProcessedStatus[orderId];
+          if (newStatus == lastStatus) return;
+          _lastProcessedStatus[orderId] = newStatus;
+
+          final (title, body) = _sellerStatusMessage(newStatus, orderId);
+          if (title != null) {
+            _add(AppNotification(
+              id: '${orderId}_$newStatus',
+              title: title,
+              body: body!,
+              orderId: orderId,
+            ));
+          }
+        },
+      );
+    }
+    
+    _channel = chan.subscribe();
+
+    // Restore persisted notification history for this user
+    _loadFromDb();
+  }
+
 
   /// Delivery partner: watches for new available orders and their active ones.
   void listenAsDelivery(String partnerId) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:move_to_background/move_to_background.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -133,7 +134,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       systemNavigationBarColor: AdminColors.surface,
     ));
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        MoveToBackground.moveTaskToBack();
+      },
+      child: Scaffold(
       backgroundColor: AdminColors.bg,
       body: Stack(
         children: [
@@ -181,7 +188,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         ],
       ),
       bottomNavigationBar: _buildNavBar(navItems, safeIndex),
-    );
+    ));
   }
 
   Widget _buildScreen(String label, String adminName, RbacProvider rbac) {

@@ -33,8 +33,8 @@ class OrderGroup {
     if (allPickedUp) return 'picked_up'; // ready to go out for delivery
     
     // Check if any is still pending/preparing
-    if (orders.any((o) => o.status == 'pending')) return 'pending';
     if (orders.any((o) => o.status == 'awaiting_payment')) return 'awaiting_payment';
+    if (orders.any((o) => o.status == 'pending')) return 'pending';
     
     // Otherwise it's in the pickup phase
     return 'pickup_in_progress';

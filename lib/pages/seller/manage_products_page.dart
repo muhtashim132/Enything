@@ -55,7 +55,7 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
     try {
       await _supabase
           .from('products')
-          .update({'is_available': !product.isAvailable}).eq('id', product.id);
+          .update({'is_available': !product.isAvailable}).eq('id', product.id).eq('shop_id', product.shopId);
       _loadProducts();
     } catch (e) {
       debugPrint('Toggle error: $e');
@@ -85,7 +85,7 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
     );
 
     if (confirmed == true) {
-      await _supabase.from('products').delete().eq('id', product.id);
+      await _supabase.from('products').delete().eq('id', product.id).eq('shop_id', product.shopId);
       _loadProducts();
     }
   }

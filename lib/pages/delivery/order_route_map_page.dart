@@ -23,6 +23,7 @@ class OrderRouteMapPage extends StatefulWidget {
   final double? riderLng;
   final List<({double lat, double lng, String name})> shops;
   final VoidCallback onAccept;
+  final bool isViewOnly;
 
   const OrderRouteMapPage({
     super.key,
@@ -31,6 +32,7 @@ class OrderRouteMapPage extends StatefulWidget {
     required this.riderLng,
     required this.shops,
     required this.onAccept,
+    this.isViewOnly = false,
   });
 
   @override
@@ -105,9 +107,29 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     List<LatLng> deliveryRoute = [];
     double totalKm = 0;
 
-    final shopPts = widget.shops.map((s) => LatLng(s.lat, s.lng)).toList();
-    final customerPt = LatLng(widget.group.deliveryLat ?? 0.0, widget.group.deliveryLng ?? 0.0);
-    final riderPt = (widget.riderLat != null && widget.riderLng != null)
+    List<LatLng> shopPts = [];
+    if (widget.shops.isNotEmpty) {
+      final unvisited = widget.shops.map((s) => LatLng(s.lat, s.lng)).toList();
+      LatLng currentPos = (widget.riderLat != null && widget.riderLng != null) 
+          ? LatLng(widget.riderLat!, widget.riderLng!) 
+          : unvisited.first;
+          
+      while (unvisited.isNotEmpty) {
+        unvisited.sort((a, b) {
+          final distA = Geolocator.distanceBetween(currentPos.latitude, currentPos.longitude, a.latitude, a.longitude);
+          final distB = Geolocator.distanceBetween(currentPos.latitude, currentPos.longitude, b.latitude, b.longitude);
+          return distA.compareTo(distB);
+        });
+        final nearest = unvisited.removeAt(0);
+        shopPts.add(nearest);
+        currentPos = nearest;
+      }
+    }
+
+    final customerPt = (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
+        ? LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!)
+        : null;
+    final riderPt = (widget.riderLat != null && widget.riderLng != null && widget.riderLat != 0.0)
         ? LatLng(widget.riderLat!, widget.riderLng!)
         : null;
 
@@ -123,9 +145,11 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
         deliveryRoute.addAll(r);
         totalKm += _calcKm(r);
       }
-      final lastR = await _fetchORSRoute(shopPts.last, customerPt);
-      deliveryRoute.addAll(lastR);
-      totalKm += _calcKm(lastR);
+      if (customerPt != null) {
+        final lastR = await _fetchORSRoute(shopPts.last, customerPt);
+        deliveryRoute.addAll(lastR);
+        totalKm += _calcKm(lastR);
+      }
     }
 
     if (mounted) {
@@ -141,9 +165,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
   void _fitMapBounds() {
     final allPoints = [
-      if (widget.riderLat != null && widget.riderLng != null) LatLng(widget.riderLat!, widget.riderLng!),
-      ...widget.shops.map((s) => LatLng(s.lat, s.lng)),
-      LatLng(widget.group.deliveryLat ?? 0.0, widget.group.deliveryLng ?? 0.0),
+      if (widget.riderLat != null && widget.riderLng != null && widget.riderLat != 0.0) LatLng(widget.riderLat!, widget.riderLng!),
+      ...widget.shops.where((s) => s.lat != 0.0).map((s) => LatLng(s.lat, s.lng)),
+      if (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0) LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!),
     ];
     if (allPoints.isEmpty) return;
 
@@ -198,23 +222,38 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final seenCoords = <String>{};
+    LatLng applyJitter(double lat, double lng) {
+      double jLat = lat;
+      double jLng = lng;
+      int attempts = 0;
+      while (seenCoords.contains('${jLat.toStringAsFixed(5)}_${jLng.toStringAsFixed(5)}') && attempts < 5) {
+        jLat += 0.00015;
+        jLng += 0.00015;
+        attempts++;
+      }
+      seenCoords.add('${jLat.toStringAsFixed(5)}_${jLng.toStringAsFixed(5)}');
+      return LatLng(jLat, jLng);
+    }
+
     final markers = <Marker>[
       for (int i = 0; i < widget.shops.length; i++)
         Marker(
-          point: LatLng(widget.shops[i].lat, widget.shops[i].lng),
+          point: applyJitter(widget.shops[i].lat, widget.shops[i].lng),
           width: 80,
           height: 70,
           child: _mapMarker(_kShopMarker, Icons.storefront_rounded, widget.shops[i].name),
         ),
-      Marker(
-        point: LatLng(widget.group.deliveryLat ?? 0.0, widget.group.deliveryLng ?? 0.0),
-        width: 80,
-        height: 70,
+      if (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
+        Marker(
+          point: applyJitter(widget.group.deliveryLat!, widget.group.deliveryLng!),
+          width: 80,
+          height: 70,
         child: _mapMarker(_kCustomerMarker, Icons.location_on_rounded, 'Customer'),
       ),
       if (widget.riderLat != null && widget.riderLng != null)
         Marker(
-          point: LatLng(widget.riderLat!, widget.riderLng!),
+          point: applyJitter(widget.riderLat!, widget.riderLng!),
           width: 80,
           height: 70,
           child: _mapMarker(_kRiderMarker, Icons.navigation_rounded, 'You'),
@@ -347,16 +386,18 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: widget.onAccept,
-                            icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
-                            label: Text('Accept Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 4, shadowColor: AppColors.success.withValues(alpha: 0.4)),
+                        if (!widget.isViewOnly) ...[
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: widget.onAccept,
+                              icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+                              label: Text('Accept Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 4, shadowColor: AppColors.success.withValues(alpha: 0.4)),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

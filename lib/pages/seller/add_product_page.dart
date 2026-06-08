@@ -200,7 +200,7 @@ class _AddProductPageState extends State<AddProductPage> {
       if (widget.existingProduct == null) {
         await _supabase.from('products').insert(data);
       } else {
-        await _supabase.from('products').update(data).eq('id', widget.existingProduct!.id);
+        await _supabase.from('products').update(data).eq('id', widget.existingProduct!.id).eq('shop_id', widget.existingProduct!.shopId);
       }
 
       if (mounted) {

@@ -22,6 +22,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/notification_service.dart';
 import '../../utils/responsive_layout.dart';
+import 'package:collection/collection.dart';
 
 class TrackOrderPage extends StatefulWidget {
   final String orderId;
@@ -32,7 +33,7 @@ class TrackOrderPage extends StatefulWidget {
 }
 
 class _TrackOrderPageState extends State<TrackOrderPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
   OrderModel? _order;
   bool _isLoading = true;
@@ -109,6 +110,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _razorpay = Razorpay();
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
@@ -125,12 +127,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _razorpay.clear();
     _pulseController.dispose();
     _paymentCountdownTimer?.cancel();
     _acceptanceCountdownTimer?.cancel();
-    _channel?.unsubscribe();
+    if (_channel != null) _supabase.removeChannel(_channel!);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _fetchOrder();
+      }
+    }
   }
 
   List<OrderModel> _groupOrders = [];
@@ -263,7 +275,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (activeOrders.any((o) => o.status == 'pending')) return 'pending';
 
     // Priority 4: out_for_delivery
-    if (activeOrders.any((o) => o.status == 'out_for_delivery')) return 'out_for_delivery';
+    if (activeOrders.every((o) => o.status == 'out_for_delivery' || o.status == 'delivered')) return 'out_for_delivery';
 
     // Priority 5: picked_up
     if (activeOrders.any((o) => o.status == 'picked_up')) return 'picked_up';
@@ -419,16 +431,21 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   Future<void> _autoCancelOnTimeout(String expectedStatus) async {
-    if (_order == null || _order!.status != expectedStatus) return;
+    if (_order == null) return;
+    if (_aggregateStatus != expectedStatus) return;
+    
+    final fresh = await _supabase.from('orders').select('status').eq('id', widget.orderId).maybeSingle();
+    if (fresh == null || fresh['status'] != expectedStatus) return;
+
     try {
-      final updateQuery = _supabase
+      var updateQuery = _supabase
           .from('orders')
           .update({'status': 'cancelled', 'cancelled_reason': 'timeout'});
           
       if (_order!.cartGroupId != null) {
-        updateQuery.eq('cart_group_id', _order!.cartGroupId!);
+        updateQuery = updateQuery.eq('cart_group_id', _order!.cartGroupId!);
       } else {
-        updateQuery.eq('id', widget.orderId);
+        updateQuery = updateQuery.eq('id', widget.orderId);
       }
       
       final res = await updateQuery.eq('status', expectedStatus).select();
@@ -450,80 +467,92 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     try {
       final newDeadline =
           DateTime.now().toUtc().add(const Duration(minutes: 2));
-      final response = await _supabase
-          .from('orders')
-          .insert({
-            'cart_group_id': _order!.cartGroupId,
-            'shop_id': _order!.shopId,
-            'customer_id': _order!.customerId,
-            'status': 'awaiting_acceptance',
-            'acceptance_deadline': newDeadline.toIso8601String(),
-            'total_amount': _order!.totalAmount,
-            'delivery_charges': _order!.deliveryCharges,
-            'rider_earnings': _order!.riderEarnings,
-            'platform_fee': _order!.platformFee,
-            'address': _order!.address,
-            'delivery_lat': _order!.deliveryLat,
-            'delivery_lng': _order!.deliveryLng,
-            'delivery_notes': _order!.deliveryNotes,
-            'payment_method': _order!.paymentMethod,
-            'payment_status': 'pending',
-            'customer_phone': _order!.customerPhone,
-            'shop_phone': _order!.shopPhone,
-            'gst_item_total': _order!.gstItemTotal,
-            'gst_delivery': _order!.gstDelivery,
-            'gst_platform': _order!.gstPlatform,
-            'enything_commission': _order!.enythingCommission,
-            'seller_payout': _order!.sellerPayout,
-            'gateway_deduction': _order!.gatewayDeduction,
-            's9_5_gst_amount': _order!.s9_5GstAmount,
-            'non_food_gst_amount': _order!.nonFoodGstAmount,
-            'tcs_amount': _order!.tcsAmount,
-            'grand_total_collected': _order!.grandTotalCollected,
-            'gst_rate_snapshot': _order!.gstRateSnapshot,
-            'estimated_distance_km': _order!.estimatedDistanceKm,
-            'shop_prep_time_snapshot': _order!.shopPrepTimeSnapshot,
-          })
-          .select()
-          .single();
+      final notifProv = context.read<NotificationProvider>();
+      String? firstNewOrderId;
+      final shopsToRetry = _groupOrders.isEmpty ? [_order!] : _groupOrders;
 
-      // Copy order items
-      final oldItems = await _supabase
-          .from('order_items')
-          .select()
-          .eq('order_id', widget.orderId);
-      if ((oldItems as List).isNotEmpty) {
-        final newItems = oldItems
-            .map((item) => {
-                  'order_id': response['id'],
-                  'product_id': item['product_id'],
-                  'product_name': item['product_name'],
-                  'quantity': item['quantity'],
-                  'price': item['price'],
-                  'weight_kg': item['weight_kg'],
-                })
-            .toList();
-        await _supabase.from('order_items').insert(newItems);
+      for (final order in shopsToRetry) {
+        final response = await _supabase
+            .from('orders')
+            .insert({
+              'cart_group_id': order.cartGroupId,
+              'shop_id': order.shopId,
+              'customer_id': order.customerId,
+              'status': 'awaiting_acceptance',
+              'acceptance_deadline': newDeadline.toIso8601String(),
+              'total_amount': order.totalAmount,
+              'delivery_charges': order.deliveryCharges,
+              'rider_earnings': order.riderEarnings,
+              'platform_fee': order.platformFee,
+              'address': order.address,
+              'delivery_lat': order.deliveryLat,
+              'delivery_lng': order.deliveryLng,
+              'delivery_notes': order.deliveryNotes,
+              'payment_method': order.paymentMethod,
+              'payment_status': 'pending',
+              'customer_phone': order.customerPhone,
+              'shop_phone': order.shopPhone,
+              'gst_item_total': order.gstItemTotal,
+              'gst_delivery': order.gstDelivery,
+              'gst_platform': order.gstPlatform,
+              'enything_commission': order.enythingCommission,
+              'seller_payout': order.sellerPayout,
+              'gateway_deduction': order.gatewayDeduction,
+              's9_5_gst_amount': order.s9_5GstAmount,
+              'non_food_gst_amount': order.nonFoodGstAmount,
+              'tcs_amount': order.tcsAmount,
+              'grand_total_collected': order.grandTotalCollected,
+              'gst_rate_snapshot': order.gstRateSnapshot,
+              'estimated_distance_km': order.estimatedDistanceKm,
+              'shop_prep_time_snapshot': order.shopPrepTimeSnapshot,
+              'prescription_urls': order.prescriptionUrls,
+            })
+            .select()
+            .single();
+
+        firstNewOrderId ??= response['id'];
+
+        // Copy order items
+        final oldItems = await _supabase
+            .from('order_items')
+            .select()
+            .eq('order_id', order.id);
+        if ((oldItems as List).isNotEmpty) {
+          final newItems = oldItems
+              .map((item) => {
+                    'order_id': response['id'],
+                    'product_id': item['product_id'],
+                    'product_name': item['product_name'],
+                    'quantity': item['quantity'],
+                    'price': item['price'],
+                    'weight_kg': item['weight_kg'],
+                    'special_instructions': item['special_instructions'],
+                    'requires_prescription': item['requires_prescription'] ?? false,
+                  })
+              .toList();
+          await _supabase.from('order_items').insert(newItems);
+        }
+
+        if (mounted && order.shopId != null) {
+          final shopData = await _supabase.from('shops').select('seller_id').eq('id', order.shopId!).maybeSingle();
+          if (shopData != null && shopData['seller_id'] != null) {
+            notifProv.sendBackgroundPush(
+              targetUserId: shopData['seller_id'] as String,
+              title: '🔔 New Order! Accept now',
+              body:
+                  'Order ₹${order.grandTotal.toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
+              data: {'order_id': response['id'], 'role': 'seller'},
+            );
+          }
+        }
       }
 
-      if (mounted) {
-        // BUG-6 FIX: Notify seller and broadcast to riders on retry
-        final notifProv = context.read<NotificationProvider>();
-        final shopData = await _supabase.from('shops').select('seller_id').eq('id', _order!.shopId!).maybeSingle();
-        if (shopData != null && shopData['seller_id'] != null) {
-          notifProv.sendBackgroundPush(
-            targetUserId: shopData['seller_id'] as String,
-            title: '🔔 New Order! Accept now',
-            body:
-                'Order ₹${_order!.grandTotal.toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
-            data: {'order_id': response['id'], 'role': 'seller'},
-          );
-        }
+      if (mounted && firstNewOrderId != null) {
         notifProv.sendBroadcastToAudience(
           audience: 'Riders',
           title: '🛵 New Order Nearby!',
           body:
-              'A new order ₹${_order!.grandTotal.toStringAsFixed(0)} was placed near you. Shop is accepting now!',
+              'A new order was placed near you. Shop is accepting now!',
           data: {'action': 'new_order'},
         );
 
@@ -531,7 +560,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         Navigator.pushReplacementNamed(
           context,
           AppRoutes.trackOrder,
-          arguments: {'orderId': response['id']},
+          arguments: {'orderId': firstNewOrderId},
         );
       }
     } catch (e) {
@@ -637,46 +666,79 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     if (confirmed != true || !mounted) return;
 
+    // BUG-7 FIX: Block cancellation after payment has been confirmed.
+    // Once status passes awaiting_payment, the customer has paid — no cancellation allowed.
+    const cancellableStatuses = [
+      'awaiting_acceptance',
+      'awaiting_payment',
+    ];
+    if (!cancellableStatuses.contains(_aggregateStatus)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Order cannot be cancelled after payment is confirmed. Please contact support.'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 4),
+        ));
+      }
+      return;
+    }
+
     setState(() => _isCancelling = true);
     try {
-      await _supabase
-          .from('orders')
-          .update({'status': 'cancelled', 'cancelled_reason': 'customer'}).eq(
-              'id', widget.orderId);
+      // BUG-6/9 FIX: The DB trigger (tr_guard_order_status_transitions) silently
+      // preserves seller_rejected / verification_failed rows during bulk updates,
+      // so no extra Dart filter is needed here. The neq('status','delivered') guard
+      // is kept as a secondary safety net.
+      if (_order?.cartGroupId != null) {
+        await _supabase
+            .from('orders')
+            .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
+            .eq('cart_group_id', _order!.cartGroupId!)
+            .neq('status', 'delivered');
+      } else {
+        await _supabase
+            .from('orders')
+            .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
+            .eq('id', widget.orderId);
+      }
 
       // Notify seller and rider that the customer cancelled
       if (mounted && _order != null) {
         final notifProv = context.read<NotificationProvider>();
+        final shopsToNotify = _groupOrders.isEmpty ? [_order!] : _groupOrders;
 
-        // Notify seller
-        if (_order!.shopId != null) {
-          _supabase
-              .from('shops')
-              .select('seller_id')
-              .eq('id', _order!.shopId!)
-              .maybeSingle()
-              .then((shopData) {
-            if (shopData != null && shopData['seller_id'] != null) {
-              notifProv.sendBackgroundPush(
-                targetUserId: shopData['seller_id'] as String,
-                title: '❌ Order Cancelled by Customer',
-                body:
-                    'The customer cancelled their order. No further action needed.',
-                data: {'order_id': widget.orderId, 'role': 'seller'},
-              );
-            }
-          });
-        }
+        for (final o in shopsToNotify) {
+          // Notify seller
+          if (o.shopId != null) {
+            _supabase
+                .from('shops')
+                .select('seller_id')
+                .eq('id', o.shopId!)
+                .maybeSingle()
+                .then((shopData) {
+              if (shopData != null && shopData['seller_id'] != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: shopData['seller_id'] as String,
+                  title: '❌ Order Cancelled by Customer',
+                  body:
+                      'The customer cancelled their order. No further action needed.',
+                  data: {'order_id': o.id, 'role': 'seller'},
+                );
+              }
+            });
+          }
 
-        // Notify assigned rider (if any)
-        if (_order!.deliveryPartnerId != null) {
-          notifProv.sendBackgroundPush(
-            targetUserId: _order!.deliveryPartnerId!,
-            title: '❌ Order Cancelled by Customer',
-            body:
-                'The customer cancelled their order. You are free for new deliveries.',
-            data: {'order_id': widget.orderId, 'role': 'rider'},
-          );
+          // Notify assigned rider (if any)
+          if (o.deliveryPartnerId != null) {
+            notifProv.sendBackgroundPush(
+              targetUserId: o.deliveryPartnerId!,
+              title: '❌ Order Cancelled by Customer',
+              body:
+                  'The customer cancelled their order. You are free for new deliveries.',
+              data: {'order_id': o.id, 'role': 'rider'},
+            );
+          }
         }
       }
 
@@ -713,25 +775,46 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   /// Step 1: Rate the Shop. Step 2 (if partner assigned): Rate the Rider.
   void _showRatingFlow() {
     if (!mounted || _order == null) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (_) => RatingBottomSheet(
-        title: 'Rate the Shop ⭐',
-        subtitle: 'How was the quality of your order?',
-        onSubmit: (rating, review) => _submitRating(
-          rateeId: null,
-          shopId: _order!.shopId, // Pass the actual shop ID
-          rateeRole: 'seller',
-          rating: rating,
-          review: review,
-          thenRateRider: _order!.deliveryPartnerId != null,
-        ),
-      ),
-    );
+    
+    int currentShopIndex = 0;
+    final shopsToRate = _groupOrders.isEmpty ? [_order!] : _groupOrders;
+    
+    void rateNextShop() {
+      if (currentShopIndex < shopsToRate.length) {
+        final orderToRate = shopsToRate[currentShopIndex];
+        currentShopIndex++;
+        final isLastShop = currentShopIndex == shopsToRate.length;
+        
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          builder: (_) => RatingBottomSheet(
+            title: shopsToRate.length > 1 ? 'Rate Shop $currentShopIndex ⭐' : 'Rate the Shop ⭐',
+            subtitle: 'How was the quality of your order?',
+            onSubmit: (rating, review) async {
+              final groupRider = _groupOrders.isEmpty 
+                ? _order?.deliveryPartnerId 
+                : _groupOrders.firstWhereOrNull((o) => o.deliveryPartnerId != null)?.deliveryPartnerId;
+              await _submitRating(
+                rateeId: null,
+                shopId: orderToRate.shopId,
+                rateeRole: 'seller',
+                rating: rating,
+                review: review,
+                thenRateRider: isLastShop && groupRider != null,
+                orderIdToUpdate: orderToRate.id,
+              );
+              rateNextShop();
+            },
+          ),
+        );
+      }
+    }
+    
+    rateNextShop();
   }
 
   Future<void> _submitRating({
@@ -741,11 +824,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     required int rating,
     required String review,
     bool thenRateRider = false,
+    String? orderIdToUpdate,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
+      final targetOrderId = orderIdToUpdate ?? widget.orderId;
       await _supabase.from('ratings').insert({
-        'order_id': widget.orderId,
+        'order_id': targetOrderId,
         'rater_id': userId,
         'ratee_id': rateeId,
         'shop_id': shopId,
@@ -756,11 +841,32 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       });
 
       if (rateeRole == 'seller') {
-        // Mark customer rated on the order
+        // BUG-19 FIX: Mark has_customer_rated on this specific order.
         await _supabase
             .from('orders')
-            .update({'has_customer_rated': true}).eq('id', widget.orderId);
-        setState(() => _order = _order?.copyWith(hasCustomerRated: true));
+            .update({'has_customer_rated': true}).eq('id', targetOrderId);
+        if (targetOrderId == widget.orderId) {
+          setState(() => _order = _order?.copyWith(hasCustomerRated: true));
+        }
+      }
+
+      // BUG-19 FIX (continued): After rating the LAST shop AND the rider (thenRateRider=false
+      // means we are in the rider sub-rating, or the last shop with no rider),
+      // mark ALL group orders as rated so the rating prompt never re-fires.
+      if (rateeRole == 'delivery' || (rateeRole == 'seller' && !thenRateRider)) {
+        final groupIds = _groupOrders.isEmpty
+            ? [widget.orderId]
+            : _groupOrders.map((o) => o.id).toList();
+        if (groupIds.length > 1) {
+          try {
+            await _supabase
+                .from('orders')
+                .update({'has_customer_rated': true})
+                .inFilter('id', groupIds);
+          } catch (e) {
+            debugPrint('Mark all orders rated error: $e');
+          }
+        }
       }
 
       if (thenRateRider && mounted) {
@@ -780,6 +886,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               rating: r,
               review: rv,
               thenRateRider: false,
+              orderIdToUpdate: widget.orderId,
             ),
           ),
         );
@@ -827,7 +934,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     return const LatLng(28.6139, 77.2090);
   }
 
-  /// Builds the rider motorcycle marker when live location is available.
+  /// Builds the map markers including all shops, customer, and live rider.
   List<Marker> _buildMapMarkers() {
     final markers = <Marker>[];
 
@@ -848,8 +955,29 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       ));
     }
 
-    // Live rider marker (only when out_for_delivery)
-    if (_riderLatLng != null && _order?.status == 'out_for_delivery') {
+    // All shop locations
+    final shops = _groupOrders.isEmpty && _order != null ? [_order!] : _groupOrders;
+    for (final shopOrd in shops) {
+      if (shopOrd.shopLat != null && shopOrd.shopLng != null) {
+        markers.add(Marker(
+          point: LatLng(shopOrd.shopLat!, shopOrd.shopLng!),
+          width: 36,
+          height: 36,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.store_rounded,
+                color: AppColors.accent, size: 20),
+          ),
+        ));
+      }
+    }
+
+    // Live rider marker (shown starting from 'confirmed')
+    final showRider = _order != null && ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(_order!.status);
+    if (_riderLatLng != null && showRider) {
       markers.add(Marker(
         point: _riderLatLng!,
         width: 52,
@@ -971,17 +1099,43 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Future<void> _openRazorpay() async {
     if (_isProcessingPayment || _order == null) return;
     setState(() => _isProcessingPayment = true);
+    
+    bool canPay = false;
+    if (_order!.cartGroupId != null) {
+      final statusesResp = await _supabase.from('orders').select('status').eq('cart_group_id', _order!.cartGroupId!);
+      final statuses = (statusesResp as List).map((r) => r['status'] as String).toList();
+      // Only pay if at least one is awaiting_payment and NONE are awaiting_acceptance
+      if (statuses.contains('awaiting_payment') && !statuses.contains('awaiting_acceptance')) {
+        canPay = true;
+      }
+    } else {
+      final freshStatus = await _supabase.from('orders').select('status').eq('id', widget.orderId).maybeSingle();
+      if (freshStatus != null && freshStatus['status'] == 'awaiting_payment') canPay = true;
+    }
+
+    if (!canPay) {
+      setState(() => _isProcessingPayment = false);
+      return;
+    }
+
     try {
-      final activeOrders = _groupOrders.isEmpty 
-          ? [_order!] 
-          : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+      // BUG-11 FIX: Only charge for orders that are actually awaiting_payment.
+      // Multi-shop: if Shop-B hasn't accepted yet, it will NOT be in awaiting_payment,
+      // so we must NOT include it in the Razorpay total.
+      final activeOrders = _groupOrders.isEmpty
+          ? [_order!]
+          : _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
+      if (activeOrders.isEmpty) {
+        setState(() => _isProcessingPayment = false);
+        return;
+      }
 
       double totalAmount = 0.0;
       for (var o in activeOrders) {
         totalAmount += (o.grandTotalCollected > 0 ? o.grandTotalCollected : o.grandTotal);
       }
       
-      final amountInPaise = (totalAmount * 100).toInt();
+      final amountInPaise = (totalAmount * 100).round();
 
       final razorpayKeyId = dotenv.maybeGet('RAZORPAY_KEY_ID') ?? '';
       final razorpayKeySecret = dotenv.maybeGet('RAZORPAY_KEY_SECRET') ?? '';
@@ -1020,13 +1174,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
 
       final auth = context.read<AuthProvider>();
-      final razorpayKey = dotenv.maybeGet('RAZORPAY_KEY') ?? '';
       
       if (_razorpayOpened) return;
       _razorpayOpened = true;
       
       _razorpay.open(<String, dynamic>{
-        'key': razorpayKey,
+        'key': razorpayKeyId,
         'amount': amountInPaise,
         'currency': 'INR',
         'order_id': razorpayOrderId,
@@ -1053,6 +1206,36 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           behavior: SnackBarBehavior.floating,
         ));
       }
+    }
+  }
+
+  Future<void> _mockPaymentBypass() async {
+    if (_isProcessingPayment || _order == null) return;
+    setState(() => _isProcessingPayment = true);
+    try {
+      final paymentId = 'pay_mock_${DateTime.now().millisecondsSinceEpoch}';
+      final razorpayOrderId = 'order_mock_${DateTime.now().millisecondsSinceEpoch}';
+
+      if (_order?.cartGroupId != null) {
+        await _supabase.from('orders').update({
+          'status': 'confirmed',
+          'payment_status': 'captured',
+          'razorpay_payment_id': paymentId,
+          'razorpay_order_id': razorpayOrderId,
+        }).eq('cart_group_id', _order!.cartGroupId!).eq('status', 'awaiting_payment');
+      } else {
+        await _supabase.from('orders').update({
+          'status': 'confirmed',
+          'payment_status': 'captured',
+          'razorpay_payment_id': paymentId,
+          'razorpay_order_id': razorpayOrderId,
+        }).eq('id', widget.orderId);
+      }
+      _paymentCountdownTimer?.cancel();
+    } catch (e) {
+      debugPrint('Mock payment error: $e');
+    } finally {
+      if (mounted) setState(() => _isProcessingPayment = false);
     }
   }
 
@@ -1413,10 +1596,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       Expanded(
                           child: _glassContactBtn(
                         icon: Icons.store_rounded,
-                        label: 'Call Shop',
+                        label: _groupOrders.length > 1 ? 'Call Shops' : 'Call Shop',
                         color: AppColors.primary,
                         isDark: isDark,
-                        onTap: () => _callPhone(_order!.shopPhone!),
+                        onTap: () {
+                          if (_groupOrders.length > 1) {
+                            _showShopSelectionBottomSheet(context, isDark);
+                          } else {
+                            _callPhone(_order!.shopPhone!);
+                          }
+                        },
                       )),
                     if (_order!.shopPhone != null && _order!.riderPhone != null)
                       const SizedBox(width: 12),
@@ -1676,6 +1865,27 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                     style: GoogleFonts.outfit(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16)),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: _isProcessingPayment
+                                ? null
+                                : () => _mockPaymentBypass(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                            ),
+                            child: Text(
+                                'Simulate Successful Payment (Test Mode)',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14)),
                           ),
                         ),
                       ],
@@ -2251,7 +2461,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           ? () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => CustomerOrderMapPage(order: _order!),
+                  builder: (_) => CustomerOrderMapPage(
+                    order: _order!,
+                    groupOrders: _groupOrders,
+                  ),
                 ),
               )
           : null,
@@ -2341,8 +2554,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 ),
               ),
 
-            // Live rider badge (top-right) when out_for_delivery
-            if (_riderLatLng != null && _order!.status == 'out_for_delivery')
+            // Live rider badge (top-right) when rider is active
+            if (_riderLatLng != null && ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(_order!.status))
               Positioned(
                 top: 12,
                 right: 12,
@@ -2397,5 +2610,58 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         ));
       }
     }
+  }
+
+  void _showShopSelectionBottomSheet(BuildContext context, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Select Shop to Call',
+                    style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : AppColors.textPrimary)),
+                const SizedBox(height: 16),
+                ..._groupOrders.where((o) => o.shopPhone != null).map((o) {
+                  final itemNames = o.items.map((i) => i.productName).take(2).join(', ');
+                  return ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.store_rounded, color: AppColors.primary),
+                    ),
+                    title: Text(itemNames.isNotEmpty ? 'Shop ($itemNames)' : 'Shop',
+                        style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : AppColors.textPrimary)),
+                    subtitle: Text(o.shopPhone!,
+                        style: GoogleFonts.outfit(
+                            color: isDark ? Colors.white60 : AppColors.textSecondary)),
+                    trailing: const Icon(Icons.phone_rounded, color: AppColors.primary, size: 20),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _callPhone(o.shopPhone!);
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }

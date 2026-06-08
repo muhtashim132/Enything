@@ -23,7 +23,7 @@ class SellerOrdersPage extends StatefulWidget {
 }
 
 class _SellerOrdersPageState extends State<SellerOrdersPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
   List<OrderModel> _orders = [];
   bool _isLoading = true;
@@ -41,6 +41,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
     _loadOrders();
     _setupRealtimeAndFcm();
@@ -48,12 +49,22 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     for (final channel in _realtimeChannels) {
       channel.unsubscribe();
     }
     _fcmSub?.cancel();
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _loadOrders();
+      }
+    }
   }
 
   /// Sets up both:
@@ -79,8 +90,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         if (!mounted) return;
         final notifProvider = context.read<NotificationProvider>();
         
+        notifProvider.listenAsSellerMultiShop(shopIds);
+
         for (final shopId in shopIds) {
-          notifProvider.listenAsSeller(shopId);
           final channel = _supabase
               .channel('seller-orders-$shopId')
               .onPostgresChanges(
@@ -195,7 +207,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         'seller_accepted': true,
         if (riderAlreadyAccepted) 'status': 'awaiting_payment',
         if (paymentDeadline != null) 'payment_deadline': paymentDeadline,
-      }).eq('id', order.id);
+      }).eq('id', order.id).eq('shop_id', order.shopId ?? '').eq('status', 'awaiting_acceptance');
 
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
@@ -375,8 +387,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       await _supabase.from('orders').update({
         'status': rejectReason == 'prescription' ? 'verification_failed' : 'seller_rejected',
         'seller_accepted': false,
+        'delivery_partner_id': null,
+        'partner_accepted': false,
         if (msg.isNotEmpty) 'rejection_message': msg,
-      }).eq('id', order.id);
+      }).eq('id', order.id).eq('shop_id', order.shopId ?? '');
 
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
@@ -460,7 +474,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         }
       }
 
-      await _supabase.from('orders').update(updateData).eq('id', order.id);
+      await _supabase.from('orders').update(updateData).eq('id', order.id).eq('shop_id', order.shopId ?? '');
       
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
@@ -979,9 +993,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             ),
           ],
 
-          // Dual-acceptance progress bar (for pending-but-one-accepted)
-          if (order.status == 'pending' &&
-              (order.sellerAccepted || order.partnerAccepted)) ...[
+          // Dual-acceptance progress bar
+          if (order.status == 'awaiting_acceptance' || order.status == 'pending') ...[
             const SizedBox(height: 12),
             _buildAcceptanceProgress(order),
           ],

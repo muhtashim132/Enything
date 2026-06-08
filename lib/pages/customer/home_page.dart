@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:move_to_background/move_to_background.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -495,7 +496,13 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     final firstName =
         context.read<AuthProvider>().user?.fullName.split(' ').first ?? '';
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        MoveToBackground.moveTaskToBack();
+      },
+      child: Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -953,7 +960,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         alignment: Alignment.bottomCenter,
         child: _buildFloatingBottomNav(cartProvider),
       ),
-    );
+    ));
   }
 
   Widget _buildCircleAction(
