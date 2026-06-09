@@ -59,3 +59,29 @@ android/app/google-services.json
 # The placeholder ios/Runner/GoogleService-Info.plist IS tracked as a template.
 # ios/Runner/GoogleService-Info.plist
 
+# Root-level dev/debug Dart scripts (not part of the app)
+/test.dart
+/test2.dart
+/test3.dart
+/test_admin_pass.dart
+/test_config.dart
+/test_db.dart
+/test_env.dart
+/test_http.dart
+/test_is.dart
+/test_order_matrix.dart
+/test_orders.dart
+/test_perms.dart
+/test_rls.dart
+/test_rls_diagnostic.dart
+/test_schema.dart
+/test_timer.dart
+/fetch_order.dart
+/update_rating.dart
+/fix_ist.dart
+/home_page_old.dart
+
+# Large analysis/build artifacts
+/analyze_output.txt
+/diff.txt
+

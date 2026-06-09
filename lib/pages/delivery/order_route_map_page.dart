@@ -396,7 +396,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text('Total Distance', style: GoogleFonts.outfit(color: const Color(0xFF00B4D8), fontSize: 11, fontWeight: FontWeight.w600)),
-                                        if (_loadingRoutes) SizedBox(height: 10, width: 40, child: const LinearProgressIndicator(color: Color(0xFF00B4D8)))
+                                        if (_loadingRoutes) const SizedBox(height: 10, width: 40, child: LinearProgressIndicator(color: Color(0xFF00B4D8)))
                                         else Text(_totalKm != null ? '${_totalKm!.toStringAsFixed(1)} km' : '— km', style: GoogleFonts.outfit(color: _totalKm != null ? const Color(0xFF00B4D8) : Colors.grey, fontSize: 15, fontWeight: FontWeight.w800)),
                                       ],
                                     ),

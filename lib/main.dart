@@ -35,6 +35,16 @@ void main() async {
 
   await dotenv.load(fileName: '.env');
 
+  // Verify critical env keys are present — catches missing .env in release builds early
+  assert(
+    dotenv.env['SUPABASE_URL']?.isNotEmpty == true,
+    '❌ SUPABASE_URL is missing from .env — ensure the file is in Flutter assets.',
+  );
+  assert(
+    dotenv.env['SUPABASE_ANON_KEY']?.isNotEmpty == true,
+    '❌ SUPABASE_ANON_KEY is missing from .env',
+  );
+
   // Initialize Firebase (used only for FCM push notifications — NOT for auth)
   await Firebase.initializeApp();
 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../theme/app_colors.dart';
 import 'profile_settings_dialogs.dart';
 import '../../config/routes.dart';
@@ -123,6 +124,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () async {
+                  context.read<NotificationProvider>().clearFcmSubs();
+                  context.read<NotificationProvider>().stopListening();
                   await auth.signOut();
                   if (context.mounted) {
                     Navigator.pushNamedAndRemoveUntil(context, '/auth/role', (_) => false);

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:move_to_background/move_to_background.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -28,7 +29,7 @@ class DeliveryDashboardPage extends StatefulWidget {
 }
 
 class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
   bool _isOnline = false;
   List<OrderGroup> _availableGroups = [];
@@ -64,6 +65,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _bgCtrl =
         AnimationController(duration: const Duration(seconds: 5), vsync: this)
           ..repeat(reverse: true);
@@ -119,11 +121,19 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _locationBroadcastTimer?.cancel();
     _fcmForegroundSub?.cancel();
     _realtimeChannel?.unsubscribe();
     _bgCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) _loadOrders();
+    }
   }
 
   // Starts pushing GPS location to DB every 15s while online.
@@ -829,9 +839,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final isDark = themeProvider.isDarkMode;
     final size = MediaQuery.of(context).size;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        MoveToBackground.moveTaskToBack();
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light,
+        child: Scaffold(
         backgroundColor:
             isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
         body: CustomScrollView(
@@ -1255,7 +1271,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           ],
         ),
       ),
-    );
+    ));
   }
 
   // ── Card Builders ─────────────────────────────────────────────────────────
@@ -1263,6 +1279,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   // ── Distance helpers ────────────────────────────────────────────────────────
 
   /// Straight-line km from rider to shop (used on the card chip).
+  // ignore: unused_element
   double? _pickupDistKm(OrderModel order) {
     if (_riderLat == null || _riderLng == null) return null;
     final shopInfo = _shopInfoCache[order.shopId];
@@ -1273,6 +1290,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   /// Straight-line km from shop to customer (used on the card chip).
+  // ignore: unused_element
   double? _deliveryDistKm(OrderModel order) {
     final shopInfo = _shopInfoCache[order.shopId];
     final sLat = shopInfo?.lat ?? order.shopLat;
@@ -1282,6 +1300,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     return Geolocator.distanceBetween(sLat, sLng, order.deliveryLat!, order.deliveryLng!) / 1000;
   }
 
+  // ignore: unused_element
   Widget _distanceChip({
     required Color color,
     required IconData icon,
@@ -1850,6 +1869,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         splashRadius: 20,
       );
       
+  // ignore: unused_element
   Widget _progressStep({required IconData icon, required bool isActive}) {
     return Container(
       padding: const EdgeInsets.all(6),
@@ -1865,6 +1885,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     );
   }
 
+  // ignore: unused_element
   Widget _progressLine({required bool isActive}) {
     return Expanded(
       child: Container(
@@ -2120,6 +2141,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     );
   }
 
+  // ignore: unused_element
   Future<void> _launchNavigation(OrderModel order) async {
     final isOutForDelivery = order.status == 'out_for_delivery';
     final lat = isOutForDelivery ? order.deliveryLat : order.shopLat;

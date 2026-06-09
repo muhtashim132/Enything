@@ -503,15 +503,23 @@ class NotificationProvider extends ChangeNotifier {
     _channel?.unsubscribe();
     _channel = null;
     
-    _fcmTokenSub?.cancel();
-    _fcmTokenSub = null;
-    _fcmMessageSub?.cancel();
-    _fcmMessageSub = null;
+    // NOTE: FCM subscriptions (_fcmTokenSub and _fcmMessageSub) are intentionally
+    // NOT cancelled here. They are user-session-level (not role-level) and must
+    // persist across role switches (e.g. customer → seller → delivery).
+    // They are only cancelled on full logout via clearFcmSubs().
     
     _listeningUserId = null;
     _listeningRole = null;
     _lastProcessedStatus.clear();
     _clearMemory(); // Clear RAM only — DB history is preserved per user
+  }
+
+  /// Called on user logout to fully tear down all subscriptions including FCM.
+  void clearFcmSubs() {
+    _fcmTokenSub?.cancel();
+    _fcmTokenSub = null;
+    _fcmMessageSub?.cancel();
+    _fcmMessageSub = null;
   }
 
   // ── Manage notifications ──────────────────────────────────────────────────

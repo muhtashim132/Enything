@@ -387,9 +387,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             orElse: () => _order!);
         _startPaymentCountdown(awaitingPayOrder);
         
-        if (!_isProcessingPayment) {
+        if (!_isProcessingPayment && !_razorpayOpened) {
           Future.delayed(const Duration(milliseconds: 800), () {
-            if (mounted) _openRazorpay();
+            if (mounted && !_razorpayOpened) _openRazorpay();
           });
         }
       } else {
@@ -450,10 +450,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       
       final res = await updateQuery.eq('status', expectedStatus).select();
       if (mounted && res.isNotEmpty) {
-        setState(() {
-          _order =
-              _order!.copyWith(status: 'cancelled', cancelledReason: 'timeout');
-        });
+        // Re-fetch all group orders to sync sibling order states
+        // (Realtime only fires individual row events — group siblings may lag)
+        await _fetchOrder();
+        if (mounted) {
+          setState(() {
+            _order =
+                _order!.copyWith(status: 'cancelled', cancelledReason: 'timeout');
+          });
+        }
       }
     } catch (e) {
       debugPrint('Auto-cancel error: $e');
@@ -1197,6 +1202,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         'theme': {'color': '#4C6EF5'},
       });
     } catch (e) {
+      _razorpayOpened = false;
       setState(() => _isProcessingPayment = false);
       debugPrint('Open Razorpay error: $e');
       if (mounted) {
