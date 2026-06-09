@@ -83,11 +83,11 @@ class _KycReviewPageState extends State<KycReviewPage>
     try {
       await _supabase.from('shops').update({
         'verification_status': 'approved',
-      }).eq('id', shopId);
+      }).eq('id', shopId).select('id');
       await _supabase.from('profiles').update({
         'kyc_status': 'approved',
         'verification_status': 'verified',
-      }).eq('id', sellerId);
+      }).eq('id', sellerId).select('id');
 
       // Push seller: KYC approved
       if (mounted) {
@@ -113,11 +113,11 @@ class _KycReviewPageState extends State<KycReviewPage>
     try {
       await _supabase.from('shops').update({
         'verification_status': 'rejected',
-      }).eq('id', shopId);
+      }).eq('id', shopId).select('id');
       await _supabase.from('profiles').update({
         'kyc_status': 'rejected',
         'verification_status': 'rejected',
-      }).eq('id', sellerId);
+      }).eq('id', sellerId).select('id');
 
       // Push seller: KYC rejected with reason
       if (mounted) {
@@ -140,11 +140,11 @@ class _KycReviewPageState extends State<KycReviewPage>
     try {
       await _supabase.from('delivery_partners').update({
         'verification_status': 'approved',
-      }).eq('id', riderId);
+      }).eq('id', riderId).select('id');
       await _supabase.from('profiles').update({
         'kyc_status': 'approved',
         'verification_status': 'verified',
-      }).eq('id', riderId);
+      }).eq('id', riderId).select('id');
 
       // Push rider: KYC approved
       if (mounted) {
@@ -169,11 +169,11 @@ class _KycReviewPageState extends State<KycReviewPage>
     try {
       await _supabase.from('delivery_partners').update({
         'verification_status': 'rejected',
-      }).eq('id', riderId);
+      }).eq('id', riderId).select('id');
       await _supabase.from('profiles').update({
         'kyc_status': 'rejected',
         'verification_status': 'rejected',
-      }).eq('id', riderId);
+      }).eq('id', riderId).select('id');
 
       // Push rider: KYC rejected with reason
       if (mounted) {
