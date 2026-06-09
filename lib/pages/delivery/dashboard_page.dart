@@ -106,13 +106,46 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             event: PostgresChangeEvent.update,
             schema: 'public',
             table: 'orders',
+            callback: (payload) {
+              if (mounted) {
+                final newRec = payload.newRecord;
+                if (newRec != null) {
+                  final orderId = newRec['id'] as String?;
+                  if (orderId != null) {
+                    final wasAvailable = _availableGroups.expand((g) => g.orders).any((o) => o.id == orderId);
+                    if (wasAvailable) {
+                      _loadOrders();
+                    }
+                  }
+                }
+              }
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'orders',
             filter: PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
               column: 'delivery_partner_id',
               value: userId,
             ),
-            callback: (_) {
-              if (mounted) _loadOrders();
+            callback: (payload) {
+              if (mounted) {
+                final oldRec = payload.oldRecord;
+                final newRec = payload.newRecord;
+                if (oldRec != null && newRec != null && oldRec['status'] != newRec['status']) {
+                  final newStatus = newRec['status'];
+                  if (newStatus == 'confirmed') {
+                    _showSnack('💳 Payment Confirmed! Head to the shop.', isError: false);
+                  } else if (newStatus == 'preparing') {
+                    _showSnack('👨‍🍳 A shop started preparing an order!', isError: false);
+                  } else if (newStatus == 'ready_for_pickup') {
+                    _showSnack('📦 An order is ready for pickup!', isError: false);
+                  }
+                }
+                _loadOrders();
+              }
             },
           )
           .subscribe();
@@ -359,13 +392,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   Future<void> _acceptOrderGroup(OrderGroup group) async {
     setState(() => _isLoading = true);
+    bool anyFailed = false;
     for (int i = 0; i < group.orders.length; i++) {
-      await _acceptOrder(group.orders[i], skipReload: true, notifyCustomer: i == 0);
+      final success = await _acceptOrder(group.orders[i], skipReload: true, notifyCustomer: i == 0);
+      if (!success) anyFailed = true;
     }
     _loadOrders();
   }
 
-  Future<void> _acceptOrder(OrderModel order, {bool skipReload = false, bool notifyCustomer = true}) async {
+  Future<bool> _acceptOrder(OrderModel order, {bool skipReload = false, bool notifyCustomer = true}) async {
     final auth = context.read<AuthProvider>();
     try {
       double? shopLat;
@@ -394,7 +429,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           ? DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String()
           : null;
 
-      await _supabase.from('orders').update({
+      final updateResult = await _supabase.from('orders').update({
         'delivery_partner_id': auth.currentUserId,
         'partner_accepted': true,
         'status': newStatus,
@@ -402,7 +437,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         if (shopLat != null && shopLat != 0.0) 'shop_lat': shopLat,
         if (shopLng != null && shopLng != 0.0) 'shop_lng': shopLng,
         'rider_phone': auth.user?.phone ?? '',
-      }).eq('id', order.id).isFilter('delivery_partner_id', null);
+      }).eq('id', order.id).isFilter('delivery_partner_id', null).select();
+
+      if ((updateResult as List).isEmpty) {
+        if (mounted) {
+          _showSnack('⚠️ This order was already assigned to another rider.', isError: true);
+        }
+        return false;
+      }
 
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
@@ -471,8 +513,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
       }
       if (!skipReload) _loadOrders();
+      return true;
+    } on PostgrestException catch (pe) {
+      debugPrint('Accept Postgrest error: $pe');
+      if (mounted) {
+        _showSnack(pe.message, isError: true);
+      }
+      return false;
     } catch (e) {
       debugPrint('Accept error: $e');
+      return false;
     }
   }
 
@@ -545,7 +595,51 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             });
           }
         }
+      } else if (status == 'shop_dispute_cancel') {
+        // Rider reported shop lied / items not given. Cancel order, do NOT reassign.
+        await _supabase.from('orders').update({
+          'status': 'cancelled',
+          'cancelled_reason': 'shop_dispute',
+          'wait_time_disputed': true,
+        }).eq('id', order.id);
+
+        if (mounted) {
+          final notifProv = context.read<NotificationProvider>();
+
+          // Notify customer with apology and refund info
+          notifProv.sendBackgroundPush(
+            targetUserId: order.customerId,
+            title: '😔 We\'re Sorry — Order Cancelled',
+            body: 'There was an issue at the shop. Your order has been cancelled. '
+                'If you were charged, a full refund will be initiated within 5–7 business days. '
+                'We sincerely apologise for this rare inconvenience.',
+            data: {'order_id': order.id, 'role': 'customer'},
+          );
+
+          // Notify seller: dispute has been filed
+          if (order.shopId != null) {
+            _supabase
+                .from('shops')
+                .select('seller_id')
+                .eq('id', order.shopId!)
+                .maybeSingle()
+                .then((shopData) {
+              if (shopData != null && shopData['seller_id'] != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: shopData['seller_id'] as String,
+                  title: '⚠️ Order Cancelled — Dispute Filed',
+                  body: 'The delivery rider reported that items were not given or the shop was not '
+                      'ready as stated. This order has been cancelled. Our team will review this report.',
+                  data: {'order_id': order.id, 'role': 'seller'},
+                );
+              }
+            });
+          }
+        }
+        _loadOrders();
+        return;
       } else if (status == 'delivered') {
+
         await _supabase.from('orders').update({
           'status': status,
         }).eq('id', order.id);
@@ -758,29 +852,31 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Dispute Order',
+        title: Text('Report Shop Issue',
             style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         content: Text(
-            'Report shop delay or missing items. You will keep your wait penalty pay and the order will be reassigned.',
+            'If the shop is not giving you the items, lied about readiness, or is being dishonest, '
+            'you can cancel this order. The customer will be notified and a refund will be initiated within 5–7 business days.',
             style: GoogleFonts.outfit()),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('Go Back')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _updateStatus(order, 'reassign_disputed');
+              _updateStatus(order, 'shop_dispute_cancel');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Dispute & Reassign'),
+            child: const Text('Cancel & Report Shop'),
           ),
         ],
       ),
     );
   }
+
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
@@ -1633,35 +1729,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   Widget _buildShopPickupTile(OrderModel order, bool isDark) {
     String? nextStatus;
     String? nextLabel;
-    final now = DateTime.now();
-    bool showWaitTimer = false;
-    int waitMinutes = 0;
-    double waitPenalty = 0.0;
-    bool canReassign = false;
-
-    if (order.arrivedAtShopTime != null) {
-      if (order.status == 'confirmed' || order.status == 'preparing' || order.status == 'ready_for_pickup') {
-        showWaitTimer = true;
-        final endTime = order.orderReadyTime ?? now;
-        waitMinutes = endTime.difference(order.arrivedAtShopTime!).inMinutes;
-        final paidMinutes = math.max(0, math.min(10, waitMinutes - 10));
-        waitPenalty = paidMinutes * 1.5;
-        canReassign = now.difference(order.arrivedAtShopTime!).inMinutes >= 20;
-      }
-    }
 
     if (order.status == 'confirmed' || order.status == 'preparing') {
       if (order.arrivedAtShopTime == null) {
         nextStatus = 'arrived';
         nextLabel = '📍 Mark Arrived';
       } else {
-        if (canReassign) {
-          nextStatus = 'reassign';
-          nextLabel = '⚠️ Wait Time Exceeded - Reassign';
-        } else {
-          nextLabel = 'Waiting for Shop to Pack...';
-          nextStatus = null;
-        }
+        nextLabel = 'Waiting for Shop to Pack...';
+        nextStatus = null;
       }
     } else if (order.status == 'ready_for_pickup') {
       nextStatus = 'picked_up';
@@ -1670,6 +1745,21 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
     final shopInfo = _shopInfoCache[order.shopId];
     final shopName = shopInfo?.name ?? 'Shop';
+
+    Color getStatusColor() {
+      switch (order.status) {
+        case 'confirmed':
+          return const Color(0xFF4C6EF5); // Bright Blue
+        case 'preparing':
+          return const Color(0xFFF5A623); // Bright Orange
+        case 'ready_for_pickup':
+          return const Color(0xFF51CF66); // Bright Green
+        case 'picked_up':
+          return const Color(0xFF845EF7); // Bright Purple
+        default:
+          return const Color(0xFF15AABF); // Bright Cyan
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1687,7 +1777,23 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               const Icon(Icons.storefront_rounded, size: 16, color: AppColors.accent),
               const SizedBox(width: 6),
               Expanded(child: Text(shopName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13))),
-              Text(order.statusDisplay, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: getStatusColor().withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: getStatusColor().withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  order.statusDisplay.toUpperCase(),
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: getStatusColor(),
+                  ),
+                ),
+              ),
             ],
           ),
           if (order.shopPhone != null && order.shopPhone!.isNotEmpty) ...[
@@ -1696,11 +1802,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               onTap: () => _callPhone(order.shopPhone!),
               child: Text('📞 Call Shop', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.accent, decoration: TextDecoration.underline)),
             )
-          ],
-          if (showWaitTimer) ...[
-            const SizedBox(height: 8),
-            Text('Wait Time: $waitMinutes mins (+₹${waitPenalty.toStringAsFixed(1)})', 
-                style: GoogleFonts.outfit(fontSize: 12, color: waitMinutes >= 10 ? Colors.orange : Colors.blue)),
           ],
           if (nextLabel != null) ...[
             const SizedBox(height: 10),
@@ -1713,14 +1814,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         if (nextStatus == 'arrived') {
                           _showSnack('📍 GPS verified: At Shop');
                           _updateStatus(order, nextStatus!);
-                        } else if (nextStatus == 'reassign') {
-                          _showDisputeDialog(order);
                         } else {
                           _updateStatus(order, nextStatus!);
                         }
                       },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: nextStatus == 'reassign' ? AppColors.danger : AppColors.accent,
+                  backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   elevation: 0,
@@ -1729,14 +1828,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               ),
             ),
           ],
-          if (showWaitTimer || order.status == 'ready_for_pickup' || order.status == 'preparing') ...[
+          if (order.status == 'confirmed' || order.status == 'preparing' || order.status == 'ready_for_pickup') ...[
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: () => _showDisputeDialog(order),
               icon: const Icon(Icons.report_problem_outlined, color: AppColors.danger, size: 16),
               label: Text(
-                  order.orderReadyTime != null
-                      ? 'Shop Lied - Items Not Received'
+                  order.status == 'ready_for_pickup'
+                      ? 'Shop Lied — Items Not Received'
                       : 'Shop Lied / Items Not Given',
                   style: GoogleFonts.outfit(color: AppColors.danger, fontSize: 12)),
             ),
@@ -1745,6 +1844,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       ),
     );
   }
+
 
   Widget _offlineState(bool isDark) => Container(
         margin: const EdgeInsets.only(top: 8),

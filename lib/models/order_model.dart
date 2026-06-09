@@ -386,6 +386,7 @@ class OrderModel {
           case 'no_rider':      return 'No Rider Available';
           case 'timeout':       return 'Order Expired';
           case 'customer':      return 'Cancelled by You';
+          case 'shop_dispute':  return 'Cancelled — Shop Issue';
           default:              return 'Cancelled';
         }
       case 'seller_rejected':

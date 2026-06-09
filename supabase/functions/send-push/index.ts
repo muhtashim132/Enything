@@ -29,12 +29,20 @@ function b64url(data: Uint8Array): string {
     .replace(/=/g, '');
 }
 
+let cachedAccessToken: string | null = null;
+let tokenExpirationTime: number = 0;
+
 /**
  * Exchange a Firebase Service Account for a short-lived OAuth2 access token
  * that authorises calls to the FCM HTTP v1 API.
  */
 async function getFcmAccessToken(sa: Record<string, string>): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
+  
+  if (cachedAccessToken && now < tokenExpirationTime) {
+    return cachedAccessToken;
+  }
+
   const enc = new TextEncoder();
 
   const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
@@ -72,7 +80,10 @@ async function getFcmAccessToken(sa: Record<string, string>): Promise<string> {
   if (!json.access_token) {
     throw new Error(`OAuth2 token exchange failed: ${JSON.stringify(json)}`);
   }
-  return json.access_token as string;
+  
+  cachedAccessToken = json.access_token;
+  tokenExpirationTime = now + 3500; // Cache for slightly less than 1 hour
+  return cachedAccessToken;
 }
 
 // ── Edge Function entry point ──────────────────────────────────────────────
