@@ -1,7 +1,7 @@
 -- ================================================================
--- Migration: create_support_tickets_table
+-- Migration: create_support_tickets_table (idempotent / safe to re-run)
 -- Creates the support_tickets table used by FaqSupportPage.
--- Adds RLS so users can only see/create their own tickets.
+-- Uses IF NOT EXISTS and DROP ... IF EXISTS to be fully re-runnable.
 -- ================================================================
 
 CREATE TABLE IF NOT EXISTS public.support_tickets (
@@ -29,6 +29,10 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_status
 
 -- ── Row-Level Security ───────────────────────────────────────────
 ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies first so re-running is always safe
+DROP POLICY IF EXISTS "support_tickets_insert_own" ON public.support_tickets;
+DROP POLICY IF EXISTS "support_tickets_select_own" ON public.support_tickets;
 
 -- Authenticated users can insert their own tickets
 CREATE POLICY "support_tickets_insert_own"
