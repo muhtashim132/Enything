@@ -224,10 +224,10 @@ class _RestaurantShopCardState extends State<RestaurantShopCard> {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      _metaChip(
+                       _metaChip(
                         Icons.timer_outlined,
                         '${shop.prepTimeMinutes} min',
-                        Colors.blue.shade600,
+                        const Color(0xFF1976D2), // blue 700
                       ),
                       const SizedBox(width: 10),
                       _metaChip(
@@ -238,10 +238,10 @@ class _RestaurantShopCardState extends State<RestaurantShopCard> {
                                 ? 'Free delivery'
                                 : '₹${deliveryCharge.toStringAsFixed(0)} delivery',
                         isOutOfRange
-                            ? Colors.red.shade600
+                            ? const Color(0xFFE53935) // red 600
                             : isFreeDelivery
-                                ? Colors.green.shade600
-                                : Colors.orange.shade700,
+                                ? const Color(0xFF43A047) // green 600
+                                : const Color(0xFFE65100), // orange 900
                       ),
                       const SizedBox(width: 10),
                       _metaChip(
@@ -249,7 +249,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard> {
                         shop.distanceKm != null
                             ? '${shop.distanceKm!.toStringAsFixed(1)} km'
                             : 'N/A km',
-                        Colors.grey.shade600,
+                        const Color(0xFF757575), // grey 600
                       ),
                     ],
                   ),

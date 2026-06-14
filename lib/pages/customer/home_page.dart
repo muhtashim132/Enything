@@ -49,6 +49,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   Map<String, ShopModel> _productShops = {};
   String _searchQuery = '';
   final _searchController = TextEditingController();
+  // Debounce timer for GPS listener to prevent race conditions
+  Timer? _locationDebounceTimer;
+  // Track if the very first load has completed (shimmer only on first load)
+  bool _hasLoadedOnce = false;
 
   // Banner carousel
   final PageController _bannerController = PageController();
@@ -131,15 +135,21 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   }
 
   void _onLocationChanged() {
-    // When location provider updates (new GPS fix), refresh the shop list
-    // so distance calculations use the latest coordinates
-    if (mounted && !_isLoading && _searchQuery.isEmpty) {
+    // When location provider updates (new GPS fix), refresh the shop list.
+    // IMPORTANT: Debounce to prevent race conditions where:
+    //   1) User taps a category → _loadData() starts
+    //   2) GPS fires → _onLocationChanged triggers another _loadData()
+    //   3) Second load sets _isLoading=true, wiping the first load's results
+    if (!mounted || _isLoading || _searchQuery.isNotEmpty) return;
+    _locationDebounceTimer?.cancel();
+    _locationDebounceTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted || _isLoading) return;
       if (_selectedTabIndex < 0) {
         _loadAllData();
       } else {
         _loadData(_categories[_selectedTabIndex]['name']! as String);
       }
-    }
+    });
   }
 
   void _startNotifications() {
@@ -157,6 +167,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   @override
   void dispose() {
     _bannerTimer?.cancel();
+    _locationDebounceTimer?.cancel();
     // Remove live location listener to avoid memory leaks
     context.read<LocationProvider>().removeListener(_onLocationChanged);
     _searchController.dispose();
@@ -320,7 +331,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   /// Fetch ALL active shops & products, sorted by rating then total_orders.
   /// Used on initial load when no category tab is selected.
   Future<void> _loadAllData() async {
-    setState(() => _isLoading = true);
+    // Only show the shimmer on the very first load. On subsequent loads
+    // (e.g., GPS update or category deselect) keep old data visible.
+    if (!_hasLoadedOnce) {
+      setState(() => _isLoading = true);
+    }
     try {
       final locationProvider = context.read<LocationProvider>();
 
@@ -385,11 +400,13 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         }
         prods.sort((a, b) => b.rating.compareTo(a.rating));
 
+        // Atomic update: swap data and clear loading in a single setState
         setState(() {
           _shops = nearby;
           _products = prods;
           _productShops = prodShops;
           _isLoading = false;
+          _hasLoadedOnce = true;
         });
       }
     } catch (e, st) {
@@ -409,17 +426,20 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   }
 
   Future<void> _loadData(String tabName) async {
-    setState(() => _isLoading = true);
+    // Do NOT set _isLoading = true here on category switch — this causes the
+    // existing content to disappear (the "flash"). Keep old data visible
+    // and only swap data once the new fetch is complete.
+    // Only show shimmer on the very first app load.
+    if (!_hasLoadedOnce) {
+      setState(() => _isLoading = true);
+    }
     try {
       final locationProvider = context.read<LocationProvider>();
       final subcategories = _tabCategories[tabName] ?? [tabName];
 
-      // Build OR filter for all subcategories in this tab
-      final catFilter = subcategories.map((c) => 'category.eq.$c').join(',');
-
       // Fetch all, filter locally
       final shopsResponse =
-          await _supabase.from('shops').select().or(catFilter);
+          await _supabase.from('shops').select().inFilter('category', subcategories);
 
       final productsResponse = await _supabase
           .from('products')
@@ -475,11 +495,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         }
         prods.sort((a, b) => b.rating.compareTo(a.rating));
         
+        // Atomic update: swap data in a single setState so there is no
+        // intermediate blank-screen state
         setState(() {
           _shops = nearby;
           _products = prods;
           _productShops = prodShops;
           _isLoading = false;
+          _hasLoadedOnce = true;
         });
       }
     } catch (e, st) {
@@ -728,7 +751,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      curve: Curves.elasticOut,
+                      curve: Curves.easeOutCubic,
                       margin:
                           const EdgeInsets.only(right: 10, top: 8, bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -740,7 +763,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                 end: Alignment.centerRight)
                             : null,
                         color: isSelected
-                            ? null
+                            ? Colors.transparent
                             : (isDark
                                 ? const Color(0xFF1E1E2E)
                                 : const Color(0xFFF0F0F8)),
@@ -765,7 +788,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         children: [
                           AnimatedDefaultTextStyle(
                             duration: const Duration(milliseconds: 300),
-                            curve: Curves.elasticOut,
+                            curve: Curves.easeOutCubic,
                             style: TextStyle(fontSize: isSelected ? 20 : 16),
                             child: Text(cat['emoji']),
                           ),
@@ -1429,8 +1452,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   Widget _buildShimmer() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final base = isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade200;
-    final highlight = isDark ? const Color(0xFF2A2A3A) : Colors.grey.shade100;
+    // Use stable hex constants instead of .shade getters to prevent
+    // the dart:ui/painting.dart assertion crash
+    final base = isDark ? const Color(0xFF1E1E2E) : const Color(0xFFE0E0E0);
+    final highlight = isDark ? const Color(0xFF2A2A3A) : const Color(0xFFF5F5F5);
     return Shimmer.fromColors(
       baseColor: base,
       highlightColor: highlight,

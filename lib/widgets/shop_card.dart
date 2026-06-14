@@ -180,16 +180,16 @@ class _ShopCardState extends State<ShopCard> {
                       _buildChip(
                         icon: Icons.timer_outlined,
                         label: '${shop.prepTimeMinutes}m',
-                        color: Colors.blue.shade50,
-                        textColor: Colors.blue.shade700,
+                        color: const Color(0xFFE3F2FD), // blue 50
+                        textColor: const Color(0xFF1976D2), // blue 700
                       ),
                       _buildChip(
                         icon: Icons.location_on_outlined,
                         label: shop.distanceKm != null
                             ? '${shop.distanceKm!.toStringAsFixed(1)} km'
                             : 'N/A km',
-                        color: Colors.orange.shade50,
-                        textColor: Colors.orange.shade700,
+                        color: const Color(0xFFFFF3E0), // orange 50
+                        textColor: const Color(0xFFE65100), // orange 900
                       ),
                       _buildDeliveryChip(shop.distanceKm ?? 0.0),
                     ],
@@ -227,8 +227,8 @@ class _ShopCardState extends State<ShopCard> {
       return _buildChip(
         icon: Icons.block_rounded,
         label: 'Out of range',
-        color: Colors.red.shade50,
-        textColor: Colors.red.shade700,
+        color: const Color(0xFFFFEBEE), // red 50
+        textColor: const Color(0xFFE53935), // red 600
       );
     }
     
@@ -236,16 +236,16 @@ class _ShopCardState extends State<ShopCard> {
       return _buildChip(
         icon: Icons.delivery_dining_outlined,
         label: 'Free delivery',
-        color: Colors.green.shade50,
-        textColor: Colors.green.shade700,
+        color: const Color(0xFFE8F5E9), // green 50
+        textColor: const Color(0xFF43A047), // green 600
       );
     }
 
     return _buildChip(
       icon: Icons.delivery_dining_outlined,
       label: '₹${charge.toStringAsFixed(0)} delivery',
-      color: Colors.blue.shade50,
-      textColor: Colors.blue.shade700,
+      color: const Color(0xFFE3F2FD), // blue 50
+      textColor: const Color(0xFF1976D2), // blue 700
     );
   }
 
