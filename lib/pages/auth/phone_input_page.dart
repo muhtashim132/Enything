@@ -155,7 +155,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                     const SizedBox(height: 20),
 
                     // Logo mark
-                    const _MiniLogo(size: 72),
+                    const _MiniLogo(size: 110),
                     const SizedBox(height: 24),
 
                     // Role badge

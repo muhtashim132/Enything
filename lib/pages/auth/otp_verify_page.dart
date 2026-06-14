@@ -588,7 +588,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                 child: Column(
                   children: [
                     const SizedBox(height: 16),
-                    const _MiniLogo(size: 64),
+                    // Logo mark
+                    const _MiniLogo(size: 110),
                     const SizedBox(height: 20),
 
                     // Role badge

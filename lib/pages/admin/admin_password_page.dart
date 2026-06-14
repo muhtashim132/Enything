@@ -265,8 +265,8 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
 
   Widget _buildLogo() {
     return Container(
-      width: 96,
-      height: 96,
+      width: 120,
+      height: 120,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         boxShadow: [
@@ -278,7 +278,7 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(48),
+        borderRadius: BorderRadius.circular(60),
         child: Image.asset(
           'logo/Enything_modern.png',
           fit: BoxFit.cover,

@@ -426,10 +426,10 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         children: [
           const SizedBox(height: 20),
           Container(
-            width: 72,
-            height: 72,
+            width: 110,
+            height: 110,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFFF4C542).withValues(alpha: 0.20),
@@ -439,7 +439,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(30),
               child: Image.asset('logo/Enything_modern.png', fit: BoxFit.cover),
             ),
           ),
@@ -495,11 +495,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           const SizedBox(height: 8),
           Center(
             child: Container(
-              width: 72,
-              height: 72,
+              width: 110,
+              height: 110,
               margin: const EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFFF4C542).withValues(alpha: 0.20),
@@ -509,7 +509,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
                 ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(30),
                 child: Image.asset('logo/Enything_modern.png', fit: BoxFit.cover),
               ),
             ),
