@@ -325,7 +325,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
-      }
+
 
       cart.clear();
       if (mounted) {
@@ -358,11 +358,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
-    final isOutOfRange = baseCharge < 0;
     final surcharge = cart.multiShopSurcharge;
     final heavyFee = cart.heavyOrderFee;
     final discount = cart.calculateDeliveryDiscount(distanceKm);
-    final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
+    final effectiveBase = baseCharge >= 0 ? baseCharge : 25.0;
     final totalDelivery = cart.totalDeliveryCharges(distanceKm);
     final riderBase = effectiveBase + surcharge + heavyFee;
     final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
@@ -687,8 +686,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   const SizedBox(height: 8),
                   _billRow(
                     'Delivery Fee',
-                    isOutOfRange ? 'Out of range' : '₹${effectiveBase.toStringAsFixed(0)}',
-                    valueColor: isOutOfRange ? AppColors.danger : AppColors.textPrimary,
+                    '₹${effectiveBase.toStringAsFixed(0)}',
                   ),
                   if (discount > 0) ...[
                     const SizedBox(height: 8),
@@ -810,21 +808,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                gradient: isOutOfRange ? null : AppColors.ctaGradient,
-                color: isOutOfRange ? Colors.grey : null,
+                gradient: AppColors.ctaGradient,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: isOutOfRange
-                    ? []
-                    : [
-                        BoxShadow(
-                          color: AppColors.secondary.withValues(alpha: 0.4),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.secondary.withValues(alpha: 0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: ElevatedButton(
-                onPressed: (_isProcessing || isOutOfRange) ? null : _placeOrder,
+                onPressed: _isProcessing ? null : _placeOrder,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Colors.transparent,
@@ -839,9 +834,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2.5),
                       )
-                    : Text(
-                        isOutOfRange ? 'OUT OF RANGE' : 'CONFIRM ORDER',
-                        style: const TextStyle(
+                    : const Text(
+                        'CONFIRM ORDER',
+                        style: TextStyle(
                             fontSize: 16,
                             height: 1.2,
                             color: Colors.white,
