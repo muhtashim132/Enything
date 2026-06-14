@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,7 +40,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     _ring2 = CurvedAnimation(parent: _ringCtrl, curve: const Interval(0.15, 0.80, curve: Curves.easeOut));
     _ring3 = CurvedAnimation(parent: _ringCtrl, curve: const Interval(0.30, 1.00, curve: Curves.easeOut));
 
-    _logoCtrl = AnimationController(duration: const Duration(milliseconds: 900), vsync: this);
+    _logoCtrl = AnimationController(duration: const Duration(seconds: 2), vsync: this);
     _logoScale = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _logoCtrl, curve: Curves.elasticOut));
     _logoFade = CurvedAnimation(parent: _logoCtrl, curve: const Interval(0.0, 0.5, curve: Curves.easeIn));
 
@@ -214,8 +215,9 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                       child: ScaleTransition(
                         scale: _pulseAnim,
                         child: _EnythingLogo(
-                          logoSize: size.shortestSide * 0.30,
+                          logoSize: size.shortestSide * 0.22,
                           shimmer: _shimmerAnim,
+                          assemblyAnim: _logoCtrl,
                         ),
                       ),
                     ),
@@ -316,7 +318,8 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
 class _EnythingLogo extends StatelessWidget {
   final double logoSize;
   final Animation<double> shimmer;
-  const _EnythingLogo({required this.logoSize, required this.shimmer});
+  final Animation<double> assemblyAnim;
+  const _EnythingLogo({required this.logoSize, required this.shimmer, required this.assemblyAnim});
 
   @override
   Widget build(BuildContext context) {
@@ -364,21 +367,14 @@ class _EnythingLogo extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Actual Enything.png logo image
-                Padding(
-                  padding: EdgeInsets.all(logoSize * 0.10),
-                  child: Image.asset(
-                    'logo/Enything.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Text(
-                        'E',
-                        style: GoogleFonts.outfit(
-                          color: const Color(0xFF5B8BFF),
-                          fontSize: logoSize * 0.45,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
+                // Animated Vector Logo instead of PNG
+                AnimatedBuilder(
+                  animation: assemblyAnim,
+                  builder: (_, __) => Padding(
+                    padding: EdgeInsets.all(logoSize * 0.10),
+                    child: CustomPaint(
+                      size: Size(logoSize * 0.80, logoSize * 0.80),
+                      painter: _LogoPartsPainter(progress: assemblyAnim.value),
                     ),
                   ),
                 ),
@@ -406,6 +402,58 @@ class _EnythingLogo extends StatelessWidget {
       ],
     );
   }
+}
+
+class _LogoPartsPainter extends CustomPainter {
+  final double progress;
+  _LogoPartsPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final radius = Radius.circular(h * 0.12);
+    final thickness = h * 0.24;
+
+    final topBox = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, thickness), radius);
+    final botBox = RRect.fromRectAndRadius(Rect.fromLTWH(0, h - thickness, w, thickness), radius);
+    final stemBox = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, thickness, h), radius);
+    final midBox = RRect.fromRectAndRadius(Rect.fromLTWH(0, h / 2 - thickness / 2, w * 0.8, thickness), radius);
+
+    double ease(double t) => Curves.easeOutCubic.transform(t.clamp(0.0, 1.0));
+
+    final tTop   = ease((progress - 0.1) / 0.3);
+    final tStem  = ease((progress - 0.3) / 0.3);
+    final tBot   = ease((progress - 0.5) / 0.3);
+    final tMid   = ease((progress - 0.7) / 0.3);
+
+    void drawPart(RRect box, double t, Offset translation, Color color) {
+      if (t <= 0) return;
+      canvas.save();
+      final currentOffset = Offset(translation.dx * (1 - t), translation.dy * (1 - t));
+      canvas.translate(currentOffset.dx, currentOffset.dy);
+      
+      final paint = Paint()
+        ..color = color.withValues(alpha: t * color.a)
+        ..style = PaintingStyle.fill;
+      
+      canvas.drawRRect(box, paint);
+      canvas.restore();
+    }
+
+    final colorTop = const Color(0xCC00DCFF); // Cyan
+    final colorBot = const Color(0xCC6432FF); // Purple/Indigo
+    final colorStem = const Color(0xCC4664FF); // Blue
+    final colorMid = const Color(0xCC00FFC8); // Mint/Teal
+
+    drawPart(botBox, tBot, Offset(0, h), colorBot);
+    drawPart(topBox, tTop, Offset(0, -h), colorTop);
+    drawPart(stemBox, tStem, Offset(-w, 0), colorStem);
+    drawPart(midBox, tMid, Offset(w, 0), colorMid);
+  }
+
+  @override
+  bool shouldRepaint(_LogoPartsPainter oldDelegate) => oldDelegate.progress != progress;
 }
 
 // ─── Custom Painters ──────────────────────────────────────────────────────────

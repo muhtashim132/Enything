@@ -26,13 +26,11 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
-
 		<!-- ─── Location ─────────────────────────────────────────────────── -->
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>Enything uses your location to show nearby shops and track your deliveries in real time.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 		<string>Enything uses your location in the background to track delivery partner routes and provide accurate ETAs.</string>
-
 		<!-- ─── Camera & Photos (image_picker) ───────────────────────────── -->
 		<key>NSCameraUsageDescription</key>
 		<string>Enything needs camera access to let you upload product photos and KYC documents.</string>
@@ -40,7 +38,6 @@
 		<string>Enything needs photo library access to let you choose images for your shop, products, and profile.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Enything saves receipt and order photos to your photo library.</string>
-
 		<!-- ─── URL Launcher (tel:, mailto:, https:) ─────────────────────── -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>
@@ -53,7 +50,6 @@
 			<string>gpay</string>
 			<string>paytm</string>
 		</array>
-
 		<!-- ─── Razorpay callback URL scheme ─────────────────────────────── -->
 		<key>CFBundleURLTypes</key>
 		<array>
@@ -68,7 +64,6 @@
 				</array>
 			</dict>
 		</array>
-
 		<!-- ─── UI Configuration ──────────────────────────────────────────── -->
 		<key>UIApplicationSceneManifest</key>
 		<dict>
@@ -110,7 +105,6 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
-
 		<!-- ─── Push Notifications ──────────────────────────────────────────── -->
 		<!-- Required: allows FCM to deliver data-only messages when app is backgrounded -->
 		<key>UIBackgroundModes</key>
@@ -118,11 +112,9 @@
 			<string>fetch</string>
 			<string>remote-notification</string>
 		</array>
-
 		<!-- Disable Firebase method swizzling so we forward APNs token manually  -->
 		<!-- (already done in AppDelegate.swift via Messaging.messaging().apnsToken) -->
 		<key>FirebaseAppDelegateProxyEnabled</key>
 		<false/>
-
 	</dict>
 </plist>
