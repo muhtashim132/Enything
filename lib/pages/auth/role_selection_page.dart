@@ -159,7 +159,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                                     child: Padding(
                                       padding: const EdgeInsets.all(8),
                                       child: Image.asset(
-                                        'logo/Enything.png',
+                                        'logo/Enything_modern.png',
                                         fit: BoxFit.contain,
                                         errorBuilder: (_, __, ___) =>
                                             const Center(

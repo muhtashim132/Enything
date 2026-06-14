@@ -440,7 +440,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
-              child: Image.asset('assets/images/Enything.png', fit: BoxFit.cover),
+              child: Image.asset('logo/Enything_modern.png', fit: BoxFit.cover),
             ),
           ),
           const SizedBox(height: 20),
@@ -510,7 +510,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Image.asset('assets/images/Enything.png', fit: BoxFit.cover),
+                child: Image.asset('logo/Enything_modern.png', fit: BoxFit.cover),
               ),
             ),
           ),

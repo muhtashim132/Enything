@@ -839,7 +839,7 @@ class _MiniLogo extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.28),
         child: Image.asset(
-          'assets/images/Enything.png',
+          'logo/Enything_modern.png',
           width: size,
           height: size,
           fit: BoxFit.cover,

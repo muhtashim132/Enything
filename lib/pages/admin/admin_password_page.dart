@@ -280,7 +280,7 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(48),
         child: Image.asset(
-          'assets/images/Enything.png',
+          'logo/Enything_modern.png',
           fit: BoxFit.cover,
         ),
       ),
