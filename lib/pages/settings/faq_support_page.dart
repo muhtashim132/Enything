@@ -407,7 +407,7 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           _buildContactCard(
             icon: Icons.location_on_outlined,
             title: 'Our Address',
-            subtitle: 'Ward No. 2, Bandipora\nJammu and Kashmir — 193502, India',
+            subtitle: 'Plan Bandipora, Ward No. 2\nBandipora, Jammu & Kashmir — 193502, India',
             onTap: () {},
             isDark: isDark,
           ),

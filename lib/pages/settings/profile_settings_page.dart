@@ -110,6 +110,13 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               onTap: () => Navigator.pushNamed(context, '/settings/faq-support'),
             ),
             _buildSettingTile(
+              icon: Icons.contact_support_rounded,
+              title: 'Contact Us',
+              subtitle: 'Email, phone & office address',
+              isDark: isDark,
+              onTap: () => Navigator.pushNamed(context, AppRoutes.contactUs),
+            ),
+            _buildSettingTile(
               icon: Icons.info_outline_rounded,
               title: 'About Enything',
               subtitle: 'App version, Terms, Privacy Policy',
