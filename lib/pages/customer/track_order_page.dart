@@ -553,14 +553,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
 
       if (mounted && firstNewOrderId != null) {
-        notifProv.sendBroadcastToAudience(
-          audience: 'Riders',
-          title: '🛵 New Order Nearby!',
-          body:
-              'A new order was placed near you. Shop is accepting now!',
-          data: {'action': 'new_order'},
-        );
-
         if (!mounted) return;
         Navigator.pushReplacementNamed(
           context,
@@ -599,14 +591,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
         
-        // Broadcast ALL riders that this order is available again
-        notifProv.sendBroadcastToAudience(
-          audience: 'Riders',
-          title: '🛵 Order Available Again!',
-          body: 'An order ₹${_order!.grandTotal.toStringAsFixed(0)} is looking for a rider. Shop has already accepted!',
-          data: {'action': 'new_order'},
-        );
-
         // Notify the seller that customer is looking for a rider again
         if (_order!.shopId != null) {
           final shopData = await _supabase.from('shops').select('seller_id').eq('id', _order!.shopId!).maybeSingle();

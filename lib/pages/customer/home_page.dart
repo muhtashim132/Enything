@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:move_to_background/move_to_background.dart';
+import 'package:flutter/services.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -205,7 +205,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         }
         shopResults = allShops
             .where((s) =>
-                s.distanceKm == null ||
+                s.distanceKm != null &&
                 DeliveryCalculator.isWithinRange(s.distanceKm!))
             .toList()
           ..sort((a, b) => (a.distanceKm ?? double.infinity)
@@ -225,7 +225,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         final shop = ShopModel.fromMap(p['shops']);
         if (!shop.isActive) continue;
         
-        if (locationProvider.hasLocation && shop.location.latitude != 0) {
+        if (locationProvider.hasLocation) {
+          if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
           final d = locationProvider.distanceTo(shop.location);
           if (!DeliveryCalculator.isWithinRange(d)) continue;
         }
@@ -346,7 +347,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           }
           nearby = allShops
               .where((s) =>
-                  s.distanceKm == null ||
+                  s.distanceKm != null &&
                   DeliveryCalculator.isWithinRange(s.distanceKm!))
               .toList()
             ..sort((a, b) {
@@ -367,12 +368,20 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
         for (final p in productsResponse as List) {
           final product = ProductModel.fromMap(p);
-          if (product.isAvailable) {
-            prods.add(product);
-            if (p['shops'] != null) {
-              prodShops[product.id] = ShopModel.fromMap(p['shops']);
-            }
+          if (!product.isAvailable) continue;
+          if (p['shops'] == null) continue;
+          
+          final shop = ShopModel.fromMap(p['shops']);
+          if (!shop.isActive) continue;
+
+          if (locationProvider.hasLocation) {
+            if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
+            final d = locationProvider.distanceTo(shop.location);
+            if (!DeliveryCalculator.isWithinRange(d)) continue;
           }
+
+          prods.add(product);
+          prodShops[product.id] = shop;
         }
         prods.sort((a, b) => b.rating.compareTo(a.rating));
 
@@ -435,7 +444,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           }
           nearby = allShops
               .where((s) =>
-                  s.distanceKm == null ||
+                  s.distanceKm != null &&
                   DeliveryCalculator.isWithinRange(s.distanceKm!))
               .toList()
             ..sort((a, b) => (a.distanceKm ?? double.infinity)
@@ -449,12 +458,20 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
         for (final p in productsResponse as List) {
           final product = ProductModel.fromMap(p);
-          if (product.isAvailable) {
-            prods.add(product);
-            if (p['shops'] != null) {
-              prodShops[product.id] = ShopModel.fromMap(p['shops']);
-            }
+          if (!product.isAvailable) continue;
+          if (p['shops'] == null) continue;
+          
+          final shop = ShopModel.fromMap(p['shops']);
+          if (!shop.isActive) continue;
+
+          if (locationProvider.hasLocation) {
+            if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
+            final d = locationProvider.distanceTo(shop.location);
+            if (!DeliveryCalculator.isWithinRange(d)) continue;
           }
+
+          prods.add(product);
+          prodShops[product.id] = shop;
         }
         prods.sort((a, b) => b.rating.compareTo(a.rating));
         
@@ -501,7 +518,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        MoveToBackground.moveTaskToBack();
+        SystemNavigator.pop();
       },
       child: Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,

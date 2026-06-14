@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:move_to_background/move_to_background.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -138,7 +137,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        MoveToBackground.moveTaskToBack();
+        SystemNavigator.pop();
       },
       child: Scaffold(
       backgroundColor: AdminColors.bg,

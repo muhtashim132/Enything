@@ -237,13 +237,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           // ── Seller accepted first → broadcast riders + notify customer ─
           _showSnack('✅ Your acceptance saved. Waiting for a delivery partner.', isError: false);
 
-          // Broadcast ALL riders that this order is now available
-          notifProv.sendBroadcastToAudience(
-            audience: 'Riders',
-            title: '🛵 Order Available!',
-            body: 'A shop accepted an order ₹${order.grandTotal.toStringAsFixed(0)}. Be the first rider to accept it!',
-            data: {'order_id': order.id, 'role': 'rider'},
-          );
+
 
           // Notify customer that shop accepted, waiting for rider
           notifProv.sendBackgroundPush(

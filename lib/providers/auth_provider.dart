@@ -418,7 +418,12 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return null; // null = success
     } catch (e) {
-      _error = 'Could not send OTP: ${e.toString()}';
+      final errorStr = e.toString();
+      if (errorStr.contains('SocketException') || errorStr.contains('Failed host lookup') || errorStr.contains('ClientException')) {
+        _error = 'No internet connection. Please check your network and try again.';
+      } else {
+        _error = 'Could not send OTP: $errorStr';
+      }
       debugPrint('sendPhoneOtp error: $e');
     }
     _isLoading = false;
@@ -543,7 +548,12 @@ class AuthProvider extends ChangeNotifier {
     } on AuthException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Verification failed. Please try again.';
+      final errorStr = e.toString();
+      if (errorStr.contains('SocketException') || errorStr.contains('Failed host lookup') || errorStr.contains('ClientException')) {
+        _error = 'No internet connection. Please check your network and try again.';
+      } else {
+        _error = 'Verification failed. Please try again.';
+      }
       debugPrint('verifyPhoneOtp error: $e');
     }
     _isLoading = false;

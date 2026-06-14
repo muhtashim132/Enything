@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:move_to_background/move_to_background.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -204,7 +203,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         canPop: false,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) return;
-          MoveToBackground.moveTaskToBack();
+          SystemNavigator.pop();
         },
         child: Scaffold(
         backgroundColor:

@@ -68,7 +68,6 @@ class _ProductCardState extends State<ProductCard> {
           children: [
             // ── Product Image ──────────────────────────────────────────
             Expanded(
-              flex: 3,
               child: Stack(
                 children: [
                   ClipRRect(
@@ -147,15 +146,13 @@ class _ProductCardState extends State<ProductCard> {
             ),
             
             // ── Info ────────────────────────────────────────────────────
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
@@ -296,7 +293,6 @@ class _ProductCardState extends State<ProductCard> {
                         ),
                       ),
                   ],
-                ),
               ),
             ),
           ],

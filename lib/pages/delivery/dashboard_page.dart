@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:move_to_background/move_to_background.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -976,7 +975,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        MoveToBackground.moveTaskToBack();
+        SystemNavigator.pop();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,

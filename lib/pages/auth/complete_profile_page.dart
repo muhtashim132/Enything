@@ -466,7 +466,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           _RoleCard(
             icon: '🏪',
             title: 'Seller',
-            subtitle: 'List your products — ${config.commissionPercent.toStringAsFixed(0)}% commission on sales',
+            subtitle: 'List your products — ${config.unifiedCommissionPercent.toStringAsFixed(0)}% commission on sales',
             selected: _role == _Role.seller,
             onTap: () => setState(() => _role = _Role.seller),
           ),

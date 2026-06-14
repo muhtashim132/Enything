@@ -325,22 +325,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
-      // Broadcast to ALL online riders immediately — same moment sellers are notified.
-      // Riders can see/accept at the same time as the seller within the 2-min window.
-      if (mounted && orderIds.isNotEmpty) {
-        final totalGrand = cart.shops.fold(0.0, (sum, shop) {
-          final shopItems = cart.items.where((i) => i.shop.id == shop.id).toList();
-          final shopBase = shopItems.fold(0.0, (s, i) => s + i.totalPrice);
-          return sum + shopBase;
-        });
-        context.read<NotificationProvider>().sendBroadcastToAudience(
-          audience: 'Riders',
-          title: '🛵 New Order${orderIds.length > 1 ? 's' : ''} Nearby!',
-          body: orderIds.length > 1
-              ? '${orderIds.length} new orders placed in your area. Shop is accepting now!'
-              : 'A new order ₹${totalGrand.toStringAsFixed(0)} was placed near you. Shop is accepting now!',
-          data: {'action': 'new_order'},
-        );
       }
 
       cart.clear();
@@ -374,10 +358,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
+    final isOutOfRange = baseCharge < 0;
     final surcharge = cart.multiShopSurcharge;
     final heavyFee = cart.heavyOrderFee;
     final discount = cart.calculateDeliveryDiscount(distanceKm);
-    final effectiveBase = baseCharge >= 0 ? baseCharge : 25.0;
+    final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
     final totalDelivery = cart.totalDeliveryCharges(distanceKm);
     final riderBase = effectiveBase + surcharge + heavyFee;
     final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
@@ -702,7 +687,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   const SizedBox(height: 8),
                   _billRow(
                     'Delivery Fee',
-                    '₹${effectiveBase.toStringAsFixed(0)}',
+                    isOutOfRange ? 'Out of range' : '₹${effectiveBase.toStringAsFixed(0)}',
+                    valueColor: isOutOfRange ? AppColors.danger : AppColors.textPrimary,
                   ),
                   if (discount > 0) ...[
                     const SizedBox(height: 8),
@@ -824,18 +810,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                gradient: AppColors.ctaGradient,
+                gradient: isOutOfRange ? null : AppColors.ctaGradient,
+                color: isOutOfRange ? Colors.grey : null,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.secondary.withValues(alpha: 0.4),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                boxShadow: isOutOfRange
+                    ? []
+                    : [
+                        BoxShadow(
+                          color: AppColors.secondary.withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
               ),
               child: ElevatedButton(
-                onPressed: _isProcessing ? null : _placeOrder,
+                onPressed: (_isProcessing || isOutOfRange) ? null : _placeOrder,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Colors.transparent,
@@ -850,9 +839,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2.5),
                       )
-                    : const Text(
-                        'CONFIRM ORDER',
-                        style: TextStyle(
+                    : Text(
+                        isOutOfRange ? 'OUT OF RANGE' : 'CONFIRM ORDER',
+                        style: const TextStyle(
                             fontSize: 16,
                             height: 1.2,
                             color: Colors.white,

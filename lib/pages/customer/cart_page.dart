@@ -369,16 +369,20 @@ class CartPage extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: cart.meetsMinimumOrder
+              onPressed: (cart.meetsMinimumOrder && baseCharge >= 0)
                   ? () => Navigator.pushNamed(context, AppRoutes.checkout)
                   : null,
-              child: cart.meetsMinimumOrder
-                  ? Text('Proceed to Checkout • ₹${total.toStringAsFixed(0)}',
-                      style: const TextStyle(
+              child: baseCharge < 0
+                  ? const Text('Out of range',
+                      style: TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w700, height: 1.2))
-                  : Text(
-                      'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
-                      style: const TextStyle(fontSize: 14, height: 1.2)),
+                  : cart.meetsMinimumOrder
+                      ? Text('Proceed to Checkout • ₹${total.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700, height: 1.2))
+                      : Text(
+                          'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
+                          style: const TextStyle(fontSize: 14, height: 1.2)),
             ),
           ),
         ],

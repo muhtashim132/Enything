@@ -345,7 +345,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
 
                     const SizedBox(height: 28),
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         SizedBox(
                           width: 24,
@@ -359,8 +360,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(
+                        Flexible(
                           child: RichText(
+                            textAlign: TextAlign.center,
                             text: TextSpan(
                               style: GoogleFonts.outfit(
                                 color: Colors.white54,
