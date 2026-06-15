@@ -91,9 +91,9 @@ class CartPage extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: item.product.firstImage.isNotEmpty
+            child: item.product.displayImage.isNotEmpty
                 ? CachedNetworkImage(
-                    imageUrl: item.product.firstImage,
+                    imageUrl: item.product.displayImage,
                     width: 70,
                     height: 70,
                     fit: BoxFit.cover,

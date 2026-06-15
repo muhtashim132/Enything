@@ -15,6 +15,7 @@ import '../../config/payment_config.dart';
 import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../settings/profile_settings_dialogs.dart';
+import '../../widgets/address_picker_sheet.dart';
 import '../../utils/responsive_layout.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -397,11 +398,41 @@ class _CheckoutPageState extends State<CheckoutPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    location.currentAddress.isEmpty
-                        ? 'Location not set'
-                        : location.currentAddress,
-                    style: const TextStyle(fontSize: 14),
+                  Row(
+                    children: [
+                      if (location.activeLabel.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(location.activeLabelIcon, style: const TextStyle(fontSize: 12)),
+                              const SizedBox(width: 4),
+                              Text(
+                                location.activeLabel,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          location.currentAddress.isEmpty
+                              ? 'Location not set'
+                              : location.currentAddress,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   if (location.hasLocation)
@@ -424,27 +455,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   Row(
                     children: [
                       OutlinedButton.icon(
-                        onPressed: () =>
-                            context.read<LocationProvider>().requestLocation(),
-                        icon: const Icon(Icons.my_location, size: 16),
-                        label: const Text('Update Location'),
+                        onPressed: () => showAddressPickerSheet(context),
+                        icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
+                        label: const Text('Change Address'),
                         style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
                             textStyle: const TextStyle(fontSize: 12)),
                       ),
-                      const SizedBox(width: 8),
-                      if (location.hasLocation)
-                        OutlinedButton.icon(
-                          onPressed: () => showSavedAddressesDialog(context),
-                          icon: const Icon(Icons.edit_location_alt_outlined,
-                              size: 16),
-                          label: const Text('Add/Edit Details'),
-                          style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              textStyle: const TextStyle(fontSize: 12)),
-                        ),
                     ],
                   ),
                 ],

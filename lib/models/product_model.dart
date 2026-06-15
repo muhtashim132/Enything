@@ -20,6 +20,7 @@ class ProductModel {
   final double rating;
   final bool requiresPrescription;
   final String medicineType;
+  final String? cutoutUrl; // AI-processed transparent PNG (background removed)
 
   ProductModel({
     required this.id,
@@ -43,6 +44,7 @@ class ProductModel {
     this.rating = 0.0,
     this.requiresPrescription = false,
     this.medicineType = 'General',
+    this.cutoutUrl,
   });
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
@@ -77,6 +79,7 @@ class ProductModel {
       rating: (map['rating'] ?? 0.0).toDouble(),
       requiresPrescription: map['requires_prescription'] ?? false,
       medicineType: map['medicine_type'] ?? 'General',
+      cutoutUrl: map['cutout_url'],
     );
   }
 
@@ -103,6 +106,16 @@ class ProductModel {
   };
 
   String get firstImage => images.isNotEmpty ? images.first : '';
+
+  /// Returns the cutout (transparent PNG) if available, otherwise the first raw image.
+  /// Use this everywhere in the UI to automatically show the best quality image.
+  String get displayImage {
+    if (cutoutUrl != null && cutoutUrl!.isNotEmpty) return cutoutUrl!;
+    return firstImage;
+  }
+
+  /// True when the AI has processed this product's image
+  bool get hasCutout => cutoutUrl != null && cutoutUrl!.isNotEmpty;
 
   double? get discountPercent {
     if (originalPrice != null && originalPrice! > price) {

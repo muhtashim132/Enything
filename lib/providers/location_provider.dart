@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
+import '../models/saved_address_model.dart';
 
 class LocationProvider extends ChangeNotifier {
   LatLng? _currentLocation;
@@ -14,8 +15,17 @@ class LocationProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _permissionGranted = false;
 
+  // ─── Saved Addresses (Swiggy/Zomato style) ──────────────────────────────
+  List<SavedAddress> _savedAddresses = [];
+  SavedAddress? _matchedAddress;   // Auto-detected saved address near GPS
+  SavedAddress? _selectedAddress;  // Manually selected by user
+  static const double _matchRadiusMeters = 200; // 200m proximity threshold
+
   LatLng? get currentLocation => _currentLocation;
   String get currentAddress {
+    // If a saved address is actively selected, use its full address
+    if (_selectedAddress != null) return _selectedAddress!.fullAddress;
+    if (_matchedAddress != null) return _matchedAddress!.fullAddress;
     if (_houseNumber.isEmpty && _landmark.isEmpty && _pincode.isEmpty) return _currentAddress;
     final parts = <String>[];
     if (_houseNumber.isNotEmpty) parts.add(_houseNumber);
@@ -29,6 +39,25 @@ class LocationProvider extends ChangeNotifier {
   String get houseNumber => _houseNumber;
   String get landmark => _landmark;
   String get pincode => _pincode;
+
+  // Saved address getters
+  List<SavedAddress> get savedAddresses => _savedAddresses;
+  SavedAddress? get matchedAddress => _matchedAddress;
+  SavedAddress? get selectedAddress => _selectedAddress;
+
+  /// Returns the active label ("Home", "Office", etc.) or empty string if no match
+  String get activeLabel {
+    if (_selectedAddress != null) return _selectedAddress!.displayLabel;
+    if (_matchedAddress != null) return _matchedAddress!.displayLabel;
+    return '';
+  }
+
+  /// Returns the emoji icon for the active address label
+  String get activeLabelIcon {
+    if (_selectedAddress != null) return _selectedAddress!.icon;
+    if (_matchedAddress != null) return _matchedAddress!.icon;
+    return '';
+  }
 
   bool get isLoading => _isLoading;
   bool get permissionGranted => _permissionGranted;
@@ -100,10 +129,156 @@ class LocationProvider extends ChangeNotifier {
     return false;
   }
 
+  /// Manually select a saved address as the delivery address
+  void selectSavedAddress(SavedAddress addr) {
+    _selectedAddress = addr;
+    _matchedAddress = null; // Clear auto-match when manual selection
+    if (addr.hasValidCoordinates) {
+      _currentLocation = addr.location;
+    }
+    _currentAddress = addr.address;
+    _houseNumber = addr.flatNumber ?? '';
+    _landmark = addr.landmark ?? '';
+    _pincode = addr.pincode ?? '';
+    _permissionGranted = true;
+    notifyListeners();
+  }
+
+  /// Clear any manual selection (revert to GPS-based auto-match)
+  void clearSelectedAddress() {
+    _selectedAddress = null;
+    notifyListeners();
+  }
+
+  /// Auto-match current GPS against saved addresses
+  void _autoMatchSavedAddress() {
+    if (_currentLocation == null || _savedAddresses.isEmpty) {
+      _matchedAddress = null;
+      return;
+    }
+    const distCalc = Distance();
+    SavedAddress? closest;
+    double closestDist = double.infinity;
+
+    for (final addr in _savedAddresses) {
+      if (!addr.hasValidCoordinates) continue;
+      final d = distCalc(_currentLocation!, addr.location);
+      if (d < _matchRadiusMeters && d < closestDist) {
+        closest = addr;
+        closestDist = d;
+      }
+    }
+    _matchedAddress = closest;
+    // If we auto-matched and no manual selection, update address details
+    if (_matchedAddress != null && _selectedAddress == null) {
+      _houseNumber = _matchedAddress!.flatNumber ?? '';
+      _landmark = _matchedAddress!.landmark ?? '';
+      _pincode = _matchedAddress!.pincode ?? '';
+    }
+  }
+
+  // ─── Saved Address CRUD ──────────────────────────────────────────────────
+
+  /// Load all saved addresses for a user from the database
+  Future<void> loadSavedAddresses(String userId) async {
+    try {
+      final db = Supabase.instance.client;
+      final response = await db
+          .from('saved_addresses')
+          .select()
+          .eq('user_id', userId)
+          .order('is_default', ascending: false)
+          .order('created_at', ascending: true);
+      _savedAddresses = (response as List)
+          .map((m) => SavedAddress.fromMap(m))
+          .toList();
+      _autoMatchSavedAddress();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('loadSavedAddresses error: $e');
+    }
+  }
+
+  /// Add a new saved address
+  Future<String?> addSavedAddress(SavedAddress addr) async {
+    try {
+      final db = Supabase.instance.client;
+      // If this is the first address or marked default, clear others' default
+      if (addr.isDefault || _savedAddresses.isEmpty) {
+        await db.from('saved_addresses')
+            .update({'is_default': false})
+            .eq('user_id', addr.userId);
+      }
+      await db.from('saved_addresses').insert(addr.toInsertMap());
+      await loadSavedAddresses(addr.userId);
+      return null; // success
+    } catch (e) {
+      debugPrint('addSavedAddress error: $e');
+      if (e.toString().contains('Maximum of 10')) {
+        return 'You can save up to 10 addresses. Please delete one first.';
+      }
+      return 'Failed to save address: $e';
+    }
+  }
+
+  /// Update an existing saved address
+  Future<String?> updateSavedAddress(SavedAddress addr) async {
+    try {
+      final db = Supabase.instance.client;
+      if (addr.isDefault) {
+        await db.from('saved_addresses')
+            .update({'is_default': false})
+            .eq('user_id', addr.userId);
+      }
+      await db.from('saved_addresses')
+          .update(addr.toUpdateMap())
+          .eq('id', addr.id);
+      await loadSavedAddresses(addr.userId);
+      return null;
+    } catch (e) {
+      debugPrint('updateSavedAddress error: $e');
+      return 'Failed to update address: $e';
+    }
+  }
+
+  /// Delete a saved address
+  Future<String?> deleteSavedAddress(String addressId, String userId) async {
+    try {
+      final db = Supabase.instance.client;
+      await db.from('saved_addresses').delete().eq('id', addressId);
+      // Clear selection if the deleted address was selected
+      if (_selectedAddress?.id == addressId) _selectedAddress = null;
+      if (_matchedAddress?.id == addressId) _matchedAddress = null;
+      await loadSavedAddresses(userId);
+      return null;
+    } catch (e) {
+      debugPrint('deleteSavedAddress error: $e');
+      return 'Failed to delete address: $e';
+    }
+  }
+
+  /// Set a specific address as the default
+  Future<void> setDefaultAddress(String addressId, String userId) async {
+    try {
+      final db = Supabase.instance.client;
+      await db.from('saved_addresses')
+          .update({'is_default': false})
+          .eq('user_id', userId);
+      await db.from('saved_addresses')
+          .update({'is_default': true})
+          .eq('id', addressId);
+      await loadSavedAddresses(userId);
+    } catch (e) {
+      debugPrint('setDefaultAddress error: $e');
+    }
+  }
+
   void setManualLocation(LatLng location, String address) {
     _currentLocation = location;
     _currentAddress = address;
     _permissionGranted = true;
+    _selectedAddress = null; // Clear manual selection on GPS update
+    _autoMatchSavedAddress();
     notifyListeners();
   }
 
@@ -200,6 +375,8 @@ class LocationProvider extends ChangeNotifier {
       _currentAddress = 'Current Location';
       notifyListeners();
     }
+    // After reverse geocode completes, check for proximity matches
+    _autoMatchSavedAddress();
   }
 
   /// Returns a formatted address string for the current coordinates

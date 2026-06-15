@@ -26,6 +26,7 @@ import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
 import '../../widgets/product_search_card.dart';
 import '../../widgets/common/notification_bell.dart';
+import '../../widgets/address_picker_sheet.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -614,7 +615,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                     const SizedBox(height: 8),
                     // Row 2: Location pill
                     GestureDetector(
-                      onTap: () => _showLocationSheet(),
+                      onTap: () => showAddressPickerSheet(context),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 7),
@@ -630,9 +631,34 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.location_on_rounded,
-                                size: 14, color: AppColors.primary),
-                            const SizedBox(width: 6),
+                            if (locationProvider.activeLabelIcon.isNotEmpty) ...[
+                              Text(locationProvider.activeLabelIcon, style: const TextStyle(fontSize: 14)),
+                              const SizedBox(width: 4),
+                              Text(
+                                locationProvider.activeLabel,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                width: 4,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white30 : Colors.grey.shade400,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ] else ...[
+                              const Icon(Icons.location_on_rounded,
+                                  size: 14, color: AppColors.primary),
+                              const SizedBox(width: 6),
+                            ],
                             Flexible(
                               child: Text(
                                 locationProvider.hasLocation
@@ -642,7 +668,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                     : 'Set location...',
                                 style: GoogleFonts.outfit(
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: locationProvider.activeLabelIcon.isNotEmpty 
+                                      ? FontWeight.w500 
+                                      : FontWeight.w600,
                                   color: isDark
                                       ? Colors.white70
                                       : AppColors.textPrimary,

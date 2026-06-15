@@ -72,9 +72,9 @@ class _ProductCardState extends State<ProductCard> {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    child: product.firstImage.isNotEmpty
+                    child: product.displayImage.isNotEmpty
                         ? CachedNetworkImage(
-                            imageUrl: product.firstImage,
+                            imageUrl: product.displayImage,
                             width: double.infinity,
                             fit: BoxFit.contain,
                             placeholder: (c, i) => Container(color: Colors.grey.shade100),

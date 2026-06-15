@@ -4,292 +4,364 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
-
+import '../../models/saved_address_model.dart';
+import '../../widgets/address_picker_sheet.dart';
 
 // Helper dialogs for Profile Settings Page
 
+/// Legacy wrapper — now opens the new address picker sheet
 void showSavedAddressesDialog(BuildContext context) {
+  showAddressPickerSheet(context);
+}
+
+/// Full-featured add/edit address dialog with label chips and GPS capture
+void showAddEditAddressDialog(BuildContext context, {SavedAddress? existingAddress}) {
   final auth = context.read<AuthProvider>();
   final user = auth.user;
   if (user == null) return;
 
-  bool isLoading = true;
   bool fetchingLocation = false;
-  int selectedIndex = 0; // 0 = Home, 1 = Work
+  String selectedLabel = existingAddress?.label ?? 'Home';
 
-  final Map<int, Map<String, TextEditingController>> ctrls = {
-    0: {
-      'flat': TextEditingController(),
-      'address': TextEditingController(),
-      'landmark': TextEditingController(),
-      'pincode': TextEditingController(),
-    },
-    1: {
-      'flat': TextEditingController(),
-      'address': TextEditingController(),
-      'landmark': TextEditingController(),
-      'pincode': TextEditingController(),
-    }
+  final flatCtrl = TextEditingController(text: existingAddress?.flatNumber ?? '');
+  final addressCtrl = TextEditingController(text: existingAddress?.address ?? '');
+  final landmarkCtrl = TextEditingController(text: existingAddress?.landmark ?? '');
+  final pincodeCtrl = TextEditingController(text: existingAddress?.pincode ?? '');
+  final customLabelCtrl = TextEditingController(text: existingAddress?.customLabel ?? '');
+
+  double? capturedLat = existingAddress?.latitude;
+  double? capturedLng = existingAddress?.longitude;
+
+  final labels = ['Home', 'Office', 'Hotel', 'Hospital', 'Other'];
+  final labelIcons = {
+    'Home': '🏠',
+    'Office': '💼',
+    'Hotel': '🏨',
+    'Hospital': '🏥',
+    'Other': '📍',
   };
 
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+    backgroundColor: Colors.transparent,
     builder: (ctx) {
-      bool initialLoadStarted = false;
       return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setState) {
-        if (isLoading) {
-          if (!initialLoadStarted) {
-            initialLoadStarted = true;
-            Supabase.instance.client
-                .from('customers')
-                .select()
-                .eq('id', user.id)
-                .maybeSingle()
-                .then((data) {
-              if (data != null && context.mounted) {
-                final home = data['address_home'] ?? {};
-                final work = data['address_work'] ?? {};
+        builder: (BuildContext context, StateSetter setState) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                ctrls[0]!['flat']!.text = home['flat'] ?? '';
-                ctrls[0]!['address']!.text =
-                    home['address'] ?? data['default_address'] ?? '';
-                ctrls[0]!['landmark']!.text =
-                    home['landmark'] ?? data['landmark'] ?? '';
-                ctrls[0]!['pincode']!.text =
-                    home['pincode'] ?? data['pincode'] ?? '';
-
-                ctrls[1]!['flat']!.text = work['flat'] ?? '';
-                ctrls[1]!['address']!.text = work['address'] ?? '';
-                ctrls[1]!['landmark']!.text = work['landmark'] ?? '';
-                ctrls[1]!['pincode']!.text = work['pincode'] ?? '';
-              }
-              setState(() => isLoading = false);
-            });
-          }
-          return const SizedBox(
-              height: 200, child: Center(child: CircularProgressIndicator()));
-        }
-
-        final currentCtrls = ctrls[selectedIndex]!;
-
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-              24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              Text('Saved Addresses',
-                  style: GoogleFonts.outfit(
-                      fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 20),
-
-              // Toggle
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(12)),
-                child: Row(
+          return Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                  20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => selectedIndex = 0),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: selectedIndex == 0
-                                ? Colors.white
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: selectedIndex == 0
-                                ? [
-                                    BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.05),
-                                        blurRadius: 4)
-                                  ]
-                                : [],
+                    // Header
+                    Row(
+                      children: [
+                        Text(
+                          existingAddress != null ? 'Edit Address' : 'Add New Address',
+                          style: GoogleFonts.outfit(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : Colors.black87,
                           ),
-                          child: Center(
-                              child: Text('🏠 Home',
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: Icon(Icons.close_rounded,
+                              color: isDark ? Colors.white54 : Colors.grey),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Label selector chips
+                    Text('Save as',
+                        style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white70 : Colors.grey.shade700)),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: labels.map((label) {
+                        final isSelected = selectedLabel == label;
+                        return GestureDetector(
+                          onTap: () => setState(() => selectedLabel = label),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Theme.of(context).primaryColor
+                                  : (isDark
+                                      ? Colors.white.withValues(alpha: 0.06)
+                                      : Colors.grey.shade100),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Theme.of(context).primaryColor
+                                    : (isDark ? Colors.white12 : Colors.grey.shade300),
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(labelIcons[label] ?? '📍',
+                                    style: const TextStyle(fontSize: 16)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  label,
                                   style: GoogleFonts.outfit(
-                                      fontWeight: selectedIndex == 0
-                                          ? FontWeight.w700
-                                          : FontWeight.w500))),
+                                    fontSize: 13,
+                                    fontWeight:
+                                        isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : (isDark ? Colors.white70 : Colors.black87),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
+                    // Custom label field for "Other"
+                    if (selectedLabel == 'Other') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: customLabelCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Custom label name',
+                          hintText: 'e.g. Gym, College, Friend\'s place',
+                          labelStyle: GoogleFonts.outfit(),
                         ),
                       ),
+                    ],
+
+                    const SizedBox(height: 20),
+
+                    // Flat / House number
+                    TextField(
+                      controller: flatCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'House / Flat Number',
+                        hintText: 'e.g. A-404',
+                        labelStyle: GoogleFonts.outfit(),
+                      ),
                     ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => selectedIndex = 1),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: selectedIndex == 1
-                                ? Colors.white
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: selectedIndex == 1
-                                ? [
-                                    BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.05),
-                                        blurRadius: 4)
-                                  ]
-                                : [],
+                    const SizedBox(height: 16),
+
+                    // Address with GPS button
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: addressCtrl,
+                            maxLines: 2,
+                            decoration: InputDecoration(
+                              labelText: 'Delivery Address',
+                              hintText: 'Type address or tap 📍',
+                              labelStyle: GoogleFonts.outfit(),
+                            ),
                           ),
-                          child: Center(
-                              child: Text('💼 Work',
-                                  style: GoogleFonts.outfit(
-                                      fontWeight: selectedIndex == 1
-                                          ? FontWeight.w700
-                                          : FontWeight.w500))),
+                        ),
+                        const SizedBox(width: 10),
+                        GestureDetector(
+                          onTap: fetchingLocation
+                              ? null
+                              : () async {
+                                  setState(() => fetchingLocation = true);
+                                  try {
+                                    final locProv =
+                                        context.read<LocationProvider>();
+                                    bool granted =
+                                        await locProv.requestLocation();
+                                    if (granted && context.mounted) {
+                                      addressCtrl.text = locProv.rawAddress;
+                                      capturedLat =
+                                          locProv.currentLocation?.latitude;
+                                      capturedLng =
+                                          locProv.currentLocation?.longitude;
+                                    }
+                                  } finally {
+                                    if (context.mounted) {
+                                      setState(
+                                          () => fetchingLocation = false);
+                                    }
+                                  }
+                                },
+                          child: Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .primaryColor
+                                  .withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: fetchingLocation
+                                ? const Padding(
+                                    padding: EdgeInsets.all(14),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : Icon(Icons.my_location_rounded,
+                                    color: Theme.of(context).primaryColor,
+                                    size: 24),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (capturedLat != null &&
+                        capturedLat != 0 &&
+                        capturedLng != null &&
+                        capturedLng != 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle_outline,
+                                size: 14, color: Colors.green.shade600),
+                            const SizedBox(width: 4),
+                            Text(
+                              'GPS captured',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  color: Colors.green.shade600,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: landmarkCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Landmark',
+                        hintText: 'e.g. Near City Mall',
+                        labelStyle: GoogleFonts.outfit(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: pincodeCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Pincode',
+                        hintText: 'e.g. 400001',
+                        labelStyle: GoogleFonts.outfit(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Save button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (addressCtrl.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a delivery address.'),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            return;
+                          }
+
+                          final locProv = context.read<LocationProvider>();
+                          final addr = SavedAddress(
+                            id: existingAddress?.id ?? '',
+                            userId: user.id,
+                            label: selectedLabel,
+                            customLabel: selectedLabel == 'Other'
+                                ? customLabelCtrl.text.trim()
+                                : null,
+                            flatNumber: flatCtrl.text.trim(),
+                            address: addressCtrl.text.trim(),
+                            landmark: landmarkCtrl.text.trim(),
+                            pincode: pincodeCtrl.text.trim(),
+                            latitude: capturedLat ?? 0,
+                            longitude: capturedLng ?? 0,
+                            isDefault: locProv.savedAddresses.isEmpty,
+                          );
+
+                          String? error;
+                          if (existingAddress != null) {
+                            error = await locProv.updateSavedAddress(addr);
+                          } else {
+                            error = await locProv.addSavedAddress(addr);
+                          }
+
+                          if (ctx.mounted) {
+                            if (error != null) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(
+                                  content: Text(error),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            } else {
+                              locProv.setLocalAddressDetails(
+                                house: flatCtrl.text.trim(),
+                                mark: landmarkCtrl.text.trim(),
+                                pin: pincodeCtrl.text.trim(),
+                                addressText: addressCtrl.text.trim(),
+                              );
+                              Navigator.pop(ctx);
+                              
+                              // Check if there was an underlying dialog to dismiss
+                              if (Navigator.canPop(context)) {
+                                 // Let the user remain on the profile settings or address picker
+                                 // unless they want to go back.
+                              }
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 56),
+                          backgroundColor: Theme.of(context).primaryColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          existingAddress != null
+                              ? 'Update ${labelIcons[selectedLabel]} $selectedLabel'
+                              : 'Save ${labelIcons[selectedLabel]} $selectedLabel',
+                          style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700, fontSize: 15),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-
-              TextField(
-                controller: currentCtrls['flat'],
-                decoration: const InputDecoration(
-                    labelText: 'House / Flat Number', hintText: 'e.g. A-404'),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: currentCtrls['address'],
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                          labelText: 'Delivery Address',
-                          hintText: 'Type address or tap 📍'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: fetchingLocation
-                        ? null
-                        : () async {
-                            setState(() => fetchingLocation = true);
-                            try {
-                              final locProv = context.read<LocationProvider>();
-                              final authProv = context.read<AuthProvider>();
-                              bool granted = await locProv.requestLocation();
-                              if (granted && context.mounted) {
-                                currentCtrls['address']!.text =
-                                    locProv.currentAddress;
-                                // Sync the fresh GPS coordinates to the database
-                                // so distance-based filtering always uses the latest location.
-                                final uid = authProv.currentUserId;
-                                if (uid != null) {
-                                  await locProv.syncLocationToDatabase('customer', uid);
-                                }
-                              }
-                            } finally {
-                              if (context.mounted) {
-                                setState(() => fetchingLocation = false);
-                              }
-                            }
-                          },
-                    child: Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .primaryColor
-                              .withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16)),
-                      child: fetchingLocation
-                          ? const Padding(
-                              padding: EdgeInsets.all(14),
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : Icon(Icons.my_location_rounded,
-                              color: Theme.of(context).primaryColor, size: 24),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: currentCtrls['landmark'],
-                decoration: const InputDecoration(
-                    labelText: 'Landmark', hintText: 'e.g. Near City Mall'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: currentCtrls['pincode'],
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Pincode', hintText: 'e.g. 400001'),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () async {
-                  final homeMap = {
-                    'flat': ctrls[0]!['flat']!.text.trim(),
-                    'address': ctrls[0]!['address']!.text.trim(),
-                    'landmark': ctrls[0]!['landmark']!.text.trim(),
-                    'pincode': ctrls[0]!['pincode']!.text.trim(),
-                  };
-                  final workMap = {
-                    'flat': ctrls[1]!['flat']!.text.trim(),
-                    'address': ctrls[1]!['address']!.text.trim(),
-                    'landmark': ctrls[1]!['landmark']!.text.trim(),
-                    'pincode': ctrls[1]!['pincode']!.text.trim(),
-                  };
-
-                  final activeMap = selectedIndex == 0 ? homeMap : workMap;
-
-                  try {
-                    await Supabase.instance.client.from('customers').upsert({
-                      'id': user.id,
-                      'address_home': homeMap,
-                      'address_work': workMap,
-                      'default_address': activeMap['address'],
-                      'landmark': activeMap['landmark'],
-                      'pincode': activeMap['pincode'],
-                    });
-
-                    if (ctx.mounted) {
-                      final locProv = ctx.read<LocationProvider>();
-                      locProv.setLocalAddressDetails(
-                        house: activeMap['flat'],
-                        mark: activeMap['landmark'],
-                        pin: activeMap['pincode'],
-                        addressText: activeMap['address'],
-                      );
-                      Navigator.pop(ctx);
-                    }
-                  } catch (e) {
-                    if (ctx.mounted) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to save address: $e'),
-                          backgroundColor: Colors.red,
-                          duration: const Duration(seconds: 8),
-                        ),
-                      );
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 56)),
-                child: Text(
-                    'Save & Set as Default ${selectedIndex == 0 ? "Home" : "Work"}'),
-              ),
-            ],
-          ),
-         ),
-        );
-      });
+            ),
+          );
+        },
+      );
     },
   );
 }

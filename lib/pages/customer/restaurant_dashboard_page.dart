@@ -623,9 +623,9 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: product.firstImage.isNotEmpty
+                child: product.displayImage.isNotEmpty
                     ? Image.network(
-                        product.firstImage,
+                        product.displayImage,
                         width: 100,
                         height: 90,
                         fit: BoxFit.cover,

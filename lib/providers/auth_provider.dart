@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
+import '../main.dart';
 
 class AuthProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
@@ -12,6 +13,7 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
   String? _pendingPhone; // Phone waiting for OTP verification
   String? _mockUserId; // ID used for magic numbers
+  bool _isManualSignOut = false;
 
 
   // ─── Admin (God Mode) State ───────────────────────────────────────────────
@@ -47,11 +49,26 @@ class AuthProvider extends ChangeNotifier {
       if (event.event == AuthChangeEvent.signedIn) {
         _fetchProfile();
       } else if (event.event == AuthChangeEvent.signedOut) {
+        bool wasManual = _isManualSignOut;
+        _isManualSignOut = false; // Reset
+
         _user = null;
         _mockUserId = null;
         _pendingPhone = null;
         _isProfileFetched = false;
         notifyListeners();
+
+        // If it wasn't a manual sign out, it means the session was revoked from another device
+        if (!wasManual && navigatorKey.currentState != null) {
+          navigatorKey.currentState!.pushNamedAndRemoveUntil('/roleSelect', (route) => false);
+          ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+            const SnackBar(
+              content: Text('You have been logged out because your account was accessed from another device.'),
+              backgroundColor: Colors.redAccent,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
       }
     });
     if (_supabase.auth.currentUser != null) {
@@ -530,6 +547,13 @@ class AuthProvider extends ChangeNotifier {
           .eq('id', userId)
           .maybeSingle();
 
+      // Revoke sessions on all other devices (Single Device Enforcement)
+      try {
+        await _supabase.auth.signOut(scope: SignOutScope.others);
+      } catch (e) {
+        debugPrint('Failed to sign out other sessions: $e');
+      }
+
       final isAdmin = await _supabase
           .from('admin_users')
           .select('id')
@@ -832,6 +856,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _isManualSignOut = true;
     try {
       if (_currentSessionId != null) {
         await _supabase.from('admin_sessions').delete().eq('id', _currentSessionId!);

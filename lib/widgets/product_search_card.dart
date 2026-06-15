@@ -73,9 +73,9 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.horizontal(left: Radius.circular(24)),
-                    child: product.firstImage.isNotEmpty
+                    child: product.displayImage.isNotEmpty
                         ? CachedNetworkImage(
-                            imageUrl: product.firstImage,
+                            imageUrl: product.displayImage,
                             width: double.infinity,
                             height: double.infinity,
                             fit: BoxFit.contain,
