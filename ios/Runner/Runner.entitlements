@@ -1,16 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<!-- ─── Push Notifications (APNs) ──────────────────────────────────────── -->
-	<!-- Change "development" to "production" before App Store submission.      -->
-	<key>aps-environment</key>
-	<string>development</string>
-
-	<!-- ─── Access Groups (Keychain sharing – optional, add if needed) ──────── -->
-	<!-- <key>keychain-access-groups</key>
-	<array>
-		<string>$(AppIdentifierPrefix)com.muhtaashimnazki.enything</string>
-	</array> -->
-</dict>
+<dict/>
 </plist>

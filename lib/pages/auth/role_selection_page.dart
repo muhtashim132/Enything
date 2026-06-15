@@ -130,8 +130,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                               children: [
                                 // Enything logo mark
                                 Container(
-                                  width: 110,
-                                  height: 110,
+                                  width: 72,
+                                  height: 72,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
                                       colors: [
@@ -141,7 +141,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                     ),
-                                    borderRadius: BorderRadius.circular(30),
+                                    borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
                                         color: const Color(0xFF5B8BFF)
                                             .withValues(alpha: 0.40),
@@ -155,7 +155,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                                     ],
                                   ),
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(28),
+                                    borderRadius: BorderRadius.circular(18),
                                     child: Padding(
                                       padding: const EdgeInsets.all(8),
                                       child: Image.asset(

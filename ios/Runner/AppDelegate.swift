@@ -64,14 +64,18 @@ extension AppDelegate: MessagingDelegate {
 }
 
 // ── Foreground notification display ─────────────────────────────────────────
-extension AppDelegate: UNUserNotificationCenterDelegate {
+extension AppDelegate {
   override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
     // Show banner + sound even when app is in the foreground
-    completionHandler([.banner, .badge, .sound])
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .badge, .sound])
+    } else {
+      completionHandler([.alert, .badge, .sound])
+    }
   }
 
   override func userNotificationCenter(
@@ -79,6 +83,6 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
-    completionHandler()
+    super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
   }
 }

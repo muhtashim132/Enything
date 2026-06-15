@@ -201,11 +201,14 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
               // ── Star field ───────────────────────────────────────────────
               CustomPaint(size: size, painter: _StarPainter(_bgCtrl.value)),
 
-              // ── Central content — perfectly centered ─────────────────────
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
+              // ── Central content — visually centered ────────────────────────
+              Align(
+                alignment: const Alignment(0, -0.12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
                   // Logo
                   FadeTransition(
                     opacity: _logoFade,
@@ -222,7 +225,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                     ),
                   ),
 
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 24),
 
                   // Text block
                   FadeTransition(
@@ -267,6 +270,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                     ),
                   ),
                 ],
+              ),
               ),
 
               // ── Bottom loading indicator ─────────────────────────────────

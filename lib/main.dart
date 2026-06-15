@@ -9,7 +9,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-
 import 'theme/app_theme.dart';
 import 'config/routes.dart';
 import 'providers/auth_provider.dart';
@@ -50,7 +49,6 @@ void main() async {
 
   // Must be a top-level function for background FCM handling
   FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
-
 
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL'] ?? '',
@@ -109,8 +107,8 @@ void _handleNotificationClick(Map<String, dynamic> data) {
   if (role == 'seller') {
     // Go directly to the Seller Orders page (Pending tab is tab 0 by default)
     // pushNamedAndRemoveUntil keeps the seller dashboard as the base so back works
-    navigatorKey.currentState?.pushNamedAndRemoveUntil(
-        AppRoutes.sellerDashboard, (route) => false);
+    navigatorKey.currentState
+        ?.pushNamedAndRemoveUntil(AppRoutes.sellerDashboard, (route) => false);
     // Then push the orders page on top so the seller sees the Pending list immediately
     Future.microtask(() {
       navigatorKey.currentState?.pushNamed(AppRoutes.sellerOrders);
@@ -145,15 +143,15 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   final title = message.data['title'] as String? ??
       message.notification?.title ??
       'Zappy';
-  final body = message.data['body'] as String? ??
-      message.notification?.body ??
-      '';
+  final body =
+      message.data['body'] as String? ?? message.notification?.body ?? '';
 
   if (title.isEmpty || body.isEmpty) return;
 
   final plugin = FlutterLocalNotificationsPlugin();
   const androidSettings = AndroidInitializationSettings('ic_notification');
-  await plugin.initialize(const InitializationSettings(android: androidSettings));
+  await plugin
+      .initialize(const InitializationSettings(android: androidSettings));
 
   // Create the channel here too — background isolate may not have it yet
   final androidPlugin = plugin.resolvePlatformSpecificImplementation<
@@ -214,7 +212,8 @@ class EnythingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RbacProvider()),
         ChangeNotifierProvider(create: (_) => TeamProvider()),
         ChangeNotifierProvider(create: (_) => AuditProvider()),
-        ChangeNotifierProvider<PlatformConfigProvider>.value(value: configProvider),
+        ChangeNotifierProvider<PlatformConfigProvider>.value(
+            value: configProvider),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

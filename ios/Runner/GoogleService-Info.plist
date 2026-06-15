@@ -1,46 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-  ╔══════════════════════════════════════════════════════════════════════════════╗
-  ║  PLACEHOLDER — Replace this file with the real GoogleService-Info.plist    ║
-  ║  from the Firebase Console BEFORE building on Mac.                         ║
-  ║                                                                             ║
-  ║  Steps on Mac / CI:                                                         ║
-  ║  1. Open Firebase Console → Project Settings → Your iOS app                ║
-  ║  2. Download GoogleService-Info.plist                                       ║
-  ║  3. Drag it into Runner/ in Xcode (check "Copy items if needed")            ║
-  ║  4. Verify the BUNDLE_ID matches com.muhtaashimnazki.enything              ║
-  ╚══════════════════════════════════════════════════════════════════════════════╝
--->
 <plist version="1.0">
 <dict>
-	<key>CLIENT_ID</key>
-	<string>REPLACE_WITH_REAL_VALUE</string>
-	<key>REVERSED_CLIENT_ID</key>
-	<string>REPLACE_WITH_REAL_VALUE</string>
 	<key>API_KEY</key>
-	<string>REPLACE_WITH_REAL_VALUE</string>
+	<string>AIzaSyB6kFBCHH_Br3en-TjajtWOXElV_9UJt2E</string>
 	<key>GCM_SENDER_ID</key>
-	<string>REPLACE_WITH_REAL_VALUE</string>
+	<string>968466237046</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.muhtaashimnazki.enything</string>
 	<key>PROJECT_ID</key>
-	<string>REPLACE_WITH_REAL_VALUE</string>
+	<string>zappymobile-91764</string>
 	<key>STORAGE_BUCKET</key>
-	<string>REPLACE_WITH_REAL_VALUE</string>
+	<string>zappymobile-91764.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_APPINVITE_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_GCM_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_SIGNIN_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>REPLACE_WITH_REAL_VALUE</string>
+	<string>1:968466237046:ios:832166ba2645f5f6950157</string>
 </dict>
 </plist>

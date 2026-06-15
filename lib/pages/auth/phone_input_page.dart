@@ -152,11 +152,11 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
 
                     // Logo mark
-                    const _MiniLogo(size: 110),
-                    const SizedBox(height: 24),
+                    const _MiniLogo(size: 80),
+                    const SizedBox(height: 16),
 
                     // Role badge
                     if (_selectedRole != null) ...[
@@ -186,7 +186,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                     ],
 
                     Text(
@@ -205,7 +205,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                       style: GoogleFonts.outfit(
                           color: Colors.white54, fontSize: 14, height: 1.5),
                     ),
-                    const SizedBox(height: 44),
+                    const SizedBox(height: 24),
 
                     // Phone input card
                     Container(
@@ -267,11 +267,19 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                                       inputFormatters: [
                                         FilteringTextInputFormatter.digitsOnly
                                       ],
+                                      onChanged: (val) {
+                                        if (val.length == 10) {
+                                          FocusScope.of(context).unfocus();
+                                          if (_agreedToTerms && !_loading) {
+                                            _sendOtp();
+                                          }
+                                        }
+                                      },
                                       style: GoogleFonts.outfit(
                                         color: Colors.white,
-                                        fontSize: 20,
+                                        fontSize: 18,
                                         fontWeight: FontWeight.w600,
-                                        letterSpacing: 2,
+                                        letterSpacing: 1,
                                       ),
                                       decoration: InputDecoration(
                                         hintText: '9876543210',
@@ -292,7 +300,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                       ),
                     ),
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
 
                     // CTA Button
                     GestureDetector(
@@ -343,7 +351,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                       ),
                     ),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -431,7 +439,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
 
                     // Want to switch role?
                     GestureDetector(
@@ -445,7 +453,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),

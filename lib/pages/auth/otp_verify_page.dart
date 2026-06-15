@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pinput/pinput.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
@@ -15,9 +16,8 @@ class OtpVerifyPage extends StatefulWidget {
 
 class _OtpVerifyPageState extends State<OtpVerifyPage>
     with SingleTickerProviderStateMixin {
-  final List<TextEditingController> _ctrlList =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusList = List.generate(6, (_) => FocusNode());
+  final TextEditingController _ctrl = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
 
   bool _loading = false;
   int _resendTimer = 30;
@@ -52,7 +52,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
         _phone = args?['phone'] ?? '';
         _requestedRole = args?['role'] as String?;
       });
-      _focusList[0].requestFocus();
+      _focusNode.requestFocus();
     });
   }
 
@@ -72,40 +72,12 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
   void dispose() {
     _timer?.cancel();
     _shakeCtrl.dispose();
-    for (final c in _ctrlList) {
-      c.dispose();
-    }
-    for (final f in _focusList) {
-      f.dispose();
-    }
+    _ctrl.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  String get _otp => _ctrlList.map((c) => c.text).join();
-
-  void _onChanged(int i, String val) {
-    if (val.length > 1) {
-      // User pasted — distribute digits across all 6 boxes starting from 0
-      final digits = val.replaceAll(RegExp(r'\D'), '').split('');
-      for (int j = 0; j < 6; j++) {
-        _ctrlList[j].text = j < digits.length ? digits[j] : '';
-      }
-      // Focus the last filled box (or box 5 if all filled)
-      final lastFilled = (digits.length - 1).clamp(0, 5);
-      _focusList[lastFilled].requestFocus();
-      if (_otp.length == 6) _verify();
-      return;
-    }
-    if (val.isNotEmpty && i < 5) _focusList[i + 1].requestFocus();
-    if (_otp.length == 6) _verify();
-  }
-
-  void _onBackspace(int i) {
-    if (_ctrlList[i].text.isEmpty && i > 0) {
-      _ctrlList[i - 1].clear();
-      _focusList[i - 1].requestFocus();
-    }
-  }
+  String get _otp => _ctrl.text;
 
   Future<void> _verify() async {
     if (_otp.length < 6) return;
@@ -178,10 +150,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       );
     } else {
       _shakeCtrl.forward(from: 0);
-      for (final c in _ctrlList) {
-        c.clear();
-      }
-      _focusList[0].requestFocus();
+      _ctrl.clear();
+      _focusNode.requestFocus();
       final err =
           context.read<AuthProvider>().error ?? 'Invalid OTP. Try again.';
       _showSnack(err, isError: true);
@@ -253,10 +223,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
     if (!mounted) return;
     setState(() => _loading = false);
     _startTimer();
-    for (final c in _ctrlList) {
-      c.clear();
-    }
-    _focusList[0].requestFocus();
+    _ctrl.clear();
+    _focusNode.requestFocus();
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -645,7 +613,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                                 fontWeight: FontWeight.w700)),
                       ]),
                     ),
-                    const SizedBox(height: 40),
+                    SizedBox(height: MediaQuery.of(context).viewInsets.bottom > 0 ? 20 : 40),
 
                     // 6-box OTP input
                     AnimatedBuilder(
@@ -658,21 +626,50 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                             0),
                         child: child,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                            6,
-                            (i) => _OtpBox(
-                                  controller: _ctrlList[i],
-                                  focusNode: _focusList[i],
-                                  onChanged: (v) => _onChanged(i, v),
-                                  onBackspace: () => _onBackspace(i),
-                                  index: i,
-                                )),
+                      child: Pinput(
+                        length: 6,
+                        controller: _ctrl,
+                        focusNode: _focusNode,
+                        autofillHints: const [AutofillHints.oneTimeCode],
+                        onCompleted: (_) => _verify(),
+                        separatorBuilder: (index) => const SizedBox(width: 10),
+                        defaultPinTheme: PinTheme(
+                          width: 46,
+                          height: 56,
+                          textStyle: GoogleFonts.outfit(
+                            color: const Color(0xFFF4C542),
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                width: 1.5),
+                          ),
+                        ),
+                        focusedPinTheme: PinTheme(
+                          width: 46,
+                          height: 56,
+                          textStyle: GoogleFonts.outfit(
+                            color: const Color(0xFFF4C542),
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: const Color(0xFF4C6EF5)
+                                    .withValues(alpha: 0.60),
+                                width: 1.5),
+                          ),
+                        ),
                       ),
                     ),
 
-                    const SizedBox(height: 36),
+                    SizedBox(height: MediaQuery.of(context).viewInsets.bottom > 0 ? 16 : 36),
 
                     // Verify button
                     GestureDetector(
@@ -757,66 +754,6 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
           ),
         ),
       );
-}
-
-// ── OTP Input Box ──────────────────────────────────────────────────────────────
-class _OtpBox extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onBackspace;
-  final int index;
-  const _OtpBox({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-    required this.onBackspace,
-    required this.index,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 46,
-      height: 56,
-      margin: const EdgeInsets.symmetric(horizontal: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border:
-            Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1.5),
-      ),
-      child: KeyboardListener(
-        focusNode: FocusNode(),
-        onKeyEvent: (e) {
-          if (e is KeyDownEvent &&
-              e.logicalKey == LogicalKeyboardKey.backspace) {
-            onBackspace();
-          }
-        },
-        child: TextField(
-          controller: controller,
-          focusNode: focusNode,
-          textAlign: TextAlign.center,
-          textAlignVertical: TextAlignVertical.center,
-          cursorColor: const Color(0xFFF4C542),
-          keyboardType: TextInputType.number,
-          maxLength: 1,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: GoogleFonts.outfit(
-              color: const Color(0xFFF4C542),
-              fontSize: 22,
-              fontWeight: FontWeight.w800),
-          decoration: const InputDecoration(
-              counterText: '', 
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-              filled: false),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
 }
 
 // ── Mini logo ──────────────────────────────────────────────────────────────────
