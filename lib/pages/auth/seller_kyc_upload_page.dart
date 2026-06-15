@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
+import '../../utils/image_picker_utils.dart';
 
 class SellerKycUploadPage extends StatefulWidget {
   const SellerKycUploadPage({super.key});
@@ -47,9 +48,11 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
   }
 
   Future<void> _pickImage(Function(File) onPicked) async {
+    final source = await showImageSourceSheet(context);
+    if (source == null) return;
     final picker = ImagePicker();
     final pickedFile =
-        await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+        await picker.pickImage(source: source, imageQuality: 70);
     if (pickedFile != null) {
       setState(() => onPicked(File(pickedFile.path)));
     }

@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../utils/validators.dart';
 import '../../models/product_model.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/image_picker_utils.dart';
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
   const AddProductPage({super.key, this.existingProduct});
@@ -129,14 +130,31 @@ class _AddProductPageState extends State<AddProductPage> {
   }
 
   Future<void> _pickImage() async {
-    if (_images.length >= 3) return;
+    if (_images.length + _existingImageUrls.length >= 3) return;
+    final source = await showImageSourceSheet(context);
+    if (source == null) return;
     final picker = ImagePicker();
-    final List<XFile> picked = await picker.pickMultiImage(imageQuality: 70);
-    if (picked.isNotEmpty) {
-      setState(() {
-        _images.addAll(picked);
-        if (_images.length > 3) _images = _images.sublist(0, 3);
-      });
+    if (source == ImageSource.camera) {
+      // Camera: pick one image at a time
+      final XFile? picked = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+      );
+      if (picked != null) {
+        setState(() {
+          _images.add(picked);
+          if (_images.length > 3) _images = _images.sublist(0, 3);
+        });
+      }
+    } else {
+      // Gallery: pick multiple images (existing behaviour)
+      final List<XFile> picked = await picker.pickMultiImage(imageQuality: 70);
+      if (picked.isNotEmpty) {
+        setState(() {
+          _images.addAll(picked);
+          if (_images.length > 3) _images = _images.sublist(0, 3);
+        });
+      }
     }
   }
 

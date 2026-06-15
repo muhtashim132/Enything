@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../providers/platform_config_provider.dart';
+import '../../utils/image_picker_utils.dart';
 
 class ShopManagementPage extends StatefulWidget {
   const ShopManagementPage({super.key});
@@ -90,7 +91,9 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   }
 
   Future<void> _pickImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    final source = await showImageSourceSheet(context);
+    if (source == null) return;
+    final pickedFile = await _picker.pickImage(source: source, imageQuality: 70);
     if (pickedFile != null && mounted) {
       setState(() {
         _selectedImage = File(pickedFile.path);

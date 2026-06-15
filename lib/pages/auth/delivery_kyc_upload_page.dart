@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
+import '../../utils/image_picker_utils.dart';
 
 class DeliveryKycUploadPage extends StatefulWidget {
   const DeliveryKycUploadPage({super.key});
@@ -47,8 +48,10 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
   }
 
   Future<void> _pickImage(Function(File) onPicked) async {
+    final source = await showImageSourceSheet(context);
+    if (source == null) return;
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    final pickedFile = await picker.pickImage(source: source, imageQuality: 70);
     if (pickedFile != null) {
       setState(() => onPicked(File(pickedFile.path)));
     }
