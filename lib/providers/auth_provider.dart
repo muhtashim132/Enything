@@ -49,6 +49,30 @@ class AuthProvider extends ChangeNotifier {
       if (event.event == AuthChangeEvent.signedIn) {
         _fetchProfile();
       } else if (event.event == AuthChangeEvent.signedOut) {
+        // Auto-deactivate shop/rider for FORCED logouts (session revoked from another device).
+        // Manual signOut() already deactivated before this event fires, so skip to avoid double-write.
+        if (!_isManualSignOut) {
+          final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+          final role = _user?.activeSessionRole;
+          if (userId != null) {
+            if (role == 'seller') {
+              _supabase
+                  .from('shops')
+                  .update({'is_active': false})
+                  .eq('seller_id', userId)
+                  .then((_) {})
+                  .catchError((_) {});
+            } else if (role == 'delivery_partner') {
+              _supabase
+                  .from('delivery_partners')
+                  .update({'is_active': false})
+                  .eq('id', userId)
+                  .then((_) {})
+                  .catchError((_) {});
+            }
+          }
+        }
+
         bool wasManual = _isManualSignOut;
         _isManualSignOut = false; // Reset
 
@@ -857,6 +881,27 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     _isManualSignOut = true;
+
+    // Auto-deactivate shop/rider status before signing out so they don't
+    // appear Open/Online after the user logs out or deletes the app.
+    final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+    final role = _user?.activeSessionRole;
+    if (userId != null) {
+      try {
+        if (role == 'seller') {
+          await _supabase
+              .from('shops')
+              .update({'is_active': false})
+              .eq('seller_id', userId);
+        } else if (role == 'delivery_partner') {
+          await _supabase
+              .from('delivery_partners')
+              .update({'is_active': false})
+              .eq('id', userId);
+        }
+      } catch (_) {} // Never block logout on deactivation failure
+    }
+
     try {
       if (_currentSessionId != null) {
         await _supabase.from('admin_sessions').delete().eq('id', _currentSessionId!);
