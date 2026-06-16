@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../models/saved_address_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/location_provider.dart';
 import '../pages/settings/profile_settings_dialogs.dart';

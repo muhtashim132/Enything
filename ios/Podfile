@@ -48,6 +48,10 @@ post_install do |installer|
       # Set minimum iOS deployment target for all pods
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
 
+      # Fix for Xcode 26: image_cropper umbrella header uses double-quoted includes
+      # which Xcode 26's strict modular header enforcement treats as a fatal error
+      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+
       # Fix Xcode 15 build warnings
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
         '$(inherited)',

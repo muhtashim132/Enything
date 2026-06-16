@@ -12,3 +12,5 @@
 -keepclasseswithmembers class * {
   public void onPayment*(...);
 }
+
+-dontwarn com.google.android.gms.auth.api.credentials.**

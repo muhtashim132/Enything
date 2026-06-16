@@ -444,10 +444,10 @@ class _LogoPartsPainter extends CustomPainter {
       canvas.restore();
     }
 
-    final colorTop = const Color(0xCC00DCFF); // Cyan
-    final colorBot = const Color(0xCC6432FF); // Purple/Indigo
-    final colorStem = const Color(0xCC4664FF); // Blue
-    final colorMid = const Color(0xCC00FFC8); // Mint/Teal
+    const colorTop = Color(0xCC00DCFF); // Cyan
+    const colorBot = Color(0xCC6432FF); // Purple/Indigo
+    const colorStem = Color(0xCC4664FF); // Blue
+    const colorMid = Color(0xCC00FFC8); // Mint/Teal
 
     drawPart(botBox, tBot, Offset(0, h), colorBot);
     drawPart(topBox, tTop, Offset(0, -h), colorTop);

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:supabase/supabase.dart';
 
 void main() async {

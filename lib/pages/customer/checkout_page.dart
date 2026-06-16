@@ -14,7 +14,6 @@ import 'package:uuid/uuid.dart';
 import '../../config/payment_config.dart';
 import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
-import '../settings/profile_settings_dialogs.dart';
 import '../../widgets/address_picker_sheet.dart';
 import '../../utils/responsive_layout.dart';
 

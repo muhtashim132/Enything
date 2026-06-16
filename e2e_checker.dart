@@ -13,7 +13,7 @@ void main() async {
   }
 
   final supabase = SupabaseClient(url, key);
-  final uuid = Uuid();
+  const uuid = Uuid();
   print('Connected to Supabase');
 
   try {
