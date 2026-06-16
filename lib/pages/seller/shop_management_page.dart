@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -95,9 +96,17 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     if (source == null) return;
     final pickedFile = await _picker.pickImage(source: source, imageQuality: 70);
     if (pickedFile != null && mounted) {
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-      });
+      final cropped = await cropImage(
+        context,
+        pickedFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
+        title: 'Crop Shop Banner',
+      );
+      if (cropped != null) {
+        setState(() {
+          _selectedImage = File(cropped.path);
+        });
+      }
     }
   }
 

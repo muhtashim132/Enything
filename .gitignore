@@ -85,3 +85,4 @@ android/app/google-services.json
 /analyze_output.txt
 /diff.txt
 
+ios/build/

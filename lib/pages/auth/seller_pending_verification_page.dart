@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../config/routes.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_provider.dart';
 
 class SellerPendingVerificationPage extends StatefulWidget {
   const SellerPendingVerificationPage({super.key});
@@ -14,16 +16,50 @@ class SellerPendingVerificationPage extends StatefulWidget {
 class _SellerPendingVerificationPageState extends State<SellerPendingVerificationPage> with SingleTickerProviderStateMixin {
   late AnimationController _animCtrl;
   late Animation<double> _pulseAnim;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(duration: const Duration(seconds: 2), vsync: this)..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 1.0, end: 1.08).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      final userId = auth.currentUserId;
+      if (userId != null) {
+        // Register Push Notification Token
+        context.read<NotificationProvider>().registerFcmToken(userId, 'seller');
+
+        // Listen for live approval
+        _channel = Supabase.instance.client.channel('public:shops:seller_id=eq.$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'shops',
+            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'seller_id', value: userId),
+            callback: (payload) async {
+              final newStatus = payload.newRecord['verification_status'];
+              if (newStatus != null && newStatus != 'pending') {
+                auth.retryProfileFetch();
+                if (mounted && (newStatus == 'approved' || newStatus == 'verified')) {
+                  Navigator.pushNamedAndRemoveUntil(context, AppRoutes.sellerDashboard, (_) => false);
+                } else if (mounted && newStatus == 'rejected') {
+                  setState(() {}); 
+                }
+              }
+            }
+          ).subscribe();
+      }
+    });
   }
 
   @override
   void dispose() {
+    if (_channel != null) {
+      Supabase.instance.client.removeChannel(_channel!);
+    }
     _animCtrl.dispose();
     super.dispose();
   }

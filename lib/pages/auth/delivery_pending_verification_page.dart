@@ -3,8 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../config/routes.dart';
 import '../../providers/auth_provider.dart';
-
 import '../../providers/notification_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DeliveryPendingVerificationPage extends StatefulWidget {
   const DeliveryPendingVerificationPage({super.key});
@@ -16,6 +16,7 @@ class DeliveryPendingVerificationPage extends StatefulWidget {
 class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerificationPage> with SingleTickerProviderStateMixin {
   late AnimationController _animCtrl;
   late Animation<double> _pulseAnim;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
@@ -28,13 +29,37 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
       final auth = context.read<AuthProvider>();
       final userId = auth.currentUserId;
       if (userId != null) {
+        // Register Push Notification Token
         context.read<NotificationProvider>().registerFcmToken(userId, 'delivery');
+
+        // Listen for live approval
+        _channel = Supabase.instance.client.channel('public:delivery_partners:id=eq.$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'delivery_partners',
+            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'id', value: userId),
+            callback: (payload) async {
+              final newStatus = payload.newRecord['verification_status'];
+              if (newStatus != null && newStatus != 'pending') {
+                auth.retryProfileFetch();
+                if (mounted && (newStatus == 'approved' || newStatus == 'verified')) {
+                  Navigator.pushNamedAndRemoveUntil(context, AppRoutes.deliveryDashboard, (_) => false);
+                } else if (mounted && newStatus == 'rejected') {
+                  setState(() {}); 
+                }
+              }
+            }
+          ).subscribe();
       }
     });
   }
 
   @override
   void dispose() {
+    if (_channel != null) {
+      Supabase.instance.client.removeChannel(_channel!);
+    }
     _animCtrl.dispose();
     super.dispose();
   }
