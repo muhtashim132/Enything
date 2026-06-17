@@ -6,7 +6,7 @@ import '../models/product_model.dart';
 import '../models/shop_model.dart';
 import '../providers/cart_provider.dart';
 import '../theme/app_colors.dart';
-import '../config/routes.dart';
+import '../widgets/product_detail_sheet.dart';
 
 class ProductSearchCard extends StatefulWidget {
   final ProductModel product;
@@ -31,11 +31,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(
-        context,
-        AppRoutes.productDetails,
-        arguments: {'productId': product.id},
-      ),
+      onTap: () => showProductDetailSheet(context, product.id),
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
@@ -73,28 +69,25 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.horizontal(left: Radius.circular(24)),
-                    child: product.displayImage.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: product.displayImage,
-                            width: double.infinity,
-                            height: double.infinity,
-                            fit: BoxFit.contain,
-                            placeholder: (c, i) => Container(color: Colors.grey.shade100),
-                            errorWidget: (c, e, s) => Container(
-                              color: AppColors.primary.withValues(alpha: 0.05),
-                              child: const Center(
+                    child: Container(
+                      color: const Color(0xFFEFF3FF), // subtle fresh blue-tint background
+                      width: double.infinity,
+                      height: double.infinity,
+                      child: product.displayImage.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: product.displayImage,
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.contain,
+                              placeholder: (c, i) => const ColoredBox(color: Color(0xFFEFF3FF)),
+                              errorWidget: (c, e, s) => const Center(
                                 child: Icon(Icons.shopping_bag_outlined, size: 30, color: AppColors.primary),
                               ),
-                            ),
-                          )
-                        : Container(
-                            width: double.infinity,
-                            height: double.infinity,
-                            color: AppColors.primary.withValues(alpha: 0.05),
-                            child: const Center(
+                            )
+                          : const Center(
                               child: Icon(Icons.shopping_bag_outlined, size: 30, color: AppColors.primary),
                             ),
-                          ),
+                    ),
                   ),
                   if (product.isVeg != null)
                     Positioned(

@@ -1,5 +1,4 @@
 {
     "java.configuration.updateBuildConfiguration": "interactive",
-    "python.terminal.useEnvFile": true,
-    "java.jdt.ls.java.home": "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+    "python.terminal.useEnvFile": true
 }

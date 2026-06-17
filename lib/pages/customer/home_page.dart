@@ -25,6 +25,8 @@ import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
 import '../../widgets/product_search_card.dart';
+import '../../widgets/shop_detail_sheet.dart';
+import '../../widgets/restaurant_dashboard_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
 import '../../widgets/address_picker_sheet.dart';
 
@@ -34,6 +36,8 @@ class CustomerHomePage extends StatefulWidget {
   @override
   State<CustomerHomePage> createState() => _CustomerHomePageState();
 }
+
+enum _SortMode { relevant, bestRating, priceLow, priceHigh, discount }
 
 class _CustomerHomePageState extends State<CustomerHomePage>
     with SingleTickerProviderStateMixin {
@@ -49,9 +53,28 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   List<ProductModel> _products = [];
   Map<String, ShopModel> _productShops = {};
   String _searchQuery = '';
+  _SortMode _sortMode = _SortMode.relevant;
   final _searchController = TextEditingController();
   // Debounce timer for GPS listener to prevent race conditions
   Timer? _locationDebounceTimer;
+
+  /// Returns search product results sorted by the current _sortMode.
+  List<ProductModel> get _sortedProductResults {
+    final list = List<ProductModel>.from(_searchProductResults);
+    switch (_sortMode) {
+      case _SortMode.bestRating:
+        list.sort((a, b) => b.rating.compareTo(a.rating));
+      case _SortMode.priceLow:
+        list.sort((a, b) => a.price.compareTo(b.price));
+      case _SortMode.priceHigh:
+        list.sort((a, b) => b.price.compareTo(a.price));
+      case _SortMode.discount:
+        list.sort((a, b) => (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0));
+      case _SortMode.relevant:
+        break;
+    }
+    return list;
+  }
   // Track if the very first load has completed (shimmer only on first load)
   bool _hasLoadedOnce = false;
 
@@ -59,6 +82,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   final PageController _bannerController = PageController();
   int _bannerIndex = 0;
   Timer? _bannerTimer;
+  Timer? _searchDebounce;
 
   /// True when a food-type tab is currently selected.
   bool get _isFoodTab {
@@ -169,6 +193,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   void dispose() {
     _bannerTimer?.cancel();
     _locationDebounceTimer?.cancel();
+    _searchDebounce?.cancel();
     // Remove live location listener to avoid memory leaks
     context.read<LocationProvider>().removeListener(_onLocationChanged);
     _searchController.dispose();
@@ -185,6 +210,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         _searchProductResults = [];
         _searchProductShops = {};
         _isSearching = false;
+        _sortMode = _SortMode.relevant; // reset sort on clear
       });
       return;
     }
@@ -554,18 +580,23 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
           // ── Premium Modern AppBar ──────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 165,
+            expandedHeight: _searchQuery.isNotEmpty ? 0 : 165,
             floating: true,
             pinned: true,
             elevation: 0,
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             surfaceTintColor: Colors.transparent,
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                padding: const EdgeInsets.fromLTRB(16, 50, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              background: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: _searchQuery.isNotEmpty ? 0.0 : 1.0,
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16, 50, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                     // Row 1: Greeting + actions
                     Row(
                       children: [
@@ -693,7 +724,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 ),
               ),
             ),
-            bottom: PreferredSize(
+          ),
+        ),
+        bottom: PreferredSize(
               preferredSize: const Size.fromHeight(70),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -703,7 +736,19 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                     color: Colors.transparent,
                     child: TextField(
                       controller: _searchController,
-                      onChanged: (v) => _searchShops(v),
+                      onChanged: (v) {
+                        _searchDebounce?.cancel();
+                        if (v.trim().isNotEmpty) {
+                          setState(() {
+                            _searchQuery = v;
+                            _isSearching = true;
+                          });
+                        }
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 350),
+                          () => _searchShops(v),
+                        );
+                      },
                       decoration: InputDecoration(
                         hintText: 'Search "Milk", "Pizza" or "Medicines"',
                         hintStyle: GoogleFonts.outfit(
@@ -756,7 +801,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           ),
 
           // ── Categories Horizontal List (pill style) ──────────────────
-          SliverToBoxAdapter(
+          if (_searchQuery.isEmpty)
+            SliverToBoxAdapter(
             child: SizedBox(
               height: 60,
               child: ListView.builder(
@@ -844,6 +890,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             ),
           ),
 
+          // ── Search Filter Bar (visible during search only) ───────────
+          if (_searchQuery.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _buildSearchFilterBar(isDark),
+            ),
+
           // ── Main Content ──────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
@@ -853,180 +905,194 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 ? SliverToBoxAdapter(child: _buildShimmer())
                 : SliverList(
                     delegate: SliverChildListDelegate([
-                      // Featured Banner
-                      _buildFeaturedBanner(),
-                      const SizedBox(height: 24),
-
-                      // Shops Section
-                      // ── Search Results (Supabase live search) ──────
+                      // ──────────────────────────────────────────────────
+                      // SEARCH MODE: clean results-only view
+                      // ──────────────────────────────────────────────────
                       if (_searchQuery.isNotEmpty) ...[
-                        _buildSectionTitle(
-                          'Search results',
-                          subtitle: _isSearching
-                              ? 'Searching...'
-                              : '${_searchResults.length + _searchProductResults.length} result${(_searchResults.length + _searchProductResults.length) == 1 ? '' : 's'}',
+                        const SizedBox(height: 4),
+
+                        // Header
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _isSearching ? 'Searching...' : 'Search results',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: isDark ? Colors.white : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  if (!_isSearching)
+                                    Text(
+                                      '${_searchResults.length + _searchProductResults.length} result${(_searchResults.length + _searchProductResults.length) == 1 ? '' : 's'} for "$_searchQuery"',
+                                      style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
+
+                        // Skeleton while loading
                         if (_isSearching)
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(vertical: 24),
-                              child: CircularProgressIndicator(),
-                            ),
-                          )
-                        else if (_searchResults.isEmpty &&
-                            _searchProductResults.isEmpty)
+                          Column(children: List.generate(3, (_) => _buildSearchSkeleton(isDark)))
+
+                        // Empty state
+                        else if (_searchResults.isEmpty && _searchProductResults.isEmpty)
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 32),
+                            padding: const EdgeInsets.symmetric(vertical: 60),
                             child: Center(
                               child: Column(
                                 children: [
-                                  const Text('🔍',
-                                      style: TextStyle(fontSize: 48)),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'No results found for "$_searchQuery"',
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.outfit(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textSecondary),
+                                  Container(
+                                    width: 80, height: 80,
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF0F0F8),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Center(child: Text('🔍', style: TextStyle(fontSize: 36))),
                                   ),
+                                  const SizedBox(height: 16),
+                                  Text('No results for', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textSecondary)),
+                                  const SizedBox(height: 4),
+                                  Text('"$_searchQuery"', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                  const SizedBox(height: 8),
+                                  Text('Try a different keyword', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textLight)),
                                 ],
                               ),
                             ),
                           )
+
+                        // Results
                         else ...[
-                          if (_searchResults.isNotEmpty) ...[
+                          // Products first (most relevant for the user)
+                          if (_searchProductResults.isNotEmpty) ...[
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
-                              child: Text('Shops & Restaurants',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary)),
+                              child: Row(
+                                children: [
+                                  Container(width: 4, height: 18, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(2))),
+                                  const SizedBox(width: 8),
+                                  Text('Items & Products', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                                    child: Text('${_searchProductResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ..._sortedProductResults.map((product) {
+                              final shop = _searchProductShops[product.id];
+                              if (shop == null) return const SizedBox.shrink();
+                              return ProductSearchCard(product: product, shop: shop);
+                            }),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Shops below products
+                          if (_searchResults.isNotEmpty) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12, top: 4),
+                              child: Row(
+                                children: [
+                                  Container(width: 4, height: 18, decoration: BoxDecoration(color: AppColors.secondary, borderRadius: BorderRadius.circular(2))),
+                                  const SizedBox(width: 8),
+                                  Text('Shops & Restaurants', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                                    child: Text('${_searchResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.secondary)),
+                                  ),
+                                ],
+                              ),
                             ),
                             ..._searchResults.map((shop) {
-                              final isFood =
-                                  AppCategories.groupFor(shop.category) ==
-                                      CategoryGroup.food;
+                              final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
                                 child: isFood
-                                    ? RestaurantShopCard(
-                                        shop: shop,
-                                        onTap: () => Navigator.pushNamed(
-                                          context,
-                                          AppRoutes.restaurantDashboard,
-                                          arguments: {'shopId': shop.id},
-                                        ),
-                                      )
-                                    : ShopCard(
-                                        shop: shop,
-                                        onTap: () => Navigator.pushNamed(
-                                          context,
-                                          AppRoutes.restaurant,
-                                          arguments: {'shopId': shop.id},
-                                        ),
-                                      ),
-                              );
-                            }),
-                          ],
-                          if (_searchProductResults.isNotEmpty) ...[
-                            Padding(
-                              padding:
-                                  const EdgeInsets.only(bottom: 12, top: 8),
-                              child: Text('Items & Products',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary)),
-                            ),
-                            ..._searchProductResults.map((product) {
-                              final shop = _searchProductShops[product.id];
-                              if (shop == null) return const SizedBox.shrink();
-                              return ProductSearchCard(
-                                product: product,
-                                shop: shop,
+                                    ? RestaurantShopCard(shop: shop, onTap: () => showRestaurantDashboardSheet(context, shop.id))
+                                    : ShopCard(shop: shop, onTap: () => showShopDetailSheet(context, shop.id)),
                               );
                             }),
                           ],
                         ],
-                      ] else if (_shops.isNotEmpty) ...[
-                        // ── Normal category browse ───────────────────
-                        _buildSectionTitle(
-                          _selectedTabIndex < 0
-                              ? 'All stores near you'
-                              : _isFoodTab
-                                  ? 'Restaurants near you'
-                                  : 'Shops near you',
-                          subtitle:
-                              '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
-                        ),
-                        const SizedBox(height: 16),
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 1, tablet: 2, desktop: 3);
-                            const spacing = 16.0;
-                            final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
 
-                            return Wrap(
-                              spacing: spacing,
-                              runSpacing: 0,
-                              children: _shops.map((shop) {
-                                final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
-                                return SizedBox(
-                                  width: itemWidth,
-                                  child: isFood
-                                      ? RestaurantShopCard(
-                                          shop: shop,
-                                          onTap: () => Navigator.pushNamed(
-                                            context,
-                                            AppRoutes.restaurantDashboard,
-                                            arguments: {'shopId': shop.id},
-                                          ),
-                                        )
-                                      : ShopCard(
-                                          shop: shop,
-                                          onTap: () => Navigator.pushNamed(
-                                            context,
-                                            AppRoutes.restaurant,
-                                            arguments: {'shopId': shop.id},
-                                          ),
-                                        ),
-                                );
-                              }).toList(),
-                            );
-                          },
-                        ),
-                      ] else if (!_isLoading) ...[
-                        locationProvider.hasLocation
-                            ? _buildNoShopsNearby()
-                            : _buildLocationRequired(),
-                      ],
+                      // ──────────────────────────────────────────────────
+                      // NORMAL MODE: banner + shops + products
+                      // ──────────────────────────────────────────────────
+                      ] else ...[
+                        // Featured Banner
+                        _buildFeaturedBanner(),
+                        const SizedBox(height: 24),
 
-                      // Products Section
-                      if (_products.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _buildSectionTitle('Popular in your area'),
-                        const SizedBox(height: 16),
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5),
-                            childAspectRatio: 0.65,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: 16,
+                        if (_shops.isNotEmpty) ...[
+                          // ── Normal category browse ───────────────────
+                          _buildSectionTitle(
+                            _selectedTabIndex < 0
+                                ? 'All stores near you'
+                                : _isFoodTab
+                                    ? 'Restaurants near you'
+                                    : 'Shops near you',
+                            subtitle: '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
                           ),
-                          itemCount: _products.length,
-                          itemBuilder: (context, index) {
-                            final product = _products[index];
-                            final shop = _productShops[product.id];
-                            return ProductCard(product: product, shop: shop);
-                          },
-                        ),
+                          const SizedBox(height: 16),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 1, tablet: 2, desktop: 3);
+                              const spacing = 16.0;
+                              final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
+                              return Wrap(
+                                spacing: spacing,
+                                runSpacing: 0,
+                                children: _shops.map((shop) {
+                                  final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
+                                  return SizedBox(
+                                    width: itemWidth,
+                                    child: isFood
+                                        ? RestaurantShopCard(shop: shop, onTap: () => showRestaurantDashboardSheet(context, shop.id))
+                                        : ShopCard(shop: shop, onTap: () => showShopDetailSheet(context, shop.id)),
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
+                        ] else if (!_isLoading) ...[
+                          locationProvider.hasLocation
+                              ? _buildNoShopsNearby()
+                              : _buildLocationRequired(),
+                        ],
+
+                        // Products Section
+                        if (_products.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _buildSectionTitle('Popular in your area'),
+                          const SizedBox(height: 16),
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5),
+                              childAspectRatio: 0.65,
+                              mainAxisSpacing: 16,
+                              crossAxisSpacing: 16,
+                            ),
+                            itemCount: _products.length,
+                            itemBuilder: (context, index) {
+                              final product = _products[index];
+                              final shop = _productShops[product.id];
+                              return ProductCard(product: product, shop: shop);
+                            },
+                          ),
+                        ],
                       ],
                     ]),
                   ),
@@ -1042,6 +1108,120 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         child: _buildFloatingBottomNav(cartProvider),
       ),
     ));
+  }
+
+  Widget _buildSearchFilterBar(bool isDark) {
+    final filters = [
+      {'mode': _SortMode.relevant, 'label': 'Relevant', 'icon': Icons.bolt_rounded},
+      {'mode': _SortMode.bestRating, 'label': 'Best Rating', 'icon': Icons.star_rounded},
+      {'mode': _SortMode.priceLow, 'label': 'Price: Low to High', 'icon': Icons.trending_up_rounded},
+      {'mode': _SortMode.priceHigh, 'label': 'Price: High to Low', 'icon': Icons.trending_down_rounded},
+      {'mode': _SortMode.discount, 'label': 'Biggest Discount', 'icon': Icons.local_offer_rounded},
+    ];
+
+    return SizedBox(
+      height: 50,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: filters.length,
+        itemBuilder: (context, index) {
+          final filter = filters[index];
+          final mode = filter['mode'] as _SortMode;
+          final isSelected = _sortMode == mode;
+
+          return GestureDetector(
+            onTap: () => setState(() => _sortMode = mode),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.primary
+                      : (isDark ? Colors.white24 : Colors.grey.shade300),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    filter['icon'] as IconData,
+                    size: 16,
+                    color: isSelected
+                        ? Colors.white
+                        : (isDark ? Colors.white70 : AppColors.textPrimary),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    filter['label'] as String,
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark ? Colors.white70 : AppColors.textPrimary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSearchSkeleton(bool isDark) {
+    final shimmerBase = isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF0F0F8);
+    final shimmerHigh = isDark ? const Color(0xFF2A2A3E) : const Color(0xFFE0E0E8);
+    return Shimmer.fromColors(
+      baseColor: shimmerBase,
+      highlightColor: shimmerHigh,
+      child: Container(
+        height: 100,
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: shimmerBase,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 100,
+              decoration: BoxDecoration(
+                color: shimmerHigh,
+                borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(height: 14, width: 140, decoration: BoxDecoration(color: shimmerHigh, borderRadius: BorderRadius.circular(7))),
+                  const SizedBox(height: 8),
+                  Container(height: 10, width: 100, decoration: BoxDecoration(color: shimmerHigh, borderRadius: BorderRadius.circular(5))),
+                  const SizedBox(height: 10),
+                  Container(height: 12, width: 60, decoration: BoxDecoration(color: shimmerHigh, borderRadius: BorderRadius.circular(6))),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                width: 60, height: 34,
+                decoration: BoxDecoration(color: shimmerHigh, borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildCircleAction(

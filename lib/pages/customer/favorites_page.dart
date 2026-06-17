@@ -11,6 +11,8 @@ import '../../widgets/restaurant_shop_card.dart';
 import '../../config/routes.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../utils/responsive_layout.dart';
+import '../../widgets/shop_detail_sheet.dart';
+import '../../widgets/restaurant_dashboard_sheet.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -203,18 +205,16 @@ class _FavoritesPageState extends State<FavoritesPage>
                               child: isFood
                                   ? RestaurantShopCard(
                                       shop: shop,
-                                      onTap: () => Navigator.pushNamed(
+                                      onTap: () => showRestaurantDashboardSheet(
                                         context,
-                                        AppRoutes.restaurantDashboard,
-                                        arguments: {'shopId': shop.id},
+                                        shop.id,
                                       ),
                                     )
                                   : ShopCard(
                                       shop: shop,
-                                      onTap: () => Navigator.pushNamed(
+                                      onTap: () => showShopDetailSheet(
                                         context,
-                                        AppRoutes.restaurant,
-                                        arguments: {'shopId': shop.id},
+                                        shop.id,
                                       ),
                                     ),
                             );

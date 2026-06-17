@@ -788,27 +788,30 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
   // Shimmer loading
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildShimmer() {
-    return Column(
-      children: [
-        Container(height: 260, color: const Color(0xFFE0E0E0)),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            children: List.generate(
-              4,
-              (_) => Container(
-                height: 120,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0E0E0),
-                  borderRadius: BorderRadius.circular(18),
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Column(
+        children: [
+          Container(height: 260, color: const Color(0xFFE0E0E0)),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: List.generate(
+                4,
+                (_) => Container(
+                  height: 120,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0E0E0),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

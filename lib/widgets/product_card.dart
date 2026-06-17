@@ -8,7 +8,7 @@ import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
-import '../config/routes.dart';
+import '../widgets/product_detail_sheet.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -36,11 +36,7 @@ class _ProductCardState extends State<ProductCard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(
-        context,
-        AppRoutes.productDetails,
-        arguments: {'productId': product.id},
-      ),
+      onTap: () => showProductDetailSheet(context, product.id),
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
@@ -72,26 +68,22 @@ class _ProductCardState extends State<ProductCard> {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    child: product.displayImage.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: product.displayImage,
-                            width: double.infinity,
-                            fit: BoxFit.contain,
-                            placeholder: (c, i) => Container(color: Colors.grey.shade100),
-                            errorWidget: (c, e, s) => Container(
-                              color: AppColors.primary.withValues(alpha: 0.05),
-                              child: const Center(
+                    child: Container(
+                      color: const Color(0xFFEFF3FF), // subtle fresh blue-tint background
+                      child: product.displayImage.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: product.displayImage,
+                              width: double.infinity,
+                              fit: BoxFit.contain,
+                              placeholder: (c, i) => const ColoredBox(color: Color(0xFFEFF3FF)),
+                              errorWidget: (c, e, s) => const Center(
                                 child: Icon(Icons.shopping_bag_outlined, size: 40, color: AppColors.primary),
                               ),
-                            ),
-                          )
-                        : Container(
-                            width: double.infinity,
-                            color: AppColors.primary.withValues(alpha: 0.05),
-                            child: const Center(
+                            )
+                          : const Center(
                               child: Icon(Icons.shopping_bag_outlined, size: 40, color: AppColors.primary),
                             ),
-                          ),
+                    ),
                   ),
                   
                   // Favorite Button

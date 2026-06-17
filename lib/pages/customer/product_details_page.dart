@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../widgets/common/notification_bell.dart';
+import '../../config/app_categories.dart';
+import '../../widgets/shop_detail_sheet.dart';
+import '../../widgets/restaurant_dashboard_sheet.dart';
 import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
 import '../../utils/responsive_layout.dart';
@@ -304,11 +308,16 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   const Divider(height: 28),
                   // Shop info
                   GestureDetector(
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      AppRoutes.restaurant,
-                      arguments: {'shopId': _shop?.id ?? ''},
-                    ),
+                    onTap: () {
+                      if (_shop != null) {
+                        final isFood = AppCategories.groupFor(_shop!.category) == CategoryGroup.food;
+                        if (isFood) {
+                          showRestaurantDashboardSheet(context, _shop!.id);
+                        } else {
+                          showShopDetailSheet(context, _shop!.id);
+                        }
+                      }
+                    },
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
