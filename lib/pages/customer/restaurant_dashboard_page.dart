@@ -545,7 +545,7 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
   Widget _buildMenuItem(ProductModel product) {
     final cart = context.read<CartProvider>();
     final quantity = cart.getItemQuantity(product.id);
-    final isVeg = product.isVeg ?? true;
+    final isVeg = product.isVeg;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -569,26 +569,28 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Veg / Non-veg indicator
-                Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                        color: isVeg ? Colors.green : Colors.red, width: 1.5),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: isVeg ? Colors.green : Colors.red,
-                        shape: BoxShape.circle,
+                if (isVeg != null) ...[
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: isVeg ? Colors.green : Colors.red, width: 1.5),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Center(
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: isVeg ? Colors.green : Colors.red,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 6),
+                  const SizedBox(height: 6),
+                ],
                 Text(
                   product.name,
                   style: GoogleFonts.outfit(

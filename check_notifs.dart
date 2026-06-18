@@ -1,5 +1,3 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:io';
 
 void main() async {
   const supabaseUrl = 'YOUR_SUPABASE_URL';

@@ -273,7 +273,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           fontFamily: 'Poppins',
                         ),
                       ),
-                      if (_product!.originalPrice != null) ...[
+                      if (_product!.discountPercent != null) ...[
                         const SizedBox(width: 8),
                         Text(
                           '₹${_product!.originalPrice!.toStringAsFixed(0)}',

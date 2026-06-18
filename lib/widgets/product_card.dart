@@ -209,7 +209,7 @@ class _ProductCardState extends State<ProductCard> {
                                 fontSize: 16,
                               ),
                             ),
-                            if (product.originalPrice != null) ...[
+                            if (product.discountPercent != null) ...[
                               const SizedBox(width: 4),
                               Text(
                                 '₹${product.originalPrice!.toStringAsFixed(0)}',

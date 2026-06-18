@@ -434,7 +434,7 @@ class _SheetContent extends StatelessWidget {
                                   color: AppColors.textPrimary,
                                 ),
                               ),
-                              if (product.originalPrice != null) ...[
+                              if (product.discountPercent != null) ...[
                                 const SizedBox(width: 8),
                                 Text(
                                   '₹${product.originalPrice!.toStringAsFixed(0)}',

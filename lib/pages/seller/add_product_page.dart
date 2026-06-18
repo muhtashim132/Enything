@@ -30,7 +30,7 @@ class _AddProductPageState extends State<AddProductPage> {
   final _weightController = TextEditingController();
   final _inventoryController = TextEditingController();
 
-  bool _isVeg = true;
+  bool? _isVeg = true;
   bool _isAvailable = true;
   bool _isSaving = false;
   String _productCategory = 'Food';
@@ -66,7 +66,7 @@ class _AddProductPageState extends State<AddProductPage> {
       _descriptionController.text = p.description ?? '';
       _productCategory = p.category;
       _menuCategoryController.text = p.menuCategory ?? '';
-      _isVeg = p.isVeg ?? false;
+      _isVeg = p.isVeg;
       _isAvailable = p.isAvailable;
       if (p.weightPerUnit != null) _weightController.text = p.weightPerUnit.toString();
       _unitType = p.unitType;
@@ -216,7 +216,7 @@ class _AddProductPageState extends State<AddProductPage> {
         'menu_category': _menuCategoryController.text.trim().isEmpty
             ? null
             : _menuCategoryController.text.trim(),
-        'is_veg': _isFoodGroup ? _isVeg : false,
+        'is_veg': _isVeg,
         'is_available': _isAvailable,
         'weight_per_unit': _weightController.text.trim().isEmpty
             ? null
@@ -545,20 +545,19 @@ class _AddProductPageState extends State<AddProductPage> {
               const SizedBox(height: 16),
               _card(
                 children: [
-                  if (_isFoodGroup) ...[
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Vegetarian',
-                          style: TextStyle(fontFamily: 'Poppins')),
-                      subtitle: Text(
-                        _isVeg ? 'Marked as veg 🟢' : 'Marked as non-veg 🔴',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      value: _isVeg,
-                      activeThumbColor: AppColors.vegGreen,
-                      onChanged: (v) => setState(() => _isVeg = v),
+                  DropdownButtonFormField<bool?>(
+                    value: _isVeg,
+                    decoration: const InputDecoration(
+                      labelText: 'Dietary Preference',
+                      prefixIcon: Icon(Icons.eco_outlined),
                     ),
-                  ],
+                    items: const [
+                      DropdownMenuItem<bool?>(value: true, child: Text('Vegetarian 🟢')),
+                      DropdownMenuItem<bool?>(value: false, child: Text('Non-Vegetarian 🔴')),
+                      DropdownMenuItem<bool?>(value: null, child: Text('None (N/A)')),
+                    ],
+                    onChanged: (v) => setState(() => _isVeg = v),
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Available',

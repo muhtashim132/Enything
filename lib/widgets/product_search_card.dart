@@ -190,7 +190,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                 fontSize: 16,
                               ),
                             ),
-                            if (product.originalPrice != null)
+                            if (product.discountPercent != null)
                               Text(
                                 '₹${product.originalPrice!.toStringAsFixed(0)}',
                                 style: GoogleFonts.outfit(
