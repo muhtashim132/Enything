@@ -8,9 +8,10 @@ import '../../../../providers/platform_config_provider.dart';
 import '../../../../config/tax_config.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tax Settings Page
-// Allows super-admins to override GST rates per category and service tax rates.
-// Reads overrides from `tax_config` table; falls back to TaxConfig defaults.
+// Tax Settings Page (Updated: September 2025 GST Reform)
+// Allows super-admins to override GST rates, slab thresholds, and slab high
+// rates per category. Reads from `tax_config` table; falls back to TaxConfig
+// code defaults (which themselves reflect the Sept 2025 reform).
 // ─────────────────────────────────────────────────────────────────────────────
 
 class TaxSettingsPage extends StatefulWidget {
@@ -30,8 +31,11 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   // Which category row is being edited inline
   String? _editingCategory;
   final _rateCtrl = TextEditingController();
+  // Extra controllers for slab threshold and high rate (Clothing/Footwear)
+  final _slabThresholdCtrl = TextEditingController();
+  final _slabHighRateCtrl  = TextEditingController();
 
-  // ── Categories in the same order as TaxConfig ────────────────────────────
+  // ── Categories (updated: Sept 2025 — new categories added) ───────────────
   static const _sections = [
     _Section(
       title: 'Food & Restaurant (Section 9(5))',
@@ -55,7 +59,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       icon: Icons.local_grocery_store_rounded,
       color: AdminColors.info,
       categories: [
-        'Grocery', 'Organic', 'Beverages', 'Pharmacy', 'Medical Store',
+        'Grocery', 'Organic', 'Supermarket / Hypermarket',
+        'Beverages', 'Pharmacy', 'Medical Store',
       ],
     ),
     _Section(
@@ -72,8 +77,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       color: Color(0xFFEC4899),
       categories: [
         'Stationery', 'Toys & Games', 'Sports', 'Pet Supplies',
-        'Salon & Beauty', 'Flowers', 'Home Decor', 'Furniture',
-        'Hardware Store', 'Auto Parts', 'Other',
+        'Salon & Beauty', 'Cosmetics & Beauty', 'Flowers', 'Home Decor',
+        'Furniture', 'Hardware Store', 'Auto Parts', 'Other',
       ],
     ),
   ];
@@ -87,6 +92,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   @override
   void dispose() {
     _rateCtrl.dispose();
+    _slabThresholdCtrl.dispose();
+    _slabHighRateCtrl.dispose();
     super.dispose();
   }
 
@@ -110,13 +117,36 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     }
   }
 
-  // Returns GST rate % (0–100) for a category from DB or code default
+  // ── Data helpers ────────────────────────────────────────────────────────────
+
   double _getRate(String category) {
     if (_dbRows.containsKey(category)) {
       final v = _dbRows[category]!['gst_rate'];
       return (double.tryParse(v.toString()) ?? 0) * 100;
     }
     return TaxConfig.gstRateForCategory(category) * 100;
+  }
+
+  double? _getSlabThreshold(String category) {
+    if (_dbRows.containsKey(category)) {
+      final v = _dbRows[category]!['slab_threshold'];
+      if (v != null) return double.tryParse(v.toString());
+    }
+    if (category == 'Clothing' || category == 'Footwear') {
+      return TaxConfig.defaultSlabThreshold;
+    }
+    return null;
+  }
+
+  double? _getSlabHighRate(String category) {
+    if (_dbRows.containsKey(category)) {
+      final v = _dbRows[category]!['slab_high_rate'];
+      if (v != null) return double.tryParse(v.toString());
+    }
+    if (category == 'Clothing' || category == 'Footwear') {
+      return TaxConfig.defaultSlabHighRate;
+    }
+    return null;
   }
 
   bool _getDeemedSupplier(String category) {
@@ -129,8 +159,14 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   bool _isCustom(String category) =>
       _dbRows[category]?['is_custom'] as bool? ?? false;
 
+  // ── Edit helpers ────────────────────────────────────────────────────────────
+
   void _startEdit(String category) {
     _rateCtrl.text = _getRate(category).toStringAsFixed(0);
+    final threshold = _getSlabThreshold(category);
+    final highRate  = _getSlabHighRate(category);
+    _slabThresholdCtrl.text = threshold != null ? threshold.toStringAsFixed(0) : '';
+    _slabHighRateCtrl.text  = highRate  != null ? (highRate * 100).toStringAsFixed(0) : '';
     setState(() => _editingCategory = category);
   }
 
@@ -143,17 +179,27 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     final rateDecimal = val / 100;
     final isDeemedSupplier = _getDeemedSupplier(category);
 
+    // Parse optional slab fields (Clothing/Footwear only)
+    final slabThresholdText = _slabThresholdCtrl.text.trim();
+    final slabHighRateText  = _slabHighRateCtrl.text.trim();
+    final double? slabThreshold =
+        slabThresholdText.isNotEmpty ? double.tryParse(slabThresholdText) : null;
+    final double? slabHighRate =
+        slabHighRateText.isNotEmpty ? (double.tryParse(slabHighRateText) ?? 18.0) / 100 : null;
+
     try {
       await _db.from('tax_config').upsert({
         'category': category,
         'gst_rate': rateDecimal,
+        'slab_threshold': slabThreshold,
+        'slab_high_rate': slabHighRate,
         'is_deemed_supplier': isDeemedSupplier,
         'is_custom': true,
         'updated_by': rbac.currentAdmin?.id,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'category');
 
-      // Audit log
+      // Audit log (best-effort)
       try {
         await _db.from('audit_logs').insert({
           'actor_id': rbac.currentAdmin?.id,
@@ -163,6 +209,9 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
           'metadata': {
             'category': category,
             'new_rate': '$val%',
+            if (slabThreshold != null) 'slab_threshold': slabThreshold,
+            if (slabHighRate != null)
+              'slab_high_rate_pct': '${(slabHighRate * 100).toStringAsFixed(0)}%',
           },
         });
       } catch (_) {}
@@ -171,6 +220,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
         _dbRows[category] = {
           ...(_dbRows[category] ?? {}),
           'gst_rate': rateDecimal,
+          'slab_threshold': slabThreshold,
+          'slab_high_rate': slabHighRate,
           'is_deemed_supplier': isDeemedSupplier,
           'is_custom': true,
         };
@@ -208,13 +259,19 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   }
 
   Future<void> _resetToDefault(String category, RbacProvider rbac) async {
-    final defaultRate = TaxConfig.gstRateForCategory(category);
-    final defaultDeemed = TaxConfig.isEnythingDeemedSupplier(category);
+    final defaultRate    = TaxConfig.gstRateForCategory(category);
+    final defaultDeemed  = TaxConfig.isEnythingDeemedSupplier(category);
+    final defaultThreshold = (category == 'Clothing' || category == 'Footwear')
+        ? TaxConfig.defaultSlabThreshold : null;
+    final defaultHighRate = (category == 'Clothing' || category == 'Footwear')
+        ? TaxConfig.defaultSlabHighRate : null;
 
     try {
       await _db.from('tax_config').upsert({
         'category': category,
         'gst_rate': defaultRate,
+        'slab_threshold': defaultThreshold,
+        'slab_high_rate': defaultHighRate,
         'is_deemed_supplier': defaultDeemed,
         'is_custom': false,
         'updated_by': rbac.currentAdmin?.id,
@@ -225,12 +282,14 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
         _dbRows[category] = {
           'category': category,
           'gst_rate': defaultRate,
+          'slab_threshold': defaultThreshold,
+          'slab_high_rate': defaultHighRate,
           'is_deemed_supplier': defaultDeemed,
           'is_custom': false,
         };
         if (_editingCategory == category) _editingCategory = null;
       });
-      _showSnack('$category reset to default (${(defaultRate * 100).toStringAsFixed(0)}%)');
+      _showSnack('$category reset to Sept 2025 default (${(defaultRate * 100).toStringAsFixed(0)}%)');
     } catch (e) {
       _showSnack('Failed to reset: $e', error: true);
     }
@@ -246,9 +305,11 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     ));
   }
 
+  // ── Build ───────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final rbac = context.watch<RbacProvider>();
+    final rbac   = context.watch<RbacProvider>();
     final config = context.watch<PlatformConfigProvider>();
     final canEdit = rbac.isSuperAdmin;
 
@@ -275,7 +336,45 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // ── Info Banner ─────────────────────────────────────────────
+                // ── Sept 2025 GST Reform Banner ─────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AdminColors.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AdminColors.warning.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.new_releases_rounded, color: AdminColors.warning, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Sept 2025 GST Reform Applied',
+                              style: AdminStyles.body(size: 13, color: AdminColors.warning),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'India\'s GST simplification (Notification 9/2025-CT Rate, Sep 22 2025) '
+                              'removed the 12% & 28% slabs for most goods. '
+                              'Clothing/Footwear threshold raised to ₹2,500 per item/pair. '
+                              'Beverages, Stationery, Toys & Games, Sports raised to 18%. '
+                              'Use this page to update rates when the government issues new notifications.',
+                              style: AdminStyles.caption(color: AdminColors.warning),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(delay: 30.ms),
+
+                // ── Add-On GST Info Banner ──────────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(14),
                   margin: const EdgeInsets.only(bottom: 20),
@@ -305,7 +404,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
 
                 // ── Per-Category Sections ───────────────────────────────────
                 ..._sections.asMap().entries.map((entry) {
-                  final i = entry.key;
+                  final i       = entry.key;
                   final section = entry.value;
                   return _buildSection(section, rbac, canEdit, delay: (i + 1) * 80);
                 }),
@@ -315,6 +414,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
             ),
     );
   }
+
+  // ── Service tax section (delivery + platform GST) ──────────────────────────
 
   Widget _buildServiceTaxSection(PlatformConfigProvider config, RbacProvider rbac, bool canEdit) {
     return Container(
@@ -379,9 +480,6 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     required bool canEdit,
   }) {
     final isEditing = _editingCategory == key;
-    if (isEditing && !_rateCtrl.text.contains('.')) {
-      // already set
-    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -470,6 +568,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     );
   }
 
+  // ── Category section builder ────────────────────────────────────────────────
+
   Widget _buildSection(_Section section, RbacProvider rbac, bool canEdit, {int delay = 0}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -514,18 +614,32 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     ).animate().fadeIn(delay: Duration(milliseconds: delay)).slideX(begin: -0.05);
   }
 
+  // ── Category row ────────────────────────────────────────────────────────────
+
   Widget _buildCategoryRow(String category, RbacProvider rbac, bool canEdit) {
-    final isEditing = _editingCategory == category;
-    final rate = _getRate(category);
-    final deemed = _getDeemedSupplier(category);
-    final custom = _isCustom(category);
+    final isEditing     = _editingCategory == category;
+    final rate          = _getRate(category);
+    final deemed        = _getDeemedSupplier(category);
+    final custom        = _isCustom(category);
+    final isSlab        = (category == 'Clothing' || category == 'Footwear');
+    final slabThreshold = _getSlabThreshold(category);
+    final slabHighRate  = _getSlabHighRate(category);
+    final slabDesc      = isSlab
+        ? TaxConfig.slabDescription(
+            category,
+            slabThreshold: slabThreshold,
+            slabHighRate: slabHighRate,
+          )
+        : null;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Category name + badges ──────────────────────────────────
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,24 +663,79 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                     if (deemed)
                       Text('Enything deemed supplier (S.9(5))',
                           style: AdminStyles.label(color: AdminColors.warning, size: 9)),
+                    if (slabDesc != null && !isEditing)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          slabDesc,
+                          style: AdminStyles.label(color: AdminColors.info, size: 9),
+                        ),
+                      ),
                   ],
                 ),
               ),
-              // Rate display / inline edit
+
+              // ── Inline editor ──────────────────────────────────────────
               if (isEditing)
                 SizedBox(
-                  width: 120,
-                  child: Row(
+                  width: 160,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _rateCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: AdminStyles.body(size: 13),
-                          autofocus: true,
+                      // Base / low-slab rate row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _rateCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              style: AdminStyles.body(size: 13),
+                              autofocus: true,
+                              decoration: InputDecoration(
+                                labelText: isSlab ? 'Low slab %' : 'GST %',
+                                labelStyle: AdminStyles.label(size: 10),
+                                suffixText: '%',
+                                suffixStyle: AdminStyles.caption(),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                isDense: true,
+                                filled: true,
+                                fillColor: AdminColors.surface,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              onSubmitted: (_) => _saveRate(category, rbac),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.check_circle_rounded, color: AdminColors.success, size: 22),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => _saveRate(category, rbac),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: AdminColors.textMuted, size: 20),
+                            padding: const EdgeInsets.only(left: 2),
+                            constraints: const BoxConstraints(),
+                            onPressed: () => setState(() => _editingCategory = null),
+                          ),
+                        ],
+                      ),
+                      // Slab-specific fields (Clothing / Footwear only)
+                      if (isSlab) ...[
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _slabThresholdCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                          style: AdminStyles.body(size: 12),
                           decoration: InputDecoration(
-                            suffixText: '%',
-                            suffixStyle: AdminStyles.caption(),
+                            labelText: 'Threshold ₹',
+                            labelStyle: AdminStyles.label(size: 10),
+                            hintText: '2500',
+                            hintStyle: AdminStyles.caption(color: AdminColors.textMuted),
+                            prefixText: '₹',
+                            prefixStyle: AdminStyles.caption(),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                             isDense: true,
                             filled: true,
@@ -576,25 +745,34 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                               borderSide: BorderSide.none,
                             ),
                           ),
-                          onSubmitted: (_) => _saveRate(category, rbac),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.check_circle_rounded, color: AdminColors.success, size: 22),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () => _saveRate(category, rbac),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: AdminColors.textMuted, size: 20),
-                        padding: const EdgeInsets.only(left: 2),
-                        constraints: const BoxConstraints(),
-                        onPressed: () => setState(() => _editingCategory = null),
-                      ),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: _slabHighRateCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: AdminStyles.body(size: 12),
+                          decoration: InputDecoration(
+                            labelText: 'High slab %',
+                            labelStyle: AdminStyles.label(size: 10),
+                            suffixText: '%',
+                            hintText: '18',
+                            hintStyle: AdminStyles.caption(color: AdminColors.textMuted),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            isDense: true,
+                            filled: true,
+                            fillColor: AdminColors.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 )
               else
+                // ── Read-only chip + controls ──────────────────────────────
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -655,7 +833,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                         icon: const Icon(Icons.restart_alt_rounded, color: AdminColors.textMuted, size: 18),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
-                        tooltip: 'Reset to default',
+                        tooltip: 'Reset to Sept 2025 default',
                         onPressed: () => _resetToDefault(category, rbac),
                       ),
                     ],

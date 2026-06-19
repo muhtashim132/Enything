@@ -458,6 +458,10 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return null; // null = success
+    } on FunctionException catch (e) {
+      final data = e.details;
+      _error = (data is Map ? data['error'] as String? : null) ?? 'Failed to send OTP: ${e.reasonPhrase ?? "Unknown error"}';
+      debugPrint('sendPhoneOtp FunctionException: $e');
     } catch (e) {
       final errorStr = e.toString();
       if (errorStr.contains('SocketException') || errorStr.contains('Failed host lookup') || errorStr.contains('ClientException')) {
@@ -595,6 +599,13 @@ class AuthProvider extends ChangeNotifier {
       return 'new';
     } on AuthException catch (e) {
       _error = e.message;
+    } on FunctionException catch (e) {
+      final data = e.details;
+      _error = (data is Map ? data['error'] as String? : null) ?? 'Verification failed: ${e.reasonPhrase ?? "Unknown error"}';
+      debugPrint('verifyPhoneOtp FunctionException: $e');
+    } on PostgrestException catch (e) {
+      _error = 'Database error: ${e.message}';
+      debugPrint('verifyPhoneOtp PostgrestException: $e');
     } catch (e) {
       final errorStr = e.toString();
       if (errorStr.contains('SocketException') || errorStr.contains('Failed host lookup') || errorStr.contains('ClientException')) {

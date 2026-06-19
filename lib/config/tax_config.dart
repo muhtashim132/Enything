@@ -119,70 +119,140 @@ class TaxConfig {
   //   These rates are applied ON TOP of the seller's base price.
   //   The customer sees: base price + GST in their bill separately.
 
+  // ── September 2025 GST Reform ────────────────────────────────────────────
+  //
+  //   India's GST simplification (Notification 9/2025-Central Tax Rate, Sep 22 2025):
+  //     • Removed 12% and 28% slabs for most goods.
+  //     • Clothing & Footwear: threshold raised ₹1,000 → ₹2,500 per item/pair.
+  //                            Upper slab: 12% → 18%.
+  //     • Beverages, Stationery, Toys & Games, Sports: 12% → 18%.
+  //     • 0%, 5%, 18%, 40% are the active slabs now.
+  //
+  // NOTE: These constants are the CODE FALLBACK.
+  //   The `tax_config` Supabase table is the live source of truth.
+  //   Admins override these values in Admin → Tax Settings.
+  //
+  // ─────────────────────────────────────────────────────────────────────────
+
   static const Map<String, double> _categoryGstRate = {
     // ── Food: Enything is deemed supplier (Section 9(5)) ─────────────────────
-    'Restaurant': 0.05, // 5% — no ITC for seller
-    'Fast Food': 0.05,
-    'Bakery': 0.05,
+    'Restaurant':      0.05, // 5% — no ITC for seller
+    'Fast Food':       0.05,
+    'Bakery':          0.05,
     'Sweets & Mithai': 0.05,
-    'Tea & Coffee': 0.05,
-    'Ice Cream': 0.05,
-    'Paan Shop': 0.05, // blended (paan 5%, tobacco higher — use 5% avg)
+    'Tea & Coffee':    0.05,
+    'Ice Cream':       0.05,
+    'Paan Shop':       0.05, // blended avg (paan 5%; tobacco component excluded)
 
-    // ── Perishables / Raw ──────────────────────────────────────────────────
-    'Fruits & Vegs': 0.00, // 0% — fresh produce
-    'Butcher': 0.00, // 0% — fresh meat
+    // ── Perishables / Raw ─────────────────────────────────────────────────────
+    'Fruits & Vegs':  0.00, // 0% — fresh produce
+    'Butcher':        0.00, // 0% — fresh meat
     'Fish & Seafood': 0.00, // 0% — fresh fish
-    'Dairy & Eggs': 0.05, // blended: eggs 0%, packaged milk 0%, butter 12%
+    'Dairy & Eggs':   0.05, // blended: eggs 0%, loose milk 0%, butter/paneer 5%
 
-    // ── Grocery / Organic ─────────────────────────────────────────────────
-    'Grocery': 0.05, // 5% blended (staples 5%, loose items 0%)
-    'Organic': 0.05,
-    'Beverages': 0.12, // 12% — packaged drinks
+    // ── Grocery / Organic ─────────────────────────────────────────────────────
+    'Grocery':                    0.05, // 5% blended (staples 5%, loose items 0%)
+    'Organic':                    0.05,
+    'Supermarket / Hypermarket':  0.05, // 5% grocery blended [Sept 2025 — new category]
 
-    // ── Pharmacy ──────────────────────────────────────────────────────────
-    'Pharmacy': 0.05, // 5% — life-saving & OTC medicines
+    // ── Beverages (Sept 2025: 12% slab removed → 18%) ────────────────────────
+    'Beverages': 0.18, // 18% packaged drinks (was 12% — updated Sept 2025)
+
+    // ── Pharmacy ──────────────────────────────────────────────────────────────
+    'Pharmacy':     0.05, // 5% — life-saving & OTC medicines
     'Medical Store': 0.05,
 
-    // ── Clothing & Footwear (price-slab — handled dynamically) ────────────
-    'Clothing': 0.05, // 5% for ≤₹1,000 | 12% for >₹1,000
-    'Footwear': 0.05, // same slab as clothing
+    // ── Clothing & Footwear (price-slab — Sept 2025) ──────────────────────────
+    //   Low slab (≤₹2,500): 5%  |  High slab (>₹2,500): 18%
+    //   Threshold is PER ITEM for Clothing, PER PAIR for Footwear.
+    //   Dynamic slab logic handled in gstRateForCategory().
+    //   DB-driven threshold via [slabThreshold] param takes precedence.
+    'Clothing': 0.05,
+    'Footwear': 0.05,
 
-    // ── Electronics ───────────────────────────────────────────────────────
-    'Electronics': 0.18,
+    // ── Electronics ───────────────────────────────────────────────────────────
+    'Electronics':    0.18,
     'Mobile & Repair': 0.18,
 
-    // ── Jewellery ─────────────────────────────────────────────────────────
-    'Jewellery': 0.03, // 3% on gold/gem value
+    // ── Jewellery (unchanged — 3% on gold/gem value) ──────────────────────────
+    'Jewellery': 0.03,
 
-    // ── General Retail ─────────────────────────────────────────────────────
-    'Stationery': 0.12,
-    'Toys & Games': 0.12,
-    'Sports': 0.12,
-    'Pet Supplies': 0.18,
-    'Salon & Beauty': 0.18,
-    'Flowers': 0.05,
-    'Home Decor': 0.18,
-    'Furniture': 0.18,
-    'Hardware Store': 0.18,
-    'Auto Parts': 0.18,
-    'Other': 0.18, // conservative default
+    // ── General Retail (Sept 2025: 12% slab removed → 18%) ───────────────────
+    'Stationery':        0.18, // was 12% — updated Sept 2025
+    'Toys & Games':      0.18, // was 12% — updated Sept 2025
+    'Sports':            0.18, // was 12% — updated Sept 2025
+    'Pet Supplies':      0.18,
+    'Salon & Beauty':    0.18,
+    'Cosmetics & Beauty': 0.18, // [Sept 2025 — new category, same as Salon]
+    'Flowers':           0.05, // 5% cut flowers
+    'Home Decor':        0.18,
+    'Furniture':         0.18,
+    'Hardware Store':    0.18,
+    'Auto Parts':        0.18,
+    'Other':             0.18, // conservative default
   };
 
+  /// The default price-slab threshold for Clothing & Footwear (Sept 2025 reform).
+  /// Items/pairs priced at or below this → 5%; above this → 18%.
+  /// Can be overridden by the DB `tax_config.slab_threshold` value.
+  static const double defaultSlabThreshold = 2500.0;
+
+  /// The GST rate applied to Clothing/Footwear items priced ABOVE [defaultSlabThreshold].
+  static const double defaultSlabHighRate = 0.18;
+
   /// Returns GST rate as a fraction (e.g. 0.05 = 5%) for a given [category].
-  /// For Clothing/Footwear, pass [itemPrice] to get the correct price-based slab.
-  static double gstRateForCategory(String category, {double? itemPrice}) {
+  ///
+  /// For Clothing/Footwear:
+  ///   • Pass [itemPrice] to apply the correct price-based slab.
+  ///   • Optionally pass [slabThreshold] and [slabHighRate] to use DB-driven
+  ///     values instead of the hardcoded defaults — the admin can change these
+  ///     from Admin Panel → Tax Settings without a code release.
+  static double gstRateForCategory(
+    String category, {
+    double? itemPrice,
+    double? slabThreshold,  // DB-driven override of defaultSlabThreshold
+    double? slabHighRate,   // DB-driven override of defaultSlabHighRate
+  }) {
     if ((category == 'Clothing' || category == 'Footwear') &&
         itemPrice != null) {
-      return itemPrice > 1000 ? 0.12 : 0.05;
+      final threshold = slabThreshold ?? defaultSlabThreshold;
+      final highRate  = slabHighRate  ?? defaultSlabHighRate;
+      // ≤ threshold → low slab (5%), > threshold → high slab (18%)
+      return itemPrice > threshold ? highRate : 0.05;
     }
     return _categoryGstRate[category] ?? 0.18;
   }
 
   /// Returns a human-readable GST label e.g. "GST 5%".
-  static String gstLabel(String category, {double? itemPrice}) {
-    final rate = gstRateForCategory(category, itemPrice: itemPrice);
+  static String gstLabel(
+    String category, {
+    double? itemPrice,
+    double? slabThreshold,
+    double? slabHighRate,
+  }) {
+    final rate = gstRateForCategory(
+      category,
+      itemPrice: itemPrice,
+      slabThreshold: slabThreshold,
+      slabHighRate: slabHighRate,
+    );
     return 'GST ${(rate * 100).toStringAsFixed(0)}%';
+  }
+
+  /// Returns a human-readable slab description for UI display.
+  /// e.g. "5% for ≤₹2,500 | 18% for >₹2,500 per pair" for Footwear.
+  static String? slabDescription(String category, {double? slabThreshold, double? slabHighRate}) {
+    if (category == 'Footwear') {
+      final t = (slabThreshold ?? defaultSlabThreshold).toStringAsFixed(0);
+      final h = ((slabHighRate ?? defaultSlabHighRate) * 100).toStringAsFixed(0);
+      return '5% for ≤₹$t | $h% for >₹$t per pair';
+    }
+    if (category == 'Clothing') {
+      final t = (slabThreshold ?? defaultSlabThreshold).toStringAsFixed(0);
+      final h = ((slabHighRate ?? defaultSlabHighRate) * 100).toStringAsFixed(0);
+      return '5% for ≤₹$t | $h% for >₹$t per item';
+    }
+    return null;
   }
 
   /// True if Enything is the deemed supplier for this category (Section 9(5)).
@@ -360,7 +430,8 @@ class OrderTaxBreakdown {
       final price = (item['price'] as num).toDouble(); // BASE price, pre-GST
       final qty = (item['quantity'] as num).toInt();
       final lineBase = price * qty;
-      final gstRate = TaxConfig.gstRateForCategory(category, itemPrice: price);
+      final gstRate = PlatformConfigProvider.instance?.getGstRate(category, itemPrice: price) 
+          ?? TaxConfig.gstRateForCategory(category, itemPrice: price);
       final lineGst = lineBase * gstRate;
 
       baseSubtotal += lineBase;
@@ -370,7 +441,10 @@ class OrderTaxBreakdown {
       final commissionRate = PlatformConfigProvider.instance?.getCommissionRateForCategory(category) ?? 0.05;
       pureCommission += lineBase * commissionRate;
 
-      if (TaxConfig.isEnythingDeemedSupplier(category)) {
+      final isDeemed = PlatformConfigProvider.instance?.getIsDeemedSupplier(category) 
+          ?? TaxConfig.isEnythingDeemedSupplier(category);
+
+      if (isDeemed) {
         s9_5Gst += lineGst;
       } else {
         nonFoodGst += lineGst;

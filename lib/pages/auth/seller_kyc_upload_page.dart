@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
 import '../../utils/image_picker_utils.dart';
+import '../../services/image_compression_service.dart';
 
 class SellerKycUploadPage extends StatefulWidget {
   const SellerKycUploadPage({super.key});
@@ -60,8 +61,8 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
 
   Future<String?> _uploadFile(File file, String path) async {
     try {
-      final bytes = await file.readAsBytes();
-      final ext = file.path.split('.').last;
+      final bytes = await ImageCompressionService.compressFile(file) ?? await file.readAsBytes();
+      const ext = 'jpg';
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_$path.$ext';
       await _db.storage.from('seller_kyc_docs').uploadBinary(fileName, bytes);
       return _db.storage.from('seller_kyc_docs').getPublicUrl(fileName);

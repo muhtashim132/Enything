@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../../providers/rbac_provider.dart';
 import '../../../../theme/admin_theme.dart';
-import '../../../utils/time_utils.dart';
+import '../../../../utils/time_utils.dart';
 
 class CouponManagementPage extends StatefulWidget {
   const CouponManagementPage({super.key});
@@ -237,7 +237,7 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  validUntil != null ? 'Ends ${DateFormat('MMM d, yyyy').format(validUntil.toIST())}' : 'No Expiry',
+                  validUntil != null ? 'Ends ${DateFormat('MMM d, yyyy').format(validUntil)}' : 'No Expiry',
                   style: AdminStyles.caption(color: AdminColors.textMuted),
                 ),
                 Row(

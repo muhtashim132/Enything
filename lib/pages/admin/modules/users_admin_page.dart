@@ -174,7 +174,12 @@ class _CustomersTabState extends State<_CustomersTab> {
           .limit(100);
       _users = List<Map<String, dynamic>>.from(res);
       _filtered = _users;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error fetching customers: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load customers'), backgroundColor: AdminColors.danger));
+      }
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -376,8 +381,14 @@ class _SellersTabState extends State<_SellersTab> {
     setState(() {
       _filtered = _sellers.where((s) {
         final name = (s['shop_name'] ?? '').toString().toLowerCase();
-        final owner = ((s['profiles'] as Map?)?['full_name'] ?? '').toString().toLowerCase();
-        return name.contains(q) || owner.contains(q);
+        final profileData = s['profiles'];
+        String ownerStr = '';
+        if (profileData is Map) {
+          ownerStr = (profileData['full_name'] ?? '').toString().toLowerCase();
+        } else if (profileData is List && profileData.isNotEmpty && profileData[0] is Map) {
+          ownerStr = (profileData[0]['full_name'] ?? '').toString().toLowerCase();
+        }
+        return name.contains(q) || ownerStr.contains(q);
       }).toList();
     });
   }
@@ -450,7 +461,14 @@ class _SellersTabState extends State<_SellersTab> {
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
                                     tooltip: 'Delete User',
-                                    onPressed: () => _deleteUser(context, s['seller_id'].toString(), s['shop_name'] ?? 'Unknown Shop', _fetch),
+                                    onPressed: () {
+                                      final targetId = s['seller_id']?.toString() ?? (s['profiles'] is Map ? s['profiles']['id']?.toString() : null) ?? '';
+                                      if (targetId.isNotEmpty) {
+                                        _deleteUser(context, targetId, s['shop_name'] ?? 'Unknown Shop', _fetch);
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: Missing user ID'), backgroundColor: AdminColors.danger));
+                                      }
+                                    },
                                   ),
                               ],
                             ),

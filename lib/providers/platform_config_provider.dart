@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/tax_config.dart';
 
 class PlatformConfigProvider extends ChangeNotifier {
   static PlatformConfigProvider? instance;
@@ -26,6 +27,9 @@ class PlatformConfigProvider extends ChangeNotifier {
   double _platformFeeGstRate = 0.18;
 
   final Map<String, double> _categoryCommissionOverrides = {};
+  
+  // Cache for tax_config table (category -> row data)
+  final Map<String, Map<String, dynamic>> _taxConfigCache = {};
 
   bool _loading = false;
   String? _error;
@@ -122,6 +126,13 @@ class PlatformConfigProvider extends ChangeNotifier {
           _categoryCommissionOverrides[category] = val;
         }
       }
+
+      // ── Load Tax Config ──────────────────────────────────────────
+      final taxData = await _db.from('tax_config').select();
+      _taxConfigCache.clear();
+      for (final row in (taxData as List)) {
+        _taxConfigCache[row['category'] as String] = Map<String, dynamic>.from(row);
+      }
     } catch (e) {
       debugPrint('Failed to load platform config: $e');
       _error = 'Failed to load live config, using defaults.';
@@ -129,6 +140,47 @@ class PlatformConfigProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  // ── GST Rate Helper (DB-driven) ──────────────────────────────────────────
+  
+  /// Returns the GST rate for a given category.
+  /// Reads from the `tax_config` DB cache if available.
+  /// Falls back to the hardcoded `TaxConfig` rules.
+  double getGstRate(String category, {double? itemPrice}) {
+    if (_taxConfigCache.containsKey(category)) {
+      final row = _taxConfigCache[category]!;
+      // For price-slab categories, we use the DB's slab threshold/rate if present
+      if ((category == 'Clothing' || category == 'Footwear') && itemPrice != null) {
+        final thresholdRaw = row['slab_threshold'];
+        final highRateRaw  = row['slab_high_rate'];
+        
+        final threshold = thresholdRaw != null 
+            ? double.tryParse(thresholdRaw.toString()) ?? TaxConfig.defaultSlabThreshold
+            : TaxConfig.defaultSlabThreshold;
+            
+        final highRate = highRateRaw != null
+            ? double.tryParse(highRateRaw.toString()) ?? TaxConfig.defaultSlabHighRate
+            : TaxConfig.defaultSlabHighRate;
+            
+        return itemPrice > threshold 
+            ? highRate 
+            : (double.tryParse(row['gst_rate'].toString()) ?? 0.05);
+      }
+      return double.tryParse(row['gst_rate'].toString()) ?? 0.18;
+    }
+    // Fallback to code defaults if DB row is missing entirely
+    return TaxConfig.gstRateForCategory(category, itemPrice: itemPrice);
+  }
+
+  /// Returns whether a category is an Enything Deemed Supplier (S.9(5)).
+  /// Reads from `tax_config` DB cache first, falls back to `TaxConfig` code default.
+  bool getIsDeemedSupplier(String category) {
+    if (_taxConfigCache.containsKey(category)) {
+      final val = _taxConfigCache[category]!['is_deemed_supplier'];
+      if (val != null) return val as bool;
+    }
+    return TaxConfig.isEnythingDeemedSupplier(category);
   }
 
   // ── Update Settings (Admin Only) ────────────────────────────

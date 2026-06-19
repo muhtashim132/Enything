@@ -11,6 +11,7 @@ import '../../utils/validators.dart';
 import '../../models/product_model.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/image_picker_utils.dart';
+import '../../services/image_compression_service.dart';
 
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
@@ -35,7 +36,6 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _isSaving = false;
   String _productCategory = 'Food';
   String _unitType = 'pieces';
-  bool _isFoodGroup = true;
   bool _requiresPrescription = false;
   String _medicineType = 'General';
   String? _shopId;
@@ -121,10 +121,7 @@ class _AddProductPageState extends State<AddProductPage> {
               : _allowedCategories.first;
         }
 
-        _isFoodGroup =
-            AppCategories.groupFor(_productCategory) == CategoryGroup.food ||
-                AppCategories.groupFor(_productCategory) ==
-                    CategoryGroup.perishable;
+
       });
     } catch (e) {
       debugPrint('Shop fetch error: $e');
@@ -142,6 +139,7 @@ class _AddProductPageState extends State<AddProductPage> {
         imageQuality: 70,
       );
       if (picked != null) {
+        if (!mounted) return;
         final cropped = await cropImage(
           context, 
           picked.path, 
@@ -159,6 +157,7 @@ class _AddProductPageState extends State<AddProductPage> {
       final List<XFile> picked = await picker.pickMultiImage(imageQuality: 70);
       if (picked.isNotEmpty) {
         for (var p in picked) {
+          if (!mounted) return;
           final cropped = await cropImage(
             context, 
             p.path, 
@@ -197,8 +196,8 @@ class _AddProductPageState extends State<AddProductPage> {
       List<String> uploadedUrls = [];
       for (int i = 0; i < _images.length; i++) {
         final file = _images[i];
-        final bytes = await file.readAsBytes();
-        final ext = file.name.split('.').last;
+        final bytes = await ImageCompressionService.compressFile(File(file.path)) ?? await file.readAsBytes();
+        const ext = 'jpg'; // Format is jpeg
         final path =
             '$_shopId/${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
         await _supabase.storage.from('raw-product-images').uploadBinary(path, bytes);
@@ -470,10 +469,7 @@ class _AddProductPageState extends State<AddProductPage> {
                         if (v != null) {
                           setState(() {
                             _productCategory = v;
-                            _isFoodGroup =
-                                AppCategories.groupFor(v) == CategoryGroup.food ||
-                                    AppCategories.groupFor(v) ==
-                                        CategoryGroup.perishable;
+
                             if (!_availableUnitTypes.contains(_unitType)) {
                               _unitType = _availableUnitTypes.first;
                             }
@@ -546,7 +542,7 @@ class _AddProductPageState extends State<AddProductPage> {
               _card(
                 children: [
                   DropdownButtonFormField<bool?>(
-                    value: _isVeg,
+                    initialValue: _isVeg,
                     decoration: const InputDecoration(
                       labelText: 'Dietary Preference',
                       prefixIcon: Icon(Icons.eco_outlined),

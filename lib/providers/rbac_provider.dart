@@ -26,6 +26,7 @@ class RbacProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
   bool get isSuperAdmin => _currentAdmin?.adminLevel == 'superadmin' ||
+      _currentAdmin?.adminLevel == 'super_admin' ||
       (_currentAdmin?.role?.slug == 'super_admin');
 
   // ── Permission check (fast O(1) set lookup) ────────────────
@@ -91,15 +92,17 @@ class RbacProvider extends ChangeNotifier {
         } catch (_) {
           _permissionCodes = {};
         }
-
-        // Preload roles + permissions for management screens
-        try {
-          await Future.wait([
-            _loadRoles(),
-            _loadPermissions(),
-          ]);
-        } catch (_) {}
+      } else {
+        _permissionCodes = {};
       }
+
+      // Preload roles + permissions for management screens (always load them so settings page works)
+      try {
+        await Future.wait([
+          _loadRoles(),
+          _loadPermissions(),
+        ]);
+      } catch (_) {}
     } catch (e) {
       _error = e.toString();
     }

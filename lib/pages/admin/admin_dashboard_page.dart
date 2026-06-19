@@ -29,6 +29,7 @@ class AdminDashboardPage extends StatefulWidget {
 class _AdminDashboardPageState extends State<AdminDashboardPage>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
+  final Set<int> _visitedIndices = {0};
   int _openTicketsCount = 0;
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
@@ -176,8 +177,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                 Expanded(
                   child: IndexedStack(
                     index: safeIndex,
-                    children: navItems.map((item) {
-                      return _buildScreen(item.label, adminName, rbac);
+                    children: navItems.asMap().entries.map((entry) {
+                      if (!_visitedIndices.contains(entry.key)) {
+                        return const SizedBox.shrink();
+                      }
+                      return _buildScreen(entry.value.label, adminName, rbac);
                     }).toList(),
                   ),
                 ),
@@ -235,7 +239,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           selectedIndex: selected,
           onDestinationSelected: (i) {
             HapticFeedback.lightImpact();
-            setState(() => _currentIndex = i);
+            setState(() {
+              _currentIndex = i;
+              _visitedIndices.add(i);
+            });
+            _loadBadges();
           },
           backgroundColor: Colors.transparent,
           indicatorColor: AdminColors.primary.withValues(alpha: 0.2),

@@ -130,10 +130,17 @@ class CartProvider extends ChangeNotifier {
   double get itemGstTotal {
     double gst = 0;
     for (final item in _items) {
-      final rate = TaxConfig.gstRateForCategory(
-        item.product.category,
-        itemPrice: item.product.price,
+      final category = item.product.category;
+      final price = item.product.price;
+      
+      final rate = PlatformConfigProvider.instance?.getGstRate(
+        category,
+        itemPrice: price,
+      ) ?? TaxConfig.gstRateForCategory(
+        category,
+        itemPrice: price,
       );
+      
       gst += item.totalPrice * rate; // base × rate (add-on, not extraction)
     }
     return gst;

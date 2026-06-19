@@ -11,6 +11,7 @@ import '../../providers/location_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../utils/image_picker_utils.dart';
+import '../../services/image_compression_service.dart';
 
 class ShopManagementPage extends StatefulWidget {
   const ShopManagementPage({super.key});
@@ -117,10 +118,11 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
       String? uploadedUrl = _bannerCtrl.text.trim().isEmpty ? null : _bannerCtrl.text.trim();
       
       if (_selectedImage != null) {
-        final fileExt = _selectedImage!.path.split('.').last;
+        final bytes = await ImageCompressionService.compressFile(_selectedImage!) ?? await _selectedImage!.readAsBytes();
+        const fileExt = 'jpg';
         final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
         final filePath = 'banners/$_shopId/$fileName';
-        await _supabase.storage.from('shops').upload(filePath, _selectedImage!);
+        await _supabase.storage.from('shops').uploadBinary(filePath, bytes);
         uploadedUrl = _supabase.storage.from('shops').getPublicUrl(filePath);
         _bannerCtrl.text = uploadedUrl;
       }

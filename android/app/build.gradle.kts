@@ -27,7 +27,7 @@ android {
         applicationId = "com.muhtaashimnazki.enything"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion // Razorpay requires API 21+; flutter.minSdkVersion can resolve to 16
+        minSdk = flutter.minSdkVersion // Required for flutter_image_compress
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -8,7 +8,7 @@ import '../../models/shop_model.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
-import '../../config/routes.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 import '../../utils/responsive_layout.dart';
 import '../../widgets/shop_detail_sheet.dart';

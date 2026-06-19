@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/rbac_provider.dart';
+import '../../../config/tax_config.dart';
 import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
 import '../../../utils/time_utils.dart';
@@ -45,10 +48,15 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
   Future<void> _fetch() async {
     try {
       final orders = await _db.from('orders').select(
-          'grand_total_collected, seller_payout, rider_earnings, enything_commission, created_at, status, id, refund_id, refund_status, gst_item_total, gst_delivery, gst_platform, payment_status, platform_fee, delivery_charges, gateway_deduction');
+          'grand_total_collected, seller_payout, rider_earnings, enything_commission, created_at, status, id, refund_id, refund_status, gst_item_total, gst_delivery, gst_platform, payment_status, platform_fee, delivery_charges, gateway_deduction, multi_shop_surcharge');
       
-      final wList = await _db.from('withdrawals').select('*, profiles:user_id(full_name)').order('requested_at', ascending: false);
-      _withdrawals = List<Map<String, dynamic>>.from(wList);
+      try {
+        final wList = await _db.from('withdrawals').select('*, profiles:user_id(full_name)').order('requested_at', ascending: false);
+        _withdrawals = List<Map<String, dynamic>>.from(wList);
+      } catch (e) {
+        debugPrint('Withdrawals error: $e');
+        _withdrawals = [];
+      }
       _transactions = List<Map<String, dynamic>>.from(orders)
         ..sort((a, b) => (b['created_at'] ?? '').compareTo(a['created_at'] ?? ''));
       // Calculate KPIs: Exclude cancelled orders for GMV/Commission
@@ -143,7 +151,7 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
               Tab(text: 'Transactions'),
               Tab(text: 'Withdrawals'),
               Tab(text: 'Refunds'),
-              Tab(text: 'Taxes'),
+              Tab(text: 'GST Report'),
             ],
           ),
         ),
@@ -156,7 +164,7 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
               _TransactionsTab(transactions: _transactions, loading: _loading),
               _WithdrawalsTab(withdrawals: _withdrawals, loading: _loading, onRefresh: _fetch),
               _RefundsTab(transactions: _transactions, loading: _loading),
-              _TaxesTab(transactions: _transactions, loading: _loading),
+              const _GstStatementTab(),
             ],
           ),
         ),
@@ -437,68 +445,807 @@ class _RefundsTab extends StatelessWidget {
   }
 }
 
-class _TaxesTab extends StatelessWidget {
-  final List<Map<String, dynamic>> transactions;
-  final bool loading;
+// ============================================================================
+// GST STATEMENT TAB — Comprehensive Admin GST View for Chartered Accountant
+// ============================================================================
+//
+// DATA SOURCES (all from existing DB columns — no logic changes):
+//   orders.s9_5_gst_amount    → S.9(5) Food GST — Enything remits to Govt
+//   orders.gst_delivery       → Delivery GST (18% embedded) — Enything remits
+//   orders.gst_platform       → Platform Fee GST (18% embedded) — Enything remits
+//   orders.enything_commission → Commission; 18% GST on this — Enything remits
+//   orders.non_food_gst_amount → Non-food GST — Seller remits (pass-through)
+//   orders.tcs_amount         → 1% TCS — Enything files GSTR-8; sellers claim
+//
+// CATEGORY GST BREAKDOWN:
+//   Fetches order_items (product_id, price, quantity)
+//   Fetches products (id, category) — separate query, joined in Dart
+//   Applies TaxConfig.gstRateForCategory() per item to compute GST amounts
+//   Groups by (GST slab %, category) for the breakdown table
+// ============================================================================
 
-  const _TaxesTab({required this.transactions, required this.loading});
+// Data class for one category within a GST slab
+class _CategoryGstRow {
+  final String category;
+  final double gstRate;
+  final bool isDeemedSupplier; // S.9(5) food category?
+  double taxableAmount = 0;
+  double gstAmount = 0;
+  int itemCount = 0;
+
+  _CategoryGstRow({
+    required this.category,
+    required this.gstRate,
+    required this.isDeemedSupplier,
+  });
+}
+
+class _GstStatementTab extends StatefulWidget {
+  const _GstStatementTab();
+
+  @override
+  State<_GstStatementTab> createState() => _GstStatementTabState();
+}
+
+class _GstStatementTabState extends State<_GstStatementTab> {
+  final _db = Supabase.instance.client;
+
+  bool _loading = true;
+  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+
+  // ── Enything's GST payable to govt ──
+  double _s9_5Gst       = 0; // S.9(5) food deemed-supplier GST
+  double _deliveryGst   = 0; // 18% embedded in delivery charge
+  double _platformGst   = 0; // 18% embedded in platform fee
+  double _commissionGst = 0; // 18% on Enything's commission
+
+  // ── Seller-owned (not Enything's liability) ──
+  double _nonFoodGst    = 0; // Passed through to seller; seller remits
+  double _tcsCollected  = 0; // Enything deducts 1% TCS, files GSTR-8
+
+  int _deliveredOrders = 0;
+
+  // ── Category × slab breakdown ──
+  // Key = GST slab label  e.g. "0%", "5%", "18%"
+  // Value = Map<category, _CategoryGstRow>
+  final Map<String, Map<String, _CategoryGstRow>> _slabMap = {};
+
+  // Standard slab display order
+  static const _slabOrder = ['0%', '3%', '5%', '18%', '28%'];
+
+  // ── Colors per slab ─────────────────────────────────────────
+  static Color _slabColor(String slab) => switch (slab) {
+    '0%'  => const Color(0xFF868E96),
+    '3%'  => const Color(0xFF51CF66),
+    '5%'  => const Color(0xFF4DABF7),
+    '18%' => const Color(0xFFF4C542),
+    '28%' => const Color(0xFFFF6B6B),
+    _     => AdminColors.primary,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGstData();
+  }
+
+  String get _monthLabel {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return '${months[_selectedMonth.month - 1]} ${_selectedMonth.year}';
+  }
+
+  void _prevMonth() {
+    setState(() {
+      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+    });
+    _loadGstData();
+  }
+
+  void _nextMonth() {
+    final now = DateTime.now();
+    if (_selectedMonth.year == now.year && _selectedMonth.month == now.month) return;
+    setState(() {
+      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+    });
+    _loadGstData();
+  }
+
+  Future<void> _loadGstData() async {
+    setState(() => _loading = true);
+    try {
+      final start = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+      final end   = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
+
+      // ── 1. Fetch orders for the selected month ─────────────────────────
+      final rawOrders = await _db
+          .from('orders')
+          .select('id, status, s9_5_gst_amount, non_food_gst_amount, gst_delivery, gst_platform, enything_commission, tcs_amount')
+          .gte('created_at', start.toIso8601String())
+          .lt('created_at', end.toIso8601String());
+
+      final allOrders   = List<Map<String, dynamic>>.from(rawOrders);
+      final delivered   = allOrders.where((o) => o['status'] == 'delivered').toList();
+      final orderIds    = delivered.map((o) => o['id'] as String).toList();
+
+      double s95 = 0, delGst = 0, platGst = 0, comm = 0, nonFood = 0, tcs = 0;
+      for (final o in delivered) {
+        s95     += (o['s9_5_gst_amount']    as num? ?? 0).toDouble();
+        delGst  += (o['gst_delivery']        as num? ?? 0).toDouble();
+        platGst += (o['gst_platform']        as num? ?? 0).toDouble();
+        comm    += (o['enything_commission'] as num? ?? 0).toDouble();
+        nonFood += (o['non_food_gst_amount'] as num? ?? 0).toDouble();
+        tcs     += (o['tcs_amount']          as num? ?? 0).toDouble();
+      }
+
+      // ── 2. Fetch order_items for delivered orders (chunked) ────────────
+      final Map<String, Map<String, _CategoryGstRow>> slabMap = {};
+
+      if (orderIds.isNotEmpty) {
+        final allItems = <Map<String, dynamic>>[];
+        // Chunk to stay within URL length limits
+        for (int i = 0; i < orderIds.length; i += 100) {
+          final chunk = orderIds.sublist(i, (i + 100).clamp(0, orderIds.length));
+          final items = await _db
+              .from('order_items')
+              .select('product_id, price, quantity')
+              .inFilter('order_id', chunk);
+          allItems.addAll(List<Map<String, dynamic>>.from(items));
+        }
+
+        // ── 3. Fetch products for category lookup ───────────────────────
+        final productIds = allItems
+            .map((i) => i['product_id'] as String?)
+            .whereType<String>()
+            .toSet()
+            .toList();
+
+        final Map<String, String> productCategoryMap = {};
+        if (productIds.isNotEmpty) {
+          for (int i = 0; i < productIds.length; i += 200) {
+            final chunk = productIds.sublist(i, (i + 200).clamp(0, productIds.length));
+            final prods = await _db
+                .from('products')
+                .select('id, category')
+                .inFilter('id', chunk);
+            for (final p in prods) {
+              productCategoryMap[p['id'] as String] =
+                  (p['category'] as String?) ?? 'Other';
+            }
+          }
+        }
+
+        // ── 4. Aggregate by (GST slab, category) ────────────────────────
+        for (final item in allItems) {
+          final productId   = item['product_id'] as String?;
+          final category    = (productId != null ? productCategoryMap[productId] : null) ?? 'Other';
+          final price       = (item['price'] as num).toDouble();
+          final qty         = (item['quantity'] as num).toInt();
+          final lineBase    = price * qty;
+          // Use TaxConfig for GST rate (same logic as checkout — never changes)
+          final gstRate       = TaxConfig.gstRateForCategory(category, itemPrice: price);
+          final lineGst       = lineBase * gstRate;
+          final isDeemedSupplier = TaxConfig.isEnythingDeemedSupplier(category);
+          final slab          = '${(gstRate * 100).toStringAsFixed(0)}%';
+
+          slabMap.putIfAbsent(slab, () => {});
+          slabMap[slab]!.putIfAbsent(
+            category,
+            () => _CategoryGstRow(
+              category: category,
+              gstRate: gstRate,
+              isDeemedSupplier: isDeemedSupplier,
+            ),
+          );
+          slabMap[slab]![category]!.taxableAmount += lineBase;
+          slabMap[slab]![category]!.gstAmount     += lineGst;
+          slabMap[slab]![category]!.itemCount     += qty;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _s9_5Gst       = s95;
+          _deliveryGst   = delGst;
+          _platformGst   = platGst;
+          _commissionGst = comm * 0.18;
+          _nonFoodGst    = nonFood;
+          _tcsCollected  = tcs;
+          _deliveredOrders = delivered.length;
+          _slabMap
+            ..clear()
+            ..addAll(slabMap);
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('GstStatement load error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Total Enything must pay to government
+  double get _enythingTotalPayable =>
+      _s9_5Gst + _deliveryGst + _platformGst + _commissionGst;
+
+  String _f(double v) => NumberFormat.currency(locale: 'en_IN', symbol: '₹').format(v);
+  String _fraw(double v) => v.toStringAsFixed(2);
+
+  // ── Copy full GST report to clipboard ─────────────────────────────────────
+  void _copyReport(BuildContext ctx) {
+    final sortedSlabs = _slabOrder.where(_slabMap.containsKey).toList()
+      ..addAll(_slabMap.keys.where((k) => !_slabOrder.contains(k)));
+
+    double grandTaxable = 0;
+    double grandGst = 0;
+    for (final s in sortedSlabs) {
+      for (final r in _slabMap[s]!.values) {
+        grandTaxable += r.taxableAmount;
+        grandGst     += r.gstAmount;
+      }
+    }
+
+    final sb = StringBuffer();
+    sb.writeln('ENYTHING — GST STATEMENT');
+    sb.writeln('Period   : $_monthLabel');
+    sb.writeln('Orders   : $_deliveredOrders delivered');
+    sb.writeln('Generated: ${DateTime.now().toString().substring(0, 16)}');
+    sb.writeln();
+    sb.writeln('════════════════════════════════════════════════');
+    sb.writeln("ENYTHING'S GST PAYABLE TO GOVERNMENT");
+    sb.writeln('════════════════════════════════════════════════');
+    sb.writeln('S.9(5) Food GST (Deemed Supplier)    : ₹${_fraw(_s9_5Gst)}');
+    sb.writeln('Delivery Service GST (SAC 9965/9967) : ₹${_fraw(_deliveryGst)}');
+    sb.writeln('Platform Fee GST    (SAC 9985)        : ₹${_fraw(_platformGst)}');
+    sb.writeln('Commission GST      (18% on comm.)   : ₹${_fraw(_commissionGst)}');
+    sb.writeln('──────────────────────────────────────────────');
+    sb.writeln('TOTAL ENYTHING GST PAYABLE            : ₹${_fraw(_enythingTotalPayable)}');
+    sb.writeln();
+    sb.writeln('════════════════════════════════════════════════');
+    sb.writeln("SELLER PASS-THROUGH (NOT ENYTHING'S LIABILITY)");
+    sb.writeln('════════════════════════════════════════════════');
+    sb.writeln('Non-Food Item GST (Seller remits)    : ₹${_fraw(_nonFoodGst)}');
+    sb.writeln('TCS Collected 1%  (Sellers claim)    : ₹${_fraw(_tcsCollected)}');
+    sb.writeln();
+    sb.writeln('════════════════════════════════════════════════');
+    sb.writeln('CATEGORY-WISE GST BREAKDOWN');
+    sb.writeln('════════════════════════════════════════════════');
+
+    for (final slab in sortedSlabs) {
+      final categories  = _slabMap[slab]!;
+      final slabTaxable = categories.values.fold<double>(0, (s, r) => s + r.taxableAmount);
+      final slabGst     = categories.values.fold<double>(0, (s, r) => s + r.gstAmount);
+      sb.writeln();
+      sb.writeln('$slab GST SLAB');
+      final sorted = categories.values.toList()
+        ..sort((a, b) => b.taxableAmount.compareTo(a.taxableAmount));
+      for (final row in sorted) {
+        final star = row.isDeemedSupplier ? ' [S.9(5) - Enything pays]' : '';
+        sb.writeln('  ${row.category}$star');
+        sb.writeln('    Items: ${row.itemCount}  Taxable: ₹${_fraw(row.taxableAmount)}  GST: ₹${_fraw(row.gstAmount)}');
+      }
+      sb.writeln('  ── Slab Total: Taxable ₹${_fraw(slabTaxable)}  |  GST ₹${_fraw(slabGst)}');
+    }
+
+    sb.writeln();
+    sb.writeln('════════════════════════════════════════════════');
+    sb.writeln('GRAND TOTAL: Taxable ₹${_fraw(grandTaxable)}  |  GST ₹${_fraw(grandGst)}');
+    sb.writeln('════════════════════════════════════════════════');
+
+    Clipboard.setData(ClipboardData(text: sb.toString()));
+    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+      content: Text('GST Statement copied ✓',
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+      backgroundColor: AdminColors.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      duration: const Duration(seconds: 2),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return _loadingSkeleton();
+    if (_loading) return _loadingSkeleton();
 
-    final taxable = transactions.where((t) {
-      if (t['status'] == 'cancelled') return false;
-      if (t['payment_status'] != 'captured' && t['payment_status'] != 'cod') return false;
-      return ((t['gst_item_total'] ?? 0) > 0 || (t['gst_delivery'] ?? 0) > 0 || (t['gst_platform'] ?? 0) > 0);
-    }).toList();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+      children: [
+        // ── Month Selector ───────────────────────────────────────────────
+        _buildMonthSelector(),
+        const SizedBox(height: 12),
 
-    if (taxable.isEmpty) {
-      return const AdminEmptyState(icon: Icons.receipt_long_rounded, message: 'No tax records yet');
+        // ── Summary banner ───────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          decoration: BoxDecoration(
+            gradient: AdminGradients.primary,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Enything GST Statement — $_monthLabel',
+                    style: AdminStyles.caption(color: Colors.white70)),
+                Text(
+                  '$_deliveredOrders orders · Enything pays ${_f(_enythingTotalPayable)}',
+                  style: AdminStyles.body(color: Colors.white),
+                ),
+              ]),
+              const Icon(Icons.receipt_long_rounded, color: Colors.white54, size: 24),
+            ],
+          ),
+        ).animate().fadeIn(delay: 50.ms),
+        const SizedBox(height: 16),
+
+        // ── Card 1: Enything's GST Payable ──────────────────────────────
+        _GstSectionCard(
+          title: "Enything's GST Payable to Government",
+          subtitle: 'File in GSTR-3B by 20th of next month',
+          accentColor: AdminColors.danger,
+          icon: Icons.account_balance_rounded,
+          rows: [
+            _GstLineItem('S.9(5) Food GST (Deemed Supplier)', _s9_5Gst,
+                tag: 'S.9(5)', tagColor: const Color(0xFF51CF66)),
+            _GstLineItem('Delivery GST   (SAC 9965/9967)', _deliveryGst),
+            _GstLineItem('Platform Fee GST (SAC 9985)', _platformGst),
+            _GstLineItem('Commission GST (18% on commission)', _commissionGst),
+            const _GstDivider(),
+            _GstLineItem('TOTAL PAYABLE TO GOVT', _enythingTotalPayable,
+                isBold: true, color: AdminColors.danger),
+          ],
+        ).animate().fadeIn(delay: 100.ms),
+        const SizedBox(height: 12),
+
+        // ── Card 2: Seller Pass-Through (not Enything's liability) ───────
+        _GstSectionCard(
+          title: "Seller GST Pass-Through",
+          subtitle: 'Collected on behalf of sellers — NOT Enything\'s liability',
+          accentColor: AdminColors.warning,
+          icon: Icons.store_rounded,
+          rows: [
+            _GstLineItem("Non-Food Item GST (Sellers remit via GSTR-1/3B)", _nonFoodGst,
+                tag: 'SELLER', tagColor: AdminColors.warning),
+            _GstLineItem("TCS Collected 1% (Sellers claim in GSTR-2B)", _tcsCollected,
+                tag: 'GSTR-8', tagColor: AdminColors.info),
+          ],
+        ).animate().fadeIn(delay: 150.ms),
+        const SizedBox(height: 16),
+
+        // ── Card 3: Category-wise GST Breakdown ─────────────────────────
+        _buildCategoryBreakdown().animate().fadeIn(delay: 200.ms),
+        const SizedBox(height: 20),
+
+        // ── Legend ───────────────────────────────────────────────────────
+        _buildLegend(),
+        const SizedBox(height: 16),
+
+        // ── Copy Button ──────────────────────────────────────────────────
+        ElevatedButton.icon(
+          onPressed: () => _copyReport(context),
+          icon: const Icon(Icons.content_copy_rounded, size: 18),
+          label: Text(
+            'Copy Full GST Statement for CA',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AdminColors.primary,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+          ),
+        ).animate().fadeIn(delay: 250.ms),
+        const SizedBox(height: 8),
+        Text(
+          '📌  Copy this report and share with your CA via WhatsApp or email.\n'
+          '    File GSTR-3B by 20th. Sellers check GSTR-2B after Enything files GSTR-8 by 10th.',
+          style: AdminStyles.caption(color: AdminColors.textMuted).copyWith(height: 1.6),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  // ── Month Selector Widget ──────────────────────────────────────────────────
+  Widget _buildMonthSelector() {
+    final isCurrentMonth = _selectedMonth.month == DateTime.now().month &&
+        _selectedMonth.year == DateTime.now().year;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: AdminColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AdminColors.cardBorder),
+      ),
+      child: Row(children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left_rounded, color: AdminColors.textSecondary),
+          onPressed: _prevMonth,
+        ),
+        Expanded(
+          child: Text(
+            _monthLabel,
+            textAlign: TextAlign.center,
+            style: AdminStyles.title(size: 16).copyWith(color: Colors.white),
+          ),
+        ),
+        IconButton(
+          icon: Icon(
+            Icons.chevron_right_rounded,
+            color: isCurrentMonth ? AdminColors.cardBorder : AdminColors.textSecondary,
+          ),
+          onPressed: _nextMonth,
+        ),
+      ]),
+    );
+  }
+
+  // ── Category-wise breakdown ────────────────────────────────────────────────
+  Widget _buildCategoryBreakdown() {
+    if (_slabMap.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AdminColors.cardBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AdminColors.cardBorder),
+        ),
+        child: Column(children: [
+          Icon(Icons.receipt_long_rounded, color: AdminColors.textMuted, size: 40),
+          const SizedBox(height: 12),
+          Text('No taxable items for $_monthLabel',
+              style: AdminStyles.body(color: AdminColors.textMuted)),
+          Text('Delivered orders with products will appear here.',
+              style: AdminStyles.caption(), textAlign: TextAlign.center),
+        ]),
+      );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: taxable.length,
-      itemBuilder: (_, i) {
-        final t = taxable[i];
-        final gstItem = (t['gst_item_total'] as num?)?.toDouble() ?? 0;
-        final gstDel = (t['gst_delivery'] as num?)?.toDouble() ?? 0;
-        final gstPlat = (t['gst_platform'] as num?)?.toDouble() ?? 0;
-        final totalGst = gstItem + gstDel + gstPlat;
-        final time = t['created_at'] != null
-            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t['created_at'].toString()).toIST())
-            : '';
+    final sortedSlabs = _slabOrder.where(_slabMap.containsKey).toList()
+      ..addAll(_slabMap.keys.where((k) => !_slabOrder.contains(k)));
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(14),
-          decoration: AdminDecorations.glassCard(),
+    double grandTaxable = 0;
+    double grandGst = 0;
+    for (final s in sortedSlabs) {
+      for (final r in _slabMap[s]!.values) {
+        grandTaxable += r.taxableAmount;
+        grandGst     += r.gstAmount;
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AdminColors.cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AdminColors.info.withValues(alpha: 0.25)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(
+            color: AdminColors.info.withValues(alpha: 0.08),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
           child: Row(children: [
             Container(
-              width: 38, height: 38,
-              decoration: BoxDecoration(color: AdminColors.info.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.receipt_rounded, color: AdminColors.info, size: 18),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AdminColors.info.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.category_rounded, color: AdminColors.info, size: 16),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Order #${t['id'].toString().substring(0, 8).toUpperCase()}', style: AdminStyles.body(size: 13)),
-                Text(time, style: AdminStyles.caption()),
-              ]),
-            ),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('₹${totalGst.toStringAsFixed(2)}', style: AdminStyles.body(size: 14)),
-              const SizedBox(height: 4),
-              const AdminBadge(label: 'GST Collected', color: AdminColors.info),
-            ]),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Category-wise GST Breakdown',
+                  style: AdminStyles.body(color: AdminColors.textPrimary)),
+              Text('Grouped by GST slab · $_monthLabel',
+                  style: AdminStyles.caption(color: AdminColors.textMuted)),
+            ])),
           ]),
-        ).animate().fadeIn(delay: Duration(milliseconds: i * 30)).slideY(begin: 0.08);
-      },
+        ),
+
+        // Slab sections
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (int idx = 0; idx < sortedSlabs.length; idx++) ...[
+              _buildSlabSection(sortedSlabs[idx], _slabMap[sortedSlabs[idx]]!),
+              if (idx < sortedSlabs.length - 1) ...[
+                const SizedBox(height: 8),
+                const Divider(color: Colors.white10, height: 1),
+                const SizedBox(height: 8),
+              ],
+            ],
+
+            // Grand Total
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+              decoration: BoxDecoration(
+                gradient: AdminGradients.primary,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('GRAND TOTAL (All Categories)',
+                      style: AdminStyles.body(color: Colors.white, size: 13)
+                          .copyWith(fontWeight: FontWeight.w700)),
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text('Taxable  ${_f(grandTaxable)}',
+                        style: AdminStyles.caption(color: Colors.white70)),
+                    Text('GST  ${_f(grandGst)}',
+                        style: AdminStyles.body(color: Colors.white, size: 14)
+                            .copyWith(fontWeight: FontWeight.w800)),
+                  ]),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildSlabSection(String slab, Map<String, _CategoryGstRow> categories) {
+    final slabColor    = _slabColor(slab);
+    final slabTaxable  = categories.values.fold<double>(0, (s, r) => s + r.taxableAmount);
+    final slabGst      = categories.values.fold<double>(0, (s, r) => s + r.gstAmount);
+    final sortedCats   = categories.values.toList()
+      ..sort((a, b) => b.taxableAmount.compareTo(a.taxableAmount));
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Slab header pill
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: slabColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Container(width: 8, height: 8,
+              decoration: BoxDecoration(color: slabColor, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(
+            '$slab GST${slab == '0%' ? ' — EXEMPT' : ''}',
+            style: AdminStyles.body(color: slabColor, size: 12)
+                .copyWith(fontWeight: FontWeight.w800),
+          ),
+          const Spacer(),
+          Text('GST: ${_f(slabGst)}',
+              style: AdminStyles.caption(color: slabColor)
+                  .copyWith(fontWeight: FontWeight.w700)),
+        ]),
+      ),
+      const SizedBox(height: 8),
+
+      // Category rows
+      ...sortedCats.map((row) => Padding(
+        padding: const EdgeInsets.only(left: 16, bottom: 7),
+        child: Row(children: [
+          // S.9(5) indicator
+          if (row.isDeemedSupplier)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Icon(Icons.restaurant_rounded,
+                  color: const Color(0xFF51CF66), size: 12),
+            )
+          else
+            const SizedBox(width: 16),
+          // Category name + item count
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(row.category,
+                  style: AdminStyles.body(color: AdminColors.textSecondary, size: 12)),
+              Text('${row.itemCount} item${row.itemCount == 1 ? '' : 's'}',
+                  style: AdminStyles.caption(color: AdminColors.textMuted).copyWith(fontSize: 10)),
+            ]),
+          ),
+          // Taxable + GST
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(_f(row.taxableAmount),
+                style: AdminStyles.caption(color: AdminColors.textSecondary)),
+            Text(
+              '+ ${_f(row.gstAmount)} GST',
+              style: AdminStyles.body(color: slabColor, size: 12)
+                  .copyWith(fontWeight: FontWeight.w600),
+            ),
+          ]),
+        ]),
+      )),
+
+      // Slab subtotal
+      Padding(
+        padding: const EdgeInsets.only(left: 16, top: 2),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: slabColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: slabColor.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              'Slab total: ${_f(slabTaxable)} taxable  |  ${_f(slabGst)} GST',
+              style: AdminStyles.caption(color: slabColor)
+                  .copyWith(fontWeight: FontWeight.w700, fontSize: 10),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  // ── Legend ─────────────────────────────────────────────────────────────────
+  Widget _buildLegend() => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AdminColors.cardBg,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AdminColors.cardBorder),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Legend', style: AdminStyles.caption(color: AdminColors.textMuted)
+          .copyWith(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      Row(children: [
+        Icon(Icons.restaurant_rounded, color: const Color(0xFF51CF66), size: 12),
+        const SizedBox(width: 6),
+        Expanded(child: Text(
+          'S.9(5) — Enything is the deemed supplier (restaurant/food). Enything remits GST, not the seller.',
+          style: AdminStyles.caption(color: AdminColors.textSecondary).copyWith(fontSize: 10),
+        )),
+      ]),
+      const SizedBox(height: 4),
+      Row(children: [
+        Container(width: 12, height: 12,
+            decoration: const BoxDecoration(
+                color: Color(0xFF868E96), shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Expanded(child: Text(
+          '0% — Exempt (fresh produce, meat, fish). No GST charged.',
+          style: AdminStyles.caption(color: AdminColors.textSecondary).copyWith(fontSize: 10),
+        )),
+      ]),
+    ]),
+  );
+}
+
+// ── Shared helper widgets ─────────────────────────────────────────────────────
+
+/// A GST section card (e.g. Enything Payable / Seller Pass-Through)
+class _GstSectionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Color accentColor;
+  final IconData icon;
+  final List<Widget> rows;
+
+  const _GstSectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.accentColor,
+    required this.icon,
+    required this.rows,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: AdminColors.cardBg,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: accentColor.withValues(alpha: 0.25)),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Header
+      Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: accentColor.withValues(alpha: 0.08),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: accentColor, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: AdminStyles.body(color: AdminColors.textPrimary)),
+            Text(subtitle, style: AdminStyles.caption(color: AdminColors.textMuted)),
+          ])),
+        ]),
+      ),
+      // Rows
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(children: rows),
+      ),
+    ]),
+  );
+}
+
+/// A single GST line item row
+class _GstLineItem extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool isBold;
+  final Color? color;
+  final String? tag;
+  final Color? tagColor;
+
+  const _GstLineItem(
+    this.label,
+    this.value, {
+    this.isBold = false,
+    this.color,
+    this.tag,
+    this.tagColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayColor = color ?? (isBold ? AdminColors.textPrimary : AdminColors.textSecondary);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        Expanded(
+          child: Text(
+            label,
+            style: AdminStyles.body(color: displayColor, size: 12).copyWith(
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+        ),
+        if (tag != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: (tagColor ?? Colors.white).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Text(
+              tag!,
+              style: AdminStyles.caption(color: tagColor ?? Colors.white).copyWith(
+                fontSize: 8,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          '₹${value.toStringAsFixed(2)}',
+          style: AdminStyles.body(color: displayColor, size: isBold ? 15 : 13).copyWith(
+            fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+          ),
+        ),
+      ]),
     );
   }
 }
 
+class _GstDivider extends StatelessWidget {
+  const _GstDivider();
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 6),
+    child: Divider(color: Colors.white12, height: 1),
+  );
+}
+
+// ── Shared skeleton loader ────────────────────────────────────────────────────
 Widget _loadingSkeleton() {
   return ListView.builder(
     padding: const EdgeInsets.all(16),

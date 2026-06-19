@@ -141,15 +141,16 @@ class _KycReviewPageState extends State<KycReviewPage>
       await _supabase.from('delivery_partners').update({
         'verification_status': 'approved',
       }).eq('id', riderId).select('id');
+      final userId = rider['user_id'] as String? ?? (rider['profiles'] is Map ? rider['profiles']['id'] as String? : null) ?? riderId;
       await _supabase.from('profiles').update({
         'kyc_status': 'approved',
         'verification_status': 'verified',
-      }).eq('id', riderId).select('id');
+      }).eq('id', userId).select('id');
 
       // Push rider: KYC approved
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: riderId,
+          targetUserId: userId,
           title: '✅ KYC Approved!',
           body: 'Congratulations! Your rider KYC has been verified. You can now go online and start earning.',
         );
@@ -170,15 +171,16 @@ class _KycReviewPageState extends State<KycReviewPage>
       await _supabase.from('delivery_partners').update({
         'verification_status': 'rejected',
       }).eq('id', riderId).select('id');
+      final userId = rider['user_id'] as String? ?? (rider['profiles'] is Map ? rider['profiles']['id'] as String? : null) ?? riderId;
       await _supabase.from('profiles').update({
         'kyc_status': 'rejected',
         'verification_status': 'rejected',
-      }).eq('id', riderId).select('id');
+      }).eq('id', userId).select('id');
 
       // Push rider: KYC rejected with reason
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: riderId,
+          targetUserId: userId,
           title: '❌ KYC Application Rejected',
           body: 'Reason: $reason. Please re-upload your documents and reapply.',
         );

@@ -16,6 +16,7 @@ import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../widgets/address_picker_sheet.dart';
 import '../../utils/responsive_layout.dart';
+import '../../services/image_compression_service.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -193,8 +194,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (cart.requiresPrescription && _prescriptions.isNotEmpty) {
         for (int i = 0; i < _prescriptions.length; i++) {
           final file = _prescriptions[i];
-          final bytes = await file.readAsBytes();
-          final ext = file.name.split('.').last;
+          final bytes = await ImageCompressionService.compressFile(File(file.path)) ?? await file.readAsBytes();
+          const ext = 'jpg'; // Compressformat is jpeg
           final path = '${auth.currentUserId}/${cartGroupId}_$i.$ext';
           await supabase.storage
               .from('prescription_docs')
@@ -237,7 +238,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         for (final item in shopItems) {
           final cat = item.product.category;
           if (!rateSnapshot.containsKey(cat)) {
-            rateSnapshot[cat] =
+            rateSnapshot[cat] = PlatformConfigProvider.instance?.getGstRate(
+                  cat,
+                  itemPrice: item.product.price,
+                ) ??
                 TaxConfig.gstRateForCategory(cat, itemPrice: item.product.price);
           }
         }

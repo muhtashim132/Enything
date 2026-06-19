@@ -45,7 +45,7 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
       // Try reading from a support_tickets or complaints table — graceful fallback
       final res = await _db
           .from('support_tickets')
-          .select('*')
+          .select('*, profiles:user_id(full_name, phone)')
           .order('created_at', ascending: false)
           .limit(50);
       _complaints = List<Map<String, dynamic>>.from(res);
@@ -279,11 +279,16 @@ class _ComplaintCard extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () async {
-                        await db
-                            .from('support_tickets')
-                            .update({'status': 'in_progress'}).eq(
-                                'id', complaint['id']);
-                        await onRefresh();
+                        try {
+                          await db
+                              .from('support_tickets')
+                              .update({'status': 'in_progress'}).eq(
+                                  'id', complaint['id']);
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status updated'), backgroundColor: AdminColors.success));
+                          await onRefresh();
+                        } catch (e) {
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.danger));
+                        }
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AdminColors.info,
@@ -304,11 +309,16 @@ class _ComplaintCard extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
-                        await db
-                            .from('support_tickets')
-                            .update({'status': 'resolved'}).eq(
-                                'id', complaint['id']);
-                        await onRefresh();
+                        try {
+                          await db
+                              .from('support_tickets')
+                              .update({'status': 'resolved'}).eq(
+                                  'id', complaint['id']);
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ticket resolved'), backgroundColor: AdminColors.success));
+                          await onRefresh();
+                        } catch (e) {
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.danger));
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AdminColors.success,
