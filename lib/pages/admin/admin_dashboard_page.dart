@@ -135,10 +135,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     ));
 
     return PopScope(
-      canPop: false,
+      canPop: safeIndex == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        SystemNavigator.pop();
+        if (safeIndex != 0) {
+          setState(() {
+            _currentIndex = 0;
+            _visitedIndices.add(0);
+          });
+        }
       },
       child: Scaffold(
       backgroundColor: AdminColors.bg,

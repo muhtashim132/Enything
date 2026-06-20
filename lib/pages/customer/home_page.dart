@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter/services.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -565,10 +564,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         context.read<AuthProvider>().user?.fullName.split(' ').first ?? '';
 
     return PopScope(
-      canPop: false,
+      canPop: _navIndex == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        SystemNavigator.pop();
+        if (_navIndex != 0) {
+          setState(() {
+            _navIndex = 0;
+          });
+        }
       },
       child: Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,

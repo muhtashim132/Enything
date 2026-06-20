@@ -200,11 +200,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) return;
-          SystemNavigator.pop();
-        },
+        canPop: true,
         child: Scaffold(
         backgroundColor:
             isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),

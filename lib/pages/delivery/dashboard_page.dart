@@ -973,11 +973,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final size = MediaQuery.of(context).size;
 
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        SystemNavigator.pop();
-      },
+      canPop: true,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
         child: Scaffold(
