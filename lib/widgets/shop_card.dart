@@ -178,8 +178,11 @@ class _ShopCardState extends State<ShopCard> {
                     runSpacing: 6,
                     children: [
                       _buildChip(
-                        icon: Icons.timer_outlined,
-                        label: '${shop.prepTimeMinutes}m',
+                        icon: Icons.access_time_rounded,
+                        label: DeliveryCalculator.etaLabel(
+                          shop.distanceKm ?? 3.0,
+                          shop.prepTimeMinutes,
+                        ),
                         color: const Color(0xFFE3F2FD), // blue 50
                         textColor: const Color(0xFF1976D2), // blue 700
                       ),

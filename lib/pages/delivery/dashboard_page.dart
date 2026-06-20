@@ -20,6 +20,7 @@ import '../../widgets/common/notification_bell.dart';
 import 'order_route_map_page.dart';
 import '../../utils/time_utils.dart';
 import '../../models/order_group.dart';
+import '../../utils/delivery_calculator.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
   const DeliveryDashboardPage({super.key});
@@ -1682,6 +1683,41 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             style: GoogleFonts.outfit(color: isDark ? Colors.white60 : Colors.grey.shade600, fontSize: 13),
                             maxLines: 1, overflow: TextOverflow.ellipsis)),
                   ]),
+                  // ── ETA chip for rider (drop-off time estimate) ──
+                  if (group.orders.isNotEmpty && group.orders.first.estimatedDistanceKm > 0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(50),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.access_time_rounded, color: Colors.white, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Drop in ~${DeliveryCalculator.etaLabel(group.orders.first.estimatedDistanceKm, 0)}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '· by ${DeliveryCalculator.etaArrivalTime(group.orders.first.estimatedDistanceKm, 0)}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     children: [

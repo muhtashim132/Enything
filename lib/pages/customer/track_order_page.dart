@@ -23,6 +23,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/notification_service.dart';
 import '../../utils/responsive_layout.dart';
 import 'package:collection/collection.dart';
+import '../../utils/delivery_calculator.dart';
 
 class TrackOrderPage extends StatefulWidget {
   final String orderId;
@@ -1570,6 +1571,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                             ],
                           ),
                         ],
+                        // ── ETA Strip (active states only) ─────────────────────
+                        if (!isCancelled && !isDelivered &&
+                            !['awaiting_acceptance', 'awaiting_payment']
+                                .contains(_aggregateStatus))
+                          _buildEtaStrip(),
                       ],
                     ),
                   ),
@@ -2292,6 +2298,84 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     fontSize: 13, fontWeight: FontWeight.w700, color: color)),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Builds the Swiggy/Zomato-style ETA strip shown inside the status hero
+  /// for active, post-payment order states.
+  Widget _buildEtaStrip() {
+    if (_order == null) return const SizedBox.shrink();
+
+    double distanceKm = _order!.estimatedDistanceKm > 0
+        ? _order!.estimatedDistanceKm
+        : 3.0;
+    int prepMins = _order!.shopPrepTimeSnapshot > 0
+        ? _order!.shopPrepTimeSnapshot
+        : 30;
+
+    // During out_for_delivery: use live rider→customer distance for remaining time
+    if (_aggregateStatus == 'out_for_delivery' &&
+        _riderLatLng != null &&
+        _order!.deliveryLat != null &&
+        _order!.deliveryLng != null) {
+      distanceKm = DeliveryCalculator.haversineKm(
+        _riderLatLng!,
+        LatLng(_order!.deliveryLat!, _order!.deliveryLng!),
+      );
+      prepMins = 0; // prep is done — only travel remains
+    } else if (_aggregateStatus == 'picked_up' || _aggregateStatus == 'out_for_delivery') {
+      // Prep is already done; only travel time remains
+      prepMins = 0;
+    } else if (_aggregateStatus == 'preparing') {
+      // Rider will take time to arrive at shop + travel — use full ETA
+    }
+
+    final etaStr = DeliveryCalculator.etaLabel(distanceKm, prepMins);
+    final arrivalStr = DeliveryCalculator.etaArrivalTime(distanceKm, prepMins);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.30)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.access_time_rounded, color: Colors.white, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            etaStr,
+            style: GoogleFonts.outfit(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            width: 4,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.5),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const Icon(Icons.location_on_rounded, color: Colors.white70, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            'by $arrivalStr',
+            style: GoogleFonts.outfit(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

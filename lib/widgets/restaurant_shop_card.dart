@@ -225,8 +225,11 @@ class _RestaurantShopCardState extends State<RestaurantShopCard> {
                   Row(
                     children: [
                        _metaChip(
-                        Icons.timer_outlined,
-                        '${shop.prepTimeMinutes} min',
+                        Icons.access_time_rounded,
+                        DeliveryCalculator.etaLabel(
+                          shop.distanceKm ?? 3.0,
+                          shop.prepTimeMinutes,
+                        ),
                         const Color(0xFF1976D2), // blue 700
                       ),
                       const SizedBox(width: 10),

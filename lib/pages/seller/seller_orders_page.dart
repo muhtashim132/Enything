@@ -15,6 +15,8 @@ import '../../pages/seller/seller_order_map_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/time_utils.dart';
+import '../../utils/delivery_calculator.dart';
+
 class SellerOrdersPage extends StatefulWidget {
   const SellerOrdersPage({super.key});
 
@@ -870,6 +872,44 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   : _statusBadge(order, statusColor),
             ],
           ),
+
+          // ── ETA strip for active orders (seller sees rider arrival time) ──
+          if ([
+            'confirmed', 'preparing', 'ready_for_pickup',
+          ].contains(order.status) && order.estimatedDistanceKm > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.access_time_rounded, size: 14, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Rider delivers in ~${DeliveryCalculator.etaLabel(order.estimatedDistanceKm, 0)}',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'by ${DeliveryCalculator.etaArrivalTime(order.estimatedDistanceKm, 0)}',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // ── Order Items (Collapsible) ───────────────────────────────────
           if (order.items.isNotEmpty) ...[

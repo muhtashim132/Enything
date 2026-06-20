@@ -116,4 +116,47 @@ class DeliveryCalculator {
     final travelMins = (distance / deliverySpeed * 60).ceil();
     return prepTimeMinutes + travelMins;
   }
+
+  // ---------------------------------------------------------------------------
+  // ETA helpers — Swiggy/Zomato-style formatted delivery time
+  // ---------------------------------------------------------------------------
+
+  /// Returns the raw ETA in minutes:
+  ///   prepTimeMinutes + ceil(distanceKm / 25 km/h * 60)
+  static int etaMinutes(double distanceKm, int prepTimeMinutes) {
+    const deliverySpeed = 25.0; // km/h average urban rider speed
+    final travelMins = (distanceKm / deliverySpeed * 60).ceil();
+    return prepTimeMinutes + travelMins;
+  }
+
+  /// Returns a display-ready ETA string like Swiggy/Zomato:
+  ///   < 20 min  → "15–20 mins"
+  ///   20–60 min → "25–35 mins"
+  ///   > 60 min  → "1 hr 10 mins"
+  static String etaLabel(double distanceKm, int prepTimeMinutes) {
+    final mins = etaMinutes(distanceKm, prepTimeMinutes);
+    if (mins <= 0) return '< 5 mins';
+    if (mins > 90) return '90+ mins';
+    // Show a ±5 min range, same as Zomato
+    final lo = (mins ~/ 5) * 5;
+    final hi = lo + 10;
+    if (hi >= 60) {
+      final h = hi ~/ 60;
+      final m = hi % 60;
+      return m == 0 ? '$h hr' : '$h hr $m mins';
+    }
+    return '$lo–$hi mins';
+  }
+
+  /// Returns the estimated arrival clock time as a string, e.g. "4:35 PM".
+  /// [fromNow] defaults to [DateTime.now()].
+  static String etaArrivalTime(double distanceKm, int prepTimeMinutes,
+      {DateTime? fromNow}) {
+    final mins = etaMinutes(distanceKm, prepTimeMinutes);
+    final arrival = (fromNow ?? DateTime.now()).add(Duration(minutes: mins));
+    final h = arrival.hour > 12 ? arrival.hour - 12 : (arrival.hour == 0 ? 12 : arrival.hour);
+    final m = arrival.minute.toString().padLeft(2, '0');
+    final ampm = arrival.hour >= 12 ? 'PM' : 'AM';
+    return '$h:$m $ampm';
+  }
 }

@@ -17,6 +17,7 @@ import '../../providers/platform_config_provider.dart';
 import '../../widgets/address_picker_sheet.dart';
 import '../../utils/responsive_layout.dart';
 import '../../services/image_compression_service.dart';
+import '../../utils/delivery_calculator.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -471,6 +472,99 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+
+            // ── ETA Banner ────────────────────────────────────────────────
+            Builder(builder: (context) {
+              // Compute max distance and max prep time across all shops
+              double maxDist = 3.0;
+              int maxPrep = 30;
+              if (location.currentLocation != null && cart.shops.isNotEmpty) {
+                for (final s in cart.shops) {
+                  final d = location.distanceTo(s.location);
+                  if (d > maxDist) maxDist = d;
+                  if (s.prepTimeMinutes > maxPrep) maxPrep = s.prepTimeMinutes;
+                }
+              }
+              final etaStr = DeliveryCalculator.etaLabel(maxDist, maxPrep);
+              final arrivalStr = DeliveryCalculator.etaArrivalTime(maxDist, maxPrep);
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.08),
+                      AppColors.primary.withValues(alpha: 0.04),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.20),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.access_time_rounded,
+                          color: AppColors.primary, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Estimated Delivery',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary.withValues(alpha: 0.7),
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            etaStr,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text(
+                          'Arrives by',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          arrivalStr,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: 16),
 
             // Order Items
