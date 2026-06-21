@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,7 @@ import 'order_route_map_page.dart';
 import '../../utils/time_utils.dart';
 import '../../models/order_group.dart';
 import '../../utils/delivery_calculator.dart';
+import '../../services/rider_background_service.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
   const DeliveryDashboardPage({super.key});
@@ -74,6 +76,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
     _loadOrders();
     _initNotifications();
+    // Initialize background GPS service (registers the isolate entry point).
+    // Must be called once per app session before startService() can be used.
+    RiderBackgroundService.instance.initialize();
   }
 
   void _initNotifications() {
@@ -166,7 +171,40 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (mounted) _loadOrders();
+      // App came back to foreground — stop background service so the
+      // existing foreground timer takes over (avoids double GPS polling).
+      if (_isOnline) {
+        RiderBackgroundService.instance.stopService();
+      }
+    } else if (state == AppLifecycleState.paused ||
+               state == AppLifecycleState.detached) {
+      // App went to background / screen locked — start background service
+      // so GPS keeps updating for the customer map even when screen is off.
+      if (_isOnline) {
+        final auth = context.read<AuthProvider>();
+        final riderId = auth.currentUserId;
+        if (riderId != null) {
+          _launchBackgroundService(riderId);
+        }
+      }
     }
+  }
+
+  void _launchBackgroundService(String riderId) {
+    // flutter_dotenv is already loaded in main() before runApp().
+    // We read the values here to pass them into the background isolate
+    // (which has no access to the main isolate's in-memory dotenv state).
+    final url = dotenv.env['SUPABASE_URL'] ?? '';
+    final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+    if (url.isEmpty || anonKey.isEmpty) {
+      debugPrint('[Dashboard] Cannot start background service: missing Supabase env vars');
+      return;
+    }
+    RiderBackgroundService.instance.startService(
+      riderId: riderId,
+      supabaseUrl: url,
+      anonKey: anonKey,
+    );
   }
 
   // Starts pushing GPS location to DB every 15s while online.
@@ -694,6 +732,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
 
         _stopLocationBroadcast();
+        RiderBackgroundService.instance.stopService(); // Also kill background GPS
         if (!skipReload) _loadOrders();
         // Show rating prompt after delivering
         if (mounted && !order.hasDeliveryRated && !skipRating) {
@@ -1202,8 +1241,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       setState(() => _isOnline = newVal);
                       if (newVal) {
                         _startLocationBroadcast();
+                        // Background service will be started by didChangeAppLifecycleState
+                        // when/if the app is backgrounded. No action needed here.
                       } else {
                         _stopLocationBroadcast();
+                        // Also stop the background service if it happened to be running
+                        RiderBackgroundService.instance.stopService();
                       }
                       final auth = context.read<AuthProvider>();
                       if (auth.currentUserId != null) {
