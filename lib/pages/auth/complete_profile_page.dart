@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart' as ll;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
@@ -12,6 +10,7 @@ import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../widgets/seller/category_extra_fields.dart';
 import '../../utils/responsive_layout.dart';
+import '../../widgets/map_pin_picker_page.dart';
 
 enum _Role { customer, seller, delivery }
 
@@ -123,42 +122,41 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     }
   }
 
-  /// Fetch current GPS location and reverse-geocode it into the target address field
-  Future<void> _fetchLiveLocation(TextEditingController targetCtrl) async {
+  /// Opens the map pin picker and fills [targetCtrl] with the picked address.
+  /// Also calls [locProv.setManualLocation] so _submit() can read the coordinates.
+  Future<void> _pickLocationOnMap(TextEditingController targetCtrl) async {
     setState(() => _fetchingLocation = true);
     try {
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.deniedForever) {
-        _showSnack('Location permission denied. Enable it in settings.',
-            isError: true);
-        setState(() => _fetchingLocation = false);
-        return;
-      }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
+      final locProv = context.read<LocationProvider>();
+      // Seed the map from existing GPS or previously confirmed location
+      final seedLoc = locProv.currentLocation;
+      final seedAddr = targetCtrl.text.trim().isNotEmpty ? targetCtrl.text.trim() : null;
+
+      final result = await Navigator.push<MapPickResult?>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MapPinPickerPage(
+            initialLocation: seedLoc,
+            initialAddress: seedAddr,
+            title: 'Select Location',
+            confirmLabel: 'Confirm Location',
+          ),
         ),
       );
-      final latLng = ll.LatLng(pos.latitude, pos.longitude);
-      if (mounted) {
-        final locProv = context.read<LocationProvider>();
-        locProv.setManualLocation(latLng, 'Fetching address...');
-        final addr = await locProv.getAddressForLocation(latLng);
-        locProv.setManualLocation(latLng, addr);
-        if (mounted) {
-          setState(() {
-            targetCtrl.text = addr;
-            _fetchingLocation = false;
-          });
-        }
+
+      if (!mounted) return;
+      if (result != null) {
+        locProv.setManualLocation(result.location, result.address);
+        setState(() {
+          targetCtrl.text = result.address;
+          _fetchingLocation = false;
+        });
+      } else {
+        setState(() => _fetchingLocation = false);
       }
     } catch (e) {
       if (mounted) {
-        _showSnack('Could not get location: $e', isError: true);
+        _showSnack('Could not open map: $e', isError: true);
         setState(() => _fetchingLocation = false);
       }
     }
@@ -793,6 +791,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
   }
 
   Widget _buildAddressAndLocation(String label, TextEditingController ctrl) {
+    final hasAddress = ctrl.text.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -803,61 +802,101 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.6)),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12)),
+        GestureDetector(
+          onTap: _fetchingLocation ? null : () => _pickLocationOnMap(ctrl),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            decoration: BoxDecoration(
+              color: hasAddress
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: hasAddress
+                    ? const Color(0xFF1A35C8).withValues(alpha: 0.5)
+                    : Colors.white.withValues(alpha: 0.12),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _fetchingLocation
+                      ? Row(
+                          children: [
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white54),
+                            ),
+                            const SizedBox(width: 12),
+                            Text('Opening map…',
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white38, fontSize: 14)),
+                          ],
+                        )
+                      : hasAddress
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.check_circle_rounded,
+                                        size: 14, color: Color(0xFF51CF66)),
+                                    const SizedBox(width: 6),
+                                    Text('Location pinned',
+                                        style: GoogleFonts.outfit(
+                                            color: const Color(0xFF51CF66),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  ctrl.text,
+                                  style: GoogleFonts.outfit(
+                                      color: Colors.white, fontSize: 14),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Tap to pick on map',
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.white54,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 2),
+                                Text('Drag & drop the pin to exact location',
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.white30, fontSize: 11)),
+                              ],
+                            ),
                 ),
-                child: TextField(
-                  controller: ctrl,
-                  maxLines: 2,
-                  style: GoogleFonts.outfit(
-                      color: Colors.white, fontSize: 15),
-                  decoration: InputDecoration(
-                    hintText: 'Type address or tap 📍',
-                    hintStyle: GoogleFonts.outfit(
-                        color: Colors.white24, fontSize: 14),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 14),
-                    border: InputBorder.none,
-                    filled: true,
-                    fillColor: Colors.transparent,
+                const SizedBox(width: 10),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [Color(0xFF1A35C8), Color(0xFF0A178C)]),
+                    borderRadius: BorderRadius.circular(14),
                   ),
+                  child: const Icon(Icons.location_on_rounded,
+                      color: Colors.white, size: 22),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 10),
-            GestureDetector(
-              onTap: _fetchingLocation ? null : () => _fetchLiveLocation(ctrl),
-              child: Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [Color(0xFF1A35C8), Color(0xFF0A178C)]),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: _fetchingLocation
-                    ? const Padding(
-                        padding: EdgeInsets.all(14),
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Icon(Icons.my_location_rounded,
-                        color: Colors.white, size: 24),
-              ),
-            ),
-          ],
+          ),
         ),
         const SizedBox(height: 6),
-        Text('Tap 📍 to auto-fill from your current GPS location',
-            style:
-                GoogleFonts.outfit(color: Colors.white30, fontSize: 11)),
+        Text('Tap to open interactive map and pin your location',
+            style: GoogleFonts.outfit(color: Colors.white30, fontSize: 11)),
       ],
     );
   }

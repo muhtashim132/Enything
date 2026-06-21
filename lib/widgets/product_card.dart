@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/product_model.dart';
@@ -69,13 +70,25 @@ class _ProductCardState extends State<ProductCard> {
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     child: Container(
-                      color: const Color(0xFFEFF3FF), // subtle fresh blue-tint background
+                      // Premium subtle backdrop for AI cutouts
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFFF8F9FA), Color(0xFFE9ECEF)],
+                        ),
+                      ),
                       child: product.displayImage.isNotEmpty
                           ? CachedNetworkImage(
                               imageUrl: product.displayImage,
                               width: double.infinity,
                               fit: BoxFit.contain,
-                              placeholder: (c, i) => const ColoredBox(color: Color(0xFFEFF3FF)),
+                              fadeInDuration: const Duration(milliseconds: 300),
+                              placeholder: (c, i) => Shimmer.fromColors(
+                                baseColor: const Color(0xFFE9ECEF),
+                                highlightColor: const Color(0xFFF8F9FA),
+                                child: Container(color: Colors.white),
+                              ),
                               errorWidget: (c, e, s) => const Center(
                                 child: Icon(Icons.shopping_bag_outlined, size: 40, color: AppColors.primary),
                               ),

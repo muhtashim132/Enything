@@ -157,29 +157,54 @@ serve(async (req: Request) => {
     //
     // Fallback: use .like filter on the text representation of the array.
     // This matches any product whose images array contains the exact raw URL.
-    const { data: updatedProducts, error: updateError } = await supabase
-      .from("products")
-      .update({ cutout_url: cutoutUrl })
-      .contains("images", JSON.stringify([rawUrl]));
+    let updatedProducts: any = null;
+    let updateError: any = null;
+    let rowsUpdated = 0;
 
-    if (updateError) {
+    // ── Race Condition Fix: Intelligent Polling ────────────────────────────
+    // The Flutter app uploads the image FIRST, which triggers this edge function.
+    // If we process it fast enough, the product row might not be inserted yet!
+    // We patiently poll for up to ~15 seconds until the product appears.
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      const { data: currentUpdateData, error: currentUpdateError } = await supabase
+        .from("products")
+        .update({ cutout_url: cutoutUrl })
+        .contains("images", JSON.stringify([rawUrl]))
+        .select("id"); // Select id so we know if a row was actually updated
+
+      updateError = currentUpdateError;
+
+      if (!currentUpdateError && currentUpdateData && currentUpdateData.length > 0) {
+        updatedProducts = currentUpdateData;
+        rowsUpdated = currentUpdateData.length;
+        console.log(`✅ Product linked successfully on attempt ${attempt}`);
+        break; // Success! Break out of the loop
+      }
+
+      console.log(`Product not found for URL on attempt ${attempt}. Retrying in 2.5s...`);
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+
+    if (updateError || rowsUpdated === 0) {
       // Log clearly — this is important for debugging
       console.error(
-        `❌ Product cutout_url update FAILED for rawUrl="${rawUrl}": ${updateError.message} (code: ${updateError.code})`
+        `❌ Product cutout_url update FAILED or product not found for rawUrl="${rawUrl}" after 6 attempts.`
       );
+      if (updateError) {
+        console.error(`Error details: ${updateError.message} (code: ${updateError.code})`);
+      }
       // Still return success since the cutout file was saved — seller can re-trigger manually
       return new Response(
         JSON.stringify({
           success: false,
           output: outputPath,
           cutout_url: cutoutUrl,
-          update_error: updateError.message,
+          update_error: updateError?.message ?? "Product not found (race condition timeout)",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const rowsUpdated = Array.isArray(updatedProducts) ? updatedProducts.length : "unknown";
     console.log(`✅ Background removal complete: ${filePath} → ${outputPath} (products updated: ${rowsUpdated})`);
 
     return new Response(

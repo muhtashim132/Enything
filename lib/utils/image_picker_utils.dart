@@ -196,10 +196,17 @@ Future<CroppedFile?> cropImage(
         toolbarWidgetColor: isDark ? Colors.white : Colors.black,
         initAspectRatio: CropAspectRatioPreset.original,
         lockAspectRatio: aspectRatio != null,
+        hideBottomControls: false,
+        backgroundColor: isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
+        activeControlsWidgetColor: const Color(0xFF4C6EF5),
+        dimmedLayerColor: isDark ? Colors.black87 : Colors.black54,
       ),
       IOSUiSettings(
         title: title,
         aspectRatioLockEnabled: aspectRatio != null,
+        rotateButtonsHidden: false,
+        rotateClockwiseButtonHidden: false,
+        resetButtonHidden: false,
       ),
     ],
   );

@@ -43,7 +43,7 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
       // 1. Fetch all orders for this rider
       final orders = await _supabase
           .from('orders')
-          .select('created_at, status, arrived_at_shop_time, order_ready_time, delivery_partner_earnings')
+          .select('created_at, status, arrived_at_shop_time, order_ready_time, rider_earnings')
           .eq('delivery_partner_id', userId);
 
       _totalOrdersAccepted = (orders as List).length;
@@ -87,7 +87,7 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
 
           if (createdAt != null) {
             final dateKey = "${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}";
-            earningsByDate[dateKey] = (earningsByDate[dateKey] ?? 0.0) + ((o['delivery_partner_earnings'] as num?)?.toDouble() ?? 0.0);
+            earningsByDate[dateKey] = (earningsByDate[dateKey] ?? 0.0) + ((o['rider_earnings'] as num?)?.toDouble() ?? 0.0);
           }
         }
       }

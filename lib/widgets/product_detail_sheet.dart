@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -200,11 +201,11 @@ class _SheetContent extends StatelessWidget {
                               imageUrl: url,
                               fit: BoxFit.contain,
                               width: double.infinity,
-                              placeholder: (c, _) => Container(
-                                color: Colors.white,
-                                child: const Center(
-                                    child: CircularProgressIndicator(
-                                        color: AppColors.primary)),
+                              fadeInDuration: const Duration(milliseconds: 300),
+                              placeholder: (c, _) => Shimmer.fromColors(
+                                baseColor: const Color(0xFFE9ECEF),
+                                highlightColor: const Color(0xFFF8F9FA),
+                                child: Container(color: Colors.white),
                               ),
                               errorWidget: (c, e, s) => _ImageFallback(),
                             ),
@@ -217,9 +218,14 @@ class _SheetContent extends StatelessWidget {
                 Positioned.fill(
                   child: IgnorePointer(
                     child: Container(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Colors.transparent, Colors.transparent],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            const Color(0xFFF8F9FA).withValues(alpha: 0.8), 
+                            const Color(0xFFE9ECEF).withValues(alpha: 0.4)
+                          ],
                         ),
                       ),
                     ),

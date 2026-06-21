@@ -26,6 +26,7 @@ class _AddProductPageState extends State<AddProductPage> {
   final _supabase = Supabase.instance.client;
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  final _originalPriceController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _menuCategoryController = TextEditingController();
   final _weightController = TextEditingController();
@@ -33,6 +34,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
   bool? _isVeg = true;
   bool _isAvailable = true;
+  bool _hasDiscount = false;
   bool _isSaving = false;
   String _productCategory = 'Food';
   String _unitType = 'pieces';
@@ -63,6 +65,10 @@ class _AddProductPageState extends State<AddProductPage> {
       final p = widget.existingProduct!;
       _nameController.text = p.name;
       _priceController.text = p.price.toString();
+      if (p.originalPrice != null && p.originalPrice! > 0) {
+        _hasDiscount = true;
+        _originalPriceController.text = p.originalPrice.toString();
+      }
       _descriptionController.text = p.description ?? '';
       _productCategory = p.category;
       _menuCategoryController.text = p.menuCategory ?? '';
@@ -184,6 +190,17 @@ class _AddProductPageState extends State<AddProductPage> {
 
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    if (_hasDiscount) {
+      final price = double.tryParse(_priceController.text) ?? 0.0;
+      final originalPrice = double.tryParse(_originalPriceController.text) ?? 0.0;
+      if (originalPrice <= price) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Original Price (MRP) must be greater than Selling Price')),
+        );
+        return;
+      }
+    }
     if (_shopId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No shop found. Create a shop first.')),
@@ -210,6 +227,9 @@ class _AddProductPageState extends State<AddProductPage> {
         'shop_id': _shopId,
         'name': _nameController.text.trim(),
         'price': double.parse(_priceController.text),
+        'original_price': _hasDiscount && _originalPriceController.text.trim().isNotEmpty
+            ? double.tryParse(_originalPriceController.text.trim())
+            : null,
         'description': _descriptionController.text.trim(),
         'category': _productCategory,
         'menu_category': _menuCategoryController.text.trim().isEmpty
@@ -412,6 +432,36 @@ class _AddProductPageState extends State<AddProductPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Add Discount', style: TextStyle(fontFamily: 'Poppins')),
+                    subtitle: const Text('Show Original Price (MRP) slashed out', style: TextStyle(fontSize: 12)),
+                    value: _hasDiscount,
+                    activeThumbColor: AppColors.primary,
+                    onChanged: (v) => setState(() => _hasDiscount = v),
+                  ),
+                  if (_hasDiscount) ...[
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _originalPriceController,
+                      keyboardType: TextInputType.number,
+                      validator: (v) {
+                        if (!_hasDiscount) return null;
+                        if (v == null || v.trim().isEmpty) return 'Please enter original price';
+                        final op = double.tryParse(v);
+                        final p = double.tryParse(_priceController.text);
+                        if (op == null) return 'Invalid price';
+                        if (p != null && op <= p) return 'MRP must be > Selling Price';
+                        return null;
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Original Price (MRP) (₹)',
+                        hintText: '299',
+                        prefixIcon: Icon(Icons.local_offer_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   TextFormField(
                     controller: _descriptionController,
                     maxLines: 3,

@@ -12,6 +12,8 @@ import '../../theme/app_colors.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
+import '../../widgets/map_pin_picker_page.dart';
+import 'package:latlong2/latlong.dart' as ll;
 
 class ShopManagementPage extends StatefulWidget {
   const ShopManagementPage({super.key});
@@ -28,6 +30,8 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   String? _shopId;
   bool _isActive = false;
   String? _currentAddress;
+  double? _shopLat;
+  double? _shopLng;
 
   final _bannerCtrl = TextEditingController();
   final _openTimeCtrl = TextEditingController();
@@ -164,37 +168,56 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     }
   }
 
-  Future<void> _updateLocation(BuildContext context) async {
+  /// Opens the map pin picker so the seller can precisely set shop location.
+  Future<void> _pickShopLocationOnMap(BuildContext context) async {
     if (_shopId == null) return;
+
+    // Determine seed location: previously confirmed coords → else GPS
+    final locProv = context.read<LocationProvider>();
+    final seedLoc = (_shopLat != null && _shopLng != null)
+        ? _buildLatLng(_shopLat!, _shopLng!)
+        : locProv.currentLocation;
+
+    final result = await Navigator.push<MapPickResult?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapPinPickerPage(
+          initialLocation: seedLoc,
+          initialAddress: _currentAddress,
+          title: 'Set Shop Location',
+          confirmLabel: 'Confirm Shop Location',
+          tooltip: 'Place the pin exactly at your shop entrance',
+        ),
+      ),
+    );
+
+    if (result == null || !mounted) return;
     setState(() => _isSaving = true);
     try {
-      final locProv = context.read<LocationProvider>();
-      if (!locProv.hasLocation) {
-        await locProv.requestLocation();
-      }
-      final currentLoc = locProv.currentLocation;
-      if (currentLoc == null) {
-        _showSnack('Could not fetch location', isError: true);
-        return;
-      }
-      
-      final point = 'POINT(${currentLoc.longitude} ${currentLoc.latitude})';
-      final addr = await locProv.getAddressForLocation(currentLoc);
-      
+      final point =
+          'POINT(${result.location.longitude} ${result.location.latitude})';
       await _supabase.from('shops').update({
         'location': point,
-        'address': addr
+        'address': result.address,
       }).eq('id', _shopId!);
-      
       if (mounted) {
-        setState(() => _currentAddress = addr);
+        setState(() {
+          _currentAddress = result.address;
+          _shopLat = result.location.latitude;
+          _shopLng = result.location.longitude;
+        });
       }
-      _showSnack('✅ Location updated to current position!');
+      _showSnack('✅ Shop location updated!');
     } catch (e) {
       _showSnack('Failed to update location: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  /// Helper to build a latlong2 LatLng from raw lat/lng doubles.
+  ll.LatLng _buildLatLng(double lat, double lng) {
+    return ll.LatLng(lat, lng);
   }
 
   @override
@@ -328,16 +351,16 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                                     ],
                                   ),
                                 ),
-                              Text('Update your shop location to your current GPS location so customers can find you within ${(PlatformConfigProvider.instance?.maxDeliveryRadiusKm ?? 15.0).toInt()}km.',
+                              Text('Pin your exact shop location on the map so customers can find you within ${(PlatformConfigProvider.instance?.maxDeliveryRadiusKm ?? 15.0).toInt()}km.',
                                   style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary)),
                               const SizedBox(height: 12),
                               ElevatedButton.icon(
-                                onPressed: () => _updateLocation(context),
-                                icon: const Icon(Icons.my_location),
-                                label: const Text('Update to Current GPS'),
+                                onPressed: _isSaving ? null : () => _pickShopLocationOnMap(context),
+                                icon: const Icon(Icons.edit_location_alt_rounded),
+                                label: const Text('Set Location on Map'),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                                  foregroundColor: AppColors.primary,
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
                                   elevation: 0,
                                 ),
                               ),

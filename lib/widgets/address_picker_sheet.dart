@@ -184,7 +184,8 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Center(
-                        child: Text(addr.icon, style: const TextStyle(fontSize: 18)),
+                        child: Text(addr.icon,
+                            style: const TextStyle(fontSize: 18)),
                       ),
                     ),
                     title: Row(
@@ -218,7 +219,8 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                         if (isActive) ...[
                           const SizedBox(width: 6),
                           Icon(Icons.check_circle_rounded,
-                              size: 16, color: Theme.of(context).primaryColor),
+                              size: 16,
+                              color: Theme.of(context).primaryColor),
                         ],
                       ],
                     ),
@@ -228,7 +230,32 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color: isDark ? Colors.white54 : Colors.grey.shade600,
+                        color:
+                            isDark ? Colors.white54 : Colors.grey.shade600,
+                      ),
+                    ),
+                    trailing: GestureDetector(
+                      onTap: () {
+                        // Close picker first, then open 2-step edit flow
+                        Navigator.pop(context);
+                        showAddEditAddressDialog(
+                          context,
+                          existingAddress: addr,
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.edit_location_alt_outlined,
+                            size: 18,
+                            color: isDark
+                                ? Colors.white54
+                                : Colors.grey.shade600),
                       ),
                     ),
                     onTap: () {

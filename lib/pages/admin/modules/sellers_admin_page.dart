@@ -109,11 +109,11 @@ class _SellersAdminPageState extends State<SellersAdminPage> {
                               Row(
                                 children: [
                                   StarRatingDisplay(
-                                      rating: (shop['rating'] ?? 0.0).toDouble(),
+                                      rating: (shop['average_rating'] ?? 0.0).toDouble(),
                                       color: Colors.amber, size: 14),
                                   const SizedBox(width: 4),
                                   Text(
-                                      '${shop['rating'] ?? '0.0'} (${shop['total_reviews'] ?? 0} reviews)',
+                                      '${(shop['average_rating'] as num?)?.toStringAsFixed(1) ?? '0.0'} (${shop['total_reviews'] ?? 0} reviews)',
                                       style: GoogleFonts.outfit(
                                           color: Colors.white70, fontSize: 12)),
                                   const SizedBox(width: 16),
