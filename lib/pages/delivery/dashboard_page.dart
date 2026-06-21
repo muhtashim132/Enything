@@ -341,12 +341,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           if (order.shopId == null) return true; // include if no shop data
           final shopInfo = _shopInfoCache[order.shopId];
           if (shopInfo == null) return true; // include if shop location unknown
-          // Haversine approximation (fast, good enough for <50km)
+          // C4 FIX: Equirectangular approximation — accurate for <50km, accounts for
+          // latitude-based longitude compression (the missing cos term in old formula).
           const double degToRad = 3.14159265358979 / 180.0;
           final dLat = (shopInfo.lat - _riderLat!) * degToRad;
           final dLng = (shopInfo.lng - _riderLng!) * degToRad;
-          final a = dLat * dLat + dLng * dLng * 0.5; // simplified
-          final distKm = 6371 * 2 * (a < 1 ? a : 1);
+          final midLatRad = ((_riderLat! + shopInfo.lat) / 2.0) * degToRad;
+          final x = dLng * math.cos(midLatRad);
+          final distKm = 6371.0 * math.sqrt(dLat * dLat + x * x);
           return distKm <= maxRadiusKm;
         }).toList();
       } else {
@@ -374,8 +376,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               .eq('status', 'delivered');
           for (var row in deliveredResp as List) {
             tempTotalKmsDriven += (row['estimated_distance_km'] ?? 0.0).toDouble();
-            final created = DateTime.tryParse(row['created_at'] ?? '')?.toIST() ?? DateTime.now();
-            if (created.year == today.year &&
+            final created = DateTime.tryParse(row['created_at'] ?? '')?.toIST();
+            if (created != null &&
+                created.year == today.year &&
                 created.month == today.month &&
                 created.day == today.day) {
               tempTodayEarnings += (row['rider_earnings'] ?? 0.0).toDouble() + (row['wait_time_penalty'] ?? 0.0).toDouble();

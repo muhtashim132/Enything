@@ -216,7 +216,9 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
   }
 
   Widget _buildRatingCard(bool isDark) {
-    final maxCount = _ratingDistribution.values.reduce((a, b) => a > b ? a : b);
+    // C2 FIX: reduce() crashes if all values are 0 (new rider with no ratings yet).
+    // fold() with seed 0 returns 0 safely, then frac guard below prevents division by zero.
+    final maxCount = _ratingDistribution.values.fold(0, (a, b) => a > b ? a : b);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(

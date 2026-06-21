@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import '../../models/product_model.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
+import '../../widgets/image_enhancement_studio.dart';
 
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
@@ -46,6 +48,10 @@ class _AddProductPageState extends State<AddProductPage> {
   late List<String> _allowedCategories = [_productCategory]; // secure fallback until shop loads
   List<XFile> _images = [];
   List<String> _existingImageUrls = [];
+  /// Baked (enhanced) bytes for locally picked images, keyed by XFile.path.
+  Map<String, Uint8List> _enhancedBytesMap = {};
+  /// When true, images are uploaded to raw-product-images (triggers AI BG removal).
+  bool _bgRemovalEnabled = true;
 
   List<String> get _availableUnitTypes {
     if (_productCategory == 'Clothing' ||
@@ -181,11 +187,40 @@ class _AddProductPageState extends State<AddProductPage> {
   }
 
   void _removeImage(int index) {
-    setState(() => _images.removeAt(index));
+    setState(() {
+      final removed = _images.removeAt(index);
+      _enhancedBytesMap.remove(removed.path);
+    });
   }
 
   void _removeExistingImage(int index) {
     setState(() => _existingImageUrls.removeAt(index));
+  }
+
+  /// Opens the Image Enhancement Studio and applies results.
+  Future<void> _openEnhancementStudio() async {
+    if (_images.isEmpty && _existingImageUrls.isEmpty) return;
+    final result = await ImageEnhancementStudio.show(
+      context,
+      newImages: _images,
+      existingImageUrls: _existingImageUrls,
+      bgRemovalEnabled: _bgRemovalEnabled,
+    );
+    if (result == null || !mounted) return;
+
+    // Reconstruct XFile list from returned paths (same objects, reordered)
+    final pathToXFile = {for (final f in _images) f.path: f};
+    final reorderedNew = result.newImagePaths
+        .map((p) => pathToXFile[p])
+        .whereType<XFile>()
+        .toList();
+
+    setState(() {
+      _images = reorderedNew;
+      _existingImageUrls = result.existingImageUrls;
+      _enhancedBytesMap = result.bakedBytesMap;
+      _bgRemovalEnabled = result.bgRemovalEnabled;
+    });
   }
 
   Future<void> _saveProduct() async {
@@ -211,14 +246,26 @@ class _AddProductPageState extends State<AddProductPage> {
     setState(() => _isSaving = true);
     try {
       List<String> uploadedUrls = [];
+      // Use the bucket that matches the seller's BG removal preference.
+      // raw-product-images → triggers AI BG removal + enhance-image edge functions.
+      // products           → no AI processing, keeps original background.
+      final uploadBucket = _bgRemovalEnabled ? 'raw-product-images' : 'products';
+
       for (int i = 0; i < _images.length; i++) {
         final file = _images[i];
-        final bytes = await ImageCompressionService.compressFile(File(file.path)) ?? await file.readAsBytes();
+        // Prefer baked (enhanced) bytes if the seller used the studio;
+        // otherwise compress the raw file as before.
+        Uint8List bytes;
+        if (_enhancedBytesMap.containsKey(file.path)) {
+          bytes = _enhancedBytesMap[file.path]!;
+        } else {
+          bytes = await ImageCompressionService.compressFile(File(file.path))
+                  ?? await file.readAsBytes();
+        }
         const ext = 'jpg'; // Format is jpeg
-        final path =
-            '$_shopId/${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
-        await _supabase.storage.from('raw-product-images').uploadBinary(path, bytes);
-        uploadedUrls.add(_supabase.storage.from('raw-product-images').getPublicUrl(path));
+        final path = '$_shopId/${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
+        await _supabase.storage.from(uploadBucket).uploadBinary(path, bytes);
+        uploadedUrls.add(_supabase.storage.from(uploadBucket).getPublicUrl(path));
       }
 
       uploadedUrls.addAll(_existingImageUrls);
@@ -406,6 +453,90 @@ class _AddProductPageState extends State<AddProductPage> {
                     ),
                   ],
                 ),
+              // ── Enhance Photos button + AI status row ──────────────────────
+              if (_images.isNotEmpty || _existingImageUrls.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _openEnhancementStudio,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF6A1B9A), Color(0xFF0A2A9E)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.auto_fix_high,
+                                  color: Colors.white, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                _enhancedBytesMap.isNotEmpty
+                                    ? '✨ Enhanced (${_enhancedBytesMap.length}/${_images.length})'
+                                    : '✨ Enhance Photos',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'Outfit',
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // AI BG removal badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _bgRemovalEnabled
+                            ? AppColors.primary.withValues(alpha: 0.1)
+                            : Colors.grey.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _bgRemovalEnabled
+                              ? AppColors.primary.withValues(alpha: 0.4)
+                              : Colors.grey.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.auto_awesome,
+                            size: 14,
+                            color: _bgRemovalEnabled
+                                ? AppColors.primary
+                                : Colors.grey,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _bgRemovalEnabled ? 'AI ON' : 'AI OFF',
+                            style: TextStyle(
+                              color: _bgRemovalEnabled
+                                  ? AppColors.primary
+                                  : Colors.grey,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'Outfit',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 20),
 
               _card(

@@ -590,7 +590,7 @@ class NotificationProvider extends ChangeNotifier {
           .eq('user_id', userId)
           .order('created_at', ascending: true)
           .limit(50);
-      for (final row in (rows as List)) {
+      for (final row in rows) {
         final notif = AppNotification(
           id: row['notif_key'] as String,
           title: row['title'] as String,

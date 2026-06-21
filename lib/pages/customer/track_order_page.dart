@@ -88,6 +88,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       'subtitle': 'Shop is preparing your order',
       'icon': Icons.restaurant,
     },
+    // M5 FIX: ready_for_pickup was missing — stepper jumped from Preparing → Picked Up
+    {
+      'status': 'ready_for_pickup',
+      'title': 'Ready for Pickup',
+      'subtitle': 'Order is packed, waiting for rider',
+      'icon': Icons.inventory_2_outlined,
+    },
     {
       'status': 'picked_up',
       'title': 'Picked Up',

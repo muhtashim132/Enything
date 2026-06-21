@@ -127,13 +127,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       for (var cartItem in cart.items) {
         final dbProduct = latestProducts.where((p) => p['id'] == cartItem.product.id).firstOrNull;
         if (dbProduct == null) {
-          throw Exception("\${cartItem.product.name} is no longer available.");
+          throw Exception("${cartItem.product.name} is no longer available."); // C3 FIX: was \${...}
         }
         if (dbProduct['is_available'] == false) {
-          throw Exception("\${cartItem.product.name} is currently out of stock.");
+          throw Exception("${cartItem.product.name} is currently out of stock."); // C3 FIX: was \${...}
         }
         if (dbProduct['total_quantity'] != null && dbProduct['total_quantity'] < cartItem.quantity) {
-          throw Exception("Only \${dbProduct['total_quantity']} units of \${cartItem.product.name} are available.");
+          throw Exception("Only ${dbProduct['total_quantity']} units of ${cartItem.product.name} are available."); // C3 FIX: was \${...}
         }
       }
 
@@ -221,10 +221,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopRiderEarnings = riderEarnings / numShops;
         final shopPlatformFee = cart.platformFee / numShops;
 
-        final shopTaxBreakdownItems = shopItems.map((i) => {
-          'category': i.product.category,
-          'price': i.product.price,
-          'quantity': i.quantity,
+        final shopTaxBreakdownItems = shopItems.map((i) {
+          return {
+            'category': i.product.category,
+            'price': i.product.price,
+            'quantity': i.quantity,
+          };
         }).toList();
 
         final shopBreakdown = OrderTaxBreakdown.calculate(
@@ -303,18 +305,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
         orderIds.add(orderId);
 
         final itemsToInsert = shopItems
-            .map((item) => {
-                  'order_id': orderId,
-                  'product_id': item.product.id,
-                  'product_name': item.product.name,
-                  'quantity': item.quantity,
-                  'price': item.product.price,
-                  'weight_kg': item.weightKg,
-                  // BUG-23 FIX: Persist prescription flag so seller knows
-                  // which item requires a valid prescription.
-                  'requires_prescription': item.product.requiresPrescription,
-                  'special_instructions': item.specialInstructions,
-                })
+            .map((item) {
+              return {
+                'order_id': orderId,
+                'product_id': item.product.id,
+                'product_name': item.product.name,
+                'quantity': item.quantity,
+                'price': item.product.price,
+                'weight_kg': item.weightKg,
+                // BUG-23 FIX: Persist prescription flag so seller knows
+                // which item requires a valid prescription.
+                'requires_prescription': item.product.requiresPrescription,
+                'special_instructions': item.specialInstructions,
+              };
+            })
             .toList();
         await supabase.from('order_items').insert(itemsToInsert);
 

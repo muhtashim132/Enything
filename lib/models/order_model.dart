@@ -310,6 +310,10 @@ class OrderModel {
     List<String>? prescriptionUrls,
     String? rejectionMessage,
     double? gstItemTotal,
+    // C1 FIX: These fields were missing from copyWith — they'd silently reset to 0.0 on any copy
+    double? smallCartFee,
+    double? heavyOrderFee,
+    double? deliveryDiscount,
   }) {
     return OrderModel(
       id: id,
@@ -366,6 +370,10 @@ class OrderModel {
       prescriptionUrls: prescriptionUrls ?? this.prescriptionUrls,
       estimatedDistanceKm: estimatedDistanceKm,
       shopPrepTimeSnapshot: shopPrepTimeSnapshot,
+      // C1 FIX: Preserve the 3 previously-dropped fee fields
+      smallCartFee: smallCartFee ?? this.smallCartFee,
+      heavyOrderFee: heavyOrderFee ?? this.heavyOrderFee,
+      deliveryDiscount: deliveryDiscount ?? this.deliveryDiscount,
     );
   }
 
