@@ -61,6 +61,8 @@ void showAddEditAddressDialog(BuildContext context,
     locProv: locProv,
     pickedLocation: result.location,
     pickedAddress: result.address,
+    pickedHouseNumber: result.houseNumber,
+    pickedLandmark: result.landmark,
     existingAddress: existingAddress,
   );
 }
@@ -71,14 +73,16 @@ void _showAddressDetailSheet(
   required LocationProvider locProv,
   required dynamic pickedLocation,
   required String pickedAddress,
+  required String pickedHouseNumber,
+  required String pickedLandmark,
   SavedAddress? existingAddress,
 }) {
   String selectedLabel = existingAddress?.label ?? 'Home';
 
   final flatCtrl = TextEditingController(
-      text: existingAddress?.flatNumber ?? locProv.houseNumber);
+      text: pickedHouseNumber.isNotEmpty ? pickedHouseNumber : (existingAddress?.flatNumber ?? locProv.houseNumber));
   final landmarkCtrl = TextEditingController(
-      text: existingAddress?.landmark ?? locProv.landmark);
+      text: pickedLandmark.isNotEmpty ? pickedLandmark : (existingAddress?.landmark ?? locProv.landmark));
   final pincodeCtrl = TextEditingController(
       text: existingAddress?.pincode ?? locProv.pincode);
   final customLabelCtrl =

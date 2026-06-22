@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
 
 // ─── Result model ─────────────────────────────────────────────────────────────
@@ -15,7 +16,14 @@ import '../theme/app_colors.dart';
 class MapPickResult {
   final LatLng location;
   final String address;
-  const MapPickResult({required this.location, required this.address});
+  final String houseNumber;
+  final String landmark;
+  const MapPickResult({
+    required this.location,
+    required this.address,
+    required this.houseNumber,
+    required this.landmark,
+  });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -73,6 +81,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
 
   // Search
   final _searchCtrl = TextEditingController();
+  final _houseCtrl = TextEditingController();
+  final _landmarkCtrl = TextEditingController();
   Timer? _searchDebounce;
   bool _isSearching = false;
   List<Map<String, dynamic>> _suggestions = [];
@@ -88,9 +98,20 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
+  Future<void> _initPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _houseCtrl.text = prefs.getString('saved_house_number') ?? '';
+        _landmarkCtrl.text = prefs.getString('saved_landmark') ?? '';
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _initPrefs();
 
     _mapController = MapController();
 
@@ -121,6 +142,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
     _mapController.dispose();
     _pinAnim.dispose();
     _searchCtrl.dispose();
+    _houseCtrl.dispose();
+    _landmarkCtrl.dispose();
     _geocodeDebounce?.cancel();
     _searchDebounce?.cancel();
     super.dispose();
@@ -347,7 +370,7 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
 
   // ── Confirm ──────────────────────────────────────────────────────────────────
 
-  void _confirm() {
+  Future<void> _confirm() async {
     if (_isGeocoding) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Finding address, please wait…',
@@ -368,10 +391,22 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
       ));
       return;
     }
-    Navigator.pop(
-      context,
-      MapPickResult(location: _center, address: _address),
-    );
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_house_number', _houseCtrl.text.trim());
+    await prefs.setString('saved_landmark', _landmarkCtrl.text.trim());
+
+    if (mounted) {
+      Navigator.pop(
+        context,
+        MapPickResult(
+          location: _center,
+          address: _address,
+          houseNumber: _houseCtrl.text.trim(),
+          landmark: _landmarkCtrl.text.trim(),
+        ),
+      );
+    }
   }
 
   // ── Build ────────────────────────────────────────────────────────────────────
@@ -725,6 +760,42 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                                       ),
                                     ],
                                   ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Manual Inputs
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _houseCtrl,
+                          style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                          decoration: InputDecoration(
+                            labelText: 'House / Flat No.',
+                            labelStyle: GoogleFonts.outfit(fontSize: 13, color: isDark ? Colors.white54 : Colors.black54),
+                            filled: true,
+                            fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _landmarkCtrl,
+                          style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                          decoration: InputDecoration(
+                            labelText: 'Landmark',
+                            labelStyle: GoogleFonts.outfit(fontSize: 13, color: isDark ? Colors.white54 : Colors.black54),
+                            filled: true,
+                            fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          ),
+                        ),
                       ),
                     ],
                   ),

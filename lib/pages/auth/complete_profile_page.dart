@@ -146,9 +146,17 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
 
       if (!mounted) return;
       if (result != null) {
-        locProv.setManualLocation(result.location, result.address);
+        locProv.setManualLocation(
+          result.location, 
+          result.address, 
+          house: result.houseNumber, 
+          mark: result.landmark
+        );
         setState(() {
           targetCtrl.text = result.address;
+          if (result.landmark.isNotEmpty) {
+            _landmarkCtrl.text = result.landmark;
+          }
           _fetchingLocation = false;
         });
       } else {

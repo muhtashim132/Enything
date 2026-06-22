@@ -273,9 +273,11 @@ class LocationProvider extends ChangeNotifier {
     }
   }
 
-  void setManualLocation(LatLng location, String address) {
+  void setManualLocation(LatLng location, String address, {String? house, String? mark}) {
     _currentLocation = location;
     _currentAddress = address;
+    if (house != null && house.isNotEmpty) _houseNumber = house;
+    if (mark != null && mark.isNotEmpty) _landmark = mark;
     _permissionGranted = true;
     _selectedAddress = null; // Clear manual selection on GPS update
     _autoMatchSavedAddress();

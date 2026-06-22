@@ -20,8 +20,6 @@ class ProductModel {
   final double rating;
   final bool requiresPrescription;
   final String medicineType;
-  final String? cutoutUrl; // AI-processed transparent PNG (background removed)
-  final String? enhancedUrl; // Server-side auto-enhanced JPEG (vivid preset)
 
   ProductModel({
     required this.id,
@@ -45,8 +43,6 @@ class ProductModel {
     this.rating = 0.0,
     this.requiresPrescription = false,
     this.medicineType = 'General',
-    this.cutoutUrl,
-    this.enhancedUrl,
   });
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
@@ -81,8 +77,6 @@ class ProductModel {
       rating: (map['rating'] ?? 0.0).toDouble(),
       requiresPrescription: map['requires_prescription'] ?? false,
       medicineType: map['medicine_type'] ?? 'General',
-      cutoutUrl: map['cutout_url'],
-      enhancedUrl: map['enhanced_url'],
     );
   }
 
@@ -110,21 +104,10 @@ class ProductModel {
 
   String get firstImage => images.isNotEmpty ? images.first : '';
 
-  /// Returns the best available image in priority order:
-  ///   1. cutout_url  — AI background-removed transparent PNG
-  ///   2. enhanced_url — server-side auto-enhanced JPEG (vivid preset)
-  ///   3. raw image   — original upload
+  /// Returns the primary product image
   String get displayImage {
-    if (cutoutUrl != null && cutoutUrl!.isNotEmpty) return cutoutUrl!;
-    if (enhancedUrl != null && enhancedUrl!.isNotEmpty) return enhancedUrl!;
     return firstImage;
   }
-
-  /// True when the AI has processed this product's image
-  bool get hasCutout => cutoutUrl != null && cutoutUrl!.isNotEmpty;
-
-  /// True when server-side enhancement has been applied
-  bool get hasEnhancement => enhancedUrl != null && enhancedUrl!.isNotEmpty;
 
   double? get discountPercent {
     if (originalPrice != null && originalPrice! > price) {

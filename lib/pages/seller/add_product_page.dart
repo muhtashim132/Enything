@@ -13,7 +13,6 @@ import '../../models/product_model.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
-import '../../widgets/image_enhancement_studio.dart';
 
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
@@ -48,10 +47,6 @@ class _AddProductPageState extends State<AddProductPage> {
   late List<String> _allowedCategories = [_productCategory]; // secure fallback until shop loads
   List<XFile> _images = [];
   List<String> _existingImageUrls = [];
-  /// Baked (enhanced) bytes for locally picked images, keyed by XFile.path.
-  Map<String, Uint8List> _enhancedBytesMap = {};
-  /// When true, images are uploaded to raw-product-images (triggers AI BG removal).
-  bool _bgRemovalEnabled = true;
 
   List<String> get _availableUnitTypes {
     if (_productCategory == 'Clothing' ||
@@ -146,11 +141,14 @@ class _AddProductPageState extends State<AddProductPage> {
     if (source == null) return;
     final picker = ImagePicker();
     if (source == ImageSource.camera) {
-      final XFile? picked = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 70,
-      );
-      if (picked != null) {
+      while (_images.length + _existingImageUrls.length < 3) {
+        final XFile? picked = await picker.pickImage(
+          source: ImageSource.camera,
+          imageQuality: 70,
+          maxWidth: 1080,
+          maxHeight: 1080,
+        );
+        if (picked == null) break;
         if (!mounted) return;
         final cropped = await cropImage(
           context, 
@@ -164,9 +162,29 @@ class _AddProductPageState extends State<AddProductPage> {
             if (_images.length > 3) _images = _images.sublist(0, 3);
           });
         }
+        
+        if (_images.length + _existingImageUrls.length >= 3) break;
+        
+        if (!mounted) break;
+        final bool? takeAnother = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Add another?'),
+            content: const Text('Would you like to take another photo?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes')),
+            ],
+          ),
+        );
+        if (takeAnother != true) break;
       }
     } else {
-      final List<XFile> picked = await picker.pickMultiImage(imageQuality: 70);
+      final List<XFile> picked = await picker.pickMultiImage(
+        imageQuality: 70,
+        maxWidth: 1080,
+        maxHeight: 1080,
+      );
       if (picked.isNotEmpty) {
         for (var p in picked) {
           if (!mounted) return;
@@ -186,41 +204,50 @@ class _AddProductPageState extends State<AddProductPage> {
     }
   }
 
+  void _showImagePreview(ImageProvider imageProvider) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              panEnabled: true,
+              minScale: 1.0,
+              maxScale: 4.0,
+              child: Image(image: imageProvider, fit: BoxFit.contain),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 24),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _removeImage(int index) {
     setState(() {
-      final removed = _images.removeAt(index);
-      _enhancedBytesMap.remove(removed.path);
+      _images.removeAt(index);
     });
   }
 
   void _removeExistingImage(int index) {
     setState(() => _existingImageUrls.removeAt(index));
-  }
-
-  /// Opens the Image Enhancement Studio and applies results.
-  Future<void> _openEnhancementStudio() async {
-    if (_images.isEmpty && _existingImageUrls.isEmpty) return;
-    final result = await ImageEnhancementStudio.show(
-      context,
-      newImages: _images,
-      existingImageUrls: _existingImageUrls,
-      bgRemovalEnabled: _bgRemovalEnabled,
-    );
-    if (result == null || !mounted) return;
-
-    // Reconstruct XFile list from returned paths (same objects, reordered)
-    final pathToXFile = {for (final f in _images) f.path: f};
-    final reorderedNew = result.newImagePaths
-        .map((p) => pathToXFile[p])
-        .whereType<XFile>()
-        .toList();
-
-    setState(() {
-      _images = reorderedNew;
-      _existingImageUrls = result.existingImageUrls;
-      _enhancedBytesMap = result.bakedBytesMap;
-      _bgRemovalEnabled = result.bgRemovalEnabled;
-    });
   }
 
   Future<void> _saveProduct() async {
@@ -246,22 +273,12 @@ class _AddProductPageState extends State<AddProductPage> {
     setState(() => _isSaving = true);
     try {
       List<String> uploadedUrls = [];
-      // Use the bucket that matches the seller's BG removal preference.
-      // raw-product-images → triggers AI BG removal + enhance-image edge functions.
-      // products           → no AI processing, keeps original background.
-      final uploadBucket = _bgRemovalEnabled ? 'raw-product-images' : 'products';
+      final uploadBucket = 'products';
 
       for (int i = 0; i < _images.length; i++) {
         final file = _images[i];
-        // Prefer baked (enhanced) bytes if the seller used the studio;
-        // otherwise compress the raw file as before.
-        Uint8List bytes;
-        if (_enhancedBytesMap.containsKey(file.path)) {
-          bytes = _enhancedBytesMap[file.path]!;
-        } else {
-          bytes = await ImageCompressionService.compressFile(File(file.path))
-                  ?? await file.readAsBytes();
-        }
+        Uint8List bytes = await ImageCompressionService.compressFile(File(file.path))
+                ?? await file.readAsBytes();
         const ext = 'jpg'; // Format is jpeg
         final path = '$_shopId/${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
         await _supabase.storage.from(uploadBucket).uploadBinary(path, bytes);
@@ -409,18 +426,29 @@ class _AddProductPageState extends State<AddProductPage> {
                               ),
                             );
                           }
+                          final isExisting = index < _existingImageUrls.length;
+                          final imagePath = isExisting ? null : _images[index - _existingImageUrls.length].path;
+                          
+                          ImageProvider provider;
+                          if (isExisting) {
+                            provider = NetworkImage(_existingImageUrls[index]);
+                          } else {
+                            provider = FileImage(File(imagePath!));
+                          }
+
                           return Stack(
                             children: [
-                              Container(
-                                width: 120,
-                                margin: const EdgeInsets.only(right: 12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  image: DecorationImage(
-                                    image: index < _existingImageUrls.length
-                                        ? NetworkImage(_existingImageUrls[index])
-                                        : FileImage(File(_images[index - _existingImageUrls.length].path)) as ImageProvider,
-                                    fit: BoxFit.cover,
+                              GestureDetector(
+                                onTap: () => _showImagePreview(provider),
+                                child: Container(
+                                  width: 120,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    image: DecorationImage(
+                                      image: provider,
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -453,90 +481,6 @@ class _AddProductPageState extends State<AddProductPage> {
                     ),
                   ],
                 ),
-              // ── Enhance Photos button + AI status row ──────────────────────
-              if (_images.isNotEmpty || _existingImageUrls.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: _openEnhancementStudio,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF6A1B9A), Color(0xFF0A2A9E)],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.auto_fix_high,
-                                  color: Colors.white, size: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                _enhancedBytesMap.isNotEmpty
-                                    ? '✨ Enhanced (${_enhancedBytesMap.length}/${_images.length})'
-                                    : '✨ Enhance Photos',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontFamily: 'Outfit',
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // AI BG removal badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _bgRemovalEnabled
-                            ? AppColors.primary.withValues(alpha: 0.1)
-                            : Colors.grey.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _bgRemovalEnabled
-                              ? AppColors.primary.withValues(alpha: 0.4)
-                              : Colors.grey.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.auto_awesome,
-                            size: 14,
-                            color: _bgRemovalEnabled
-                                ? AppColors.primary
-                                : Colors.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _bgRemovalEnabled ? 'AI ON' : 'AI OFF',
-                            style: TextStyle(
-                              color: _bgRemovalEnabled
-                                  ? AppColors.primary
-                                  : Colors.grey,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'Outfit',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
               const SizedBox(height: 20),
 
               _card(
