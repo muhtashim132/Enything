@@ -43,6 +43,8 @@ void showAddEditAddressDialog(BuildContext context,
       builder: (_) => MapPinPickerPage(
         initialLocation: seedLocation,
         initialAddress: seedAddress,
+        initialHouseNumber: existingAddress?.flatNumber,
+        initialLandmark: existingAddress?.landmark,
         title: existingAddress != null
             ? 'Move Pin to Edit Location'
             : 'Select Your Location',
@@ -61,8 +63,8 @@ void showAddEditAddressDialog(BuildContext context,
     locProv: locProv,
     pickedLocation: result.location,
     pickedAddress: result.address,
-    pickedHouseNumber: result.houseNumber,
-    pickedLandmark: result.landmark,
+    houseFromMap: result.houseNumber,
+    landmarkFromMap: result.landmark,
     existingAddress: existingAddress,
   );
 }
@@ -73,16 +75,23 @@ void _showAddressDetailSheet(
   required LocationProvider locProv,
   required dynamic pickedLocation,
   required String pickedAddress,
-  required String pickedHouseNumber,
-  required String pickedLandmark,
+  /// House/Building name captured on the map page (takes priority over locProv)
+  String houseFromMap = '',
+  /// Landmark captured on the map page (takes priority over locProv)
+  String landmarkFromMap = '',
   SavedAddress? existingAddress,
 }) {
   String selectedLabel = existingAddress?.label ?? 'Home';
 
+  // Priority: map-page input > existing saved address > locProv defaults
   final flatCtrl = TextEditingController(
-      text: pickedHouseNumber.isNotEmpty ? pickedHouseNumber : (existingAddress?.flatNumber ?? locProv.houseNumber));
+      text: houseFromMap.isNotEmpty
+          ? houseFromMap
+          : (existingAddress?.flatNumber ?? locProv.houseNumber));
   final landmarkCtrl = TextEditingController(
-      text: pickedLandmark.isNotEmpty ? pickedLandmark : (existingAddress?.landmark ?? locProv.landmark));
+      text: landmarkFromMap.isNotEmpty
+          ? landmarkFromMap
+          : (existingAddress?.landmark ?? locProv.landmark));
   final pincodeCtrl = TextEditingController(
       text: existingAddress?.pincode ?? locProv.pincode);
   final customLabelCtrl =
@@ -295,9 +304,10 @@ void _showAddressDetailSheet(
                     TextField(
                       controller: flatCtrl,
                       decoration: InputDecoration(
-                        labelText: 'House / Flat Number',
-                        hintText: 'e.g. A-404',
+                        labelText: 'House No. / Building Name *',
+                        hintText: 'e.g. A-404, Green Valley Apartments',
                         labelStyle: GoogleFonts.outfit(),
+                        prefixIcon: const Icon(Icons.home_outlined, size: 20),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -306,9 +316,10 @@ void _showAddressDetailSheet(
                     TextField(
                       controller: landmarkCtrl,
                       decoration: InputDecoration(
-                        labelText: 'Landmark',
-                        hintText: 'e.g. Near City Mall',
+                        labelText: 'Landmark *',
+                        hintText: 'e.g. Near City Mall, Opp. Police Station',
                         labelStyle: GoogleFonts.outfit(),
+                        prefixIcon: const Icon(Icons.flag_outlined, size: 20),
                       ),
                     ),
                     const SizedBox(height: 16),

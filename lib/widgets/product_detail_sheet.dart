@@ -139,8 +139,11 @@ class _SheetContent extends StatelessWidget {
     final quantity = cart.getItemQuantity(product.id);
     final isFav = favs.isProductFavorite(product.id);
 
-    return CustomScrollView(
-      controller: scrollController,
+    return Column(
+      children: [
+        Expanded(
+          child: CustomScrollView(
+            controller: scrollController,
       slivers: [
         // ── Drag handle ──────────────────────────────────────────────────────
         SliverToBoxAdapter(
@@ -214,8 +217,9 @@ class _SheetContent extends StatelessWidget {
                   },
                 ),
 
-                // Image background tint
-                Positioned.fill(
+                // Image background tint (top only for icons)
+                Positioned(
+                  top: 0, left: 0, right: 0, height: 80,
                   child: IgnorePointer(
                     child: Container(
                       decoration: BoxDecoration(
@@ -223,8 +227,8 @@ class _SheetContent extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            const Color(0xFFF8F9FA).withValues(alpha: 0.8), 
-                            const Color(0xFFE9ECEF).withValues(alpha: 0.4)
+                            Colors.black.withValues(alpha: 0.3),
+                            Colors.transparent,
                           ],
                         ),
                       ),
@@ -466,12 +470,6 @@ class _SheetContent extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // ADD / quantity stepper
-                    _AddButton(
-                      product: product,
-                      shop: shop,
-                      quantity: quantity,
-                    ),
                   ],
                 ),
               ],
@@ -656,100 +654,123 @@ class _SheetContent extends StatelessWidget {
 
         // Bottom spacing
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
+            ],
+          ),
+        ),
+        _buildBottomBar(context, quantity, cart),
       ],
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADD / quantity stepper button
-// ─────────────────────────────────────────────────────────────────────────────
-class _AddButton extends StatelessWidget {
-  final ProductModel product;
-  final ShopModel? shop;
-  final int quantity;
-
-  const _AddButton(
-      {required this.product, required this.shop, required this.quantity});
-
-  @override
-  Widget build(BuildContext context) {
-    if (quantity > 0) {
-      return Container(
-        height: 44,
-        width: 120,
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.35),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            GestureDetector(
-              onTap: () => context
-                  .read<CartProvider>()
-                  .updateQuantity(product.id, quantity - 1),
-              child: const Icon(Icons.remove, size: 20, color: Colors.white),
-            ),
-            Text(
-              '$quantity',
-              style: GoogleFonts.outfit(
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-                color: Colors.white,
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                if (shop != null) {
-                  context.read<CartProvider>().addItem(product, shop!);
-                }
-              },
-              child: const Icon(Icons.add, size: 20, color: Colors.white),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return GestureDetector(
-      onTap: () {
-        if (shop != null) {
-          context.read<CartProvider>().addItem(product, shop!);
-        }
-      },
-      child: Container(
-        height: 44,
-        width: 100,
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.35),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            'ADD',
-            style: GoogleFonts.outfit(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-              letterSpacing: 1,
-            ),
+  Widget _buildBottomBar(BuildContext context, int quantity, CartProvider cart) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1A1A2E) : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
           ),
-        ),
+        ],
+      ),
+      child: quantity > 0
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _qtyBtn(Icons.remove, () {
+                  if (shop != null) cart.updateQuantity(product.id, quantity - 1);
+                }),
+                const SizedBox(width: 28),
+                Text('$quantity', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800)),
+                const SizedBox(width: 28),
+                _qtyBtn(Icons.add, () {
+                  if (shop != null) cart.addItem(product, shop!);
+                }),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).clearSnackBars();
+                      Navigator.pushNamed(context, '/cart');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('View Cart', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      if (shop != null) {
+                        cart.addItem(product, shop!);
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${product.name} added to cart! 🛒'),
+                            backgroundColor: AppColors.success,
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            action: SnackBarAction(
+                              label: 'View Cart',
+                              textColor: Colors.white,
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).clearSnackBars();
+                                Navigator.pushNamed(context, '/cart');
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: AppColors.primary, width: 2),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('ADD TO CART', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (shop != null) {
+                        cart.addItem(product, shop!);
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        Navigator.pushNamed(context, '/cart');
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('BUY NOW', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _qtyBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(50),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(border: Border.all(color: AppColors.primary, width: 2), shape: BoxShape.circle),
+        child: Icon(icon, color: AppColors.primary, size: 18),
       ),
     );
   }

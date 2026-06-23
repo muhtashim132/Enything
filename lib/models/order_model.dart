@@ -32,6 +32,9 @@ class OrderModel {
   String? deliveryPartnerId;
   final String? shopId;
   final String? address;
+  /// Emoji + label string saved at checkout — e.g. "🏠 Home", "💼 Office".
+  /// Null for legacy orders placed before this feature.
+  final String? addressLabel;
   final String? deliveryNotes;
   final String? customerPhone;
   final String? shopPhone;
@@ -149,6 +152,7 @@ class OrderModel {
     this.deliveryPartnerId,
     this.shopId,
     this.address,
+    this.addressLabel,
     this.deliveryNotes,
     this.customerPhone,
     this.shopPhone,
@@ -209,6 +213,7 @@ class OrderModel {
       deliveryPartnerId: map['delivery_partner_id'],
       shopId: map['shop_id'],
       address: map['address'],
+      addressLabel: map['address_label'],
       deliveryNotes: map['delivery_notes'],
       customerPhone: map['customer_phone'],
       shopPhone: map['shop_phone'],
@@ -289,6 +294,8 @@ class OrderModel {
     String? status,
     String? deliveryPartnerId,
     String? shopId,
+    String? address,
+    String? addressLabel,
     String? customerPhone,
     String? shopPhone,
     String? riderPhone,
@@ -328,7 +335,8 @@ class OrderModel {
       items: items,
       deliveryPartnerId: deliveryPartnerId ?? this.deliveryPartnerId,
       shopId: shopId ?? this.shopId,
-      address: address,
+      address: address ?? this.address,
+      addressLabel: addressLabel ?? this.addressLabel,
       deliveryNotes: deliveryNotes,
       customerPhone: customerPhone ?? this.customerPhone,
       shopPhone: shopPhone ?? this.shopPhone,

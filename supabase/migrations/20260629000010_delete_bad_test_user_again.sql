@@ -1,0 +1,1 @@
+DELETE FROM auth.users WHERE email = 'mock919999999996@enything.com';

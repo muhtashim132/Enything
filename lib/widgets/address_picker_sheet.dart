@@ -16,13 +16,25 @@ void showAddressPickerSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => _AddressPickerContent(userId: userId),
+    builder: (ctx) => _AddressPickerContent(
+      userId: userId,
+      // Pass the PARENT (scaffold) context so showAddEditAddressDialog
+      // is called with a context that remains mounted after the sheet
+      // closes — fixes the silent bug where Step 2 was skipped.
+      rootContext: context,
+    ),
   );
 }
 
 class _AddressPickerContent extends StatefulWidget {
   final String userId;
-  const _AddressPickerContent({required this.userId});
+  /// Parent (scaffold) context — stays alive after the sheet is dismissed.
+  /// Used when launching the 2-step add/edit address flow.
+  final BuildContext rootContext;
+  const _AddressPickerContent({
+    required this.userId,
+    required this.rootContext,
+  });
 
   @override
   State<_AddressPickerContent> createState() => _AddressPickerContentState();
@@ -237,9 +249,12 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                     trailing: GestureDetector(
                       onTap: () {
                         // Close picker first, then open 2-step edit flow
+                        // Use widget.rootContext (parent scaffold context) so the
+                        // mounted check inside showAddEditAddressDialog passes
+                        // even after this sheet's context is disposed.
                         Navigator.pop(context);
                         showAddEditAddressDialog(
-                          context,
+                          widget.rootContext,
                           existingAddress: addr,
                         );
                       },
@@ -275,12 +290,22 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
               child: SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () {
+                  onPressed: locProv.savedAddresses.length >= 4 ? () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Maximum 4 addresses allowed. Please edit or delete an existing one.'),
+                        backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                      )
+                    );
+                  } : () {
+                    // Use rootContext (parent scaffold context) for the same
+                    // reason as in the edit flow above.
                     Navigator.pop(context);
-                    showAddEditAddressDialog(context);
+                    showAddEditAddressDialog(widget.rootContext);
                   },
                   icon: const Icon(Icons.add_location_alt_outlined, size: 18),
-                  label: Text('Add new address',
+                  label: Text(locProv.savedAddresses.length >= 4 ? 'Maximum 4 addresses' : 'Add new address',
                       style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -338,12 +363,22 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
         ),
       ),
       onTap: () async {
+        // Capture rootContext before any async gap (lint: use_build_context_synchronously)
+        final navContext = widget.rootContext;
         setState(() => _isLocating = true);
         locProv.clearSelectedAddress();
         await locProv.requestLocation();
         if (mounted) {
           setState(() => _isLocating = false);
           Navigator.pop(context);
+          if (locProv.matchedAddress != null) {
+            locProv.selectSavedAddress(locProv.matchedAddress!);
+          } else {
+            // Safe: navContext is the parent scaffold context (rootContext),
+            // not the sheet's own context — it remains mounted after the sheet closes.
+            // ignore: use_build_context_synchronously
+            showAddEditAddressDialog(navContext);
+          }
         }
       },
     );

@@ -97,6 +97,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return DraggableScrollableSheet(
       initialChildSize: 0.65,
       minChildSize: 0.4,
@@ -105,9 +106,10 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
       snapSizes: const [0.65, 1.0],
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFFAFAFA),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF7F8FC),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -122,21 +124,23 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                             SliverToBoxAdapter(
                               child: Center(
                                 child: Container(
-                                  margin:
-                                      const EdgeInsets.only(top: 12, bottom: 8),
-                                  width: 40,
+                                  margin: const EdgeInsets.only(
+                                      top: 12, bottom: 4),
+                                  width: 44,
                                   height: 4,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade300,
+                                    color: isDark
+                                        ? Colors.white24
+                                        : Colors.grey.shade300,
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
                               ),
                             ),
-                            _buildHeroAppBar(),
-                            _buildInfoStrip(),
-                            _buildCategoryTabs(),
-                            _buildMenuGrid(),
+                            _buildHeroAppBar(isDark),
+                            _buildInfoStrip(isDark),
+                            _buildCategoryTabs(isDark),
+                            _buildMenuGrid(isDark),
                             const SliverToBoxAdapter(
                                 child: SizedBox(height: 120)),
                           ],
@@ -165,17 +169,18 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
   // ─────────────────────────────────────────────────────────────────────────
   // Hero SliverAppBar
   // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildHeroAppBar() {
+  Widget _buildHeroAppBar(bool isDark) {
     final favs = context.watch<FavoritesProvider>();
     final auth = context.watch<AuthProvider>();
     final isFav = favs.isShopFavorite(_shop!.id);
 
     return SliverAppBar(
-      expandedHeight: 220,
+      expandedHeight: 230,
       pinned: true,
       stretch: true,
       elevation: 0,
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor:
+          isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF7F8FC),
       leading: const SizedBox.shrink(),
       leadingWidth: 0,
       actions: [
@@ -185,22 +190,31 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
               favs.toggleShopFavorite(auth.currentUserId!, _shop!.id);
             }
           },
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isFav
+                  ? Colors.red.withValues(alpha: 0.15)
+                  : Colors.white.withValues(alpha: 0.92),
               shape: BoxShape.circle,
+              border: isFav
+                  ? Border.all(
+                      color: Colors.red.withValues(alpha: 0.3), width: 1.5)
+                  : null,
               boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8)
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 10)
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Icon(
-                isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                color: isFav ? Colors.red : AppColors.textSecondary,
-                size: 20,
-              ),
+            child: Icon(
+              isFav
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              color: isFav ? Colors.red : AppColors.textSecondary,
+              size: 20,
             ),
           ),
         ),
@@ -210,7 +224,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
         background: Stack(
           fit: StackFit.expand,
           children: [
-            // Banner
+            // Banner image
             _shop!.bannerImage != null
                 ? CachedNetworkImage(
                     imageUrl: _shop!.bannerImage!,
@@ -219,36 +233,66 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                     errorWidget: (_, __, ___) => _heroBannerPlaceholder(),
                   )
                 : _heroBannerPlaceholder(),
-            // Dark gradient overlay
+            // Cinematic gradient overlay
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.75),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.80),
                   ],
+                  stops: const [0.0, 0.45, 1.0],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  stops: const [0.4, 1.0],
                 ),
               ),
             ),
-            // Shop name & cuisine at bottom of hero
+            // Name + cuisine at bottom
             Positioned(
               bottom: 20,
               left: 20,
-              right: 20,
+              right: 72,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Bestseller badge
+                  if (_shop!.rating >= 4.2 && _shop!.totalReviews > 20) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF9F43), Color(0xFFEE5A24)],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.local_fire_department_rounded,
+                              size: 11, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text('BESTSELLER',
+                              style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.6)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Text(
                     _shop!.name,
                     style: GoogleFonts.outfit(
-                      fontSize: 28,
+                      fontSize: 26,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
-                      shadows: [
-                        const Shadow(blurRadius: 12, color: Colors.black54),
+                      letterSpacing: -0.5,
+                      shadows: const [
+                        Shadow(blurRadius: 16, color: Colors.black54),
                       ],
                     ),
                   ),
@@ -257,8 +301,9 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                     Text(
                       _shop!.cuisineType!,
                       style: GoogleFonts.outfit(
-                        fontSize: 14,
-                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.82),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -272,157 +317,244 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
   }
 
   Widget _heroBannerPlaceholder() => Container(
-        color: const Color(0xFF2D0B6B),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1A0040), Color(0xFF4A0080), Color(0xFF6D1B9A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
         child: const Center(
           child: Text('🍽️', style: TextStyle(fontSize: 72)),
         ),
       );
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Info strip (rating | time | distance | veg badge | FSSAI)
+  // Info strip — glassmorphism stat boxes
   // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildInfoStrip() {
+  Widget _buildInfoStrip(bool isDark) {
     return SliverToBoxAdapter(
       child: Container(
-        color: Colors.white,
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Quick stats row
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Row(
-                children: [
-                  _statBox(
-                    label: _shop!.totalOrders > 0
-                        ? _shop!.rating.toStringAsFixed(1)
-                        : 'New',
-                    sub: 'Rating',
-                    icon: Icons.star_rounded,
-                    iconColor: const Color(0xFF48BB78),
-                  ),
-                  _divider(),
-                  _statBox(
-                    label: '${_shop!.prepTimeMinutes} min',
-                    sub: 'Prep time',
-                    icon: Icons.timer_outlined,
-                    iconColor: Colors.blue.shade600,
-                  ),
-                  _divider(),
-                  _statBox(
-                    label: '${_shop!.totalOrders}+',
-                    sub: 'Orders',
-                    icon: Icons.receipt_long_outlined,
-                    iconColor: Colors.orange.shade700,
-                  ),
-                ],
-              ),
+            // Stats row
+            Row(
+              children: [
+                _statCard(
+                  label: _shop!.totalReviews > 0
+                      ? _shop!.rating.toStringAsFixed(1)
+                      : 'New',
+                  sub: 'Rating',
+                  icon: Icons.star_rounded,
+                  iconColor: const Color(0xFF48BB78),
+                  gradColors: isDark
+                      ? [const Color(0xFF1A2A1A), const Color(0xFF162416)]
+                      : [const Color(0xFFF0FFF4), Colors.white],
+                  isDark: isDark,
+                ),
+                const SizedBox(width: 10),
+                _statCard(
+                  label: '${_shop!.prepTimeMinutes} min',
+                  sub: 'Prep time',
+                  icon: Icons.timer_rounded,
+                  iconColor: const Color(0xFF4299E1),
+                  gradColors: isDark
+                      ? [const Color(0xFF1A1E2A), const Color(0xFF141824)]
+                      : [const Color(0xFFEBF8FF), Colors.white],
+                  isDark: isDark,
+                ),
+                const SizedBox(width: 10),
+                _statCard(
+                  label: '${_shop!.totalOrders}+',
+                  sub: 'Orders',
+                  icon: Icons.receipt_long_rounded,
+                  iconColor: const Color(0xFFED8936),
+                  gradColors: isDark
+                      ? [const Color(0xFF2A1E10), const Color(0xFF241810)]
+                      : [const Color(0xFFFFFAF0), Colors.white],
+                  isDark: isDark,
+                ),
+              ],
             ),
-            const Divider(height: 1, color: Color(0xFFF0F0F0)),
+
+            const SizedBox(height: 12),
+
             // Address row
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: isDark
+                    ? Border.all(color: Colors.white.withValues(alpha: 0.08))
+                    : Border.all(color: Colors.grey.shade100),
+                boxShadow: isDark
+                    ? []
+                    : [
+                        BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8)
+                      ],
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.location_on_outlined,
-                      size: 15, color: AppColors.textSecondary),
-                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.location_on_rounded,
+                        size: 14, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       _shop!.address,
                       style: GoogleFonts.outfit(
-                          fontSize: 12, color: AppColors.textSecondary),
+                        fontSize: 12,
+                        color: isDark
+                            ? Colors.white60
+                            : AppColors.textSecondary,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(height: 12),
+
             // Badge row
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  if (_shop!.isVegOnly)
-                    _badge('Pure Veg', Icons.eco, Colors.green.shade600),
-                  if (_shop!.fssaiNumber != null)
-                    _badge('FSSAI: ${_shop!.fssaiNumber}',
-                        Icons.verified_outlined, Colors.blue.shade600),
-                  if (_shop!.openingHours != null)
-                    _badge(_shop!.openingHours!, Icons.access_time_outlined,
-                        Colors.grey.shade600),
-                ],
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (_shop!.isVegOnly)
+                  _modernBadge('Pure Veg', Icons.eco, Colors.green.shade600,
+                      isDark),
+                if (_shop!.fssaiNumber != null)
+                  _modernBadge(
+                      'FSSAI: ${_shop!.fssaiNumber}',
+                      Icons.verified_outlined,
+                      Colors.blue.shade600,
+                      isDark),
+                if (_shop!.openingHours != null)
+                  _modernBadge(_shop!.openingHours!, Icons.access_time_rounded,
+                      Colors.grey.shade600, isDark),
+              ],
             ),
-            const Divider(height: 1, color: Color(0xFFF0F0F0)),
+
+            const SizedBox(height: 16),
+            Divider(
+              height: 1,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.grey.shade100,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _statBox(
-      {required String label,
-      required String sub,
-      required IconData icon,
-      required Color iconColor}) {
+  Widget _statCard({
+    required String label,
+    required String sub,
+    required IconData icon,
+    required Color iconColor,
+    required List<Color> gradColors,
+    required bool isDark,
+  }) {
     return Expanded(
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: iconColor),
-              const SizedBox(width: 4),
-              Text(label,
-                  style: GoogleFonts.outfit(
-                      fontSize: 16, fontWeight: FontWeight.w800)),
-            ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradColors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          Text(sub,
+          borderRadius: BorderRadius.circular(16),
+          border: isDark
+              ? Border.all(color: Colors.white.withValues(alpha: 0.08))
+              : Border.all(color: Colors.grey.shade100),
+          boxShadow: isDark
+              ? []
+              : [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3)),
+                ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: iconColor),
+                const SizedBox(width: 4),
+                Text(label,
+                    style: GoogleFonts.outfit(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(sub,
+                style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    color: isDark
+                        ? Colors.white54
+                        : AppColors.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _modernBadge(
+      String label, IconData icon, Color color, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark
+            ? color.withValues(alpha: 0.15)
+            : color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 5),
+          Text(label,
               style: GoogleFonts.outfit(
-                  fontSize: 11, color: AppColors.textSecondary)),
+                  fontSize: 11, fontWeight: FontWeight.w700, color: color)),
         ],
       ),
     );
   }
 
-  Widget _divider() => Container(
-      width: 1,
-      height: 36,
-      color: const Color(0xFFE5E7EB),
-      margin: const EdgeInsets.symmetric(horizontal: 4));
-
-  Widget _badge(String label, IconData icon, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: color),
-            const SizedBox(width: 4),
-            Text(label,
-                style: GoogleFonts.outfit(
-                    fontSize: 11, fontWeight: FontWeight.w600, color: color)),
-          ],
-        ),
-      );
-
   // ─────────────────────────────────────────────────────────────────────────
-  // Category tabs (horizontal scrollable chips)
+  // Category tabs — underline style (Swiggy-style)
   // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildCategoryTabs() {
+  Widget _buildCategoryTabs(bool isDark) {
     final cats = _menuCategories;
     return SliverPersistentHeader(
       pinned: true,
       delegate: _StickyTabsDelegate(
         child: Container(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF7F8FC),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -431,30 +563,52 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                 child: Text(
                   'Menu',
                   style: GoogleFonts.outfit(
-                      fontSize: 20, fontWeight: FontWeight.w800),
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                    letterSpacing: -0.3,
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               SizedBox(
-                height: 36,
+                height: 38,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: cats.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, __) => const SizedBox(width: 4),
                   itemBuilder: (_, i) {
                     final isSelected = _selectedCategory == cats[i];
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedCategory = cats[i]),
+                      onTap: () =>
+                          setState(() => _selectedCategory = cats[i]),
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
+                        duration: const Duration(milliseconds: 220),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
+                            horizontal: 16, vertical: 6),
                         decoration: BoxDecoration(
                           color: isSelected
                               ? AppColors.primary
-                              : const Color(0xFFF0F0F8),
+                              : (isDark
+                                  ? Colors.white.withValues(alpha: 0.07)
+                                  : Colors.white),
                           borderRadius: BorderRadius.circular(20),
+                          border: isSelected
+                              ? null
+                              : Border.all(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.12)
+                                      : Colors.grey.shade200),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.35),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4)),
+                                ]
+                              : [],
                         ),
                         child: Text(
                           cats[i],
@@ -463,7 +617,9 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                             fontWeight: FontWeight.w700,
                             color: isSelected
                                 ? Colors.white
-                                : AppColors.textSecondary,
+                                : (isDark
+                                    ? Colors.white60
+                                    : AppColors.textSecondary),
                           ),
                         ),
                       ),
@@ -472,7 +628,12 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                 ),
               ),
               const SizedBox(height: 10),
-              const Divider(height: 1, color: Color(0xFFF0F0F0)),
+              Divider(
+                height: 1,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.grey.shade100,
+              ),
             ],
           ),
         ),
@@ -481,22 +642,34 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Menu list — full-width horizontal item rows (food-style)
+  // Menu list — premium food item rows
   // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildMenuGrid() {
+  Widget _buildMenuGrid(bool isDark) {
     final items = _filteredProducts;
 
     if (items.isEmpty) {
-      return const SliverToBoxAdapter(
+      return SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.all(48),
+          padding: const EdgeInsets.all(48),
           child: Center(
             child: Column(
               children: [
-                Text('🍽️', style: TextStyle(fontSize: 56)),
-                SizedBox(height: 12),
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : const Color(0xFFF0F0F8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Text('🍽️', style: TextStyle(fontSize: 38)),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 Text('No items in this category',
-                    style: TextStyle(
+                    style: GoogleFonts.outfit(
                         color: AppColors.textSecondary, fontSize: 15)),
               ],
             ),
@@ -506,189 +679,295 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
     }
 
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
-          (_, i) => _buildMenuItem(items[i]),
+          (_, i) => _buildMenuItem(items[i], isDark),
           childCount: items.length,
         ),
       ),
     );
   }
 
-  Widget _buildMenuItem(ProductModel product) {
+  Widget _buildMenuItem(ProductModel product, bool isDark) {
     final cart = context.read<CartProvider>();
     final quantity = cart.getItemQuantity(product.id);
     final isVeg = product.isVeg;
+    final isBestseller =
+        product.rating >= 4.2 && product.totalReviews > 10;
+    final hasDiscount = product.discountPercent != null &&
+        product.discountPercent! > 0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: isDark
+            ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+            : null,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.3)
+                  : Colors.black.withValues(alpha: 0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 5)),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Info ────────────────────────────────────────────────────
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Veg / Non-veg indicator
-                if (isVeg != null) ...[
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: isVeg ? Colors.green : Colors.red, width: 1.5),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Info ───────────────────────────────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Veg/NonVeg indicator (FSSAI style)
+                  if (isVeg != null) ...[
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        border: Border.all(
                           color: isVeg ? Colors.green : Colors.red,
-                          shape: BoxShape.circle,
+                          width: 1.5,
                         ),
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                ],
-                Text(
-                  product.name,
-                  style: GoogleFonts.outfit(
-                      fontSize: 15, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                if (product.description != null &&
-                    product.description!.isNotEmpty)
-                  Text(
-                    product.description!,
-                    style: GoogleFonts.outfit(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                        height: 1.4),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                const SizedBox(height: 8),
-                Text(
-                  '₹${product.price.toStringAsFixed(0)}',
-                  style: GoogleFonts.outfit(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // ── Image + Add button ──────────────────────────────────────
-          Column(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: product.displayImage.isNotEmpty
-                    ? Image.network(
-                        product.displayImage,
-                        width: 100,
-                        height: 90,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _foodImgPlaceholder(),
-                      )
-                    : _foodImgPlaceholder(),
-              ),
-              const SizedBox(height: 8),
-              // Quantity stepper / ADD button
-              quantity == 0
-                  ? GestureDetector(
-                      onTap: () {
-                        cart.addItem(product, _shop!);
-                        setState(() {});
-                      },
-                      child: Container(
-                        width: 100,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border:
-                              Border.all(color: AppColors.primary, width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.12),
-                                blurRadius: 8),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            'ADD',
-                            style: GoogleFonts.outfit(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13),
+                      child: Center(
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: isVeg ? Colors.green : Colors.red,
+                            shape: BoxShape.circle,
                           ),
                         ),
                       ),
-                    )
-                  : Container(
-                      width: 100,
-                      height: 36,
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+
+                  // Bestseller tag
+                  if (isBestseller) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(10),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF9F43), Color(0xFFEE5A24)],
+                        ),
+                        borderRadius: BorderRadius.circular(7),
                       ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          GestureDetector(
-                            onTap: () {
-                              cart.updateQuantity(product.id, quantity - 1);
-                              setState(() {});
-                            },
-                            child: const Icon(Icons.remove,
-                                color: Colors.white, size: 18),
-                          ),
-                          Text('$quantity',
+                          const Icon(Icons.local_fire_department_rounded,
+                              size: 10, color: Colors.white),
+                          const SizedBox(width: 3),
+                          Text('Bestseller',
                               style: GoogleFonts.outfit(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14)),
-                          GestureDetector(
-                            onTap: () {
-                              cart.addItem(product, _shop!);
-                              setState(() {});
-                            },
-                            child: const Icon(Icons.add,
-                                color: Colors.white, size: 18),
-                          ),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900)),
                         ],
                       ),
                     ),
-            ],
-          ),
-        ],
+                    const SizedBox(height: 6),
+                  ],
+
+                  Text(
+                    product.name,
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  if (product.description != null &&
+                      product.description!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      product.description!,
+                      style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: isDark
+                              ? Colors.white54
+                              : AppColors.textSecondary,
+                          height: 1.4),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text(
+                        '₹${product.price.toStringAsFixed(0)}',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                        ),
+                      ),
+                      if (hasDiscount) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '₹${product.originalPrice!.toStringAsFixed(0)}',
+                          style: GoogleFonts.outfit(
+                            color: isDark
+                                ? Colors.white38
+                                : AppColors.textLight,
+                            fontSize: 12,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF3366)
+                                .withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${product.discountPercent!.toStringAsFixed(0)}% off',
+                            style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFFF3366)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // ── Image + Add button ────────────────────────────────────
+            Column(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: product.displayImage.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: product.displayImage,
+                          width: 100,
+                          height: 90,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) =>
+                              _foodImgPlaceholder(isDark),
+                        )
+                      : _foodImgPlaceholder(isDark),
+                ),
+                const SizedBox(height: 8),
+                // ADD / Stepper
+                quantity == 0
+                    ? GestureDetector(
+                        onTap: () {
+                          cart.addItem(product, _shop!);
+                          setState(() {});
+                        },
+                        child: Container(
+                          width: 100,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primary.withValues(alpha: 0.07),
+                                AppColors.primary.withValues(alpha: 0.12),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(11),
+                            border: Border.all(
+                                color: AppColors.primary.withValues(alpha: 0.5),
+                                width: 1.3),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.add_rounded,
+                                  size: 14, color: AppColors.primary),
+                              const SizedBox(width: 3),
+                              Text(
+                                'ADD',
+                                style: GoogleFonts.outfit(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Container(
+                        width: 100,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF0A2A9E), Color(0xFF1E40AF)],
+                          ),
+                          borderRadius: BorderRadius.circular(11),
+                          boxShadow: [
+                            BoxShadow(
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4)),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                cart.updateQuantity(product.id, quantity - 1);
+                                setState(() {});
+                              },
+                              child: const Icon(Icons.remove_rounded,
+                                  color: Colors.white, size: 18),
+                            ),
+                            Text('$quantity',
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14)),
+                            GestureDetector(
+                              onTap: () {
+                                cart.addItem(product, _shop!);
+                                setState(() {});
+                              },
+                              child: const Icon(Icons.add_rounded,
+                                  color: Colors.white, size: 18),
+                            ),
+                          ],
+                        ),
+                      ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _foodImgPlaceholder() => Container(
+  Widget _foodImgPlaceholder(bool isDark) => Container(
         width: 100,
         height: 90,
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF3EE),
-          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(
+            colors: isDark
+                ? [const Color(0xFF242438), const Color(0xFF1A1A2E)]
+                : [const Color(0xFFFFF3EE), const Color(0xFFFFE4D6)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(
           child: Text('🍴', style: TextStyle(fontSize: 30)),
@@ -703,58 +982,70 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
       child: GestureDetector(
         onTap: () {
-          Navigator.pop(context); // Close sheet
+          Navigator.pop(context);
           Navigator.pushNamed(context, AppRoutes.cart);
         },
         child: Container(
-          height: 60,
+          height: 62,
           padding: const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF0A2A9E), Color(0xFF1A3FBA)],
+              colors: [Color(0xFF0A1260), Color(0xFF162AC4), Color(0xFF1E40AF)],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                  color: const Color(0xFF0A2A9E).withValues(alpha: 0.4),
-                  blurRadius: 18,
+                  color: const Color(0xFF0A2A9E).withValues(alpha: 0.45),
+                  blurRadius: 20,
                   offset: const Offset(0, 8)),
             ],
           ),
           child: Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: Text(
                   '${cart.totalItemCount} item${cart.totalItemCount > 1 ? 's' : ''}',
                   style: GoogleFonts.outfit(
                       color: Colors.white,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
                       fontSize: 13),
                 ),
               ),
               const Spacer(),
               Text(
-                'View Cart  →',
+                'View Cart',
                 style: GoogleFonts.outfit(
                     color: Colors.white,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                     fontSize: 15),
               ),
               const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.arrow_forward_rounded,
+                    color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 10),
               Text(
                 '₹${cart.subtotal.toStringAsFixed(0)}',
                 style: GoogleFonts.outfit(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13),
+                    color: Colors.white.withValues(alpha: 0.88),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14),
               ),
             ],
           ),
@@ -773,9 +1064,9 @@ class _StickyTabsDelegate extends SliverPersistentHeaderDelegate {
   _StickyTabsDelegate({required this.child});
 
   @override
-  double get minExtent => 102;
+  double get minExtent => 106;
   @override
-  double get maxExtent => 102;
+  double get maxExtent => 106;
 
   @override
   Widget build(

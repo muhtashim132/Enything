@@ -273,6 +273,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'delivery_discount': deliveryDiscount / numShops,
               'platform_fee': shopPlatformFee,
               'address': location.currentAddress,
+              'address_label': location.activeLabel.isNotEmpty
+                  ? '${location.activeLabelIcon} ${location.activeLabel}'
+                  : null,
               'delivery_lat': location.currentLocation?.latitude,
               'delivery_lng': location.currentLocation?.longitude,
               'delivery_notes':

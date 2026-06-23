@@ -60,6 +60,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   // Track collapsed state so it doesn't reset on timer/realtime updates
   final Set<String> _collapsedAvailableGroups = {};
   final Set<String> _collapsedActiveGroups = {};
+  DateTime? _lastBackPressTime;
 
   // FCM foreground message subscription — triggers _loadOrders() on push
   StreamSubscription? _fcmForegroundSub;
@@ -1015,7 +1016,24 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final size = MediaQuery.of(context).size;
 
     return PopScope(
-      canPop: true,
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        final now = DateTime.now();
+        if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Press back again to exit'),
+              duration: Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          // ignore: use_build_context_synchronously
+          SystemNavigator.pop();
+        }
+      },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
         child: Scaffold(
@@ -1451,6 +1469,66 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   // ── Card Builders ─────────────────────────────────────────────────────────
 
+  /// Renders the customer delivery address with an optional label badge.
+  ///
+  /// [address] is the full string from [OrderGroup.customerAddress], which
+  /// already prepends "🏠 Home · " when the order has an [addressLabel].
+  /// The method splits on the first " · " to separate the badge from the text.
+  Widget _buildAddressDisplay({
+    required String address,
+    required bool isDark,
+    bool lightTheme = false,
+  }) {
+    // Try to split "🏠 Home · A-404, Bandipora…" into badge + body
+    final sepIdx = address.indexOf(' · ');
+    final hasLabel = sepIdx != -1;
+    final badge = hasLabel ? address.substring(0, sepIdx) : null;
+    final body = hasLabel ? address.substring(sepIdx + 3) : address;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (badge != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: lightTheme
+                  ? Colors.white.withValues(alpha: 0.20)
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.10)
+                      : const Color(0xFFEEF2FF)),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              badge,
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: lightTheme
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : const Color(0xFF4C6EF5)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+        Text(
+          body,
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: lightTheme
+                ? Colors.white.withValues(alpha: 0.85)
+                : (isDark ? Colors.white60 : Colors.grey.shade600),
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
   // ── Distance helpers ────────────────────────────────────────────────────────
 
   /// Straight-line km from rider to shop (used on the card chip).
@@ -1600,11 +1678,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         const Icon(Icons.location_on_outlined, size: 16, color: AppColors.danger),
                         const SizedBox(width: 6),
                         Expanded(
-                            child: Text(group.customerAddress,
-                                style: GoogleFonts.outfit(
-                                    color: isDark ? Colors.white60 : Colors.grey.shade600, fontSize: 13),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis)),
+                          child: _buildAddressDisplay(
+                            address: group.customerAddress,
+                            isDark: isDark,
+                          ),
+                        ),
                       ]),
                       const SizedBox(height: 10),
                       Text('Contains items from ${group.orders.length} shops', 
@@ -1721,9 +1799,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     const Icon(Icons.location_on_outlined, size: 16, color: AppColors.danger),
                     const SizedBox(width: 6),
                     Expanded(
-                        child: Text(group.customerAddress,
-                            style: GoogleFonts.outfit(color: isDark ? Colors.white60 : Colors.grey.shade600, fontSize: 13),
-                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      child: _buildAddressDisplay(
+                        address: group.customerAddress,
+                        isDark: isDark,
+                        lightTheme: true,
+                      ),
+                    ),
                   ]),
                   // ── ETA chip for rider (drop-off time estimate) ──
                   if (group.orders.isNotEmpty && group.orders.first.estimatedDistanceKm > 0) ...[

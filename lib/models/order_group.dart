@@ -9,7 +9,18 @@ class OrderGroup {
   double get totalGrand => orders.fold(0.0, (sum, o) => sum + o.grandTotalCollected);
   double get totalEarnings => orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
   
-  String get customerAddress => orders.first.address ?? 'Address not set';
+  /// Full delivery address shown to the rider.
+  /// Format: "🏠 Home · A-404, Bandipora, J&K, Near City Mall"
+  /// Falls back to raw address for legacy orders without a label.
+  String get customerAddress {
+    final order = orders.first;
+    final addr = order.address ?? 'Address not set';
+    final label = order.addressLabel;
+    if (label != null && label.isNotEmpty) {
+      return '$label · $addr';
+    }
+    return addr;
+  }
   String? get customerPhone => orders.first.customerPhone;
   String? get customerName => orders.first.customerId; // actually we don't store customer name in order model?
 

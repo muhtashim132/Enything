@@ -16,13 +16,15 @@ import '../theme/app_colors.dart';
 class MapPickResult {
   final LatLng location;
   final String address;
+  /// House / Flat / Building name entered by the user (mandatory).
   final String houseNumber;
+  /// Landmark entered by the user (mandatory).
   final String landmark;
   const MapPickResult({
     required this.location,
     required this.address,
-    required this.houseNumber,
-    required this.landmark,
+    this.houseNumber = '',
+    this.landmark = '',
   });
 }
 
@@ -48,6 +50,12 @@ class MapPinPickerPage extends StatefulWidget {
   /// Pre-fill the address text (e.g. for editing an existing address).
   final String? initialAddress;
 
+  /// Pre-fill house/building name (for editing an existing address).
+  final String? initialHouseNumber;
+
+  /// Pre-fill landmark (for editing an existing address).
+  final String? initialLandmark;
+
   /// AppBar title text.
   final String title;
 
@@ -61,6 +69,8 @@ class MapPinPickerPage extends StatefulWidget {
     super.key,
     this.initialLocation,
     this.initialAddress,
+    this.initialHouseNumber,
+    this.initialLandmark,
     this.title = 'Select Your Location',
     this.confirmLabel = 'Confirm Location',
     this.tooltip = 'Place the pin to your exact location',
@@ -81,12 +91,14 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
 
   // Search
   final _searchCtrl = TextEditingController();
-  final _houseCtrl = TextEditingController();
-  final _landmarkCtrl = TextEditingController();
   Timer? _searchDebounce;
   bool _isSearching = false;
   List<Map<String, dynamic>> _suggestions = [];
   bool _showSuggestions = false;
+
+  // House + Landmark (mandatory detail fields shown in bottom card)
+  final _houseCtrl = TextEditingController();
+  final _landmarkCtrl = TextEditingController();
 
   // State
   LatLng _center = const LatLng(20.5937, 78.9629); // fallback: centre of India
@@ -98,20 +110,9 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
-  Future<void> _initPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _houseCtrl.text = prefs.getString('saved_house_number') ?? '';
-        _landmarkCtrl.text = prefs.getString('saved_landmark') ?? '';
-      });
-    }
-  }
-
   @override
   void initState() {
     super.initState();
-    _initPrefs();
 
     _mapController = MapController();
 
@@ -122,6 +123,14 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
     _pinLift = Tween<double>(begin: 0, end: -18).animate(
       CurvedAnimation(parent: _pinAnim, curve: Curves.easeOut),
     );
+
+    // Pre-fill detail fields when editing an existing address
+    if (widget.initialHouseNumber != null && widget.initialHouseNumber!.isNotEmpty) {
+      _houseCtrl.text = widget.initialHouseNumber!;
+    }
+    if (widget.initialLandmark != null && widget.initialLandmark!.isNotEmpty) {
+      _landmarkCtrl.text = widget.initialLandmark!;
+    }
 
     if (widget.initialLocation != null) {
       _center = widget.initialLocation!;
@@ -391,11 +400,28 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
       ));
       return;
     }
-    
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('saved_house_number', _houseCtrl.text.trim());
-    await prefs.setString('saved_landmark', _landmarkCtrl.text.trim());
-
+    // Mandatory: House / Building name
+    if (_houseCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please enter your House No. / Building Name',
+            style: GoogleFonts.outfit()),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+      return;
+    }
+    // Mandatory: Landmark
+    if (_landmarkCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please enter a Landmark for easy delivery',
+            style: GoogleFonts.outfit()),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+      return;
+    }
     if (mounted) {
       Navigator.pop(
         context,
@@ -666,7 +692,10 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
           // ── 4. My Location FAB ─────────────────────────────────────────
           Positioned(
             right: 16,
-            bottom: safeBottom + 210,
+            // When address is set the bottom card expands with detail fields
+            bottom: _address.isNotEmpty
+                ? safeBottom + 310
+                : safeBottom + 210,
             child: FloatingActionButton.small(
               heroTag: 'mapPickerMyLocation',
               backgroundColor:
@@ -684,7 +713,7 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
             ),
           ),
 
-          // ── 5. Bottom card: address + Confirm ──────────────────────────
+          // ── 5. Bottom card: address + detail fields + Confirm ─────────
           Positioned(
             left: 0,
             right: 0,
@@ -707,7 +736,7 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Address row
+                  // ── Address row (geocoded pin address) ─────────────────
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -742,66 +771,73 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                                           : Colors.black54,
                                     ),
                                   )
-                                : Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _address,
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
+                                : Text(
+                                    _address,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
 
-                  // Manual Inputs
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _houseCtrl,
-                          style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
-                          decoration: InputDecoration(
-                            labelText: 'House / Flat No.',
-                            labelStyle: GoogleFonts.outfit(fontSize: 13, color: isDark ? Colors.white54 : Colors.black54),
-                            filled: true,
-                            fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  // ── Mandatory detail fields (shown once pin address found) ─
+                  if (_address.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    // Divider label
+                    Row(
+                      children: [
+                        Expanded(child: Divider(
+                          color: isDark ? Colors.white12 : Colors.grey.shade200,
+                          height: 1,
+                        )),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            'ADD DELIVERY DETAILS',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: isDark ? Colors.white38 : Colors.grey.shade500,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _landmarkCtrl,
-                          style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
-                          decoration: InputDecoration(
-                            labelText: 'Landmark',
-                            labelStyle: GoogleFonts.outfit(fontSize: 13, color: isDark ? Colors.white54 : Colors.black54),
-                            filled: true,
-                            fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                        Expanded(child: Divider(
+                          color: isDark ? Colors.white12 : Colors.grey.shade200,
+                          height: 1,
+                        )),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // House / Building Name (mandatory)
+                    _buildDetailField(
+                      controller: _houseCtrl,
+                      label: 'House No. / Building Name *',
+                      hint: 'e.g. H-12, Green Valley Apartments',
+                      icon: Icons.home_outlined,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 10),
+                    // Landmark (mandatory)
+                    _buildDetailField(
+                      controller: _landmarkCtrl,
+                      label: 'Landmark *',
+                      hint: 'e.g. Near City Mall, Opp. Police Station',
+                      icon: Icons.flag_outlined,
+                      isDark: isDark,
+                    ),
+                  ],
+
                   const SizedBox(height: 16),
 
-                  // Confirm button
+                  // ── Confirm button ──────────────────────────────────────
                   SizedBox(
                     width: double.infinity,
                     height: 54,
@@ -860,6 +896,53 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
         ),
         child: Icon(icon, size: 20,
             color: isDark ? Colors.white : Colors.black87),
+      ),
+    );
+  }
+
+  /// Compact styled text field for house/landmark inputs in the bottom card.
+  Widget _buildDetailField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.grey.shade200,
+        ),
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: (_) => setState(() {}), // refresh confirm button state
+        style: GoogleFonts.outfit(
+          fontSize: 13,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon,
+              size: 18,
+              color: isDark ? Colors.white38 : Colors.grey.shade500),
+          labelText: label,
+          labelStyle: GoogleFonts.outfit(
+            fontSize: 12,
+            color: isDark ? Colors.white54 : Colors.grey.shade600,
+          ),
+          hintText: hint,
+          hintStyle: GoogleFonts.outfit(
+            fontSize: 12,
+            color: isDark ? Colors.white24 : Colors.grey.shade400,
+          ),
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
       ),
     );
   }

@@ -36,6 +36,7 @@ import '../pages/admin/admin_password_page.dart';
 import '../pages/admin/admin_dashboard_page.dart';
 import '../pages/settings/faq_support_page.dart';
 import '../pages/legal/refund_policy_page.dart';
+import '../pages/legal/shipping_policy_page.dart';
 import '../pages/seller/seller_withdrawals_page.dart';
 import '../pages/delivery/rider_withdrawals_page.dart';
 import '../pages/delivery/rider_insights_page.dart';
@@ -81,6 +82,7 @@ class AppRoutes {
   static const String adminDashboard     = '/admin/dashboard';
   static const String faqSupport         = '/settings/faq-support';
   static const String refundPolicy       = '/legal/refund-policy';
+  static const String shippingPolicy     = '/legal/shipping-policy';
   static const String sellerWithdrawals  = '/seller/withdrawals';
   static const String riderWithdrawals   = '/delivery/withdrawals';
   static const String riderInsights      = '/delivery/insights';
@@ -177,6 +179,8 @@ class AppRoutes {
       case refundPolicy:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         return _build(RefundPolicyPage(role: a?['role'] as String?), routeSettings);
+      case shippingPolicy:
+        return _build(const ShippingPolicyPage(), routeSettings);
       case sellerWithdrawals:
         return _build(const SellerWithdrawalsPage(), routeSettings);
       case riderWithdrawals:

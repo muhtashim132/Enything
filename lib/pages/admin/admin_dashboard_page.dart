@@ -33,6 +33,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   int _openTicketsCount = 0;
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
+  DateTime? _lastBackPressTime;
 
   @override
   void initState() {
@@ -135,7 +136,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     ));
 
     return PopScope(
-      canPop: safeIndex == 0,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (safeIndex != 0) {
@@ -143,6 +144,21 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
             _currentIndex = 0;
             _visitedIndices.add(0);
           });
+        } else {
+          final now = DateTime.now();
+          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+            _lastBackPressTime = now;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Press back again to exit'),
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else {
+            // ignore: use_build_context_synchronously
+            SystemNavigator.pop();
+          }
         }
       },
       child: Scaffold(

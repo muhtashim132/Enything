@@ -214,8 +214,8 @@ class LocationProvider extends ChangeNotifier {
       return null; // success
     } catch (e) {
       debugPrint('addSavedAddress error: $e');
-      if (e.toString().contains('Maximum of 10')) {
-        return 'You can save up to 10 addresses. Please delete one first.';
+      if (e.toString().contains('Maximum of 4') || e.toString().contains('Maximum of 10')) {
+        return 'You can save up to 4 addresses. Please delete one first.';
       }
       return 'Failed to save address: $e';
     }

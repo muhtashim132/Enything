@@ -1,0 +1,1 @@
+UPDATE auth.users SET aud = 'authenticated' WHERE id = '00000000-0000-0000-0000-919999999996';

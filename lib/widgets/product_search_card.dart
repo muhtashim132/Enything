@@ -12,7 +12,8 @@ class ProductSearchCard extends StatefulWidget {
   final ProductModel product;
   final ShopModel shop;
 
-  const ProductSearchCard({super.key, required this.product, required this.shop});
+  const ProductSearchCard(
+      {super.key, required this.product, required this.shop});
 
   @override
   State<ProductSearchCard> createState() => _ProductSearchCardState();
@@ -29,6 +30,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     final cart = context.watch<CartProvider>();
     final quantity = cart.getItemQuantity(product.id);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasDiscount =
+        product.discountPercent != null && product.discountPercent! > 0;
 
     return GestureDetector(
       onTap: () => showProductDetailSheet(context, product.id),
@@ -39,246 +42,397 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
         scale: _isPressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOutCubic,
-        child: Container(
-        height: 120,
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.06)) : null,
-          boxShadow: [
-            BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.3)
-                  : Colors.black.withValues(alpha: 0.06),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Image
-            Container(
-              width: 120,
-              height: 120,
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.horizontal(left: Radius.circular(24)),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: isDark
+                ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                : null,
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.35)
+                    : Colors.black.withValues(alpha: 0.07),
+                blurRadius: _isPressed ? 6 : 16,
+                offset: Offset(0, _isPressed ? 2 : 7),
               ),
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(24)),
-                    child: Container(
-                      color: const Color(0xFFEFF3FF), // subtle fresh blue-tint background
-                      width: double.infinity,
-                      height: double.infinity,
-                      child: product.displayImage.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: product.displayImage,
-                              width: double.infinity,
-                              height: double.infinity,
-                              fit: BoxFit.contain,
-                              placeholder: (c, i) => const ColoredBox(color: Color(0xFFEFF3FF)),
-                              errorWidget: (c, e, s) => const Center(
-                                child: Icon(Icons.shopping_bag_outlined, size: 30, color: AppColors.primary),
-                              ),
-                            )
-                          : const Center(
-                              child: Icon(Icons.shopping_bag_outlined, size: 30, color: AppColors.primary),
-                            ),
-                    ),
-                  ),
-                  if (product.isVeg != null)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(4),
-                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                        ),
-                        child: Icon(
-                          Icons.circle,
-                          size: 10,
-                          color: product.isVeg! ? AppColors.vegGreen : AppColors.nonVegRed,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            
-            // Info
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            product.name,
-                            style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                              color: AppColors.textPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+            ],
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Image ────────────────────────────────────────────────
+                SizedBox(
+                  width: 115,
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(22)),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: isDark
+                                ? const LinearGradient(
+                                    colors: [
+                                      Color(0xFF242438),
+                                      Color(0xFF1A1A2E)
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  )
+                                : const LinearGradient(
+                                    colors: [
+                                      Color(0xFFF8F9FF),
+                                      Color(0xFFEEF2FF)
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
                           ),
-                        ),
-                        Row(
-                          children: [
-                            const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              product.rating > 0 ? product.rating.toStringAsFixed(1) : 'New',
-                              style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        if (shop.bannerImage != null && shop.bannerImage!.isNotEmpty) ...[
-                          CircleAvatar(
-                            radius: 8,
-                            backgroundImage: CachedNetworkImageProvider(shop.bannerImage!),
-                            backgroundColor: Colors.grey.shade200,
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        Expanded(
-                          child: Text(
-                            shop.name,
-                            style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '₹${product.price.toStringAsFixed(0)}',
-                              style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primary,
-                                fontSize: 16,
-                              ),
-                            ),
-                            if (product.discountPercent != null)
-                              Text(
-                                '₹${product.originalPrice!.toStringAsFixed(0)}',
-                                style: GoogleFonts.outfit(
-                                  color: AppColors.textLight,
-                                  fontSize: 12,
-                                  decoration: TextDecoration.lineThrough,
-                                ),
-                              ),
-                          ],
-                        ),
-                        if (quantity > 0)
-                          Container(
-                            height: 32,
-                            width: 80,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => context.read<CartProvider>().updateQuantity(product.id, quantity - 1),
-                                  child: const Icon(Icons.remove, size: 16, color: Colors.white),
-                                ),
-                                Text(
-                                  '$quantity',
-                                  style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 13,
-                                    color: Colors.white,
+                          width: double.infinity,
+                          height: double.infinity,
+                          child: product.displayImage.isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl: product.displayImage,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  fit: BoxFit.contain,
+                                  placeholder: (c, i) => const ColoredBox(
+                                      color: Color(0xFFEEF2FF)),
+                                  errorWidget: (c, e, s) => Center(
+                                    child: Icon(
+                                      Icons.shopping_bag_outlined,
+                                      size: 28,
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                )
+                              : Center(
+                                  child: Icon(
+                                    Icons.shopping_bag_outlined,
+                                    size: 28,
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.4),
                                   ),
                                 ),
-                                GestureDetector(
-                                  onTap: () {
-                                    context.read<CartProvider>().addItem(product, shop);
-                                  },
-                                  child: const Icon(Icons.add, size: 16, color: Colors.white),
+                        ),
+                      ),
+                      // Discount badge
+                      if (hasDiscount)
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 4),
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFFF6B35), Color(0xFFFF3366)],
+                              ),
+                              borderRadius: BorderRadius.only(
+                                topLeft: Radius.circular(22),
+                                bottomRight: Radius.circular(10),
+                              ),
+                            ),
+                            child: Text(
+                              '${product.discountPercent!.toStringAsFixed(0)}% OFF',
+                              style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                      // Veg/NonVeg indicator
+                      if (product.isVeg != null)
+                        Positioned(
+                          top: hasDiscount ? 32 : 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                              boxShadow: const [
+                                BoxShadow(
+                                    color: Colors.black12, blurRadius: 4)
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.circle,
+                              size: 10,
+                              color: product.isVeg!
+                                  ? AppColors.vegGreen
+                                  : AppColors.nonVegRed,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // ── Info ──────────────────────────────────────────────────
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Name + Rating
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                product.name,
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF1A1A2E),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Row(
+                              children: [
+                                const Icon(Icons.star_rounded,
+                                    color: Color(0xFFF6C90E), size: 14),
+                                const SizedBox(width: 2),
+                                Text(
+                                  product.totalReviews > 0
+                                      ? product.rating.toStringAsFixed(1)
+                                      : 'New',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : AppColors.textPrimary,
+                                  ),
                                 ),
                               ],
                             ),
-                          )
-                        else
-                          GestureDetector(
-                            onTap: () {
-                              context.read<CartProvider>().addItem(product, shop);
-                              _showAddedToast(context, product.name);
-                            },
-                            child: Container(
-                              height: 32,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: AppColors.primary, width: 1.5),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'ADD',
-                                  style: GoogleFonts.outfit(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
+                          ],
+                        ),
+
+                        const SizedBox(height: 5),
+
+                        // Shop row with avatar
+                        Row(
+                          children: [
+                            if (shop.bannerImage != null &&
+                                shop.bannerImage!.isNotEmpty) ...[
+                              Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.3),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: ClipOval(
+                                  child: CachedNetworkImage(
+                                    imageUrl: shop.bannerImage!,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (c, e, s) => Container(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.1),
+                                      child: const Icon(
+                                          Icons.storefront_rounded,
+                                          size: 10,
+                                          color: AppColors.primary),
+                                    ),
                                   ),
                                 ),
                               ),
+                              const SizedBox(width: 5),
+                            ] else ...[
+                              Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.primary
+                                      .withValues(alpha: 0.1),
+                                  border: Border.all(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.3),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: const Icon(Icons.storefront_rounded,
+                                    size: 10, color: AppColors.primary),
+                              ),
+                              const SizedBox(width: 5),
+                            ],
+                            Expanded(
+                              child: Text(
+                                shop.name,
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : AppColors.textSecondary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
+                          ],
+                        ),
+
+                        const Spacer(),
+
+                        // Price + ADD button row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // Price
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '₹${product.price.toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.primary,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                if (hasDiscount)
+                                  Text(
+                                    '₹${product.originalPrice!.toStringAsFixed(0)}',
+                                    style: GoogleFonts.outfit(
+                                      color: isDark
+                                          ? Colors.white38
+                                          : AppColors.textLight,
+                                      fontSize: 11,
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                  ),
+                              ],
+                            ),
+
+                            // ADD / Stepper
+                            if (quantity > 0)
+                              Container(
+                                height: 34,
+                                width: 88,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF0A2A9E),
+                                      Color(0xFF1E40AF)
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(11),
+                                  boxShadow: [
+                                    BoxShadow(
+                                        color: AppColors.primary
+                                            .withValues(alpha: 0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3)),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => context
+                                          .read<CartProvider>()
+                                          .updateQuantity(
+                                              product.id, quantity - 1),
+                                      child: const Icon(Icons.remove_rounded,
+                                          size: 16, color: Colors.white),
+                                    ),
+                                    Text(
+                                      '$quantity',
+                                      style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 13,
+                                          color: Colors.white),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        context
+                                            .read<CartProvider>()
+                                            .addItem(product, shop);
+                                      },
+                                      child: const Icon(Icons.add_rounded,
+                                          size: 16, color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              GestureDetector(
+                                onTap: () {
+                                  context
+                                      .read<CartProvider>()
+                                      .addItem(product, shop);
+                                },
+                                child: Container(
+                                  height: 34,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                        color: AppColors.primary, width: 1.5),
+                                    borderRadius: BorderRadius.circular(11),
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        AppColors.primary
+                                            .withValues(alpha: 0.06),
+                                        AppColors.primary
+                                            .withValues(alpha: 0.10),
+                                      ],
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.add_rounded,
+                                          size: 14,
+                                          color: AppColors.primary),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        'ADD',
+                                        style: GoogleFonts.outfit(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
-      )),
-    );
-  }
-
-  void _showAddedToast(BuildContext context, String name) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$name added! 🛒'),
-        duration: const Duration(seconds: 1),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(bottom: 100, left: 24, right: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

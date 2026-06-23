@@ -169,7 +169,7 @@ class _FavoritesPageState extends State<FavoritesPage>
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
-                            childAspectRatio: 0.65,
+                            childAspectRatio: 0.55,
                             mainAxisSpacing: 16,
                             crossAxisSpacing: 16,
                           ),

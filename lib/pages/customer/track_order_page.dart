@@ -1589,7 +1589,126 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 ),
                 const SizedBox(height: 20),
 
-                // ── Glass Contact Buttons ─────────────────────────────────────
+                // ── Delivering To card (shows full address with label) ─────────
+                if (_order!.address != null && _order!.address!.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.07)
+                            : Colors.grey.shade100,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.10),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.location_on_rounded,
+                              color: AppColors.primary, size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                Text(
+                                  'Delivering to',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.white38
+                                        : Colors.grey.shade500,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                // Label badge (🏠 Home / 💼 Office …)
+                                if (_order!.addressLabel != null &&
+                                    _order!.addressLabel!.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.10),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      _order!.addressLabel!,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ]),
+                              const SizedBox(height: 4),
+                              Text(
+                                _order!.address!,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
+                                ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (_order!.deliveryNotes != null &&
+                                  _order!.deliveryNotes!.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Row(children: [
+                                  Icon(Icons.info_outline_rounded,
+                                      size: 12,
+                                      color: isDark
+                                          ? Colors.amber.shade300
+                                          : Colors.orange.shade700),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      _order!.deliveryNotes!,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        color: isDark
+                                            ? Colors.amber.shade300
+                                            : Colors.orange.shade700,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ]),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
 
                 if (!isCancelled &&
                     ((_order!.shopPhone != null && _order!.shopPhone!.isNotEmpty) ||

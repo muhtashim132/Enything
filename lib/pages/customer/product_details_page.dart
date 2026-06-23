@@ -124,7 +124,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
                 GestureDetector(
                   onTap: () {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).clearSnackBars();
                     Navigator.pushNamed(context, AppRoutes.cart);
                   },
                   child: Container(
@@ -420,7 +420,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       Expanded(
                         child: ElevatedButton(
                           onPressed: () {
-                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).clearSnackBars();
                             Navigator.pushNamed(context, AppRoutes.cart);
                           },
                           child: const Text('View Cart'),
@@ -435,6 +435,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           onPressed: () {
                             if (_shop != null) {
                               cart.addItem(_product!, _shop!);
+                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
@@ -449,7 +450,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                     textColor: Colors.white,
                                     onPressed: () {
                                       ScaffoldMessenger.of(context)
-                                          .hideCurrentSnackBar();
+                                          .clearSnackBars();
                                       Navigator.pushNamed(
                                           context, AppRoutes.cart);
                                     },
@@ -480,7 +481,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             if (_shop != null) {
                               cart.addItem(_product!, _shop!);
                               ScaffoldMessenger.of(context)
-                                  .hideCurrentSnackBar();
+                                  .clearSnackBars();
                               Navigator.pushNamed(context, AppRoutes.cart);
                             }
                           },

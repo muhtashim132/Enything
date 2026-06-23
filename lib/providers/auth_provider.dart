@@ -489,47 +489,25 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    // ─── Magic Number Bypass (internal testing) ────────────────────────────
-    if (_isMagicNumber(phone)) {
-      await Future.delayed(const Duration(seconds: 1));
 
-      String mockId =
-          '00000000-0000-0000-0000-${phone.replaceAll("+", "").padLeft(12, "0")}';
-      _mockUserId = mockId;
-
-      final existing = await _supabase
-          .from('profiles')
-          .select('id, role')
-          .eq('id', mockId)
-          .maybeSingle();
-
-      _isLoading = false;
-      notifyListeners();
-
-      if (existing != null ||
-          preferredRole == 'admin' ||
-          phone.contains('9999999996')) {
-        await _fetchProfile(preferredRole: preferredRole);
-        return 'existing';
-      }
-      return 'new';
-    }
     // ──────────────────────────────────────────────────────────────────────
 
     try {
       // 1️⃣ Verify OTP via Edge Function
-      final verifyResp = await _supabase.functions.invoke(
-        'verify-otp',
-        body: {'phone': phone, 'otp': otp.trim()},
-      );
+      if (!_isMagicNumber(phone)) {
+        final verifyResp = await _supabase.functions.invoke(
+          'verify-otp',
+          body: {'phone': phone, 'otp': otp.trim()},
+        );
 
-      if (verifyResp.status != 200) {
-        final data = verifyResp.data;
-        _error = (data is Map ? data['error'] as String? : null) ??
-            'Invalid OTP. Please try again.';
-        _isLoading = false;
-        notifyListeners();
-        return null;
+        if (verifyResp.status != 200) {
+          final data = verifyResp.data;
+          _error = (data is Map ? data['error'] as String? : null) ??
+              'Invalid OTP. Please try again.';
+          _isLoading = false;
+          notifyListeners();
+          return null;
+        }
       }
 
       // 2️⃣ Create / sign-in to Supabase Auth using phone-derived credentials
@@ -566,6 +544,60 @@ class AuthProvider extends ChangeNotifier {
         _isLoading = false;
         notifyListeners();
         return null;
+      }
+
+      // For Razorpay reviewer, auto-insert profile + customer + address
+      if (phone.contains('9999999996')) {
+        // 1. Upsert profile — handle phone uniqueness gracefully
+        try {
+          await _supabase.from('profiles').upsert({
+            'id': userId,
+            'role': preferredRole ?? 'customer',
+            'full_name': 'Razorpay Reviewer',
+            'phone': phone
+          }, onConflict: 'id');
+        } catch (e) {
+          debugPrint('Mock profile upsert failed: $e');
+        }
+
+        // 2. Upsert customer row (just the id — no PostGIS geometry)
+        try {
+          await _supabase.from('customers').upsert({
+            'id': userId,
+          }, onConflict: 'id');
+        } catch (e) {
+          debugPrint('Mock customer upsert failed: $e');
+        }
+
+        // 3. Insert a saved address so the reviewer can place orders
+        try {
+          final existingAddr = await _supabase
+              .from('saved_addresses')
+              .select()
+              .eq('user_id', userId)
+              .maybeSingle();
+              
+          if (existingAddr == null) {
+            await _supabase.from('saved_addresses').insert({
+              'user_id': userId,
+              'label': 'Home',
+              'address': 'Main Market, Bandipora',
+              'landmark': 'Near Jamia Masjid',
+              'pincode': '193502',
+              'latitude': 34.4225,
+              'longitude': 74.6366,
+              'is_default': true
+            });
+          }
+        } catch (e) {
+          debugPrint('Mock address insert failed: $e');
+        }
+
+        // Always treat Razorpay reviewer as an existing user — skip setup page
+        await _fetchProfile(preferredRole: preferredRole ?? 'customer');
+        _isLoading = false;
+        notifyListeners();
+        return 'existing';
       }
 
       // 3️⃣ Check if this user already has a profile or is an admin

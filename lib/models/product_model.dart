@@ -18,6 +18,7 @@ class ProductModel {
   final List<String> specialTags;
   final bool isAvailable;
   final double rating;
+  final int totalReviews;
   final bool requiresPrescription;
   final String medicineType;
 
@@ -41,6 +42,7 @@ class ProductModel {
     this.specialTags = const [],
     this.isAvailable = true,
     this.rating = 0.0,
+    this.totalReviews = 0,
     this.requiresPrescription = false,
     this.medicineType = 'General',
   });
@@ -75,6 +77,7 @@ class ProductModel {
       specialTags: List<String>.from(map['special_tags'] ?? []),
       isAvailable: map['is_available'] ?? true,
       rating: (map['rating'] ?? 0.0).toDouble(),
+      totalReviews: map['total_reviews'] ?? 0,
       requiresPrescription: map['requires_prescription'] ?? false,
       medicineType: map['medicine_type'] ?? 'General',
     );

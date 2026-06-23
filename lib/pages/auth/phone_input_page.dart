@@ -433,6 +433,23 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                                     ),
                                   ),
                                 ),
+                                if (_selectedRole == 'customer') ...[
+                                  const TextSpan(text: ', and '),
+                                  WidgetSpan(
+                                    child: GestureDetector(
+                                      onTap: () => Navigator.pushNamed(context, AppRoutes.shippingPolicy),
+                                      child: Text(
+                                        'Shipping Policy',
+                                        style: GoogleFonts.outfit(
+                                          color: const Color(0xFFF4C542),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

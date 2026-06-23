@@ -41,6 +41,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   late Animation<double> _bgAnim;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
+  DateTime? _lastBackPressTime;
 
   @override
   void initState() {
@@ -200,7 +201,24 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: PopScope(
-        canPop: true,
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          final now = DateTime.now();
+          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+            _lastBackPressTime = now;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Press back again to exit'),
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else {
+            // ignore: use_build_context_synchronously
+            SystemNavigator.pop();
+          }
+        },
         child: Scaffold(
         backgroundColor:
             isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),

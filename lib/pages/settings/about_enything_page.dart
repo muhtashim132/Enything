@@ -165,6 +165,14 @@ class AboutEnythingPage extends StatelessWidget {
                       onTap: () =>
                           Navigator.pushNamed(context, AppRoutes.refundPolicy),
                     ),
+                    const SizedBox(height: 12),
+                    _buildListTile(
+                      title: 'Shipping & Delivery Policy',
+                      icon: Icons.local_shipping_outlined,
+                      isDark: isDark,
+                      onTap: () =>
+                          Navigator.pushNamed(context, AppRoutes.shippingPolicy),
+                    ),
 
                     const SizedBox(height: 32),
 

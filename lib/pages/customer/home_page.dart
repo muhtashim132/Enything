@@ -54,6 +54,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   String _searchQuery = '';
   _SortMode _sortMode = _SortMode.relevant;
   final _searchController = TextEditingController();
+  DateTime? _lastBackPressTime;
   // Debounce timer for GPS listener to prevent race conditions
   Timer? _locationDebounceTimer;
 
@@ -564,13 +565,28 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         context.read<AuthProvider>().user?.fullName.split(' ').first ?? '';
 
     return PopScope(
-      canPop: _navIndex == 0,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_navIndex != 0) {
           setState(() {
             _navIndex = 0;
           });
+        } else {
+          final now = DateTime.now();
+          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+            _lastBackPressTime = now;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Press back again to exit'),
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else {
+            // ignore: use_build_context_synchronously
+            Navigator.of(context).pop();
+          }
         }
       },
       child: Scaffold(
@@ -583,7 +599,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
           // ── Premium Modern AppBar ──────────────────────────────────────
           SliverAppBar(
-            expandedHeight: _searchQuery.isNotEmpty ? 0 : 165,
+            expandedHeight: _searchQuery.isNotEmpty ? 0 : 170,
             floating: true,
             pinned: true,
             elevation: 0,
@@ -803,11 +819,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             ),
           ),
 
-          // ── Categories Horizontal List (pill style) ──────────────────
+          // ── Categories Horizontal List (premium card style) ──────────────────
           if (_searchQuery.isEmpty)
             SliverToBoxAdapter(
             child: SizedBox(
-              height: 60,
+              height: 72,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -827,62 +843,86 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                       }
                     },
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
+                      duration: const Duration(milliseconds: 280),
                       curve: Curves.easeOutCubic,
-                      margin:
-                          const EdgeInsets.only(right: 10, top: 8, bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      margin: const EdgeInsets.only(right: 10, top: 6, bottom: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
                         gradient: isSelected
                             ? LinearGradient(
                                 colors: grad,
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight)
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight)
                             : null,
                         color: isSelected
                             ? Colors.transparent
                             : (isDark
-                                ? const Color(0xFF1E1E2E)
-                                : const Color(0xFFF0F0F8)),
-                        borderRadius: BorderRadius.circular(14),
+                                ? const Color(0xFF1A1A2E)
+                                : Colors.white),
+                        borderRadius: BorderRadius.circular(18),
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                    color: grad.first.withValues(alpha: 0.35),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 3))
+                                    color: grad.first.withValues(alpha: 0.45),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 5))
                               ]
-                            : [],
+                            : [
+                                BoxShadow(
+                                    color: isDark
+                                        ? Colors.black.withValues(alpha: 0.3)
+                                        : Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4))
+                              ],
                         border: isSelected
                             ? null
                             : Border.all(
                                 color: isDark
-                                    ? Colors.white10
-                                    : Colors.grey.shade200),
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.grey.shade100),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOutCubic,
-                            style: TextStyle(fontSize: isSelected ? 20 : 16),
-                            child: Text(cat['emoji']),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            cat['name'],
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: isSelected
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
-                              color: isSelected
-                                  ? Colors.white
-                                  : (isDark
-                                      ? Colors.white70
-                                      : Colors.grey.shade700),
+                          AnimatedScale(
+                            scale: isSelected ? 1.15 : 1.0,
+                            duration: const Duration(milliseconds: 280),
+                            child: Text(
+                              cat['emoji'],
+                              style: TextStyle(fontSize: isSelected ? 22 : 19),
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                cat['name'],
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w900
+                                      : FontWeight.w700,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (isDark
+                                          ? Colors.white70
+                                          : const Color(0xFF2D3748)),
+                                ),
+                              ),
+                              if (isSelected)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 2),
+                                  height: 2,
+                                  width: 20,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    borderRadius: BorderRadius.circular(1),
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
                       ),
@@ -1046,6 +1086,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                                     ? 'Restaurants near you'
                                     : 'Shops near you',
                             subtitle: '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
+                            count: _shops.length,
                           ),
                           const SizedBox(height: 16),
                           LayoutBuilder(
@@ -1084,7 +1125,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                             physics: const NeverScrollableScrollPhysics(),
                             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5),
-                              childAspectRatio: 0.65,
+                              childAspectRatio: 0.55,
                               mainAxisSpacing: 16,
                               crossAxisSpacing: 16,
                             ),
@@ -1258,42 +1299,45 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             'Supporting local sellers · ${config.unifiedCommissionPercent.toStringAsFixed(2)}% commission',
         'icon': Icons.bolt_rounded,
         'colors': [
+          const Color(0xFF05093D),
           const Color(0xFF0A1260),
-          const Color(0xFF162AC4),
-          const Color(0xFF2444E8)
+          const Color(0xFF1A2BC4)
         ],
         'accent': const Color(0xFFF4C542),
+        'emoji': '🚀',
       },
       {
         'tag': '🏪 LOCAL SHOPS',
         'title': 'Support your\ncommunity!',
-        'sub': 'Local shops near you · fresh & authentic',
+        'sub': 'Fresh from local sellers · authentic & fast',
         'icon': Icons.storefront_rounded,
         'colors': [
+          const Color(0xFF0A2E14),
           const Color(0xFF0F4C1A),
-          const Color(0xFF1A7A30),
-          const Color(0xFF27AE60)
+          const Color(0xFF1E7A32)
         ],
         'accent': const Color(0xFF7DEFA1),
+        'emoji': '🌿',
       },
       {
         'tag': '📍 LIVE TRACKING',
         'title': 'Track your\norder live!',
-        'sub': 'Real-time GPS route · always in the know',
+        'sub': 'Real-time GPS · always in the know',
         'icon': Icons.map_rounded,
         'colors': [
+          const Color(0xFF2A0050),
           const Color(0xFF4A0080),
-          const Color(0xFF7B1FA2),
-          const Color(0xFFAB47BC)
+          const Color(0xFF7B1FA2)
         ],
         'accent': const Color(0xFFE1BEE7),
+        'emoji': '📡',
       },
     ];
 
     return Column(
       children: [
         SizedBox(
-          height: 170,
+          height: 190,
           child: PageView.builder(
             controller: _bannerController,
             onPageChanged: (i) => setState(() => _bannerIndex = i),
@@ -1302,8 +1346,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               final s = slides[i];
               final colors = s['colors'] as List<Color>;
               final accent = s['accent'] as Color;
+              final emoji = s['emoji'] as String;
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 1),
+                margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: colors,
@@ -1313,59 +1358,84 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                        color: colors[1].withValues(alpha: 0.4),
-                        blurRadius: 24,
-                        offset: const Offset(0, 12)),
+                        color: colors[1].withValues(alpha: 0.5),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14)),
                   ],
                 ),
                 child: Stack(
                   children: [
+                    // Large background circle
                     Positioned(
-                        right: -30,
-                        top: -30,
+                        right: -40,
+                        top: -40,
                         child: Container(
-                            width: 160,
-                            height: 160,
+                            width: 200,
+                            height: 200,
                             decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white.withValues(alpha: 0.05)))),
+                    // Smaller circle
                     Positioned(
-                        right: -10,
-                        bottom: -10,
+                        left: -20,
+                        bottom: -20,
+                        child: Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.04)))),
+                    // Background icon
+                    Positioned(
+                        right: -5,
+                        bottom: -5,
                         child: Icon(s['icon'] as IconData,
-                            size: 140,
-                            color: Colors.white.withValues(alpha: 0.06))),
+                            size: 130,
+                            color: Colors.white.withValues(alpha: 0.07))),
+                    // Big emoji top-right
+                    Positioned(
+                        right: 20,
+                        top: 20,
+                        child: Text(emoji,
+                            style: const TextStyle(fontSize: 52))),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                      padding: const EdgeInsets.fromLTRB(24, 24, 90, 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 5),
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                                 color: accent,
-                                borderRadius: BorderRadius.circular(10)),
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: accent.withValues(alpha: 0.4),
+                                      blurRadius: 8)
+                                ]),
                             child: Text(s['tag'] as String,
                                 style: GoogleFonts.outfit(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w900,
-                                    color: Colors.black,
+                                    color: Colors.black87,
                                     letterSpacing: 0.5)),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           Text(s['title'] as String,
                               style: GoogleFonts.outfit(
-                                  fontSize: 24,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
-                                  height: 1.1)),
-                          const SizedBox(height: 8),
+                                  height: 1.15,
+                                  letterSpacing: -0.3)),
+                          const SizedBox(height: 6),
                           Text(s['sub'] as String,
                               style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  color: Colors.white.withValues(alpha: 0.75))),
+                                  fontSize: 11,
+                                  color: Colors.white.withValues(alpha: 0.72),
+                                  height: 1.3)),
                         ],
                       ),
                     ),
@@ -1375,26 +1445,30 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             },
           ),
         ),
-        const SizedBox(height: 10),
-        // Dot indicator
+        const SizedBox(height: 12),
+        // Premium dot indicator
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(slides.length, (i) {
             final active = _bannerIndex == i;
             return AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
               margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: active ? 18 : 6,
-              height: 6,
+              width: active ? 22 : 7,
+              height: 7,
               decoration: BoxDecoration(
-                color: active ? AppColors.primary : AppColors.textLight,
-                borderRadius: BorderRadius.circular(3),
+                gradient: active
+                    ? const LinearGradient(
+                        colors: [Color(0xFF0A2A9E), Color(0xFF1E40AF)])
+                    : null,
+                color: active ? null : AppColors.textLight,
+                borderRadius: BorderRadius.circular(4),
                 boxShadow: active
                     ? [
                         BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.4),
-                            blurRadius: 6)
+                            color: AppColors.primary.withValues(alpha: 0.5),
+                            blurRadius: 8)
                       ]
                     : [],
               ),
@@ -1405,62 +1479,148 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     );
   }
 
-  Widget _buildSectionTitle(String title, {String? subtitle}) {
+  Widget _buildSectionTitle(
+    String title, {
+    String? subtitle,
+    int? count,
+    bool isHighlighted = false,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: GoogleFonts.outfit(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : AppColors.textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (subtitle != null)
-                Text(
-                  subtitle,
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    color: isDark ? Colors.white70 : AppColors.textSecondary,
+              // Colored left accent bar
+              Container(
+                width: 4,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isHighlighted
+                        ? [const Color(0xFFFF6B35), const Color(0xFFFF3366)]
+                        : [const Color(0xFF0A2A9E), const Color(0xFF1E40AF)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
+                  borderRadius: BorderRadius.circular(2),
                 ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: GoogleFonts.outfit(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1A1A2E),
+                              letterSpacing: -0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (count != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: isHighlighted
+                                    ? [
+                                        const Color(0xFFFF6B35)
+                                            .withValues(alpha: 0.12),
+                                        const Color(0xFFFF3366)
+                                            .withValues(alpha: 0.08),
+                                      ]
+                                    : [
+                                        const Color(0xFF0A2A9E)
+                                            .withValues(alpha: 0.10),
+                                        const Color(0xFF1E40AF)
+                                            .withValues(alpha: 0.06),
+                                      ],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isHighlighted
+                                    ? const Color(0xFFFF3366)
+                                        .withValues(alpha: 0.25)
+                                    : AppColors.primary.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Text(
+                              '$count',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: isHighlighted
+                                    ? const Color(0xFFFF3366)
+                                    : AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: isDark
+                              ? Colors.white54
+                              : AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
-        TextButton(
-          onPressed: () {},
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'See all',
-                style: GoogleFonts.outfit(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.blue.shade300 : AppColors.primary,
+        GestureDetector(
+          onTap: () {},
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : AppColors.primary.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'See all',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white70 : AppColors.primary,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.arrow_forward_rounded,
-                size: 16,
-                color: isDark ? Colors.blue.shade300 : AppColors.primary,
-              ),
-            ],
+                const SizedBox(width: 3),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 14,
+                  color: isDark ? Colors.white70 : AppColors.primary,
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -1663,62 +1823,113 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   Widget _buildShimmer() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // Use stable hex constants instead of .shade getters to prevent
-    // the dart:ui/painting.dart assertion crash
-    final base = isDark ? const Color(0xFF1E1E2E) : const Color(0xFFE0E0E0);
-    final highlight = isDark ? const Color(0xFF2A2A3A) : const Color(0xFFF5F5F5);
+    // Use stable hex constants instead of .shade getters
+    final base = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFE8E8EE);
+    final highlight = isDark ? const Color(0xFF26263A) : const Color(0xFFF4F4FA);
     return Shimmer.fromColors(
       baseColor: base,
       highlightColor: highlight,
       child: Column(
-        children: List.generate(
+        children: [
+          const SizedBox(height: 8),
+          // Banner skeleton
+          Container(
+            height: 190,
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+            ),
+          ),
+          // Card skeletons (restaurant-style)
+          ...List.generate(
             2,
             (_) => Container(
-                  margin: const EdgeInsets.only(bottom: 20),
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
+              margin: const EdgeInsets.only(bottom: 24),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Column(
+                children: [
+                  // Banner skeleton
+                  Container(
+                    height: 185,
+                    decoration: BoxDecoration(
+                      color: base,
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24)),
+                    ),
                   ),
-                  child: Column(
-                    children: [
-                      // Banner skeleton
-                      Container(
-                        height: 160,
-                        decoration: BoxDecoration(
-                          color: base,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Name bar
+                        Container(
+                            height: 18,
+                            width: 200,
+                            decoration: BoxDecoration(
+                                color: base,
+                                borderRadius: BorderRadius.circular(9))),
+                        const SizedBox(height: 8),
+                        // Cuisine chips
+                        Row(
                           children: [
-                            // Title bar
-                            Container(height: 16, width: 180, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(8))),
-                            const SizedBox(height: 8),
-                            // Subtitle bar
-                            Container(height: 12, width: 120, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(6))),
-                            const SizedBox(height: 10),
-                            const Divider(),
-                            const SizedBox(height: 10),
-                            // Chips row
-                            Row(
-                              children: [
-                                Container(height: 12, width: 40, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(6))),
-                                const SizedBox(width: 10),
-                                Container(height: 12, width: 60, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(6))),
-                                const SizedBox(width: 10),
-                                Container(height: 12, width: 40, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(6))),
-                              ],
-                            ),
+                            Container(
+                                height: 22,
+                                width: 70,
+                                decoration: BoxDecoration(
+                                    color: base,
+                                    borderRadius: BorderRadius.circular(8))),
+                            const SizedBox(width: 8),
+                            Container(
+                                height: 22,
+                                width: 80,
+                                decoration: BoxDecoration(
+                                    color: base,
+                                    borderRadius: BorderRadius.circular(8))),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        Divider(color: base, height: 1),
+                        const SizedBox(height: 12),
+                        // Meta chips row
+                        Row(
+                          children: [
+                            Container(
+                                height: 28,
+                                width: 80,
+                                decoration: BoxDecoration(
+                                    color: base,
+                                    borderRadius: BorderRadius.circular(9))),
+                            const SizedBox(width: 8),
+                            Container(
+                                height: 28,
+                                width: 100,
+                                decoration: BoxDecoration(
+                                    color: base,
+                                    borderRadius: BorderRadius.circular(9))),
+                            const SizedBox(width: 8),
+                            Container(
+                                height: 28,
+                                width: 60,
+                                decoration: BoxDecoration(
+                                    color: base,
+                                    borderRadius: BorderRadius.circular(9))),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                )),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
