@@ -96,17 +96,19 @@ serve(async (req: Request) => {
     }
 
     // Send OTP via Fast2SMS
-    const smsResponse = await fetch("https://www.fast2sms.com/dev/otp/send", {
+    const smsResponse = await fetch("https://www.fast2sms.com/dev/bulkV2", {
       method: "POST",
       headers: {
         authorization: fast2smsKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        mobile: number,
-        otp_id: Deno.env.get("FAST2SMS_TEMPLATE_ID") ?? "218561",
-        otp: otp,
+        route: "dlt",
+        sender_id: Deno.env.get("FAST2SMS_SENDER_ID") ?? "ENYTHG",
+        message: Deno.env.get("FAST2SMS_TEMPLATE_ID") ?? "218561",
         variables_values: otp,
+        flash: 0,
+        numbers: number,
       }),
     });
 
