@@ -105,6 +105,7 @@ serve(async (req: Request) => {
       body: JSON.stringify({
         mobile: number,
         otp_id: Deno.env.get("FAST2SMS_TEMPLATE_ID") ?? "218561",
+        otp: otp,
         variables_values: otp,
       }),
     });
