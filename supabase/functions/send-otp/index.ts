@@ -103,8 +103,10 @@ serve(async (req: Request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        route: "q",
-        message: `Your Enything OTP is ${otp}. Valid for 5 minutes. Do not share this with anyone. - Team Enything`,
+        route: "dlt",
+        sender_id: Deno.env.get("FAST2SMS_SENDER_ID") ?? "ENYTHG",
+        message: Deno.env.get("FAST2SMS_TEMPLATE_ID") ?? "218561",
+        variables_values: otp,
         flash: 0,
         numbers: number,
       }),

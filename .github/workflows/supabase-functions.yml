@@ -32,3 +32,6 @@ jobs:
         
       - name: Deploy send-push function
         run: supabase functions deploy send-push --project-ref $PROJECT_ID
+        
+      - name: Deploy send-otp function
+        run: supabase functions deploy send-otp --project-ref $PROJECT_ID
