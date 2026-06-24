@@ -197,9 +197,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   ///       → set seller_accepted + broadcast to riders + notify customer shop accepted
   Future<void> _sellerAccept(OrderModel order) async {
     try {
-      // Fetch latest state to prevent race conditions (TOCTOU)
-      final latest = await _supabase.from('orders').select('partner_accepted').eq('id', order.id).maybeSingle();
-      final riderAlreadyAccepted = latest?['partner_accepted'] == true;
+      // SE1 FIX: Fetch BOTH partner_accepted AND current status to prevent TOCTOU.
+      // If the order was cancelled/rejected between load and click, abort.
+      final latest = await _supabase.from('orders').select('partner_accepted, status').eq('id', order.id).maybeSingle();
+      if (latest == null || latest['status'] != 'awaiting_acceptance') {
+        if (mounted) _showSnack('Order is no longer available to accept.', isError: true);
+        _loadOrders();
+        return;
+      }
+      final riderAlreadyAccepted = latest['partner_accepted'] == true;
 
       final paymentDeadline = riderAlreadyAccepted
           ? DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String()
@@ -380,6 +386,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     if (confirmed != true || !mounted) return;
 
     try {
+      // SE2 FIX: Only allow rejection if the order hasn't been paid yet.
+      // Once status reaches 'confirmed' or later, payment is captured —
+      // cancelling here would leave the customer charged with no order.
+      final latestStatus = await _supabase.from('orders').select('status').eq('id', order.id).maybeSingle();
+      final currentStatus = latestStatus?['status'] as String?;
+      const rejectableStatuses = ['awaiting_acceptance', 'awaiting_payment'];
+      if (currentStatus != null && !rejectableStatuses.contains(currentStatus)) {
+        if (mounted) _showSnack('Cannot decline — payment is already confirmed. Contact support.', isError: true);
+        return;
+      }
+
       final msg = messageController.text.trim();
       await _supabase.from('orders').update({
         'status': rejectReason == 'prescription' ? 'verification_failed' : 'seller_rejected',

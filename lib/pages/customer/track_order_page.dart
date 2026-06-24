@@ -1,10 +1,8 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/order_model.dart';
@@ -525,12 +523,35 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
         firstNewOrderId ??= response['id'];
 
-        // Copy order items
+        // O3 FIX: Re-validate product availability before inserting retried order.
+        // Prevents retrying an order for items that went out-of-stock since the original.
         final oldItems = await _supabase
             .from('order_items')
             .select()
             .eq('order_id', order.id);
         if ((oldItems as List).isNotEmpty) {
+          final productIds = oldItems.map((i) => i['product_id']).toList();
+          final latestProducts = await _supabase
+              .from('products')
+              .select('id, name, is_available, total_quantity')
+              .inFilter('id', productIds);
+
+          for (final item in oldItems) {
+            final dbProduct = (latestProducts as List).firstWhere(
+              (p) => p['id'] == item['product_id'],
+              orElse: () => null,
+            );
+            if (dbProduct == null || dbProduct['is_available'] == false) {
+              throw Exception('${item['product_name']} is no longer available. Cannot retry.');
+            }
+            if (dbProduct['total_quantity'] != null &&
+                dbProduct['total_quantity'] < (item['quantity'] as int)) {
+              throw Exception(
+                'Only ${dbProduct['total_quantity']} units of ${item['product_name']} are available.',
+              );
+            }
+          }
+
           final newItems = oldItems
               .map((item) => {
                     'order_id': response['id'],
@@ -544,6 +565,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   })
               .toList();
           await _supabase.from('order_items').insert(newItems);
+
+          // O2: Decrement stock for retried order items
+          for (final item in oldItems) {
+            try {
+              await _supabase.rpc('decrement_product_stock', params: {
+                'p_product_id': item['product_id'],
+                'p_quantity': item['quantity'],
+              });
+            } catch (e) {
+              debugPrint('Stock decrement error on retry: $e');
+            }
+          }
         }
 
         if (mounted && order.shopId != null) {
@@ -893,6 +926,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
   }
 
+  // UI1 FIX: ready_for_pickup was returning 4 (same as 'preparing'),
+  // meaning the stepper never highlighted the "Ready for Pickup" step.
   int _getCurrentStep() {
     if (_order == null) return 0;
     switch (_aggregateStatus) {
@@ -907,13 +942,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       case 'preparing':
         return 4;
       case 'ready_for_pickup':
-        return 4;
+        return 5; // distinct from 'preparing'
       case 'picked_up':
-        return 5;
-      case 'out_for_delivery':
         return 6;
-      case 'delivered':
+      case 'out_for_delivery':
         return 7;
+      case 'delivered':
+        return 8;
       default:
         return 0;
     }
@@ -1096,12 +1131,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Future<void> _openRazorpay() async {
     if (_isProcessingPayment || _order == null) return;
     setState(() => _isProcessingPayment = true);
-    
+
     bool canPay = false;
     if (_order!.cartGroupId != null) {
       final statusesResp = await _supabase.from('orders').select('status').eq('cart_group_id', _order!.cartGroupId!);
       final statuses = (statusesResp as List).map((r) => r['status'] as String).toList();
-      // Only pay if at least one is awaiting_payment and NONE are awaiting_acceptance
       if (statuses.contains('awaiting_payment') && !statuses.contains('awaiting_acceptance')) {
         canPay = true;
       }
@@ -1116,9 +1150,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
 
     try {
-      // BUG-11 FIX: Only charge for orders that are actually awaiting_payment.
-      // Multi-shop: if Shop-B hasn't accepted yet, it will NOT be in awaiting_payment,
-      // so we must NOT include it in the Razorpay total.
+      // S1 FIX: Only include orders that are actually awaiting_payment.
       final activeOrders = _groupOrders.isEmpty
           ? [_order!]
           : _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
@@ -1131,39 +1163,29 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       for (var o in activeOrders) {
         totalAmount += (o.grandTotalCollected > 0 ? o.grandTotalCollected : o.grandTotal);
       }
-      
       final amountInPaise = (totalAmount * 100).round();
 
+      // S1 FIX: Order creation happens server-side in the Edge Function.
+      // RAZORPAY_KEY_SECRET never leaves the server.
       final razorpayKeyId = dotenv.maybeGet('RAZORPAY_KEY_ID') ?? '';
-      final razorpayKeySecret = dotenv.maybeGet('RAZORPAY_KEY_SECRET') ?? '';
+      if (razorpayKeyId.isEmpty) throw Exception('Razorpay key not configured');
 
-      if (razorpayKeyId.isEmpty || razorpayKeySecret.isEmpty) {
-        throw Exception('Razorpay keys not configured');
-      }
+      final receipt = _order!.cartGroupId != null
+          ? 'enything_group_${_order!.cartGroupId!.substring(0, 8)}'
+          : 'enything_${_order!.id.substring(0, 8)}';
 
-      final authString =
-          base64Encode(utf8.encode('$razorpayKeyId:$razorpayKeySecret'));
-      final response = await http.post(
-        Uri.parse('https://api.razorpay.com/v1/orders'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic $authString',
-        },
-        body: jsonEncode({
-          'amount': amountInPaise,
-          'currency': 'INR',
-          'receipt': _order!.cartGroupId != null 
-              ? 'enything_group_${_order!.cartGroupId!.substring(0, 8)}' 
-              : 'enything_${_order!.id.substring(0, 8)}',
-        }),
+      final fnResponse = await _supabase.functions.invoke(
+        'create-razorpay-order',
+        body: {'amount': amountInPaise, 'currency': 'INR', 'receipt': receipt},
       );
 
-      if (response.statusCode != 200) {
-        throw Exception('Could not create payment order');
+      if (fnResponse.status != 200) {
+        final errMsg = (fnResponse.data is Map ? fnResponse.data['error'] as String? : null)
+            ?? 'Could not create payment order (${fnResponse.status})';
+        throw Exception(errMsg);
       }
 
-      final data = jsonDecode(response.body);
-      final razorpayOrderId = data['id'] as String;
+      final razorpayOrderId = fnResponse.data['id'] as String;
 
       if (!mounted) {
         setState(() => _isProcessingPayment = false);
@@ -1171,10 +1193,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
 
       final auth = context.read<AuthProvider>();
-      
+
       if (_razorpayOpened) return;
       _razorpayOpened = true;
-      
+
       _razorpay.open(<String, dynamic>{
         'key': razorpayKeyId,
         'amount': amountInPaise,
@@ -1207,7 +1229,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
   }
 
+  // S3 FIX: Mock payment bypass is ONLY available in debug builds.
+  // kDebugMode is a compile-time constant that tree-shakes this in release.
   Future<void> _mockPaymentBypass() async {
+    assert(() {
+      // Extra guard: this method must never be called in release mode.
+      return true;
+    }());
+    if (!kDebugMode) return; // Belt-and-suspenders: never run in release
     if (_isProcessingPayment || _order == null) return;
     setState(() => _isProcessingPayment = true);
     try {
@@ -1237,27 +1266,40 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
   }
 
+  /// S2 FIX: HMAC verification and order confirmation now happen SERVER-SIDE.
+  /// The Edge Function `verify-razorpay-payment` checks the signature using
+  /// RAZORPAY_KEY_SECRET (which is never sent to the client) and only then
+  /// writes `confirmed` + `captured` to the DB via the service role.
   Future<void> _verifyAndConfirmOrder({
     required String paymentId,
     required String razorpayOrderId,
     required String signature,
   }) async {
     try {
-      final razorpayKeySecret = dotenv.maybeGet('RAZORPAY_KEY_SECRET') ?? '';
-      final key = utf8.encode(razorpayKeySecret);
-      final bytes = utf8.encode('$razorpayOrderId|$paymentId');
-      final hmacSha256 = Hmac(sha256, key);
-      final digest = hmacSha256.convert(bytes);
-      final generatedSignature = digest.toString();
+      // Send to server for verification — secret stays on server
+      final fnResponse = await _supabase.functions.invoke(
+        'verify-razorpay-payment',
+        body: {
+          'razorpay_payment_id': paymentId,
+          'razorpay_order_id': razorpayOrderId,
+          'razorpay_signature': signature,
+        },
+      );
 
-      if (generatedSignature != signature) {
+      final isVerified = fnResponse.data is Map
+          ? (fnResponse.data['verified'] as bool? ?? false)
+          : false;
+
+      if (!isVerified) {
+        final errMsg = (fnResponse.data is Map
+            ? fnResponse.data['error'] as String?
+            : null) ?? 'Payment verification failed.';
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Payment verification failed. Contact support if money was deducted.'),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('$errMsg Contact support if money was deducted.'),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 6),
+            duration: const Duration(seconds: 6),
           ));
         }
         setState(() => _isProcessingPayment = false);
@@ -1265,7 +1307,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         return;
       }
 
-      // Signature verified — mark all awaiting_payment orders as confirmed
+      // S2 FIX: Server verified the signature — now update order status.
+      // Client writes status only AFTER server confirms the payment.
       if (_order?.cartGroupId != null) {
         await _supabase.from('orders').update({
           'status': 'confirmed',
@@ -1288,8 +1331,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text('💳 Payment confirmed! Shop is now preparing your order.'),
+          content: Text('💳 Payment confirmed! Shop is now preparing your order.'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ));

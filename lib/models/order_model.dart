@@ -277,9 +277,12 @@ class OrderModel {
   bool get isFullyConfirmed => sellerAccepted && partnerAccepted;
 
   /// Grand total as displayed to customer at checkout.
+  /// O6 FIX: Fallback now includes ALL fee components so legacy orders
+  /// (where grandTotalCollected == 0) display the correct amount.
   double get grandTotal => grandTotalCollected > 0
       ? grandTotalCollected
-      : totalAmount + gstItemTotal + deliveryCharges + multiShopSurcharge + platformFee;
+      : totalAmount + gstItemTotal + deliveryCharges + multiShopSurcharge +
+            platformFee + smallCartFee + heavyOrderFee - deliveryDiscount;
 
   /// Total GST across the entire order (items + delivery + platform).
   double get totalGstInOrder => gstItemTotal + gstDelivery + gstPlatform;

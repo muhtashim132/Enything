@@ -34,15 +34,20 @@ void main() async {
 
   await dotenv.load(fileName: '.env');
 
-  // Verify critical env keys are present — catches missing .env in release builds early
-  assert(
-    dotenv.env['SUPABASE_URL']?.isNotEmpty == true,
-    '❌ SUPABASE_URL is missing from .env — ensure the file is in Flutter assets.',
-  );
-  assert(
-    dotenv.env['SUPABASE_ANON_KEY']?.isNotEmpty == true,
-    '❌ SUPABASE_ANON_KEY is missing from .env',
-  );
+  // APP1 FIX: Replace assert() with runtime checks — assert() is stripped in
+  // release builds, leaving the app to crash silently if .env is misconfigured.
+  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+  if (supabaseUrl.isEmpty) {
+    throw StateError(
+      '❌ SUPABASE_URL is missing from .env — ensure the file is declared in Flutter assets.',
+    );
+  }
+  if (supabaseAnonKey.isEmpty) {
+    throw StateError(
+      '❌ SUPABASE_ANON_KEY is missing from .env',
+    );
+  }
 
   // Initialize Firebase (used only for FCM push notifications — NOT for auth)
   await Firebase.initializeApp();
@@ -51,8 +56,8 @@ void main() async {
   FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
 
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey, // ignore: deprecated_member_use — SDK alias still works
   );
 
   // Set Supabase instance locally

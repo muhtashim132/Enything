@@ -35,11 +35,12 @@ let tokenExpirationTime: number = 0;
 /**
  * Exchange a Firebase Service Account for a short-lived OAuth2 access token
  * that authorises calls to the FCM HTTP v1 API.
+ * EF2 FIX: Invalidate cache on any FCM 401 to force token refresh.
  */
-async function getFcmAccessToken(sa: Record<string, string>): Promise<string> {
+async function getFcmAccessToken(sa: Record<string, string>, forceRefresh = false): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  
-  if (cachedAccessToken && now < tokenExpirationTime) {
+
+  if (!forceRefresh && cachedAccessToken && now < tokenExpirationTime) {
     return cachedAccessToken;
   }
 
@@ -80,7 +81,7 @@ async function getFcmAccessToken(sa: Record<string, string>): Promise<string> {
   if (!json.access_token) {
     throw new Error(`OAuth2 token exchange failed: ${JSON.stringify(json)}`);
   }
-  
+
   cachedAccessToken = json.access_token;
   tokenExpirationTime = now + 3500; // Cache for slightly less than 1 hour
   return cachedAccessToken;
@@ -98,7 +99,7 @@ serve(async (req) => {
     let user_id, title, body, data;
 
     if (rawBody.type === 'INSERT' && rawBody.record) {
-      // It's a Supabase Webhook payload from the `notifications` table!
+      // It's a Supabase Webhook payload from the `notifications` table
       user_id = rawBody.record.user_id;
       title = rawBody.record.title;
       body = rawBody.record.body;
@@ -114,7 +115,22 @@ serve(async (req) => {
         }
       }
     } else {
-      // It's a direct API call (from Dart)
+      // EF1 FIX: Authenticate the calling user for direct API calls.
+      // Without this check, any internet user could spam push notifications
+      // to any other user by calling this Edge Function directly.
+      const supabaseAnon = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
+      );
+      const { data: { user }, error: authErr } = await supabaseAnon.auth.getUser();
+      if (authErr || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
       user_id = rawBody.user_id;
       title = rawBody.title;
       body = rawBody.body;
@@ -150,7 +166,7 @@ serve(async (req) => {
     // Parse service account & get OAuth2 token
     const sa = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
     const projectId = sa.project_id ?? Deno.env.get('FIREBASE_PROJECT_ID') ?? '';
-    const accessToken = await getFcmAccessToken(sa);
+    let accessToken = await getFcmAccessToken(sa);
     const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
 
     let sent = 0;
@@ -161,10 +177,8 @@ serve(async (req) => {
         const message = {
           message: {
             token,
-            // CRITICAL FOR SAMSUNG/ANDROID 12: Swiping the app away force-stops it.
-            // If the app is force-stopped, data-only messages are blocked by the OS.
-            // Including 'notification' forces Google Play Services to draw it 
-            // on the system tray regardless of the app's background state.
+            // CRITICAL FOR SAMSUNG/ANDROID 12: Including 'notification' forces Google
+            // Play Services to draw it on the system tray regardless of app state.
             notification: { title, body },
             data: {
               title,
@@ -193,7 +207,7 @@ serve(async (req) => {
           },
         };
 
-        const fcmRes = await fetch(fcmUrl, {
+        let fcmRes = await fetch(fcmUrl, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -201,6 +215,21 @@ serve(async (req) => {
           },
           body: JSON.stringify(message),
         });
+
+        // EF2 FIX: On 401 (stale token), force-refresh once and retry.
+        if (fcmRes.status === 401) {
+          console.warn('FCM returned 401 — refreshing access token and retrying...');
+          cachedAccessToken = null; // Invalidate cache
+          accessToken = await getFcmAccessToken(sa, true);
+          fcmRes = await fetch(fcmUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(message),
+          });
+        }
 
         if (fcmRes.ok) {
           sent++;

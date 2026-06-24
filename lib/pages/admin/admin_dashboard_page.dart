@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/cart_provider.dart';
 import '../../providers/rbac_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
@@ -84,7 +85,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   }
 
   void _signOut() {
+    // N1 FIX: Clean up notification subscriptions
+    context.read<NotificationProvider>().clearFcmSubs();
     context.read<NotificationProvider>().stopListening();
+    // APP4 FIX: Clear cart on logout
+    context.read<CartProvider>().clear();
     context.read<AuthProvider>().adminSignOut();
     context.read<RbacProvider>().clear();
     Navigator.pushNamedAndRemoveUntil(

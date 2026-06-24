@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -424,7 +425,11 @@ class AuthProvider extends ChangeNotifier {
     return 'Enything$digits#Auth2025';
   }
 
+  // S4 FIX: Magic test numbers are ONLY active in debug builds.
+  // In release APKs, kDebugMode is false (compile-time constant), so
+  // this method always returns false and the bypass code is dead.
   bool _isMagicNumber(String phone) {
+    if (!kDebugMode) return false;
     return phone.contains('9999999991') ||
         phone.contains('9999999992') ||
         phone.contains('9999999993') ||

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/cart_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../theme/app_colors.dart';
 import 'profile_settings_dialogs.dart';
@@ -131,8 +132,11 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () async {
+                  // N1 FIX: Clean up all notification subscriptions before signout
                   context.read<NotificationProvider>().clearFcmSubs();
                   context.read<NotificationProvider>().stopListening();
+                  // APP4 FIX: Clear cart so next user doesn't inherit previous user's cart
+                  context.read<CartProvider>().clear();
                   await auth.signOut();
                   if (context.mounted) {
                     Navigator.pushNamedAndRemoveUntil(context, '/auth/role', (_) => false);

@@ -98,13 +98,20 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         if (mounted) _loadOrders();
       });
 
-      // Also listen to realtime postgres changes so we don't miss anything (like cancellations)
+      // D3 FIX: Filter INSERT events to only orders with no delivery partner yet.
+      // Without this, every new order on the platform would trigger _loadOrders()
+      // for every connected rider, creating O(riders × orders) load spikes.
       _realtimeChannel = _supabase
           .channel('delivery-orders-$userId')
           .onPostgresChanges(
             event: PostgresChangeEvent.insert,
             schema: 'public',
             table: 'orders',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'delivery_partner_id',
+              value: 'null', // Supabase realtime IS NULL filter syntax
+            ),
             callback: (_) {
               if (mounted) _loadOrders();
             },
@@ -164,6 +171,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     _locationBroadcastTimer?.cancel();
     _fcmForegroundSub?.cancel();
     _realtimeChannel?.unsubscribe();
+    // D2+APP5 FIX: Stop background GPS service when the delivery page is
+    // disposed (e.g., user switches role or logs out). Without this, the
+    // foreground notification "Enything is tracking your location" stays
+    // visible after the rider has left the delivery screen.
+    RiderBackgroundService.instance.stopService();
     _bgCtrl.dispose();
     super.dispose();
   }

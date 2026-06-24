@@ -96,6 +96,7 @@ class UserModel {
   /// Human-readable label for a given role string
   static String roleLabel(String r) {
     switch (r) {
+      case 'admin':            return 'Admin';       // APP3 FIX: was falling through to default
       case 'seller':           return 'Seller';
       case 'delivery_partner': return 'Delivery Partner';
       case 'customer':         return 'Customer';

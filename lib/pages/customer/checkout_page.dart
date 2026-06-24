@@ -28,6 +28,7 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage> {
   bool _isProcessing = false;
+  bool _isCreatingOrder = false; // O1 FIX: Idempotency lock — prevents duplicate order creation
   final _notesController = TextEditingController();
   final List<XFile> _prescriptions = [];
 
@@ -114,6 +115,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // Financial snapshot is stored immediately for transparency.
   // Razorpay is only opened from TrackOrderPage when both seller & rider accept.
   Future<void> _createOrderInDb() async {
+    // O1 FIX: Hard idempotency lock — reject concurrent invocations
+    if (_isCreatingOrder) return;
+    _isCreatingOrder = true;
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
@@ -327,6 +331,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
             .toList();
         await supabase.from('order_items').insert(itemsToInsert);
 
+        // O2 FIX: Atomically decrement inventory for each product after
+        // successful order placement. Uses coalesce to only decrement when
+        // total_quantity is tracked (non-null); unlimited items are unaffected.
+        for (final item in shopItems) {
+          try {
+            await supabase.rpc('decrement_product_stock', params: {
+              'p_product_id': item.product.id,
+              'p_quantity': item.quantity,
+            });
+          } catch (e) {
+            // Non-fatal: log and continue. Stock count may be slightly off
+            // but order is already placed — don't block the user.
+            debugPrint('Stock decrement error for ${item.product.id}: $e');
+          }
+        }
+
         // Notify seller: payment NOT charged yet — safe to accept or decline
         final isMagic = auth.user?.phone.contains('9999999996') == true;
         if (mounted && !isMagic) {
@@ -355,6 +375,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       debugPrint('Order placement error: $e');
       rethrow;
     } finally {
+      _isCreatingOrder = false; // O1 FIX: always release lock
       if (mounted) setState(() => _isProcessing = false);
     }
   }
