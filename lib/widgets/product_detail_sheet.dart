@@ -12,6 +12,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 
 import '../config/app_categories.dart';
+import '../config/routes.dart';
 import 'shop_detail_sheet.dart';
 import 'restaurant_dashboard_sheet.dart';
 
@@ -693,7 +694,7 @@ class _SheetContent extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: () {
                       ScaffoldMessenger.of(context).clearSnackBars();
-                      Navigator.pushNamed(context, '/cart');
+                      Navigator.pushNamed(context, AppRoutes.cart);
                     },
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -725,7 +726,7 @@ class _SheetContent extends StatelessWidget {
                               textColor: Colors.white,
                               onPressed: () {
                                 ScaffoldMessenger.of(context).clearSnackBars();
-                                Navigator.pushNamed(context, '/cart');
+                                Navigator.pushNamed(context, AppRoutes.cart);
                               },
                             ),
                           ),
@@ -747,7 +748,7 @@ class _SheetContent extends StatelessWidget {
                       if (shop != null) {
                         cart.addItem(product, shop!);
                         ScaffoldMessenger.of(context).clearSnackBars();
-                        Navigator.pushNamed(context, '/cart');
+                        Navigator.pushNamed(context, AppRoutes.cart);
                       }
                     },
                     style: ElevatedButton.styleFrom(

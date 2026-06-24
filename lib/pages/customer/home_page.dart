@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -304,9 +305,19 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   Future<void> _checkLocationAndLoad() async {
     final locationProvider = context.read<LocationProvider>();
-    if (!locationProvider.hasLocation) {
+    final authProvider = context.read<AuthProvider>();
+
+    final isMagic = authProvider.user?.phone.contains('9999999996') == true;
+
+    if (isMagic) {
+      locationProvider.setManualLocation(
+        LatLng(34.4225, 74.6366),
+        'Main Market, Bandipora',
+      );
+    } else if (!locationProvider.hasLocation) {
       await locationProvider.requestLocation();
     }
+
     // _selectedTabIndex == -1 means "All" — fetch every active shop
     if (_selectedTabIndex < 0) {
       _loadAllData();

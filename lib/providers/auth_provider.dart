@@ -348,9 +348,11 @@ class AuthProvider extends ChangeNotifier {
       _user = UserModel.fromMap({
         ...data,
         'email': _supabase.auth.currentUser?.email ?? '',
-        'phone': (_supabase.auth.currentUser?.phone?.isNotEmpty == true) 
-            ? _supabase.auth.currentUser!.phone! 
-            : (data['phone'] ?? ''),
+        'phone': (_supabase.auth.currentUser?.email?.contains('9999999996') == true)
+            ? '+919999999996'
+            : (_supabase.auth.currentUser?.phone?.isNotEmpty == true) 
+                ? _supabase.auth.currentUser!.phone! 
+                : (data['phone'] ?? ''),
         'activeRoles': allRoles,
         'activeSessionRole': sessionRole,
         'verification_status': verificationStatus,
@@ -407,11 +409,17 @@ class AuthProvider extends ChangeNotifier {
   /// Derives a stable email+password pair from a phone number so we can
   /// create a real Supabase Auth session after OTP verification.
   String _emailFromPhone(String phone) {
+    if (phone.contains('9999999996')) {
+      return 'mock919999999996@enything.com';
+    }
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return '$digits@auth.enything.app';
   }
 
   String _passwordFromPhone(String phone) {
+    if (phone.contains('9999999996')) {
+      return 'Dummy123';
+    }
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return 'Enything$digits#Auth2025';
   }
@@ -550,11 +558,14 @@ class AuthProvider extends ChangeNotifier {
       if (phone.contains('9999999996')) {
         // 1. Upsert profile — handle phone uniqueness gracefully
         try {
+          final uniquePhone = phone.contains('9999999996') 
+              ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}' 
+              : phone;
           await _supabase.from('profiles').upsert({
             'id': userId,
             'role': preferredRole ?? 'customer',
             'full_name': 'Razorpay Reviewer',
-            'phone': phone
+            'phone': uniquePhone
           }, onConflict: 'id');
         } catch (e) {
           debugPrint('Mock profile upsert failed: $e');

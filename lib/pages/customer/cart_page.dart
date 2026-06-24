@@ -257,7 +257,11 @@ class CartPage extends StatelessWidget {
   Widget _buildSummary(BuildContext context, CartProvider cart, LocationProvider location) {
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
-      distanceKm = location.distanceTo(cart.shops.first.location);
+      distanceKm = 0.0;
+      for (var s in cart.shops) {
+        final d = location.distanceTo(s.location);
+        if (d > distanceKm) distanceKm = d;
+      }
     }
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
     final surcharge = cart.multiShopSurcharge;
@@ -266,7 +270,7 @@ class CartPage extends StatelessWidget {
     final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
     final totalDelivery =
         effectiveBase + surcharge + heavyFee + cart.smallCartFee - discount;
-    final total = cart.subtotal + cart.itemGstTotal + totalDelivery + cart.platformFee;
+    final total = cart.subtotal + totalDelivery + cart.platformFee;
 
     return SafeArea(
       top: false,
@@ -296,11 +300,6 @@ class CartPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _summaryRow('Subtotal', '₹${cart.subtotal.toStringAsFixed(0)}'),
-          if (cart.itemGstTotal > 0) ...[
-            const SizedBox(height: 6),
-            _summaryRow('Taxes (GST)', '+₹${cart.itemGstTotal.toStringAsFixed(0)}',
-                hint: 'Govt. taxes on items'),
-          ],
           const SizedBox(height: 6),
           _summaryRow(
             'Delivery Charges',

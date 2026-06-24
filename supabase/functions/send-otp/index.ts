@@ -1,14 +1,11 @@
-// Supabase Edge Function: send-otp
-// Generates a 6-digit OTP, stores it in otp_tokens table, sends via Fast2SMS.
-// Called directly from the Flutter app.
-
+// @ts-nocheck
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 // Generate a cryptographically random 6-digit OTP
@@ -27,22 +24,34 @@ async function hashOtp(otp: string, phone: string): Promise<string> {
     .join("");
 }
 
+// Utility for JSON responses
+function jsonResponse(data: any, status: number = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req: Request) => {
+  // Handle CORS Preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
 
-  try {
-    const { phone } = await req.json();
+  // Enforce POST method
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, 405);
+  }
 
-    if (!phone) {
-      return new Response(
-        JSON.stringify({ error: "phone is required" }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
+  try {
+    const body = await req.json();
+    const { phone } = body;
+
+    if (!phone || typeof phone !== "string") {
+      return jsonResponse({ error: "Phone number is required." }, 400);
     }
 
-    // Normalize: strip non-digits for Fast2SMS (needs 10-digit Indian number)
+    // Strict Normalization: Extract exactly 10 digits for Indian mobile numbers
     const digits = phone.replace(/\D/g, "");
     const number =
       digits.length === 12 && digits.startsWith("91")
@@ -52,89 +61,112 @@ serve(async (req: Request) => {
         : null;
 
     if (!number) {
-      return new Response(
-        JSON.stringify({ error: "Invalid Indian phone number. Use format +91XXXXXXXXXX." }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      return jsonResponse(
+        { error: "Invalid phone number format. Please provide a 10-digit Indian mobile number." },
+        400
       );
     }
 
+    // Environment Variables Validation (Fail Fast)
     const fast2smsKey = Deno.env.get("FAST2SMS_API_KEY");
-    if (!fast2smsKey) {
-      return new Response(
-        JSON.stringify({ error: "SMS service not configured." }),
-        { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    // Fallback to currently known DLT credentials if not set in env
+    const senderId = Deno.env.get("FAST2SMS_SENDER_ID") || "ENYTHG"; 
+    const templateId = Deno.env.get("FAST2SMS_TEMPLATE_ID") || "218561";
+
+    if (!fast2smsKey || !supabaseUrl || !supabaseServiceKey) {
+      console.error("CRITICAL: Missing essential environment variables.");
+      return jsonResponse({ error: "Server configuration error. Service unavailable." }, 500);
     }
 
-    // Create Supabase service-role client to write to otp_tokens
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    // 1. Initialize Supabase Admin Client
+    // We use the service role key to securely bypass RLS and insert into otp_tokens
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+    });
 
-    // Generate OTP and hash it
+    // 2. Generate and Hash OTP
     const otp = generateOtp();
     const otpHash = await hashOtp(otp, phone);
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 min
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes expiry
 
-    // Delete any existing tokens for this phone (prevent accumulation)
-    await supabase.from("otp_tokens").delete().eq("phone", phone);
+    // 3. Database Operations: Atomic Replace
+    // Delete any existing tokens for this number to prevent bloat
+    await supabaseAdmin.from("otp_tokens").delete().eq("phone", phone);
 
-    // Insert new token
-    const { error: insertError } = await supabase.from("otp_tokens").insert({
+    const { error: insertError } = await supabaseAdmin.from("otp_tokens").insert({
       phone,
       otp_hash: otpHash,
       expires_at: expiresAt,
     });
 
     if (insertError) {
-      console.error("DB insert error:", insertError);
-      return new Response(
-        JSON.stringify({ error: "Failed to generate OTP. Please try again." }),
-        { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
+      console.error("Database Insert Error (otp_tokens):", insertError);
+      return jsonResponse({ error: "Failed to generate OTP. Database error." }, 500);
     }
 
-    // Send OTP via Fast2SMS
-    const smsResponse = await fetch("https://www.fast2sms.com/dev/bulkV2", {
-      method: "POST",
-      headers: {
-        authorization: fast2smsKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        route: "dlt",
-        sender_id: Deno.env.get("FAST2SMS_SENDER_ID") ?? "ENYTHG",
-        message: Deno.env.get("FAST2SMS_TEMPLATE_ID") ?? "218561",
-        variables_values: otp,
-        flash: 0,
-        numbers: number,
-      }),
-    });
+    // 4. Send OTP via Fast2SMS DLT Route with Timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 seconds timeout
 
-    const smsResult = await smsResponse.json();
-
-    if (!smsResponse.ok || smsResult.return === false) {
-      console.error("Fast2SMS error:", smsResult);
-      // Clean up the token we just inserted
-      await supabase.from("otp_tokens").delete().eq("phone", phone);
-      return new Response(
-        JSON.stringify({
-          error: smsResult.message?.[0] ?? "Failed to send OTP. Please try again.",
+    try {
+      const smsResponse = await fetch("https://www.fast2sms.com/dev/bulkV2", {
+        method: "POST",
+        headers: {
+          "authorization": fast2smsKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          route: "dlt",
+          sender_id: senderId,
+          message: templateId,
+          variables_values: otp,
+          flash: 0,
+          numbers: number,
         }),
-        { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      const smsResult = await smsResponse.json();
+
+      // Fast2SMS sets 'return: false' for logical errors even with 200 OK
+      if (!smsResponse.ok || smsResult.return === false) {
+        console.error("Fast2SMS API Error:", smsResult);
+        
+        // Rollback: Delete the token since SMS failed to send securely
+        await supabaseAdmin.from("otp_tokens").delete().eq("phone", phone);
+
+        // Fast2SMS returns message as a string on error, or an array on success
+        const errorMessage = typeof smsResult.message === "string"
+          ? smsResult.message
+          : (Array.isArray(smsResult.message) ? smsResult.message[0] : "Failed to send SMS through provider.");
+        
+        return jsonResponse({ error: errorMessage }, 502);
+      }
+
+      // Success
+      return jsonResponse({ success: true, message: "OTP sent successfully." }, 200);
+
+    } catch (fetchError) {
+      const isAbortError = fetchError && typeof fetchError === 'object' && 'name' in fetchError && fetchError.name === "AbortError";
+      clearTimeout(timeoutId);
+      console.error("Fast2SMS Network/Timeout Error:", fetchError);
+      
+      // Rollback on network failure/timeout
+      await supabaseAdmin.from("otp_tokens").delete().eq("phone", phone);
+
+      if (isAbortError) {
+        return jsonResponse({ error: "SMS provider timeout. Please try again." }, 504);
+      }
+      return jsonResponse({ error: "Failed to connect to SMS provider." }, 502);
     }
 
-    return new Response(
-      JSON.stringify({ success: true }),
-      { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-    );
   } catch (err) {
-    console.error("send-otp error:", err);
-    return new Response(
-      JSON.stringify({ error: "Internal server error." }),
-      { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-    );
+    console.error("send-otp Unhandled Exception:", err);
+    return jsonResponse({ error: "Internal server error during OTP generation." }, 500);
   }
 });
