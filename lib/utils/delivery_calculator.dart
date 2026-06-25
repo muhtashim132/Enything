@@ -63,13 +63,13 @@ class DeliveryCalculator {
   /// **Algorithm**
   /// • Shop 1 — no surcharge (it's the "anchor").
   /// • Shop 2 — distance from shop 1.
-  ///   - ≤ 1 km  → ₹7 (minimum flat charge)
-  ///   - > 1 km  → ₹7 × ceil(distanceKm)
+  ///   - ≤ 1 km  → `_ratePerKm` × 1 (minimum 1 km charged)
+  ///   - > 1 km  → `_ratePerKm` × ceil(distanceKm)
   /// • Shop 3, 4, … — distance from the **nearest** already-visited shop
   ///   (greedy nearest-neighbour), same rate as above.
   ///
-  /// [shops] must be in the order they were added to the cart (first shop first).
-  /// Returns 0 if there is only one shop.
+  /// The actual rate is `_ratePerKm` (₹10/km by default, configurable in Admin → Platform Config).
+
   static double calculateMultiShopSurcharge(List<ShopModel> shops) {
     if (shops.length <= 1) return 0;
 
@@ -87,8 +87,10 @@ class DeliveryCalculator {
         if (d < minDist) minDist = d;
       }
 
-      // Charge: minimum ₹7, then ₹7 per km (ceiling)
+      // BUG-CMT1 FIX: rate is _ratePerKm (default ₹10/km, admin-configurable)
+      // — NOT a fixed ₹7. Minimum charge = 1 km × _ratePerKm.
       final chargeForShop = _ratePerKm * math.max(1, minDist.ceil());
+
       total += chargeForShop;
 
       visited.add(candidate);

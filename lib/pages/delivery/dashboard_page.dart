@@ -242,7 +242,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
 
       // Also update orders that the rider is actively handling
-      final activeStatuses = ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'];
+      // BUG-GPS2 FIX: Include 'awaiting_payment' so the rider's location keeps
+      // updating while the customer is completing payment. Without it, the rider
+      // marker on the customer's map would freeze during the 10-minute payment window.
+      final activeStatuses = ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'];
+
       final activeOrders = _myGroups.expand((g) => g.orders).where((o) => activeStatuses.contains(o.status)).toList();
       
       for (final order in activeOrders) {

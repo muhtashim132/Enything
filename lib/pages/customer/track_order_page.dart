@@ -493,9 +493,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               'acceptance_deadline': newDeadline.toIso8601String(),
               'total_amount': order.totalAmount,
               'delivery_charges': order.deliveryCharges,
+              // BUG-RT1 FIX: rider_earnings was missing — rider would earn ₹0 on retried orders
               'rider_earnings': order.riderEarnings,
               'platform_fee': order.platformFee,
               'address': order.address,
+              // BUG-RT1 FIX: address_label was missing — rider lost the Home/Office label on retry
+              'address_label': order.addressLabel,
               'delivery_lat': order.deliveryLat,
               'delivery_lng': order.deliveryLng,
               'delivery_notes': order.deliveryNotes,
@@ -503,6 +506,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               'payment_status': 'pending',
               'customer_phone': order.customerPhone,
               'shop_phone': order.shopPhone,
+              // BUG-RT1 FIX: multi_shop_surcharge, small_cart_fee, heavy_order_fee,
+              // delivery_discount were ALL missing — showed ₹0 in receipt on retry
+              'multi_shop_surcharge': order.multiShopSurcharge,
+              'small_cart_fee': order.smallCartFee,
+              'heavy_order_fee': order.heavyOrderFee,
+              'delivery_discount': order.deliveryDiscount,
               'gst_item_total': order.gstItemTotal,
               'gst_delivery': order.gstDelivery,
               'gst_platform': order.gstPlatform,
@@ -621,13 +630,32 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     try {
       final newDeadline =
           DateTime.now().toUtc().add(const Duration(minutes: 2));
-      await _supabase.from('orders').update({
-        'status': 'awaiting_acceptance',
-        'cancelled_reason': null,
-        'seller_accepted': true,
-        'partner_accepted': false,
-        'acceptance_deadline': newDeadline.toIso8601String(),
-      }).eq('id', widget.orderId);
+      // BUG-PAY1 FIX (CRITICAL): Must null out delivery_partner_id.
+      // Without this the order remains assigned to the old rider and is
+      // filtered out by the rider dashboard (.isFilter('delivery_partner_id', null)),
+      // making the order permanently invisible to ALL new riders.
+      // Also clear rider_phone so the new rider's number is used when they accept.
+      if (_order!.cartGroupId != null) {
+        await _supabase.from('orders').update({
+          'status': 'awaiting_acceptance',
+          'cancelled_reason': null,
+          'seller_accepted': true,
+          'partner_accepted': false,
+          'delivery_partner_id': null,
+          'rider_phone': null,
+          'acceptance_deadline': newDeadline.toIso8601String(),
+        }).eq('cart_group_id', _order!.cartGroupId!);
+      } else {
+        await _supabase.from('orders').update({
+          'status': 'awaiting_acceptance',
+          'cancelled_reason': null,
+          'seller_accepted': true,
+          'partner_accepted': false,
+          'delivery_partner_id': null,
+          'rider_phone': null,
+          'acceptance_deadline': newDeadline.toIso8601String(),
+        }).eq('id', widget.orderId);
+      }
 
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
