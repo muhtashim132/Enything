@@ -9,6 +9,7 @@ import '../models/shop_model.dart';
 import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/recently_viewed_provider.dart';
 import '../theme/app_colors.dart';
 
 import '../config/app_categories.dart';
@@ -76,6 +77,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           _shop = ShopModel.fromMap(shopData);
           _isLoading = false;
         });
+        // Track recently viewed (non-blocking, fire-and-forget)
+        context.read<RecentlyViewedProvider>().addProduct(product.id);
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);

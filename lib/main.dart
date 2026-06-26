@@ -21,6 +21,8 @@ import 'providers/rbac_provider.dart';
 import 'providers/team_provider.dart';
 import 'providers/audit_provider.dart';
 import 'providers/platform_config_provider.dart';
+import 'providers/coupon_provider.dart';
+import 'providers/recently_viewed_provider.dart';
 import 'services/notification_service.dart';
 
 // Global Supabase client access
@@ -81,6 +83,10 @@ void main() async {
   final configProvider = PlatformConfigProvider();
   configProvider.load(); // DO NOT AWAIT
 
+  // Load recently viewed products from SharedPreferences (non-blocking)
+  final recentlyViewedProvider = RecentlyViewedProvider();
+  recentlyViewedProvider.init(); // DO NOT AWAIT
+
   // Initialize Notification Service async to prevent Android channel creation deadlocks
   NotificationService().init(); // DO NOT AWAIT
 
@@ -100,6 +106,7 @@ void main() async {
   runApp(EnythingApp(
     cartProvider: cartProvider,
     configProvider: configProvider,
+    recentlyViewedProvider: recentlyViewedProvider,
   ));
 }
 
@@ -197,10 +204,12 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
 class EnythingApp extends StatelessWidget {
   final CartProvider cartProvider;
   final PlatformConfigProvider configProvider;
+  final RecentlyViewedProvider recentlyViewedProvider;
   const EnythingApp({
     super.key,
     required this.cartProvider,
     required this.configProvider,
+    required this.recentlyViewedProvider,
   });
 
   @override
@@ -219,6 +228,9 @@ class EnythingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuditProvider()),
         ChangeNotifierProvider<PlatformConfigProvider>.value(
             value: configProvider),
+        ChangeNotifierProvider(create: (_) => CouponProvider()),
+        ChangeNotifierProvider<RecentlyViewedProvider>.value(
+            value: recentlyViewedProvider),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

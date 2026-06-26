@@ -9,6 +9,7 @@ import '../pages/auth/seller_pending_verification_page.dart';
 import '../pages/auth/delivery_kyc_upload_page.dart';
 import '../pages/auth/delivery_pending_verification_page.dart';
 import '../pages/auth/login_page.dart';
+import '../pages/auth/onboarding_page.dart';
 import '../pages/auth/accept_invite_page.dart';
 import '../pages/customer/home_page.dart';
 import '../pages/customer/restaurant_page.dart';
@@ -55,6 +56,7 @@ class AppRoutes {
   static const String sellerPendingVerification = '/auth/seller-pending';
   static const String deliveryKycUpload = '/auth/delivery-kyc';
   static const String deliveryPendingVerification = '/auth/delivery-pending';
+  static const String onboarding = '/onboarding';
   static const String login = '/login';
   static const String acceptAdminInvite = '/auth/accept-admin-invite';
   static const String customerHome = '/customer/home';
@@ -95,6 +97,8 @@ class AppRoutes {
     switch (routeSettings.name) {
       case splash:
         return _build(const SplashPage(), routeSettings);
+      case onboarding:
+        return _build(const OnboardingPage(), routeSettings);
       case roleSelect:
         return _build(const RoleSelectionPage(), routeSettings);
       case phoneAuth:

@@ -10,6 +10,7 @@ import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/product_detail_sheet.dart';
+import '../utils/share_utils.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -270,7 +271,32 @@ class _ProductCardState extends State<ProductCard>
                       ),
                     ),
 
-                    // Veg/NonVeg FSSAI-standard indicator — top-right (when no discount)
+                    // Share button — bottom-left below fav
+                    Positioned(
+                      bottom: isBestseller ? 8 : null,
+                      top: isBestseller ? null : 36,
+                      left: 8,
+                      child: GestureDetector(
+                        onTap: () => ShareUtils.shareProduct(product, shop: shop),
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.90),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.10),
+                                  blurRadius: 6)
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.ios_share_rounded,
+                            size: 13,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ),
                     if (product.isVeg != null && !hasDiscount)
                       Positioned(
                         top: 10,

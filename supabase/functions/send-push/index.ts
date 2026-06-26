@@ -84,19 +84,19 @@ async function getFcmAccessToken(sa: Record<string, string>, forceRefresh = fals
 
   cachedAccessToken = json.access_token;
   tokenExpirationTime = now + 3500; // Cache for slightly less than 1 hour
-  return cachedAccessToken;
+  return cachedAccessToken as string;
 }
 
 // ── Edge Function entry point ──────────────────────────────────────────────
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
     const rawBody = await req.json();
 
     // Support BOTH direct HTTP calls and Supabase Database Webhooks
-    let user_id, title, body, data;
+    let user_id: any, title: any, body: any, data: any;
 
     if (rawBody.type === 'INSERT' && rawBody.record) {
       // It's a Supabase Webhook payload from the `notifications` table

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/routes.dart';
 import '../providers/auth_provider.dart';
 
@@ -115,8 +116,14 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         Navigator.pushReplacementNamed(context, AppRoutes.customerHome);
       }
     } else {
-      // No active session — go to role selection first, then OTP
-      Navigator.pushReplacementNamed(context, AppRoutes.roleSelect);
+      // No active session — show onboarding on first launch, else role selection
+      final prefs = await SharedPreferences.getInstance();
+      final hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
+        context,
+        hasSeenOnboarding ? AppRoutes.roleSelect : AppRoutes.onboarding,
+      );
     }
   }
 

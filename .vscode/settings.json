@@ -1,4 +1,7 @@
 {
     "java.configuration.updateBuildConfiguration": "interactive",
-    "python.terminal.useEnvFile": true
+    "python.terminal.useEnvFile": true,
+    "deno.enable": true,
+    "deno.enablePaths": ["supabase/functions"],
+    "deno.unstable": true
 }

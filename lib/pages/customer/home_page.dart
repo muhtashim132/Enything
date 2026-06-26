@@ -14,6 +14,7 @@ import '../../providers/location_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/platform_config_provider.dart';
+import '../../providers/recently_viewed_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../models/product_model.dart';
@@ -1087,6 +1088,38 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         // Featured Banner
                         _buildFeaturedBanner(),
                         const SizedBox(height: 24),
+
+                        // ── Recently Viewed ─────────────────────────────
+                        Builder(builder: (ctx) {
+                          final recentProv = ctx.watch<RecentlyViewedProvider>();
+                          if (!recentProv.hasItems) return const SizedBox.shrink();
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionTitle('Recently Viewed', subtitle: 'Continue where you left off'),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                height: 220,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: recentProv.products.length,
+                                  itemBuilder: (_, index) {
+                                    final p = recentProv.products[index];
+                                    final shop = _productShops[p.id];
+                                    return SizedBox(
+                                      width: 155,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(right: 12),
+                                        child: ProductCard(product: p, shop: shop),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                          );
+                        }),
 
                         if (_shops.isNotEmpty) ...[
                           // ── Normal category browse ───────────────────

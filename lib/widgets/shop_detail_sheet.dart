@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import 'product_card.dart';
 import 'common/enything_map.dart';
+import '../utils/share_utils.dart';
 
 void showShopDetailSheet(BuildContext context, String shopId) {
   showModalBottomSheet(
@@ -102,7 +103,7 @@ class _ShopDetailSheetState extends State<ShopDetailSheet> {
   }
 }
 
-class _SheetContent extends StatelessWidget {
+class _SheetContent extends StatefulWidget {
   final ShopModel shop;
   final List<ProductModel> products;
   final ScrollController scrollController;
@@ -116,13 +117,47 @@ class _SheetContent extends StatelessWidget {
   });
 
   @override
+  State<_SheetContent> createState() => _SheetContentState();
+}
+
+class _SheetContentState extends State<_SheetContent> {
+  String _selectedCategory = 'All';
+
+  ShopModel get shop => widget.shop;
+  List<ProductModel> get allProducts => widget.products;
+  bool get isDark => widget.isDark;
+
+  // Deduplicated ordered category list from products
+  List<String> get _categories {
+    final Map<String, String> catsMap = {'all': 'All'};
+    for (final p in allProducts) {
+      final cat = p.category.trim();
+      if (cat.isNotEmpty) {
+        final lower = cat.toLowerCase();
+        if (!catsMap.containsKey(lower)) catsMap[lower] = cat;
+      }
+    }
+    return catsMap.values.toList();
+  }
+
+  List<ProductModel> get _filteredProducts => _selectedCategory == 'All'
+      ? allProducts
+      : allProducts
+          .where((p) =>
+              p.category.trim().toLowerCase() ==
+              _selectedCategory.toLowerCase())
+          .toList();
+
+  @override
   Widget build(BuildContext context) {
     final favs = context.watch<FavoritesProvider>();
     final auth = context.watch<AuthProvider>();
     final isFav = favs.isShopFavorite(shop.id);
+    final filteredProducts = _filteredProducts;
+    final cats = _categories;
 
     return CustomScrollView(
-      controller: scrollController,
+      controller: widget.scrollController,
       slivers: [
         // Drag handle
         SliverToBoxAdapter(
@@ -150,6 +185,26 @@ class _SheetContent extends StatelessWidget {
           leading: const SizedBox.shrink(),
           leadingWidth: 0,
           actions: [
+            // Share button
+            GestureDetector(
+              onTap: () => ShareUtils.shareShop(shop),
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 10)
+                  ],
+                ),
+                child: const Icon(Icons.ios_share_rounded,
+                    size: 18, color: AppColors.primary),
+              ),
+            ),
+            // Favourite button
             GestureDetector(
               onTap: () {
                 if (auth.currentUserId != null) {
@@ -419,6 +474,66 @@ class _SheetContent extends StatelessWidget {
           ),
         ),
 
+        // ── Category filter chips ──────────────────────────────────────────
+        if (cats.length > 1)
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 48,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: cats.length,
+                itemBuilder: (_, i) {
+                  final cat = cats[i];
+                  final isSelected = _selectedCategory == cat;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedCategory = cat),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary
+                            : isDark
+                                ? Colors.white.withValues(alpha: 0.07)
+                                : const Color(0xFFF0F4FF),
+                        borderRadius: BorderRadius.circular(20),
+                        border: isSelected
+                            ? null
+                            : Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.12)
+                                    : Colors.grey.shade200),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.35),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3))
+                              ]
+                            : [],
+                      ),
+                      child: Text(
+                        cat,
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : isDark
+                                  ? Colors.white60
+                                  : const Color(0xFF4A5568),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
         // Products header
         SliverToBoxAdapter(
           child: Padding(
@@ -426,7 +541,7 @@ class _SheetContent extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  'Products',
+                  _selectedCategory == 'All' ? 'Products' : _selectedCategory,
                   style: GoogleFonts.outfit(
                     fontSize: 21,
                     fontWeight: FontWeight.w900,
@@ -450,7 +565,7 @@ class _SheetContent extends StatelessWidget {
                         color: AppColors.primary.withValues(alpha: 0.2)),
                   ),
                   child: Text(
-                    '${products.length} items',
+                    '${filteredProducts.length} items',
                     style: GoogleFonts.outfit(
                         color: AppColors.primary,
                         fontSize: 12,
@@ -463,7 +578,7 @@ class _SheetContent extends StatelessWidget {
         ),
 
         // Products grid
-        if (products.isEmpty)
+        if (filteredProducts.isEmpty)
           SliverToBoxAdapter(
             child: Center(
               child: Padding(
@@ -485,7 +600,7 @@ class _SheetContent extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      'No products available',
+                      'No products in this category',
                       style: GoogleFonts.outfit(
                           color: AppColors.textSecondary, fontSize: 15),
                     ),
@@ -506,10 +621,10 @@ class _SheetContent extends StatelessWidget {
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) => ProductCard(
-                  product: products[index],
+                  product: filteredProducts[index],
                   shop: shop,
                 ),
-                childCount: products.length,
+                childCount: filteredProducts.length,
               ),
             ),
           ),
@@ -615,3 +730,4 @@ class _SheetContent extends StatelessWidget {
     );
   }
 }
+

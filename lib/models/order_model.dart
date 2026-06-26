@@ -138,6 +138,12 @@ class OrderModel {
   /// Frozen snapshot of shop's prep time at the time of order for wait time calculations.
   final int shopPrepTimeSnapshot;
 
+  /// Coupon applied to this order (nullable — not all orders use a coupon).
+  final String? couponId;
+
+  /// Discount amount deducted via coupon (defaults to 0 when no coupon used).
+  final double couponDiscount;
+
   OrderModel({
     required this.id,
     required this.customerId,
@@ -197,6 +203,8 @@ class OrderModel {
     this.smallCartFee = 0.0,
     this.heavyOrderFee = 0.0,
     this.deliveryDiscount = 0.0,
+    this.couponId,
+    this.couponDiscount = 0.0,
   });
 
   factory OrderModel.fromMap(Map<String, dynamic> map) {
@@ -270,6 +278,8 @@ class OrderModel {
       smallCartFee: (map['small_cart_fee'] ?? 0.0).toDouble(),
       heavyOrderFee: (map['heavy_order_fee'] ?? 0.0).toDouble(),
       deliveryDiscount: (map['delivery_discount'] ?? 0.0).toDouble(),
+      couponId: map['coupon_id'] as String?,
+      couponDiscount: (map['coupon_discount'] ?? 0.0).toDouble(),
     );
   }
 

@@ -18,6 +18,8 @@ import '../../widgets/address_picker_sheet.dart';
 import '../../utils/responsive_layout.dart';
 import '../../services/image_compression_service.dart';
 import '../../utils/delivery_calculator.dart';
+import '../../providers/coupon_provider.dart';
+import '../../widgets/coupon_input_widget.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -306,6 +308,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'prescription_urls': uploadedPrescriptionUrls,
               'estimated_distance_km': shopDistanceKm,
               'shop_prep_time_snapshot': shop.prepTimeMinutes,
+              'coupon_id': context.read<CouponProvider>().appliedCoupon?.id,
+              'coupon_discount': context.read<CouponProvider>().discountAmount,
             })
             .select()
             .single();
@@ -363,6 +367,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
 
       cart.clear();
+      context.read<CouponProvider>().clearCoupon();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(
           context,
@@ -384,6 +389,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
     final location = context.watch<LocationProvider>();
+    final couponProv = context.watch<CouponProvider>();
 
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
@@ -411,8 +417,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       platformFee: cart.platformFee,
       paymentMethod: 'upi',
     );
-    // Grand total = base items + item GST + delivery + platform
-    final total = gstBreakdown.grandTotal;
+    // Grand total = base items + item GST + delivery + platform - coupon discount
+    final couponDiscount = couponProv.discountAmount;
+    final total = (gstBreakdown.grandTotal - couponDiscount).clamp(0.0, double.infinity);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -750,6 +757,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ],
             const SizedBox(height: 16),
 
+            // ── Coupon / Promo Code ──────────────────────────────────────────
+            CouponInputWidget(cartTotal: cart.subtotal),
+            const SizedBox(height: 16),
+
             // Delivery Notes
             _sectionCard(
               title: 'Delivery Notes',
@@ -876,6 +887,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       '+₹${gstBreakdown.totalGst.toStringAsFixed(2)}',
                       hint: 'Govt. taxes on items & services',
                       valueColor: const Color(0xFF1565C0), // deep blue
+                    ),
+                  ],
+                  // Coupon discount
+                  if (couponDiscount > 0) ...[
+                    const SizedBox(height: 8),
+                    _billRow(
+                      'Promo (${couponProv.appliedCoupon!.code})',
+                      '-₹${couponDiscount.toStringAsFixed(2)}',
+                      valueColor: AppColors.success,
                     ),
                   ],
                   const Divider(height: 20),

@@ -46,6 +46,7 @@ dependencies:
   flutter_image_compress: ^2.4.0
   image: ^4.2.0
   flutter_background_service: ^5.0.5
+  share_plus: ^13.1.0
 
 dev_dependencies:
   flutter_test:

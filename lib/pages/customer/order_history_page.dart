@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/cart_provider.dart';
+import '../../models/product_model.dart';
+import '../../models/shop_model.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
@@ -21,6 +24,110 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   List<OrderModel> _orders = [];
   bool _isLoading = true;
   final Set<String> _cancellingIds = {}; // track which orders are being cancelled
+  final Set<String> _reorderingIds = {};  // track reorder in progress
+
+  // ── Reorder: fetch items from a past order, add valid ones to cart ──────
+  Future<void> _reorder(OrderModel order) async {
+    if (_reorderingIds.contains(order.id)) return;
+    setState(() => _reorderingIds.add(order.id));
+    try {
+      final itemsData = await _supabase
+          .from('order_items')
+          .select('product_id, quantity')
+          .eq('order_id', order.id);
+
+      if (!mounted) return;
+
+      // Fetch current product availability for each item
+      final productIds = (itemsData as List)
+          .map((i) => i['product_id'] as String)
+          .toList();
+
+      if (productIds.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No items found in this order.')),
+        );
+        return;
+      }
+
+      final productsData = await _supabase
+          .from('products')
+          .select('*, shops(*)')
+          .inFilter('id', productIds)
+          .eq('is_available', true);
+
+      if (!mounted) return;
+      final cart = context.read<CartProvider>();
+      final products = (productsData as List)
+          .map((p) => ProductModel.fromMap(p))
+          .toList();
+      // Build shopId → ShopModel lookup from the joined shop data
+      final Map<String, ShopModel> shopMap = {};
+      for (final p in productsData as List) {
+        if (p['shops'] != null) {
+          final shop = ShopModel.fromMap(p['shops']);
+          shopMap[shop.id] = shop;
+        }
+      }
+
+      int added = 0;
+      int skipped = 0;
+
+      for (final item in itemsData) {
+        final productId = item['product_id'] as String;
+        final quantity = item['quantity'] as int? ?? 1;
+        final product = products.cast<ProductModel?>().firstWhere(
+          (p) => p?.id == productId,
+          orElse: () => null,
+        );
+        if (product != null) {
+          final shop = shopMap[product.shopId];
+          if (shop != null) {
+            for (int i = 0; i < quantity; i++) {
+              cart.addItem(product, shop);
+            }
+            added++;
+          } else {
+            skipped++; // shop data unavailable
+          }
+        } else {
+          skipped++;
+        }
+      }
+
+      if (!mounted) return;
+
+      final msg = skipped > 0
+          ? '$added items added to cart ($skipped no longer available)'
+          : '$added items added to cart!';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          action: SnackBarAction(
+            label: 'View Cart',
+            textColor: Colors.white,
+            onPressed: () =>
+                Navigator.pushNamed(context, AppRoutes.cart),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to reorder: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _reorderingIds.remove(order.id));
+    }
+  }
 
   @override
   void initState() {
@@ -291,6 +398,49 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 ),
                 Row(
                   children: [
+                // Reorder button — for delivered or cancelled orders
+                    if (order.status == 'delivered' ||
+                        order.status == 'cancelled' ||
+                        order.status == 'seller_rejected') ...[
+                      _reorderingIds.contains(order.id)
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: AppColors.primary),
+                            )
+                          : GestureDetector(
+                              onTap: () => _reorder(order),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: AppColors.primary.withValues(alpha: 0.35)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.replay_rounded,
+                                        size: 12, color: AppColors.primary),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Reorder',
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                      const SizedBox(width: 8),
+                    ],
                     // Cancel chip — only for pending orders
                     // BUG-5 FIX: show cancel for awaiting_acceptance too (new order flow)
                     if (order.status == 'awaiting_acceptance' || order.status == 'pending') ...[
