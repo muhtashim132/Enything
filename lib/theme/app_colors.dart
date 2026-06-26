@@ -38,6 +38,12 @@ class AppColors {
   static const Color darkSurface = Color(0xFF1A1A2E);
   static const Color darkCard = Color(0xFF16213E);
 
+  // Premium Surface Elevations (for layered cards / sheets)
+  static const Color surfaceElevatedLight = Color(0xFFF0F2F8);
+  static const Color surfaceElevatedDark = Color(0xFF222236);
+  static const Color surfaceOverlayLight = Color(0xFFE8EAF0);
+  static const Color surfaceOverlayDark = Color(0xFF2A2A40);
+
   // Text Colors
   static const Color textPrimary = Color(0xFF1A1A2E);
   static const Color textSecondary = Color(0xFF6B7280);
@@ -51,6 +57,19 @@ class AppColors {
   // Shimmer
   static const Color shimmerBase = Color(0xFFE0E0E0);
   static const Color shimmerHighlight = Color(0xFFF5F5F5);
+
+  // Premium Trust & Status Colors
+  static const Color premiumGold = Color(0xFFD4A017);
+  static const Color premiumGoldLight = Color(0xFFFFF8E1);
+  static const Color premiumSilver = Color(0xFF9E9E9E);
+  static const Color trustGreen = Color(0xFF2E7D32);
+  static const Color savingsGreen = Color(0xFF1B5E20);
+
+  // Glassmorphism Overlays
+  static const Color glassLight = Color(0x26FFFFFF);
+  static const Color glassDark = Color(0x1AFFFFFF);
+  static const Color glassBorderLight = Color(0x40FFFFFF);
+  static const Color glassBorderDark = Color(0x14FFFFFF);
 
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(
@@ -99,6 +118,45 @@ class AppColors {
 
   static const LinearGradient deliveryGradient = LinearGradient(
     colors: [Color(0xFF00695C), Color(0xFF26A69A)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Premium Additional Gradients
+  static const LinearGradient successGradient = LinearGradient(
+    colors: [Color(0xFF00C853), Color(0xFF69F0AE)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient warningGradient = LinearGradient(
+    colors: [Color(0xFFFF6D00), Color(0xFFFFAB40)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient dangerGradient = LinearGradient(
+    colors: [Color(0xFFD32F2F), Color(0xFFFF5252)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient premiumGoldGradient = LinearGradient(
+    colors: [Color(0xFFD4A017), Color(0xFFF4C542)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient shimmerGradientLight = LinearGradient(
+    colors: [Color(0xFFE8E8EE), Color(0xFFF4F4FA), Color(0xFFE8E8EE)],
+    stops: [0.0, 0.5, 1.0],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient shimmerGradientDark = LinearGradient(
+    colors: [Color(0xFF1E1E2E), Color(0xFF2A2A3E), Color(0xFF1E1E2E)],
+    stops: [0.0, 0.5, 1.0],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

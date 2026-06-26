@@ -615,7 +615,7 @@ class _SheetContentState extends State<_SheetContent> {
             sliver: SliverGrid(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 0.55,
+                childAspectRatio: 0.54,
                 mainAxisSpacing: 14,
                 crossAxisSpacing: 14,
               ),

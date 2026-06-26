@@ -6,6 +6,7 @@ import '../models/shop_model.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/premium_effects.dart';
 import '../utils/delivery_calculator.dart';
 
 class ShopCard extends StatefulWidget {
@@ -51,10 +52,6 @@ class _ShopCardState extends State<ShopCard> {
     'Pet Supplies': [Color(0xFF2F9E44), Color(0xFF8CE99A)],
   };
 
-  List<Color> get _accentColors =>
-      _categoryColors[shop.category] ??
-      [const Color(0xFF0A2A9E), const Color(0xFF1E40AF)];
-
   static const Map<String, String> _categoryEmoji = {
     'Grocery': '🛒',
     'Supermarket / Hypermarket': '🏬',
@@ -83,7 +80,11 @@ class _ShopCardState extends State<ShopCard> {
     'Other': '🛍️',
   };
 
-  String get _categoryEmoji_ => _categoryEmoji[shop.category] ?? '🏪';
+  List<Color> get _accentColors =>
+      _categoryColors[shop.category] ??
+      [const Color(0xFF0A2A9E), const Color(0xFF1E40AF)];
+
+  String get _emoji => _categoryEmoji[shop.category] ?? '🏪';
 
   @override
   Widget build(BuildContext context) {
@@ -104,37 +105,29 @@ class _ShopCardState extends State<ShopCard> {
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
+        scale: _isPressed ? PremiumAnimations.pressedScale : PremiumAnimations.normalScale,
+        duration: PremiumAnimations.fast,
+        curve: PremiumAnimations.defaultCurve,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: PremiumAnimations.normal,
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: isDark ? AppColors.darkSurface : Colors.white,
+            borderRadius: PremiumRadius.largeBorder,
             border: isDark
                 ? Border.all(color: Colors.white.withValues(alpha: 0.07))
                 : null,
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.40)
-                    : Colors.black.withValues(alpha: 0.09),
-                blurRadius: _isPressed ? 6 : 20,
-                offset: Offset(0, _isPressed ? 2 : 8),
-              ),
-            ],
+            boxShadow: PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header image strip (120px) ───────────────────────────
+              // ── Header image strip ─────────────────────────────────────
               Stack(
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(24)),
+                        top: Radius.circular(PremiumRadius.large)),
                     child: shop.bannerImage != null
                         ? CachedNetworkImage(
                             imageUrl: shop.bannerImage!,
@@ -147,55 +140,62 @@ class _ShopCardState extends State<ShopCard> {
                           )
                         : _headerPlaceholder(colors),
                   ),
-                  // Dark gradient at bottom of image
+
+                  // Premium 3-stop gradient overlay
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(24)),
+                        top: Radius.circular(PremiumRadius.large)),
                     child: Container(
                       height: 120,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
                             Colors.transparent,
-                            Colors.black.withValues(alpha: 0.45),
+                            Colors.black.withValues(alpha: 0.15),
+                            Colors.black.withValues(alpha: 0.50),
                           ],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
+                          stops: const [0.0, 0.55, 1.0],
                         ),
                       ),
                     ),
                   ),
 
-                  // Category badge (top-left)
+                  // Category badge (top-left) — glassmorphism style
                   Positioned(
                     top: 10,
                     left: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 5),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: colors),
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                              color: colors.first.withValues(alpha: 0.4),
-                              blurRadius: 8),
-                        ],
-                      ),
-                      child: Text(
-                        '$_categoryEmoji_ ${shop.category}',
-                        style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 5),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: colors),
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                                color: colors.first.withValues(alpha: 0.45),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3)),
+                          ],
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: Text(
+                          '$_emoji ${shop.category}',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),
 
-                  // Offer badge (top-right)
+                  // Free delivery badge (top-right)
                   if (isFreeDelivery)
                     Positioned(
                       top: 10,
@@ -209,8 +209,8 @@ class _ShopCardState extends State<ShopCard> {
                           boxShadow: [
                             BoxShadow(
                                 color: const Color(0xFF00C853)
-                                    .withValues(alpha: 0.4),
-                                blurRadius: 6),
+                                    .withValues(alpha: 0.45),
+                                blurRadius: 8),
                           ],
                         ),
                         child: Text(
@@ -224,7 +224,7 @@ class _ShopCardState extends State<ShopCard> {
                       ),
                     ),
 
-                  // Rating badge (bottom-left, Zomato-style)
+                  // Rating badge (bottom-left)
                   Positioned(
                     bottom: 10,
                     left: 12,
@@ -242,23 +242,30 @@ class _ShopCardState extends State<ShopCard> {
                               auth.currentUserId!, shop.id);
                         }
                       },
-                      child: Container(
+                      child: AnimatedContainer(
+                        duration: PremiumAnimations.fast,
                         padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
+                          color: isFav
+                              ? Colors.red.withValues(alpha: 0.15)
+                              : Colors.white.withValues(alpha: 0.92),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 6)
+                                color: Colors.black.withValues(alpha: 0.18),
+                                blurRadius: 8)
                           ],
                         ),
-                        child: Icon(
-                          isFav
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_border_rounded,
-                          size: 14,
-                          color: isFav ? Colors.red : AppColors.textSecondary,
+                        child: AnimatedSwitcher(
+                          duration: PremiumAnimations.fast,
+                          child: Icon(
+                            key: ValueKey(isFav),
+                            isFav
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            size: 14,
+                            color: isFav ? Colors.red : AppColors.textSecondary,
+                          ),
                         ),
                       ),
                     ),
@@ -266,9 +273,9 @@ class _ShopCardState extends State<ShopCard> {
                 ],
               ),
 
-              // ── Info section ─────────────────────────────────────────
+              // ── Info section ──────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                padding: const EdgeInsets.fromLTRB(14, 13, 14, 15),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -284,7 +291,7 @@ class _ShopCardState extends State<ShopCard> {
                               color: isDark
                                   ? Colors.white
                                   : const Color(0xFF1A1A2E),
-                              letterSpacing: -0.2,
+                              letterSpacing: -0.3,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -300,19 +307,20 @@ class _ShopCardState extends State<ShopCard> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // Cuisine type
+                    // Cuisine / item type
                     Text(
                       shop.cuisineType ?? 'Various items',
                       style: GoogleFonts.outfit(
-                        color:
-                            isDark ? Colors.white54 : AppColors.textSecondary,
+                        color: isDark
+                            ? Colors.white54
+                            : AppColors.textSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 11),
 
                     // Chips row
                     Wrap(
@@ -364,7 +372,7 @@ class _ShopCardState extends State<ShopCard> {
       ),
       child: Center(
         child: Text(
-          _categoryEmoji_,
+          _emoji,
           style: const TextStyle(fontSize: 46),
         ),
       ),
@@ -376,11 +384,17 @@ class _ShopCardState extends State<ShopCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: hasRating ? const Color(0xFF276749) : const Color(0xFF2D3748),
+        gradient: LinearGradient(
+          colors: hasRating
+              ? [const Color(0xFF1E6B40), const Color(0xFF2E9D5E)]
+              : [const Color(0xFF2D3748), const Color(0xFF3D4A5C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(9),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2), blurRadius: 6),
+              color: Colors.black.withValues(alpha: 0.25), blurRadius: 8),
         ],
       ),
       child: Row(
@@ -407,8 +421,8 @@ class _ShopCardState extends State<ShopCard> {
     );
   }
 
-  Widget _buildDeliveryChip(double distanceKm, bool isOutOfRange,
-      bool isFreeDelivery, double charge,
+  Widget _buildDeliveryChip(
+      double distanceKm, bool isOutOfRange, bool isFreeDelivery, double charge,
       {required bool isDark}) {
     if (isOutOfRange) {
       return _buildChip(
@@ -445,10 +459,10 @@ class _ShopCardState extends State<ShopCard> {
     required bool isDark,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withValues(alpha: 0.08) : color,
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

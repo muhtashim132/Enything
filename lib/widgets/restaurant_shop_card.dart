@@ -6,6 +6,7 @@ import '../models/shop_model.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/premium_effects.dart';
 import '../utils/delivery_calculator.dart';
 
 /// A full-width, Swiggy/Zomato-style restaurant card used exclusively
@@ -77,27 +78,20 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
+        scale: _isPressed ? PremiumAnimations.pressedScale : PremiumAnimations.normalScale,
+        duration: PremiumAnimations.fast,
+        curve: PremiumAnimations.defaultCurve,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: PremiumAnimations.normal,
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: isDark ? AppColors.darkSurface : Colors.white,
+            borderRadius: PremiumRadius.largeBorder,
             border: isDark
                 ? Border.all(color: Colors.white.withValues(alpha: 0.07))
                 : null,
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.45)
-                    : Colors.black.withValues(alpha: 0.10),
-                blurRadius: _isPressed ? 8 : 24,
-                offset: Offset(0, _isPressed ? 2 : 10),
-              ),
-            ],
+            boxShadow:
+                PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,23 +235,30 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                                   auth.currentUserId!, shop.id);
                             }
                           },
-                          child: Container(
+                          child: AnimatedContainer(
+                            duration: PremiumAnimations.fast,
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.92),
+                              color: isFav
+                                  ? Colors.red.withValues(alpha: 0.15)
+                                  : Colors.white.withValues(alpha: 0.92),
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.15),
-                                    blurRadius: 8)
+                                    color: Colors.black.withValues(alpha: 0.18),
+                                    blurRadius: 10)
                               ],
                             ),
-                            child: Icon(
-                              isFav
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              size: 16,
-                              color: isFav ? Colors.red : AppColors.textSecondary,
+                            child: AnimatedSwitcher(
+                              duration: PremiumAnimations.fast,
+                              child: Icon(
+                                key: ValueKey(isFav),
+                                isFav
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                size: 16,
+                                color: isFav ? Colors.red : AppColors.textSecondary,
+                              ),
                             ),
                           ),
                         ),
@@ -330,21 +331,26 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                           return Container(
                             margin: const EdgeInsets.only(right: 6),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
+                                horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
                               color: isDark
                                   ? Colors.white.withValues(alpha: 0.08)
-                                  : const Color(0xFFF0F4FF),
-                              borderRadius: BorderRadius.circular(8),
+                                  : const Color(0xFFEEF2FF),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.10)
+                                    : const Color(0xFFD0D9FF),
+                              ),
                             ),
                             child: Text(
                               c,
                               style: GoogleFonts.outfit(
                                 fontSize: 11,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                                 color: isDark
                                     ? Colors.white60
-                                    : const Color(0xFF4A5568),
+                                    : const Color(0xFF3D52A0),
                               ),
                             ),
                           );
@@ -453,11 +459,18 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: hasRating ? const Color(0xFF276749) : const Color(0xFF2D3748),
+        gradient: LinearGradient(
+          colors: hasRating
+              ? [const Color(0xFF1E6B40), const Color(0xFF2E9D5E)]
+              : [const Color(0xFF2D3748), const Color(0xFF3D4A5C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25), blurRadius: 8),
+              color: Colors.black.withValues(alpha: 0.28), blurRadius: 10,
+              offset: const Offset(0, 3)),
         ],
       ),
       child: Row(

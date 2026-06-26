@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
 import '../../widgets/common/enything_map.dart';
 import 'dart:io';
@@ -423,7 +426,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Checkout')),
+      appBar: AppBar(title: Text('Checkout')),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: MaxWidthContainer(
@@ -452,11 +455,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           ),
                           child: Row(
                             children: [
-                              Text(location.activeLabelIcon, style: const TextStyle(fontSize: 12)),
+                              Text(location.activeLabelIcon, style: GoogleFonts.outfit(fontSize: 12)),
                               const SizedBox(width: 4),
                               Text(
                                 location.activeLabel,
-                                style: const TextStyle(
+                                style: GoogleFonts.outfit(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.primary,
@@ -472,7 +475,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           location.currentAddress.isEmpty
                               ? 'Location not set'
                               : location.currentAddress,
-                          style: const TextStyle(fontSize: 14),
+                          style: GoogleFonts.outfit(fontSize: 14),
                         ),
                       ),
                     ],
@@ -500,11 +503,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       OutlinedButton.icon(
                         onPressed: () => showAddressPickerSheet(context),
                         icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
-                        label: const Text('Change Address'),
+                        label: Text('Change Address'),
                         style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
-                            textStyle: const TextStyle(fontSize: 12)),
+                            textStyle: GoogleFonts.outfit(fontSize: 12)),
                       ),
                     ],
                   ),
@@ -560,7 +563,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         children: [
                           Text(
                             'Estimated Delivery',
-                            style: TextStyle(
+                            style: GoogleFonts.outfit(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: AppColors.primary.withValues(alpha: 0.7),
@@ -570,7 +573,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           const SizedBox(height: 2),
                           Text(
                             etaStr,
-                            style: const TextStyle(
+                            style: GoogleFonts.outfit(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
                               color: AppColors.primary,
@@ -582,9 +585,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
+                        Text(
                           'Arrives by',
-                          style: TextStyle(
+                          style: GoogleFonts.outfit(
                             fontSize: 10,
                             color: AppColors.textSecondary,
                           ),
@@ -592,7 +595,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         const SizedBox(height: 2),
                         Text(
                           arrivalStr,
-                          style: const TextStyle(
+                          style: GoogleFonts.outfit(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textPrimary,
@@ -631,12 +634,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             Expanded(
                               child: Text(
                                 '${item.quantity}x ${item.product.name}',
-                                style: const TextStyle(fontSize: 13),
+                                style: GoogleFonts.outfit(fontSize: 13),
                               ),
                             ),
                             Text(
                               '₹${item.totalPrice.toStringAsFixed(0)}',
-                              style: const TextStyle(
+                              style: GoogleFonts.outfit(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
                               ),
@@ -656,9 +659,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Your order contains medicines that require a valid doctor\'s prescription under Govt of India norms. Please upload it here.',
-                      style: TextStyle(
+                      style: GoogleFonts.outfit(
                           fontSize: 13, color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 12),
@@ -675,16 +678,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                 color: AppColors.primary.withValues(alpha: 0.3),
                                 style: BorderStyle.solid),
                           ),
-                          child: const Column(
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add_photo_alternate_outlined,
+                              const Icon(Icons.add_photo_alternate_outlined,
                                   color: AppColors.primary, size: 32),
-                              SizedBox(height: 8),
+                              const SizedBox(height: 8),
                               Text(
                                   'Tap to upload prescription\n(Clear & readable image)',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(
+                                  style: GoogleFonts.outfit(
                                       color: AppColors.primary,
                                       fontWeight: FontWeight.w600)),
                             ],
@@ -797,19 +800,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         color: AppColors.success, size: 22),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Pay after confirmation',
-                            style: TextStyle(
+                            style: GoogleFonts.outfit(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                                 color: AppColors.textPrimary)),
                         SizedBox(height: 2),
                         Text(
                           'No money is charged now. Payment via UPI/Card is only requested after the shop & rider both accept your order.',
-                          style: TextStyle(
+                          style: GoogleFonts.outfit(
                               fontSize: 11,
                               color: AppColors.textSecondary),
                         ),
@@ -934,21 +937,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Total Amount',
-                    style: TextStyle(
+                Text('Total Amount',
+                    style: GoogleFonts.outfit(
                         color: AppColors.textSecondary, fontSize: 13)),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text('₹${total.toStringAsFixed(2)}',
-                        style: const TextStyle(
+                        style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary)),
                     if (gstBreakdown.totalGst > 0)
                       Text(
                         'Incl. ₹${gstBreakdown.totalGst.toStringAsFixed(2)} Total GST',
-                        style: const TextStyle(
+                        style: GoogleFonts.outfit(
                             fontSize: 10, color: AppColors.textSecondary),
                       ),
                   ],
@@ -985,9 +988,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2.5),
                       )
-                    : const Text(
+                    : Text(
                         'CONFIRM ORDER',
-                        style: TextStyle(
+                        style: GoogleFonts.outfit(
                             fontSize: 16,
                             height: 1.2,
                             color: Colors.white,
@@ -1031,7 +1034,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(
+                style: GoogleFonts.outfit(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1057,7 +1060,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label,
-                style: TextStyle(
+                style: GoogleFonts.outfit(
                   color:
                       isBold ? AppColors.textPrimary : AppColors.textSecondary,
                   fontSize: isBold ? 15 : 13,
@@ -1065,14 +1068,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 )),
             if (hint != null)
               Text(hint,
-                  style: const TextStyle(
+                  style: GoogleFonts.outfit(
                     color: AppColors.textSecondary,
                     fontSize: 10,
                   )),
           ],
         ),
         Text(value,
-            style: TextStyle(
+            style: GoogleFonts.outfit(
               color: valueColor ?? AppColors.textPrimary,
               fontSize: isBold ? 17 : 13,
               fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,

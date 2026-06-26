@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/favorites_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/premium_effects.dart';
 import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
 import '../../widgets/product_card.dart';
@@ -79,44 +81,68 @@ class _FavoritesPageState extends State<FavoritesPage>
     }
   }
 
-  Widget _buildEmptyState(String title, String subtitle, IconData icon) {
+  Widget _buildEmptyState(String title, String subtitle, IconData icon, bool isDark) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon,
-              size: 80, color: AppColors.textSecondary.withValues(alpha: 0.3)),
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.1),
+                  AppColors.primaryLight.withValues(alpha: isDark ? 0.12 : 0.06),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              size: 56, 
+              color: isDark ? AppColors.primaryLight : AppColors.primary,
+            ),
+          ),
           const SizedBox(height: 24),
           Text(
             title,
             style: GoogleFonts.outfit(
               fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             subtitle,
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: 15,
-              color: AppColors.textSecondary,
+              fontSize: 14,
+              color: isDark ? Colors.white54 : AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: PremiumRadius.mediumBorder,
+                boxShadow: PremiumShadows.floatingButtonLight,
+              ),
+              child: Text(
+                'Start Exploring',
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
               ),
             ),
-            child: const Text('Start Exploring',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -126,6 +152,7 @@ class _FavoritesPageState extends State<FavoritesPage>
   @override
   Widget build(BuildContext context) {
     final favProvider = context.watch<FavoritesProvider>();
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
 
     // Keep lists in sync if user un-favorites something while on this page
     _favoriteProducts
@@ -134,20 +161,64 @@ class _FavoritesPageState extends State<FavoritesPage>
         .removeWhere((s) => !favProvider.favoriteShopIds.contains(s.id));
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
       appBar: AppBar(
-        title: Text('Favorites',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+        backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            margin: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFF0F0F8),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.arrow_back_ios_new_rounded,
+                size: 16, color: isDark ? Colors.white70 : AppColors.textPrimary),
+          ),
+        ),
+        title: Text(
+          'Favorites',
+          style: GoogleFonts.outfit(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: isDark ? Colors.white : AppColors.textPrimary,
+          ),
+        ),
         centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
-          tabs: const [
-            Tab(text: 'Items & Products'),
-            Tab(text: 'Shops & Restaurants'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              labelColor: isDark ? Colors.white : Colors.white,
+              unselectedLabelColor: isDark ? Colors.white54 : AppColors.textSecondary,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+              unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+              tabs: const [
+                Tab(text: 'Items & Products'),
+                Tab(text: 'Shops & Restaurants'),
+              ],
+            ),
+          ),
         ),
       ),
       body: MaxWidthContainer(
@@ -161,15 +232,18 @@ class _FavoritesPageState extends State<FavoritesPage>
                     ? _buildEmptyState(
                         'No favorite items yet',
                         'Tap the heart icon on any item you love\nto save it for later.',
-                        Icons.favorite_border_rounded)
+                        Icons.favorite_border_rounded,
+                        isDark)
                     : RefreshIndicator(
                         onRefresh: _loadFavorites,
+                        color: AppColors.primary,
+                        backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
                         child: GridView.builder(
                           padding: const EdgeInsets.all(16),
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
-                            childAspectRatio: 0.55,
+                            childAspectRatio: 0.54,
                             mainAxisSpacing: 16,
                             crossAxisSpacing: 16,
                           ),
@@ -186,9 +260,12 @@ class _FavoritesPageState extends State<FavoritesPage>
                     ? _buildEmptyState(
                         'No favorite shops yet',
                         'Save your go-to restaurants and stores\nfor quick access.',
-                        Icons.storefront_outlined)
+                        Icons.storefront_outlined,
+                        isDark)
                     : RefreshIndicator(
                         onRefresh: _loadFavorites,
+                        color: AppColors.primary,
+                        backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
                         child: ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: _favoriteShops.length,

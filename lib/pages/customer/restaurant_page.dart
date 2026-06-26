@@ -310,7 +310,7 @@ class _RestaurantPageState extends State<RestaurantPage> {
                 gridDelegate:
                     const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
-                  childAspectRatio: 0.55,
+                  childAspectRatio: 0.54,
                   mainAxisSpacing: 14,
                   crossAxisSpacing: 14,
                 ),

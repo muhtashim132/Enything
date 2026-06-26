@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shimmer/shimmer.dart';
 import '../models/product_model.dart';
 import '../models/shop_model.dart';
 import '../providers/cart_provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/premium_effects.dart';
 import '../widgets/product_detail_sheet.dart';
 
 class ProductSearchCard extends StatefulWidget {
@@ -39,27 +41,19 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
+        scale: _isPressed ? PremiumAnimations.pressedScale : PremiumAnimations.normalScale,
+        duration: PremiumAnimations.fast,
+        curve: PremiumAnimations.defaultCurve,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: PremiumAnimations.normal,
           margin: const EdgeInsets.only(bottom: 14),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-            borderRadius: BorderRadius.circular(22),
+            color: isDark ? AppColors.darkSurface : Colors.white,
+            borderRadius: PremiumRadius.largeBorder,
             border: isDark
                 ? Border.all(color: Colors.white.withValues(alpha: 0.07))
                 : null,
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.35)
-                    : Colors.black.withValues(alpha: 0.07),
-                blurRadius: _isPressed ? 6 : 16,
-                offset: Offset(0, _isPressed ? 2 : 7),
-              ),
-            ],
+            boxShadow: PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
           child: IntrinsicHeight(
             child: Row(
@@ -101,14 +95,18 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                   width: double.infinity,
                                   height: double.infinity,
                                   fit: BoxFit.contain,
-                                  placeholder: (c, i) => const ColoredBox(
-                                      color: Color(0xFFEEF2FF)),
+                                  fadeInDuration: const Duration(milliseconds: 200),
+                                  placeholder: (c, i) => Shimmer.fromColors(
+                                    baseColor: PremiumShimmer.baseColor(isDark),
+                                    highlightColor: PremiumShimmer.highlightColor(isDark),
+                                    child: Container(color: Colors.white),
+                                  ),
                                   errorWidget: (c, e, s) => Center(
                                     child: Icon(
                                       Icons.shopping_bag_outlined,
                                       size: 28,
                                       color: AppColors.primary
-                                          .withValues(alpha: 0.4),
+                                          .withValues(alpha: isDark ? 0.35 : 0.35),
                                     ),
                                   ),
                                 )
@@ -117,7 +115,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                     Icons.shopping_bag_outlined,
                                     size: 28,
                                     color: AppColors.primary
-                                        .withValues(alpha: 0.4),
+                                        .withValues(alpha: 0.35),
                                   ),
                                 ),
                         ),
@@ -301,7 +299,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            // Price
+                            // Price column
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
@@ -314,126 +312,147 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                     fontSize: 16,
                                   ),
                                 ),
-                                if (hasDiscount)
-                                  Text(
-                                    '₹${product.originalPrice!.toStringAsFixed(0)}',
-                                    style: GoogleFonts.outfit(
-                                      color: isDark
-                                          ? Colors.white38
-                                          : AppColors.textLight,
-                                      fontSize: 11,
-                                      decoration: TextDecoration.lineThrough,
+                                if (hasDiscount) ...
+                                  [
+                                    Text(
+                                      '₹${product.originalPrice!.toStringAsFixed(0)}',
+                                      style: GoogleFonts.outfit(
+                                        color: isDark
+                                            ? Colors.white38
+                                            : AppColors.textLight,
+                                        fontSize: 11,
+                                        decoration: TextDecoration.lineThrough,
+                                        decorationColor: isDark
+                                            ? Colors.white38
+                                            : AppColors.textLight,
+                                      ),
                                     ),
-                                  ),
+                                    Text(
+                                      'Save ₹${(product.originalPrice! - product.price).toStringAsFixed(0)}',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ],
                               ],
                             ),
 
-                            // ADD / Stepper
-                            if (quantity > 0)
-                              Container(
-                                height: 34,
-                                width: 88,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFF0A2A9E),
-                                      Color(0xFF1E40AF)
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(11),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: AppColors.primary
-                                            .withValues(alpha: 0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 3)),
-                                  ],
+                            // ADD / Stepper with AnimatedSwitcher
+                            AnimatedSwitcher(
+                              duration: PremiumAnimations.normal,
+                              switchInCurve: Curves.elasticOut,
+                              switchOutCurve: Curves.easeIn,
+                              transitionBuilder: (child, animation) =>
+                                ScaleTransition(
+                                  scale: animation,
+                                  child: FadeTransition(opacity: animation, child: child),
                                 ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => context
-                                          .read<CartProvider>()
-                                          .updateQuantity(
-                                              product.id, quantity - 1),
-                                      child: const Icon(Icons.remove_rounded,
-                                          size: 16, color: Colors.white),
-                                    ),
-                                    Text(
-                                      '$quantity',
-                                      style: GoogleFonts.outfit(
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 13,
-                                          color: Colors.white),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () {
-                                        context
-                                            .read<CartProvider>()
-                                            .addItem(product, shop);
-                                      },
-                                      child: const Icon(Icons.add_rounded,
-                                          size: 16, color: Colors.white),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            else
-                              GestureDetector(
-                                onTap: () {
-                                  context
-                                      .read<CartProvider>()
-                                      .addItem(product, shop);
-                                },
-                                child: Container(
-                                  height: 34,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                        color: AppColors.primary, width: 1.5),
-                                    borderRadius: BorderRadius.circular(11),
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        AppColors.primary
-                                            .withValues(alpha: 0.06),
-                                        AppColors.primary
-                                            .withValues(alpha: 0.10),
+                              child: quantity > 0
+                                ? Container(
+                                    key: const ValueKey('stepper'),
+                                    height: 34,
+                                    width: 88,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF0A2A9E), Color(0xFF1E40AF)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(11),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.primary.withValues(alpha: 0.35),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
                                       ],
                                     ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.add_rounded,
-                                          size: 14,
-                                          color: AppColors.primary),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        'ADD',
-                                        style: GoogleFonts.outfit(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () => context
+                                              .read<CartProvider>()
+                                              .updateQuantity(product.id, quantity - 1),
+                                          child: const Icon(Icons.remove_rounded,
+                                              size: 16, color: Colors.white),
+                                        ),
+                                        AnimatedSwitcher(
+                                          duration: const Duration(milliseconds: 180),
+                                          transitionBuilder: (child, anim) =>
+                                              ScaleTransition(scale: anim, child: child),
+                                          child: Text(
+                                            '$quantity',
+                                            key: ValueKey(quantity),
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 13,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () => context
+                                              .read<CartProvider>()
+                                              .addItem(product, shop),
+                                          child: const Icon(Icons.add_rounded,
+                                              size: 16, color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : GestureDetector(
+                                    key: const ValueKey('add'),
+                                    onTap: () => context
+                                        .read<CartProvider>()
+                                        .addItem(product, shop),
+                                    child: Container(
+                                      height: 34,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: AppColors.primary.withValues(alpha: isDark ? 0.5 : 0.8),
+                                          width: 1.5,
+                                        ),
+                                        borderRadius: BorderRadius.circular(11),
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            AppColors.primary.withValues(alpha: isDark ? 0.15 : 0.06),
+                                            AppColors.primary.withValues(alpha: isDark ? 0.10 : 0.10),
+                                          ],
                                         ),
                                       ),
-                                    ],
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.add_rounded,
+                                              size: 14,
+                                              color: isDark ? AppColors.primaryLight : AppColors.primary),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            'ADD',
+                                            style: GoogleFonts.outfit(
+                                              color: isDark ? AppColors.primaryLight : AppColors.primary,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                          ],
-                        ),
+                            ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 }

@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
 
@@ -179,26 +182,30 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     }
   }
 
-  Future<void> _cancelOrder(OrderModel order) async {
+  Future<void> _cancelOrder(OrderModel order, bool isDark) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Cancel Order?',
-            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: const Text(
+        backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Cancel Order?',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+        content: Text(
             'Are you sure you want to cancel this order?',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+            style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white70 : AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep Order'),
+            child: Text('Keep Order', style: GoogleFonts.outfit(color: isDark ? Colors.white70 : AppColors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Yes, Cancel',
-                style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Yes, Cancel',
+                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -279,22 +286,49 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('My Orders')),
+      backgroundColor: isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
+      appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            margin: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFF0F0F8),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.arrow_back_ios_new_rounded,
+                size: 16, color: isDark ? Colors.white70 : AppColors.textPrimary),
+          ),
+        ),
+        title: Text(
+          'My Orders',
+          style: GoogleFonts.outfit(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: isDark ? Colors.white : AppColors.textPrimary,
+          ),
+        ),
+      ),
       body: MaxWidthContainer(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _orders.isEmpty
-              ? _buildEmptyState()
+              ? _buildEmptyState(isDark)
               : RefreshIndicator(
                   onRefresh: _fetchOrders,
                   color: AppColors.primary,
+                  backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: _orders.length,
                     itemBuilder: (context, index) {
-                      return _buildOrderCard(_orders[index]);
+                      return _buildOrderCard(_orders[index], isDark);
                     },
                   ),
                 ),
@@ -302,27 +336,24 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     );
   }
 
-  Widget _buildOrderCard(OrderModel order) {
+  Widget _buildOrderCard(OrderModel order, bool isDark) {
     final statusColor = _getStatusColor(order.status);
+    
     return GestureDetector(
       onTap: () => Navigator.pushNamed(
         context,
         AppRoutes.trackOrder,
         arguments: {'orderId': order.id},
       ),
-      child: Container(
+      child: AnimatedContainer(
+        duration: PremiumAnimations.normal,
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: PremiumRadius.largeBorder,
+          border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.07)) : null,
+          boxShadow: PremiumShadows.cardLight,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -330,14 +361,14 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(_getStatusIcon(order.status),
-                      color: statusColor, size: 20),
+                      color: statusColor, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -346,66 +377,70 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     children: [
                       Text(
                         'Order #${order.id.substring(0, 8).toUpperCase()}',
-                        style: const TextStyle(
+                        style: GoogleFonts.outfit(
                           fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          fontFamily: 'Poppins',
+                          fontSize: 15,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         DateFormat('dd MMM yyyy, hh:mm a')
                             .format(order.createdAt),
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                          fontFamily: 'Poppins',
+                        style: GoogleFonts.outfit(
+                          color: isDark ? Colors.white54 : AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
+                    color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     order.statusDisplay,
-                    style: TextStyle(
+                    style: GoogleFonts.outfit(
                       color: statusColor,
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
               ],
             ),
-            const Divider(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Divider(
+                height: 1, 
+                color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade100,
+              ),
+            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   '₹${order.grandTotal.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    fontSize: 18,
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    fontFamily: 'Poppins',
+                    color: isDark ? Colors.white : AppColors.textPrimary,
                   ),
                 ),
                 Row(
                   children: [
-                // Reorder button — for delivered or cancelled orders
+                    // Reorder button — for delivered or cancelled orders
                     if (order.status == 'delivered' ||
                         order.status == 'cancelled' ||
                         order.status == 'seller_rejected') ...[
                       _reorderingIds.contains(order.id)
                           ? const SizedBox(
-                              width: 22,
-                              height: 22,
+                              width: 24,
+                              height: 24,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: AppColors.primary),
                             )
@@ -413,26 +448,25 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                               onTap: () => _reorder(order),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
+                                    horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: AppColors.primary.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                      color: AppColors.primary.withValues(alpha: 0.35)),
+                                      color: AppColors.primary.withValues(alpha: 0.2)),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.replay_rounded,
-                                        size: 12, color: AppColors.primary),
-                                    SizedBox(width: 4),
+                                    const Icon(Icons.replay_rounded,
+                                        size: 14, color: AppColors.primary),
+                                    const SizedBox(width: 4),
                                     Text(
                                       'Reorder',
-                                      style: TextStyle(
+                                      style: GoogleFonts.outfit(
                                         color: AppColors.primary,
-                                        fontSize: 11,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w700,
-                                        fontFamily: 'Poppins',
                                       ),
                                     ),
                                   ],
@@ -446,46 +480,44 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     if (order.status == 'awaiting_acceptance' || order.status == 'pending') ...[
                       _cancellingIds.contains(order.id)
                           ? const SizedBox(
-                              width: 22,
-                              height: 22,
+                              width: 24,
+                              height: 24,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: AppColors.danger),
                             )
                           : GestureDetector(
-                              onTap: () => _cancelOrder(order),
+                              onTap: () => _cancelOrder(order, isDark),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
+                                    horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: AppColors.danger.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                      color: AppColors.danger.withValues(alpha: 0.4)),
+                                      color: AppColors.danger.withValues(alpha: 0.2)),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'Cancel',
-                                  style: TextStyle(
+                                  style: GoogleFonts.outfit(
                                     color: AppColors.danger,
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w700,
-                                    fontFamily: 'Poppins',
                                   ),
                                 ),
                               ),
                             ),
                       const SizedBox(width: 8),
                     ],
-                    const Text(
-                      'View Details',
-                      style: TextStyle(
+                    Text(
+                      'Details',
+                      style: GoogleFonts.outfit(
                         color: AppColors.primary,
                         fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.arrow_forward_ios,
+                    const Icon(Icons.arrow_forward_ios_rounded,
                         size: 12, color: AppColors.primary),
                   ],
                 ),
@@ -497,7 +529,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(bool isDark) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -506,33 +538,65 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.1),
+                  AppColors.primaryLight.withValues(alpha: isDark ? 0.12 : 0.06),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
             ),
-            child: const Center(
-              child: Icon(Icons.receipt_long_outlined,
-                  size: 60, color: AppColors.primary),
+            child: Icon(
+              Icons.receipt_long_outlined,
+              size: 56, 
+              color: isDark ? AppColors.primaryLight : AppColors.primary,
             ),
           ),
           const SizedBox(height: 24),
-          const Text('No orders yet',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Poppins')),
+          Text(
+            'No orders yet',
+            style: GoogleFonts.outfit(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 8),
-          const Text('Start ordering from nearby shops!',
-              style: TextStyle(
-                  color: AppColors.textSecondary, fontFamily: 'Poppins')),
+          Text(
+            'Start ordering from nearby shops!',
+            style: GoogleFonts.outfit(
+              color: isDark ? Colors.white54 : AppColors.textSecondary,
+              fontSize: 14,
+            ),
+          ),
           const SizedBox(height: 28),
-          ElevatedButton.icon(
-            onPressed: () =>
-                Navigator.pushReplacementNamed(context, AppRoutes.customerHome),
-            icon: const Icon(Icons.shopping_bag_outlined),
-            label: const Text('Order Now'),
-            style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 14)),
+          GestureDetector(
+            onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.customerHome),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: PremiumRadius.mediumBorder,
+                boxShadow: PremiumShadows.floatingButtonLight,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Order Now',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),

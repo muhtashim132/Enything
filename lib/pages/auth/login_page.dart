@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
 import '../../utils/validators.dart';
+import '../../utils/responsive_layout.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -58,7 +62,7 @@ class _LoginPageState extends State<LoginPage>
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error),
+          content: Text(error, style: GoogleFonts.outfit()),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape:
@@ -81,10 +85,11 @@ class _LoginPageState extends State<LoginPage>
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF8F9FA),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -92,24 +97,22 @@ class _LoginPageState extends State<LoginPage>
             Container(
               height: size.height * 0.40,
               width: double.infinity,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF0A2A9E),
-                    Color(0xFF071D6B),
-                    Color(0xFF050F3A),
-                  ],
+                  colors: isDark 
+                    ? [const Color(0xFF070B19), const Color(0xFF0A1535), const Color(0xFF101B40)]
+                    : [const Color(0xFF0A2A9E), const Color(0xFF071D6B), const Color(0xFF050F3A)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
                 borderRadius:
-                    BorderRadius.vertical(bottom: Radius.circular(36)),
+                    const BorderRadius.vertical(bottom: Radius.circular(36)),
               ),
               child: SafeArea(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Gold logo
+                    // Premium Gold logo
                     Container(
                       width: 82,
                       height: 82,
@@ -139,27 +142,26 @@ class _LoginPageState extends State<LoginPage>
                         ],
                       ),
                       child: const Center(
-                        child: Icon(Icons.bolt, color: Colors.white, size: 50),
+                        child: Icon(Icons.bolt_rounded, color: Colors.white, size: 50),
                       ),
                     ),
                     const SizedBox(height: 18),
-                    const Text(
+                    Text(
                       'Welcome Back!',
-                      style: TextStyle(
+                      style: GoogleFonts.outfit(
                         color: Colors.white,
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
-                        fontFamily: 'Inter',
                         letterSpacing: 0.3,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       'Sign in to continue to Enything',
-                      style: TextStyle(
+                      style: GoogleFonts.outfit(
                         color: Colors.white.withValues(alpha: 0.75),
                         fontSize: 14,
-                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -174,121 +176,124 @@ class _LoginPageState extends State<LoginPage>
                 position: _slideAnim,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 36, 24, 32),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Email
-                        _buildInputField(
-                          controller: _emailController,
-                          label: 'Email Address',
-                          hint: 'you@example.com',
-                          icon: Icons.email_outlined,
-                          keyboardType: TextInputType.emailAddress,
-                          validator: AppValidators.email,
-                        ),
-                        const SizedBox(height: 16),
-                        // Password
-                        _buildPasswordField(),
-                        const SizedBox(height: 4),
-                        // Forgot password
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {},
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFFFF8A00),
-                              padding: EdgeInsets.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text(
-                              'Forgot Password?',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                  child: MaxWidthContainer(
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Email
+                          _buildInputField(
+                            controller: _emailController,
+                            label: 'Email Address',
+                            hint: 'you@example.com',
+                            icon: Icons.email_outlined,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: AppValidators.email,
+                            isDark: isDark,
+                          ),
+                          const SizedBox(height: 16),
+                          // Password
+                          _buildPasswordField(isDark),
+                          const SizedBox(height: 4),
+                          // Forgot password
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () {},
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                padding: EdgeInsets.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'Forgot Password?',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Sign In button
-                        _buildCTAButton(
-                          label: 'Sign In',
-                          isLoading: auth.isLoading,
-                          onPressed: _login,
-                        ),
-                        const SizedBox(height: 28),
-                        // Sign up link
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "Don't have an account? ",
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () => Navigator.pushReplacementNamed(
-                                  context, AppRoutes.roleSelect),
-                              child: const Text(
-                                'Sign Up',
-                                style: TextStyle(
-                                  color: Color(0xFFFF8A00),
-                                  fontWeight: FontWeight.w700,
+                          const SizedBox(height: 24),
+                          // Sign In button
+                          _buildCTAButton(
+                            label: 'Sign In',
+                            isLoading: auth.isLoading,
+                            onPressed: _login,
+                          ),
+                          const SizedBox(height: 28),
+                          // Sign up link
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "Don't have an account? ",
+                                style: GoogleFonts.outfit(
+                                  color: isDark ? Colors.white54 : Colors.grey[600],
                                   fontSize: 14,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-                        // Divider
-                        Row(
-                          children: [
-                            Expanded(child: Divider(color: Colors.grey[300])),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'OR',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 1,
+                              GestureDetector(
+                                onTap: () => Navigator.pushReplacementNamed(
+                                    context, AppRoutes.roleSelect),
+                                child: Text(
+                                  'Sign Up',
+                                  style: GoogleFonts.outfit(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Expanded(child: Divider(color: Colors.grey[300])),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        // Feature badges
-                        _buildFeatureBadges(),
-                        const SizedBox(height: 32),
-                        // Admin Invite Link
-                        Center(
-                          child: TextButton.icon(
-                            onPressed: () => Navigator.pushNamed(context, AppRoutes.acceptAdminInvite),
-                            icon: const Icon(Icons.admin_panel_settings_outlined, size: 18, color: Color(0xFF0A2A9E)),
-                            label: const Text(
-                              'Have an Admin Invite Code?',
-                              style: TextStyle(
-                                color: Color(0xFF0A2A9E),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                            ],
+                          ),
+                          const SizedBox(height: 32),
+                          // Divider
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: isDark ? Colors.white10 : Colors.grey[300])),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text(
+                                  'OR',
+                                  style: GoogleFonts.outfit(
+                                    color: isDark ? Colors.white38 : Colors.grey[400],
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: isDark ? Colors.white10 : Colors.grey[300])),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          // Feature badges
+                          _buildFeatureBadges(isDark),
+                          const SizedBox(height: 32),
+                          // Admin Invite Link
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: () => Navigator.pushNamed(context, AppRoutes.acceptAdminInvite),
+                              icon: const Icon(Icons.admin_panel_settings_outlined, size: 18, color: AppColors.primary),
+                              label: Text(
+                                'Have an Admin Invite Code?',
+                                style: GoogleFonts.outfit(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
                             ),
-                            style: TextButton.styleFrom(
-                              backgroundColor: const Color(0xFF0A2A9E).withValues(alpha: 0.05),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -305,54 +310,51 @@ class _LoginPageState extends State<LoginPage>
     required String label,
     required String hint,
     required IconData icon,
+    required bool isDark,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
   }) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: isDark ? PremiumShadows.cardDark : PremiumShadows.cardLight,
       ),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
         validator: validator,
-        style: const TextStyle(
+        style: GoogleFonts.outfit(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: Color(0xFF1A1A2E),
+          color: isDark ? Colors.white : const Color(0xFF1A1A2E),
         ),
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: GoogleFonts.outfit(color: isDark ? Colors.white60 : Colors.grey.shade600),
           hintText: hint,
-          prefixIcon: Icon(icon, size: 20),
+          hintStyle: GoogleFonts.outfit(color: isDark ? Colors.white30 : Colors.grey.shade400),
+          prefixIcon: Icon(icon, size: 20, color: isDark ? Colors.white60 : Colors.grey.shade600),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFF0A2A9E), width: 2),
+            borderSide: const BorderSide(color: AppColors.primary, width: 2),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD32F2F)),
+            borderSide: const BorderSide(color: AppColors.danger),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD32F2F), width: 2),
+            borderSide: const BorderSide(color: AppColors.danger, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
         ),
@@ -360,62 +362,59 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  Widget _buildPasswordField() {
+  Widget _buildPasswordField(bool isDark) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: isDark ? PremiumShadows.cardDark : PremiumShadows.cardLight,
       ),
       child: TextFormField(
         controller: _passwordController,
         obscureText: _obscurePassword,
         validator: AppValidators.password,
-        style: const TextStyle(
+        style: GoogleFonts.outfit(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: Color(0xFF1A1A2E),
+          color: isDark ? Colors.white : const Color(0xFF1A1A2E),
         ),
         decoration: InputDecoration(
           labelText: 'Password',
+          labelStyle: GoogleFonts.outfit(color: isDark ? Colors.white60 : Colors.grey.shade600),
           hintText: '••••••••',
-          prefixIcon: const Icon(Icons.lock_outline, size: 20),
+          hintStyle: GoogleFonts.outfit(color: isDark ? Colors.white30 : Colors.grey.shade400),
+          prefixIcon: Icon(Icons.lock_outline, size: 20, color: isDark ? Colors.white60 : Colors.grey.shade600),
           suffixIcon: IconButton(
             icon: Icon(
               _obscurePassword
                   ? Icons.visibility_off_outlined
                   : Icons.visibility_outlined,
               size: 20,
+              color: isDark ? Colors.white54 : Colors.grey.shade600,
             ),
             onPressed: () =>
                 setState(() => _obscurePassword = !_obscurePassword),
           ),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFF0A2A9E), width: 2),
+            borderSide: const BorderSide(color: AppColors.primary, width: 2),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD32F2F)),
+            borderSide: const BorderSide(color: AppColors.danger),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFD32F2F), width: 2),
+            borderSide: const BorderSide(color: AppColors.danger, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
         ),
@@ -432,19 +431,9 @@ class _LoginPageState extends State<LoginPage>
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFF9900), Color(0xFFFF6B00)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
+        gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFF8A00).withValues(alpha: 0.45),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: PremiumShadows.floatingButtonLight,
       ),
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
@@ -463,10 +452,10 @@ class _LoginPageState extends State<LoginPage>
               )
             : Text(
                 label,
-                style: const TextStyle(
+                style: GoogleFonts.outfit(
                   fontSize: 16,
                   color: Colors.white,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: 0.3,
                 ),
               ),
@@ -474,7 +463,7 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  Widget _buildFeatureBadges() {
+  Widget _buildFeatureBadges(bool isDark) {
     final badges = [
       {'icon': Icons.local_shipping_outlined, 'text': 'Fast Delivery'},
       {'icon': Icons.shield_outlined, 'text': 'Secure & Safe'},
@@ -487,25 +476,25 @@ class _LoginPageState extends State<LoginPage>
         return Column(
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
-                color: const Color(0xFF0A2A9E).withValues(alpha: 0.08),
+                color: isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 b['icon'] as IconData,
-                color: const Color(0xFF0A2A9E),
-                size: 22,
+                color: isDark ? AppColors.primaryLight : AppColors.primary,
+                size: 24,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               b['text'] as String,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                color: isDark ? Colors.white60 : Colors.grey[700],
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

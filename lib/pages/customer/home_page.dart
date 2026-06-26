@@ -1099,7 +1099,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                               _buildSectionTitle('Recently Viewed', subtitle: 'Continue where you left off'),
                               const SizedBox(height: 12),
                               SizedBox(
-                                height: 220,
+                                height: 290,
                                 child: ListView.builder(
                                   scrollDirection: Axis.horizontal,
                                   itemCount: recentProv.products.length,
@@ -1169,7 +1169,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                             physics: const NeverScrollableScrollPhysics(),
                             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5),
-                              childAspectRatio: 0.55,
+                              childAspectRatio: 0.54,
                               mainAxisSpacing: 16,
                               crossAxisSpacing: 16,
                             ),
