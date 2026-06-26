@@ -14,7 +14,7 @@ class AppTheme {
         error: AppColors.danger,
         brightness: Brightness.light,
       ),
-      scaffoldBackgroundColor: const Color(0xFFFBFBFE),
+      scaffoldBackgroundColor: const Color(0xFFF5F6FF),
       textTheme: GoogleFonts.outfitTextTheme(base.textTheme).copyWith(
         displayLarge: GoogleFonts.outfit(
             fontSize: 34,
@@ -185,11 +185,30 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 0,
-        shadowColor: Colors.black.withValues(alpha: 0.05),
+        shadowColor: Colors.black.withValues(alpha: 0.04),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24)),
         clipBehavior: Clip.antiAliasWithSaveLayer,
         margin: EdgeInsets.zero,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: Colors.white,
+        indicatorColor: AppColors.primary.withValues(alpha: 0.12),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary);
+          }
+          return GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textLight);
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.primary, size: 22);
+          }
+          return const IconThemeData(color: AppColors.textLight, size: 22);
+        }),
+        elevation: 0,
+        height: 64,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: Colors.white,
@@ -264,6 +283,7 @@ class AppTheme {
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
         },
       ),
       listTileTheme: ListTileThemeData(
@@ -287,7 +307,7 @@ class AppTheme {
         error: AppColors.danger,
         brightness: Brightness.dark,
       ),
-      scaffoldBackgroundColor: const Color(0xFF12121A),
+      scaffoldBackgroundColor: const Color(0xFF0C0E1A),
       textTheme: GoogleFonts.outfitTextTheme(base.textTheme).copyWith(
         displayLarge: GoogleFonts.outfit(
             fontSize: 34,
@@ -440,17 +460,36 @@ class AppTheme {
         suffixIconColor: Colors.grey.shade500,
       ),
       cardTheme: CardThemeData(
-        color: const Color(0xFF1E1E2C),
+        color: const Color(0xFF141626),
         elevation: 0,
-        shadowColor: Colors.black.withValues(alpha: 0.30),
+        shadowColor: Colors.black.withValues(alpha: 0.40),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24)),
         clipBehavior: Clip.antiAliasWithSaveLayer,
         margin: EdgeInsets.zero,
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: const Color(0xFF141626),
+        indicatorColor: AppColors.primaryLight.withValues(alpha: 0.18),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primaryLight);
+          }
+          return GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.grey.shade600);
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.primaryLight, size: 22);
+          }
+          return IconThemeData(color: Colors.grey.shade600, size: 22);
+        }),
+        elevation: 0,
+        height: 64,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: const Color(0xFF1E1E2C),
-        selectedItemColor: AppColors.primary,
+        backgroundColor: const Color(0xFF141626),
+        selectedItemColor: AppColors.primaryLight,
         unselectedItemColor: Colors.grey.shade600,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
@@ -484,7 +523,7 @@ class AppTheme {
         closeIconColor: Colors.white54,
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: const Color(0xFF141626),
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -492,11 +531,11 @@ class AppTheme {
         dragHandleColor: Colors.grey.shade700,
         dragHandleSize: const Size(40, 4),
         elevation: 0,
-        modalBackgroundColor: const Color(0xFF1A1A2E),
+        modalBackgroundColor: const Color(0xFF141626),
         modalElevation: 0,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: const Color(0xFF1E1E2C),
+        backgroundColor: const Color(0xFF141626),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(

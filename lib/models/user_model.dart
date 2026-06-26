@@ -14,6 +14,12 @@ class UserModel {
   final int totalReviews;
   /// KYC verification status for the active role (pending, verified, rejected)
   final String verificationStatus;
+  
+  /// Specific verification status for seller role (if applicable)
+  final String sellerVerificationStatus;
+  
+  /// Specific verification status for rider role (if applicable)
+  final String riderVerificationStatus;
 
   UserModel({
     required this.id,
@@ -28,6 +34,8 @@ class UserModel {
     this.averageRating = 0.0,
     this.totalReviews = 0,
     this.verificationStatus = 'verified', // Default for customers usually
+    this.sellerVerificationStatus = 'unverified',
+    this.riderVerificationStatus = 'unverified',
   })  : activeRoles = activeRoles ?? [role],
         activeSessionRole = activeSessionRole ?? role;
 
@@ -46,6 +54,8 @@ class UserModel {
       averageRating: (map['average_rating'] ?? 0.0).toDouble(),
       totalReviews: map['total_reviews'] ?? 0,
       verificationStatus: map['verification_status'] as String? ?? 'verified',
+      sellerVerificationStatus: map['seller_verification_status'] as String? ?? 'unverified',
+      riderVerificationStatus: map['rider_verification_status'] as String? ?? 'unverified',
     );
   }
 
@@ -55,6 +65,8 @@ class UserModel {
     double? averageRating,
     int? totalReviews,
     String? verificationStatus,
+    String? sellerVerificationStatus,
+    String? riderVerificationStatus,
   }) {
     return UserModel(
       id: id,
@@ -69,6 +81,8 @@ class UserModel {
       averageRating: averageRating ?? this.averageRating,
       totalReviews: totalReviews ?? this.totalReviews,
       verificationStatus: verificationStatus ?? this.verificationStatus,
+      sellerVerificationStatus: sellerVerificationStatus ?? this.sellerVerificationStatus,
+      riderVerificationStatus: riderVerificationStatus ?? this.riderVerificationStatus,
     );
   }
 

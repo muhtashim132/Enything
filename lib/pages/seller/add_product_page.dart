@@ -271,6 +271,8 @@ class _AddProductPageState extends State<AddProductPage> {
     }
 
     setState(() => _isSaving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     try {
       List<String> uploadedUrls = [];
       final uploadBucket = 'products';
@@ -321,24 +323,16 @@ class _AddProductPageState extends State<AddProductPage> {
         await _supabase.from('products').update(data).eq('id', widget.existingProduct!.id).eq('shop_id', widget.existingProduct!.shopId);
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Product saved successfully! 🎉'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      navigator.pop(true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.danger,
-          ),
-        );
-      }
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

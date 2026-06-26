@@ -224,11 +224,20 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
                                 icon: const Icon(Icons.edit_outlined,
                                     color: AppColors.primary),
                                 onPressed: () async {
-                                  await Navigator.pushNamed(
+                                  final result = await Navigator.pushNamed(
                                     context,
                                     '/seller/add-product',
                                     arguments: {'product': product},
                                   );
+                                  if (result == true) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Changes saved successfully! 🎉'),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  }
                                   _loadProducts();
                                 },
                               ),

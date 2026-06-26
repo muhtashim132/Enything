@@ -636,7 +636,7 @@ class _SheetContentState extends State<_SheetContent> {
   Widget _heroBannerPlaceholder() => Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF0A2A9E), Color(0xFF1E40AF), Color(0xFF4299E1)],
+            colors: [Color(0xFF1E3FD8), Color(0xFF3D6BFF), Color(0xFF6B9FFF)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),

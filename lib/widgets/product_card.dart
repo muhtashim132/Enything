@@ -536,12 +536,12 @@ class _ProductCardState extends State<ProductCard>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_rounded,
-                size: 15,
-                color: isDark ? AppColors.secondaryLight : AppColors.secondary),
-            const SizedBox(width: 3),
+            // Icon(Icons.add_rounded,
+            //     size: 15,
+            //     color: isDark ? AppColors.secondaryLight : AppColors.secondary),
+            // const SizedBox(width: 3),
             Text(
-              'ADD',
+              'ADD TO CART',
               style: GoogleFonts.outfit(
                 color: isDark ? AppColors.secondaryLight : AppColors.secondary,
                 fontWeight: FontWeight.w800,

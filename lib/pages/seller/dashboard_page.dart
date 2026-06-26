@@ -13,6 +13,7 @@ import '../../widgets/common/notification_bell.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/time_utils.dart';
+import '../../theme/app_colors.dart';
 
 class SellerDashboardPage extends StatefulWidget {
   const SellerDashboardPage({super.key});
@@ -566,8 +567,17 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                         badge: null,
                         isDark: isDark,
                         onTap: () async {
-                          await Navigator.pushNamed(
+                          final result = await Navigator.pushNamed(
                               context, AppRoutes.addProduct);
+                          if (result == true) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Product added successfully! 🎉'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          }
                           _loadStats();
                         },
                       ),

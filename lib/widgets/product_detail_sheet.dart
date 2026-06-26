@@ -616,7 +616,25 @@ class _SheetContent extends StatelessWidget {
           ),
         ],
       ),
-      child: quantity > 0
+      child: (shop != null && !shop!.isActive)
+          ? Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: PremiumRadius.smallBorder,
+              ),
+              child: Center(
+                child: Text(
+                  'Shop Currently Closed',
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            )
+          : quantity > 0
           ? Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

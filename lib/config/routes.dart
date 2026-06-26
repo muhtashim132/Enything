@@ -11,7 +11,7 @@ import '../pages/auth/delivery_pending_verification_page.dart';
 import '../pages/auth/login_page.dart';
 import '../pages/auth/onboarding_page.dart';
 import '../pages/auth/accept_invite_page.dart';
-import '../pages/customer/home_page.dart';
+import '../pages/customer/main_page.dart';
 import '../pages/customer/restaurant_page.dart';
 import '../pages/customer/restaurant_dashboard_page.dart';
 import '../pages/customer/product_details_page.dart';
@@ -120,7 +120,7 @@ class AppRoutes {
       case acceptAdminInvite:
         return _build(const AcceptInvitePage(), routeSettings);
       case customerHome:
-        return _build(const CustomerHomePage(), routeSettings);
+        return _build(const CustomerMainPage(), routeSettings);
       case restaurant:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         return _build(

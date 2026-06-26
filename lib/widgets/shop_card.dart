@@ -82,7 +82,7 @@ class _ShopCardState extends State<ShopCard> {
 
   List<Color> get _accentColors =>
       _categoryColors[shop.category] ??
-      [const Color(0xFF0A2A9E), const Color(0xFF1E40AF)];
+      [const Color(0xFF1E3FD8), const Color(0xFF3D6BFF)];
 
   String get _emoji => _categoryEmoji[shop.category] ?? '🏪';
 

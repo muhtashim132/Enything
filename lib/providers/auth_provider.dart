@@ -338,12 +338,18 @@ class AuthProvider extends ChangeNotifier {
       }
 
       String verificationStatus = 'verified'; // Default for customer
-      if (sessionRole == 'seller') {
+      String sellerVerificationStatus = 'unverified';
+      String riderVerificationStatus = 'unverified';
+      
+      if (allRoles.contains('seller')) {
         final sellerData = await _supabase.from('shops').select('verification_status').eq('seller_id', userId).maybeSingle();
-        verificationStatus = sellerData?['verification_status'] ?? 'unverified';
-      } else if (sessionRole == 'delivery_partner') {
+        sellerVerificationStatus = sellerData?['verification_status'] ?? 'unverified';
+        if (sessionRole == 'seller') verificationStatus = sellerVerificationStatus;
+      } 
+      if (allRoles.contains('delivery_partner')) {
         final deliveryData = await _supabase.from('delivery_partners').select('verification_status').eq('id', userId).maybeSingle();
-        verificationStatus = deliveryData?['verification_status'] ?? 'unverified';
+        riderVerificationStatus = deliveryData?['verification_status'] ?? 'unverified';
+        if (sessionRole == 'delivery_partner') verificationStatus = riderVerificationStatus;
       }
 
       _user = UserModel.fromMap({

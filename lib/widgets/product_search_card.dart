@@ -424,12 +424,12 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.add_rounded,
-                                              size: 14,
-                                              color: isDark ? AppColors.secondaryLight : AppColors.secondary),
-                                          const SizedBox(width: 4),
+                                          // Icon(Icons.add_rounded,
+                                          //     size: 14,
+                                          //     color: isDark ? AppColors.secondaryLight : AppColors.secondary),
+                                          // const SizedBox(width: 4),
                                           Text(
-                                            'ADD',
+                                            'ADD TO CART',
                                             style: GoogleFonts.outfit(
                                               fontWeight: FontWeight.w800,
                                               fontSize: 12,

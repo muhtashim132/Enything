@@ -89,8 +89,10 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
       await _supabase
           .from('shops')
           .update({'is_active': value}).eq('id', _shopId!);
+      if (!mounted) return;
       _showSnack(value ? '🟢 Shop is now Open' : '🔴 Shop is now Closed');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isActive = !value); // revert
       _showSnack('Failed to update shop status', isError: true);
     }
@@ -136,8 +138,10 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         'open_time': _openTimeCtrl.text.trim(),
         'close_time': _closeTimeCtrl.text.trim(),
       }).eq('id', _shopId!);
+      if (!mounted) return;
       _showSnack('✅ Shop details updated!');
     } catch (e) {
+      if (!mounted) return;
       _showSnack('Failed to save changes', isError: true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -145,7 +149,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   }
 
   void _showSnack(String msg, {bool isError = false}) {
-    if (!mounted) return;
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg, style: GoogleFonts.outfit()),
       backgroundColor: isError ? AppColors.danger : AppColors.success,
@@ -200,15 +204,15 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         'location': point,
         'address': result.address,
       }).eq('id', _shopId!);
-      if (mounted) {
-        setState(() {
-          _currentAddress = result.address;
-          _shopLat = result.location.latitude;
-          _shopLng = result.location.longitude;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _currentAddress = result.address;
+        _shopLat = result.location.latitude;
+        _shopLng = result.location.longitude;
+      });
       _showSnack('✅ Shop location updated!');
     } catch (e) {
+      if (!mounted) return;
       _showSnack('Failed to update location: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
