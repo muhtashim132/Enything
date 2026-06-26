@@ -306,30 +306,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             ],
                           ),
                         ),
-                        if (_product!.isVeg == true)
-                          Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: AppColors.vegGreen, width: 2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.circle, size: 12, color: AppColors.vegGreen),
-                            ),
-                          )
-                        else if (_product!.isVeg == false)
-                          Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: AppColors.nonVegRed, width: 2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.change_history, size: 14, color: AppColors.nonVegRed),
-                            ),
-                          ),
+
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -440,13 +417,53 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     ),
                     if (_product!.description != null && _product!.description!.isNotEmpty) ...[
                       const SizedBox(height: 32),
-                      Text(
-                        'Description',
-                        style: GoogleFonts.outfit(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: isDark ? Colors.white : AppColors.textPrimary,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Description',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white : AppColors.textPrimary,
+                            ),
+                          ),
+                          if (_product!.isVeg != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _product!.isVeg! 
+                                    ? AppColors.vegGreen.withValues(alpha: 0.1) 
+                                    : AppColors.nonVegRed.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(100),
+                                border: Border.all(
+                                  color: _product!.isVeg! 
+                                      ? AppColors.vegGreen.withValues(alpha: 0.3) 
+                                      : AppColors.nonVegRed.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _product!.isVeg! ? '🥦' : '🍗',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _product!.isVeg! ? 'Veg' : 'Non-Veg',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: _product!.isVeg! 
+                                          ? AppColors.vegGreen 
+                                          : AppColors.nonVegRed,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       Text(

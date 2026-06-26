@@ -147,30 +147,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                             ),
                           ),
                         ),
-                      // Veg/NonVeg indicator
-                      if (product.isVeg != null)
-                        Positioned(
-                          top: hasDiscount ? 32 : 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(4),
-                              boxShadow: const [
-                                BoxShadow(
-                                    color: Colors.black12, blurRadius: 4)
-                              ],
-                            ),
-                            child: Icon(
-                              Icons.circle,
-                              size: 10,
-                              color: product.isVeg!
-                                  ? AppColors.vegGreen
-                                  : AppColors.nonVegRed,
-                            ),
-                          ),
-                        ),
+
                     ],
                   ),
                 ),

@@ -11,6 +11,7 @@ import '../theme/app_colors.dart';
 import 'product_card.dart';
 import 'common/enything_map.dart';
 import '../utils/share_utils.dart';
+import 'common/sheet_skeleton_loader.dart';
 
 void showShopDetailSheet(BuildContext context, String shopId) {
   showModalBottomSheet(
@@ -88,7 +89,7 @@ class _ShopDetailSheetState extends State<ShopDetailSheet> {
                 const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? SheetSkeletonLoader(isDark: isDark)
               : _shop == null
                   ? const Center(child: Text('Shop not found'))
                   : _SheetContent(

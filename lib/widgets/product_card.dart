@@ -298,19 +298,6 @@ class _ProductCardState extends State<ProductCard>
                       ),
                     ),
 
-                    // Veg / Non-veg indicator
-                    if (product.isVeg != null && !hasDiscount)
-                      Positioned(
-                        top: 10,
-                        right: 10,
-                        child: _buildVegBadge(product.isVeg!),
-                      ),
-                    if (product.isVeg != null && hasDiscount)
-                      Positioned(
-                        top: 38,
-                        right: 10,
-                        child: _buildVegBadge(product.isVeg!),
-                      ),
                   ],
                 ),
               ),
@@ -501,22 +488,6 @@ class _ProductCardState extends State<ProductCard>
           size: 36,
           color: AppColors.primary.withValues(alpha: isDark ? 0.35 : 0.30),
         ),
-      ),
-    );
-  }
-
-  Widget _buildVegBadge(bool isVeg) {
-    return Container(
-      padding: const EdgeInsets.all(2.5),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
-      ),
-      child: Icon(
-        Icons.circle,
-        size: 10,
-        color: isVeg ? AppColors.vegGreen : AppColors.nonVegRed,
       ),
     );
   }

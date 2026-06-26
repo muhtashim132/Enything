@@ -11,6 +11,7 @@ import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/recently_viewed_provider.dart';
 import '../providers/location_provider.dart';
+import 'common/sheet_skeleton_loader.dart';
 import '../utils/delivery_calculator.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
@@ -896,24 +897,8 @@ class _LoadingSheet extends StatelessWidget {
   const _LoadingSheet();
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          margin: const EdgeInsets.only(top: 12),
-          width: 40,
-          height: 4,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const Expanded(
-          child: Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          ),
-        ),
-      ],
-    );
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SheetSkeletonLoader(isDark: isDark);
   }
 }
 

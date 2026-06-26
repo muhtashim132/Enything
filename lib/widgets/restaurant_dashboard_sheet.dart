@@ -10,6 +10,7 @@ import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../config/routes.dart';
+import 'common/sheet_skeleton_loader.dart';
 
 void showRestaurantDashboardSheet(BuildContext context, String shopId) {
   showModalBottomSheet(
@@ -112,7 +113,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                 const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? SheetSkeletonLoader(isDark: isDark)
               : _shop == null
                   ? const Center(child: Text('Restaurant not found'))
                   : Stack(
@@ -725,31 +726,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Veg/NonVeg indicator (FSSAI style)
-                  if (isVeg != null) ...[
-                    Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: isVeg ? Colors.green : Colors.red,
-                          width: 1.5,
-                        ),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: isVeg ? Colors.green : Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                  ],
+
 
                   // Bestseller tag
                   if (isBestseller) ...[

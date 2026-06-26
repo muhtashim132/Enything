@@ -568,29 +568,7 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Veg / Non-veg indicator
-                if (isVeg != null) ...[
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: isVeg ? Colors.green : Colors.red, width: 1.5),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: isVeg ? Colors.green : Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                ],
+
                 Text(
                   product.name,
                   style: GoogleFonts.outfit(
