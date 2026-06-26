@@ -8,6 +8,7 @@ import '../models/shop_model.dart';
 import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/location_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
 import '../widgets/product_detail_sheet.dart';
@@ -384,6 +385,21 @@ class _ProductCardState extends State<ProductCard>
                                     : AppColors.textSecondary,
                               ),
                             ),
+                          if (shop != null) ...[
+                            const SizedBox(width: 6),
+                            Container(width: 3, height: 3, decoration: BoxDecoration(color: isDark ? Colors.white38 : AppColors.textSecondary, shape: BoxShape.circle)),
+                            const SizedBox(width: 6),
+                            Icon(Icons.location_on_rounded, size: 11, color: AppColors.primary),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)} km',
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white54 : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
 

@@ -177,6 +177,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                                 color: AppColors.textLight, fontSize: 12),
                           ),
                         ),
+                        const SizedBox(height: 120),
                       ],
                     ),
                   ),

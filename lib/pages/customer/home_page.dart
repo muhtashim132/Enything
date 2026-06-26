@@ -561,16 +561,6 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
 
-    // Greeting based on time of day
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12
-        ? 'Good morning ☀️'
-        : hour < 17
-            ? 'Good afternoon 🌤'
-            : 'Good evening 🌙';
-    final firstName =
-        context.read<AuthProvider>().user?.fullName.split(' ').first ?? '';
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: GestureDetector(
@@ -578,10 +568,9 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
         child: CustomScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
-
           // ── Premium Modern AppBar ──────────────────────────────────────
           SliverAppBar(
-            expandedHeight: _searchQuery.isNotEmpty ? 0 : 170,
+            expandedHeight: _searchQuery.isNotEmpty ? 0 : 135,
             floating: true,
             pinned: true,
             elevation: 0,
@@ -598,28 +587,85 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    // Row 1: Greeting + actions
+                    // Row 1: Location Pill + actions
                     Row(
                       children: [
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                firstName.isNotEmpty
-                                    ? '$greeting, $firstName!'
-                                    : '$greeting!',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
+                          child: GestureDetector(
+                            onTap: () => showAddressPickerSheet(context),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 7),
+                                decoration: BoxDecoration(
                                   color: isDark
-                                      ? Colors.white
-                                      : AppColors.textPrimary,
+                                      ? const Color(0xFF1E1E2E)
+                                      : const Color(0xFFF0F0F8),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isDark ? Colors.white10 : Colors.transparent,
+                                  ),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (locationProvider.activeLabelIcon.isNotEmpty) ...[
+                                      Text(locationProvider.activeLabelIcon, style: const TextStyle(fontSize: 14)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        locationProvider.activeLabel,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w900,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        width: 4,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          color: isDark ? Colors.white30 : Colors.grey.shade400,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                    ] else ...[
+                                      const Icon(Icons.location_on_rounded,
+                                          size: 14, color: AppColors.primary),
+                                      const SizedBox(width: 6),
+                                    ],
+                                    Flexible(
+                                      child: Text(
+                                        locationProvider.hasLocation
+                                            ? locationProvider.currentAddress.isNotEmpty
+                                                ? locationProvider.currentAddress
+                                                : 'Current Location'
+                                            : 'Set location...',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w900,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.keyboard_arrow_down_rounded,
+                                        size: 16,
+                                        color: isDark
+                                            ? Colors.white38
+                                            : AppColors.textSecondary),
+                                  ],
+                                ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
                         NotificationBell(
@@ -643,83 +689,6 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                               Navigator.pushNamed(context, AppRoutes.settings),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Row 2: Location pill
-                    GestureDetector(
-                      onTap: () => showAddressPickerSheet(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E1E2E)
-                              : const Color(0xFFF0F0F8),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isDark ? Colors.white10 : Colors.transparent,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (locationProvider.activeLabelIcon.isNotEmpty) ...[
-                              Text(locationProvider.activeLabelIcon, style: const TextStyle(fontSize: 14)),
-                              const SizedBox(width: 4),
-                              Text(
-                                locationProvider.activeLabel,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                  color: isDark
-                                      ? Colors.white
-                                      : AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                width: 4,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.white30 : Colors.grey.shade400,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                            ] else ...[
-                              const Icon(Icons.location_on_rounded,
-                                  size: 14, color: AppColors.primary),
-                              const SizedBox(width: 6),
-                            ],
-                            Flexible(
-                              child: Text(
-                                locationProvider.hasLocation
-                                    ? locationProvider.currentAddress.isNotEmpty
-                                        ? locationProvider.currentAddress
-                                        : 'Current Location'
-                                    : 'Set location...',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  fontWeight: locationProvider.activeLabelIcon.isNotEmpty 
-                                      ? FontWeight.w500 
-                                      : FontWeight.w600,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : AppColors.textPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(Icons.keyboard_arrow_down_rounded,
-                                size: 16,
-                                color: isDark
-                                    ? Colors.white38
-                                    : AppColors.textSecondary),
-                          ],
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -1161,6 +1130,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                             },
                           ),
                         ],
+                        const SizedBox(height: 120),
                       ],
                     ]),
                   ),
@@ -1354,7 +1324,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
     return Column(
       children: [
         SizedBox(
-          height: 190,
+          height: 130, // Reduced from 190
           child: PageView.builder(
             controller: _bannerController,
             onPageChanged: (i) => setState(() => _bannerIndex = i),
@@ -1372,85 +1342,85 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
                         color: colors[1].withValues(alpha: 0.5),
-                        blurRadius: 28,
-                        offset: const Offset(0, 14)),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10)),
                   ],
                 ),
                 child: Stack(
                   children: [
                     // Large background circle
                     Positioned(
-                        right: -40,
-                        top: -40,
+                        right: -30,
+                        top: -30,
                         child: Container(
-                            width: 200,
-                            height: 200,
+                            width: 140,
+                            height: 140,
                             decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white.withValues(alpha: 0.05)))),
                     // Smaller circle
                     Positioned(
-                        left: -20,
-                        bottom: -20,
+                        left: -15,
+                        bottom: -15,
                         child: Container(
-                            width: 100,
-                            height: 100,
+                            width: 70,
+                            height: 70,
                             decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white.withValues(alpha: 0.04)))),
                     // Background icon
                     Positioned(
                         right: -5,
-                        bottom: -5,
+                        bottom: -15,
                         child: Icon(s['icon'] as IconData,
-                            size: 130,
+                            size: 90, // Reduced from 130
                             color: Colors.white.withValues(alpha: 0.07))),
                     // Big emoji top-right
                     Positioned(
-                        right: 20,
-                        top: 20,
+                        right: 16,
+                        top: 16,
                         child: Text(emoji,
-                            style: const TextStyle(fontSize: 52))),
+                            style: const TextStyle(fontSize: 36))), // Reduced from 52
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 24, 90, 24),
+                      padding: const EdgeInsets.fromLTRB(20, 16, 70, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                                 color: accent,
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(8),
                                 boxShadow: [
                                   BoxShadow(
                                       color: accent.withValues(alpha: 0.4),
-                                      blurRadius: 8)
+                                      blurRadius: 6)
                                 ]),
                             child: Text(s['tag'] as String,
                                 style: GoogleFonts.outfit(
-                                    fontSize: 10,
+                                    fontSize: 9,
                                     fontWeight: FontWeight.w900,
                                     color: Colors.black87,
                                     letterSpacing: 0.5)),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           Text(s['title'] as String,
                               style: GoogleFonts.outfit(
-                                  fontSize: 22,
+                                  fontSize: 18, // Reduced from 22
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                   height: 1.15,
                                   letterSpacing: -0.3)),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Text(s['sub'] as String,
                               style: GoogleFonts.outfit(
-                                  fontSize: 11,
+                                  fontSize: 10, // Reduced from 11
                                   color: Colors.white.withValues(alpha: 0.72),
                                   height: 1.3)),
                         ],

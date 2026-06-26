@@ -239,7 +239,7 @@ class _FavoritesPageState extends State<FavoritesPage>
                         color: AppColors.primary,
                         backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
                         child: GridView.builder(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
@@ -267,7 +267,7 @@ class _FavoritesPageState extends State<FavoritesPage>
                         color: AppColors.primary,
                         backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
                         child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                           itemCount: _favoriteShops.length,
                           itemBuilder: (context, index) {
                             final shop = _favoriteShops[index];

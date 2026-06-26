@@ -10,6 +10,8 @@ import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/recently_viewed_provider.dart';
+import '../providers/location_provider.dart';
+import '../utils/delivery_calculator.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
 
@@ -163,8 +165,12 @@ class _SheetContent extends StatelessWidget {
     final cart = context.watch<CartProvider>();
     final favs = context.watch<FavoritesProvider>();
     final auth = context.watch<AuthProvider>();
+    final location = context.watch<LocationProvider>();
     final quantity = cart.getItemQuantity(product.id);
     final isFav = favs.isProductFavorite(product.id);
+
+    final distanceKm = shop != null ? location.distanceTo(shop!.location) : 0.0;
+    final deliveryLabel = DeliveryCalculator.deliveryChargeLabel(distanceKm, product.price);
 
     return Column(
       children: [
@@ -519,10 +525,54 @@ class _SheetContent extends StatelessWidget {
                           _trustItem('🔒', 'Secure', isDark),
                           const SizedBox(width: 16),
                           _trustItem('✓', 'Quality', isDark),
-                          const SizedBox(width: 16),
-                          _trustItem('↩', 'Easy Returns', isDark),
                         ],
                       ),
+
+                      // Delivery & Distance Info
+                      if (shop != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withValues(alpha: 0.03) : const Color(0xFFF4F6FB),
+                            borderRadius: BorderRadius.circular(PremiumRadius.medium),
+                            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade200),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.location_on_rounded, size: 16, color: AppColors.primary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${distanceKm.toStringAsFixed(1)} km away',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: isDark ? Colors.white70 : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  const Icon(Icons.delivery_dining_rounded, size: 16, color: AppColors.success),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    deliveryLabel,
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: AppColors.success,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

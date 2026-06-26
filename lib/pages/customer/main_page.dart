@@ -111,15 +111,15 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
                 GestureDetector(
                   onTap: () => Navigator.pushNamed(context, AppRoutes.cart),
                   child: Container(
-                    height: 52,
-                    width: 52,
+                    height: 64, // Increased size
+                    width: 64, // Increased size
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.secondary,
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.secondary.withValues(alpha: 0.4),
-                          blurRadius: 8,
+                          color: AppColors.secondary.withValues(alpha: 0.5),
+                          blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
                       ],
@@ -128,7 +128,7 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
                       alignment: Alignment.center,
                       clipBehavior: Clip.none,
                       children: [
-                        const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 24),
+                        const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 28), // Increased icon size
                         if (cart.totalItemCount > 0)
                           Positioned(
                             right: -2,
@@ -143,7 +143,7 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
                                 '${cart.totalItemCount}',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 10,
+                                  fontSize: 12, // Slightly larger badge font
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),

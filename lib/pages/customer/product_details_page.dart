@@ -14,6 +14,8 @@ import '../../utils/responsive_layout.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/location_provider.dart';
+import '../../utils/delivery_calculator.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/premium_effects.dart';
@@ -92,6 +94,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     final auth = context.watch<AuthProvider>();
     final quantity = cart.getItemQuantity(_product!.id);
     final isFav = favs.isProductFavorite(_product!.id);
+    final location = context.watch<LocationProvider>();
+    final distanceKm = _shop != null ? location.distanceTo(_shop!.location) : 0.0;
+    final deliveryLabel = DeliveryCalculator.deliveryChargeLabel(distanceKm, _product!.price);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
@@ -460,9 +465,55 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       children: [
                         _buildTrustItem(Icons.verified_user_outlined, 'Genuine', isDark),
                         _buildTrustItem(Icons.local_shipping_outlined, 'Fast Delivery', isDark),
-                        _buildTrustItem(Icons.replay_outlined, 'Easy Returns', isDark),
                       ],
                     ),
+
+                    // Delivery & Distance Info
+                    if (_shop != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withValues(alpha: 0.03) : const Color(0xFFF4F6FB),
+                          borderRadius: BorderRadius.circular(PremiumRadius.medium),
+                          border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade200),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.location_on_rounded, size: 16, color: AppColors.primary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${distanceKm.toStringAsFixed(1)} km away',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: isDark ? Colors.white70 : AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                const Icon(Icons.delivery_dining_rounded, size: 16, color: AppColors.success),
+                                const SizedBox(width: 8),
+                                Text(
+                                  deliveryLabel,
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 120),
                   ],
                 ),

@@ -325,7 +325,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   color: AppColors.primary,
                   backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                     itemCount: _orders.length,
                     itemBuilder: (context, index) {
                       return _buildOrderCard(_orders[index], isDark);
