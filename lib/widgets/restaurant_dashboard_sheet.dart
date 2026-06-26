@@ -879,25 +879,25 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                AppColors.primary.withValues(alpha: 0.07),
-                                AppColors.primary.withValues(alpha: 0.12),
+                                AppColors.secondary.withValues(alpha: 0.07),
+                                AppColors.secondary.withValues(alpha: 0.12),
                               ],
                             ),
                             borderRadius: BorderRadius.circular(11),
                             border: Border.all(
-                                color: AppColors.primary.withValues(alpha: 0.5),
+                                color: AppColors.secondary.withValues(alpha: 0.5),
                                 width: 1.3),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Icon(Icons.add_rounded,
-                                  size: 14, color: AppColors.primary),
+                                  size: 14, color: AppColors.secondary),
                               const SizedBox(width: 3),
                               Text(
                                 'ADD',
                                 style: GoogleFonts.outfit(
-                                    color: AppColors.primary,
+                                    color: AppColors.secondary,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 13),
                               ),
@@ -909,13 +909,11 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                         width: 100,
                         height: 38,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF0A2A9E), Color(0xFF1E40AF)],
-                          ),
+                          gradient: AppColors.ctaGradient,
                           borderRadius: BorderRadius.circular(11),
                           boxShadow: [
                             BoxShadow(
-                                color: AppColors.primary
+                                color: AppColors.secondary
                                     .withValues(alpha: 0.35),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4)),

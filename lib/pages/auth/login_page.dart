@@ -431,7 +431,7 @@ class _LoginPageState extends State<LoginPage>
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
+        gradient: AppColors.ctaGradient,
         borderRadius: BorderRadius.circular(16),
         boxShadow: PremiumShadows.floatingButtonLight,
       ),

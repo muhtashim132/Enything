@@ -55,7 +55,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                 : null,
             boxShadow: PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
-          child: IntrinsicHeight(
+          child: SizedBox(
+            height: 130,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -355,13 +356,11 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                     height: 34,
                                     width: 88,
                                     decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                        colors: [Color(0xFF0A2A9E), Color(0xFF1E40AF)],
-                                      ),
+                                      gradient: AppColors.ctaGradient,
                                       borderRadius: BorderRadius.circular(11),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: AppColors.primary.withValues(alpha: 0.35),
+                                          color: AppColors.secondary.withValues(alpha: 0.35),
                                           blurRadius: 10,
                                           offset: const Offset(0, 4),
                                         ),
@@ -411,14 +410,14 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                       padding: const EdgeInsets.symmetric(horizontal: 16),
                                       decoration: BoxDecoration(
                                         border: Border.all(
-                                          color: AppColors.primary.withValues(alpha: isDark ? 0.5 : 0.8),
+                                          color: AppColors.secondary.withValues(alpha: isDark ? 0.5 : 0.8),
                                           width: 1.5,
                                         ),
                                         borderRadius: BorderRadius.circular(11),
                                         gradient: LinearGradient(
                                           colors: [
-                                            AppColors.primary.withValues(alpha: isDark ? 0.15 : 0.06),
-                                            AppColors.primary.withValues(alpha: isDark ? 0.10 : 0.10),
+                                            AppColors.secondary.withValues(alpha: isDark ? 0.15 : 0.06),
+                                            AppColors.secondary.withValues(alpha: isDark ? 0.10 : 0.10),
                                           ],
                                         ),
                                       ),
@@ -427,14 +426,14 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                         children: [
                                           Icon(Icons.add_rounded,
                                               size: 14,
-                                              color: isDark ? AppColors.primaryLight : AppColors.primary),
-                                          const SizedBox(width: 2),
+                                              color: isDark ? AppColors.secondaryLight : AppColors.secondary),
+                                          const SizedBox(width: 4),
                                           Text(
                                             'ADD',
                                             style: GoogleFonts.outfit(
-                                              color: isDark ? AppColors.primaryLight : AppColors.primary,
                                               fontWeight: FontWeight.w800,
                                               fontSize: 12,
+                                              color: isDark ? AppColors.secondaryLight : AppColors.secondary,
                                             ),
                                           ),
                                         ],

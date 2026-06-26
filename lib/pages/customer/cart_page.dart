@@ -292,7 +292,7 @@ class CartPage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: AppColors.ctaGradient,
                 borderRadius: PremiumRadius.mediumBorder,
                 boxShadow: PremiumShadows.floatingButtonLight,
               ),
@@ -454,7 +454,7 @@ class CartPage extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
-                  gradient: canCheckout ? AppColors.primaryGradient : null,
+                  gradient: canCheckout ? AppColors.ctaGradient : null,
                   color: canCheckout ? null : Colors.grey.shade300,
                   borderRadius: PremiumRadius.mediumBorder,
                   boxShadow: canCheckout ? PremiumShadows.floatingButtonLight : [],

@@ -92,10 +92,10 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.secondary,
           foregroundColor: Colors.white,
           elevation: 0,
-          shadowColor: AppColors.primary.withValues(alpha: 0.35),
+          shadowColor: AppColors.secondary.withValues(alpha: 0.35),
           padding:
               const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           minimumSize: const Size(64, 50),
@@ -121,8 +121,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          side: const BorderSide(color: AppColors.primary, width: 1.5),
+          foregroundColor: AppColors.secondary,
+          side: const BorderSide(color: AppColors.secondary, width: 1.5),
           padding:
               const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           minimumSize: const Size(64, 48),
@@ -134,7 +134,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: AppColors.secondary,
           textStyle:
               GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600),
           padding:
@@ -355,10 +355,10 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.secondary,
           foregroundColor: Colors.white,
           elevation: 0,
-          shadowColor: AppColors.primary.withValues(alpha: 0.35),
+          shadowColor: AppColors.secondary.withValues(alpha: 0.35),
           padding:
               const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           minimumSize: const Size(64, 50),
@@ -380,8 +380,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          side: const BorderSide(color: AppColors.primary, width: 1.5),
+          foregroundColor: AppColors.secondary,
+          side: const BorderSide(color: AppColors.secondary, width: 1.5),
           padding:
               const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           minimumSize: const Size(64, 48),
@@ -393,7 +393,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: AppColors.secondary,
           textStyle:
               GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600),
         ),

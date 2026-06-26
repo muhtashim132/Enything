@@ -652,7 +652,7 @@ class _SheetContent extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
+                        gradient: AppColors.ctaGradient,
                         borderRadius: PremiumRadius.smallBorder,
                         boxShadow: PremiumShadows.floatingButtonLight,
                       ),
@@ -705,7 +705,7 @@ class _SheetContent extends StatelessWidget {
                         color: Colors.transparent,
                         borderRadius: PremiumRadius.smallBorder,
                         border: Border.all(
-                          color: AppColors.primary.withValues(alpha: isDark ? 0.6 : 0.8),
+                          color: AppColors.secondary.withValues(alpha: isDark ? 0.6 : 0.8),
                           width: 2,
                         ),
                       ),
@@ -715,7 +715,7 @@ class _SheetContent extends StatelessWidget {
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.primaryLight : AppColors.primary,
+                            color: isDark ? AppColors.secondaryLight : AppColors.secondary,
                           ),
                         ),
                       ),
@@ -735,7 +735,7 @@ class _SheetContent extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
+                        gradient: AppColors.ctaGradient,
                         borderRadius: PremiumRadius.smallBorder,
                         boxShadow: PremiumShadows.floatingButtonLight,
                       ),

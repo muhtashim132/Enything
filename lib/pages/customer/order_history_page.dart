@@ -577,7 +577,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: AppColors.ctaGradient,
                 borderRadius: PremiumRadius.mediumBorder,
                 boxShadow: PremiumShadows.floatingButtonLight,
               ),

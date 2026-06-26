@@ -1165,6 +1165,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                           _buildSectionTitle('Popular in your area'),
                           const SizedBox(height: 16),
                           GridView.builder(
+                            padding: EdgeInsets.zero,
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

@@ -733,15 +733,11 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
           height: 60,
           padding: const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0A2A9E), Color(0xFF1A3FBA)],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
+            gradient: AppColors.ctaGradient,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                  color: const Color(0xFF0A2A9E).withValues(alpha: 0.4),
+                  color: AppColors.secondary.withValues(alpha: 0.4),
                   blurRadius: 18,
                   offset: const Offset(0, 8)),
             ],

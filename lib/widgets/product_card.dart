@@ -520,17 +520,17 @@ class _ProductCardState extends State<ProductCard>
           gradient: LinearGradient(
             colors: isDark
                 ? [
-                    AppColors.primary.withValues(alpha: 0.18),
-                    AppColors.primaryLight.withValues(alpha: 0.14),
+                    AppColors.secondary.withValues(alpha: 0.18),
+                    AppColors.secondaryLight.withValues(alpha: 0.14),
                   ]
                 : [
-                    AppColors.primary.withValues(alpha: 0.06),
-                    AppColors.primary.withValues(alpha: 0.10),
+                    AppColors.secondary.withValues(alpha: 0.06),
+                    AppColors.secondary.withValues(alpha: 0.10),
                   ],
           ),
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-              color: AppColors.primary.withValues(alpha: isDark ? 0.40 : 0.35),
+              color: AppColors.secondary.withValues(alpha: isDark ? 0.40 : 0.35),
               width: 1.2),
         ),
         child: Row(
@@ -538,12 +538,12 @@ class _ProductCardState extends State<ProductCard>
           children: [
             Icon(Icons.add_rounded,
                 size: 15,
-                color: isDark ? AppColors.primaryLight : AppColors.primary),
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary),
             const SizedBox(width: 3),
             Text(
               'ADD',
               style: GoogleFonts.outfit(
-                color: isDark ? AppColors.primaryLight : AppColors.primary,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
                 fontWeight: FontWeight.w800,
                 fontSize: 12,
               ),
@@ -559,15 +559,11 @@ class _ProductCardState extends State<ProductCard>
       key: const ValueKey('stepper'),
       height: 36,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0A2A9E), Color(0xFF1E40AF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppColors.ctaGradient,
         borderRadius: BorderRadius.circular(100),
         boxShadow: [
           BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.35),
+              color: AppColors.secondary.withValues(alpha: 0.35),
               blurRadius: 10,
               offset: const Offset(0, 4)),
         ],

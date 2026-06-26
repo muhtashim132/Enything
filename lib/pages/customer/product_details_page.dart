@@ -507,7 +507,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           child: Container(
                             height: 56,
                             decoration: BoxDecoration(
-                              gradient: AppColors.primaryGradient,
+                              gradient: AppColors.ctaGradient,
                               borderRadius: PremiumRadius.mediumBorder,
                               boxShadow: PremiumShadows.floatingButtonLight,
                             ),
@@ -573,7 +573,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           child: Container(
                             height: 56,
                             decoration: BoxDecoration(
-                              gradient: AppColors.primaryGradient,
+                              gradient: AppColors.ctaGradient,
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: PremiumShadows.floatingButtonLight,
                             ),

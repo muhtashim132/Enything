@@ -130,7 +130,7 @@ class _FavoritesPageState extends State<FavoritesPage>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: AppColors.ctaGradient,
                 borderRadius: PremiumRadius.mediumBorder,
                 boxShadow: PremiumShadows.floatingButtonLight,
               ),
@@ -201,7 +201,7 @@ class _FavoritesPageState extends State<FavoritesPage>
               unselectedLabelColor: isDark ? Colors.white54 : AppColors.textSecondary,
               indicatorSize: TabBarIndicatorSize.tab,
               indicator: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: AppColors.ctaGradient,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
