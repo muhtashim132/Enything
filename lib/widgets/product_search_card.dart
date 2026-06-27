@@ -61,8 +61,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // ── Image ────────────────────────────────────────────────
-                SizedBox(
-                  width: 115,
+                AspectRatio(
+                  aspectRatio: 1.0,
                   child: Stack(
                     children: [
                       ClipRRect(

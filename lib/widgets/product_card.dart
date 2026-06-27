@@ -101,8 +101,8 @@ class _ProductCardState extends State<ProductCard>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Product Image ────────────────────────────────────────────
-              Expanded(
-                flex: 4,
+              AspectRatio(
+                aspectRatio: 1.0,
                 child: Stack(
                   children: [
                     // Image container with gradient background
@@ -295,7 +295,6 @@ class _ProductCardState extends State<ProductCard>
 
               // ── Info ─────────────────────────────────────────────────────
               Expanded(
-                flex: 5,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
                   child: Column(
@@ -303,138 +302,159 @@ class _ProductCardState extends State<ProductCard>
                     mainAxisSize: MainAxisSize.max,
                     children: [
                       // Product name
-                      Text(
-                        product.name,
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF1A1A2E),
-                          letterSpacing: -0.2,
+                      SizedBox(
+                        height: 36, // Fixed space for up to 2 lines
+                        child: Text(
+                          product.name,
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color:
+                                isDark ? Colors.white : const Color(0xFF1A1A2E),
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
 
                       // Shop name
-                      if (shop != null && shop!.name.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          shop!.name,
-                          style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 10,
-                            color: isDark
-                                ? Colors.white38
-                                : AppColors.textSecondary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-
-                      // Rating row
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.star_rounded,
-                              color: Color(0xFFF6C90E), size: 13),
-                          const SizedBox(width: 2),
-                          Text(
-                            product.totalReviews > 0
-                                ? product.rating.toStringAsFixed(1)
-                                : 'New',
-                            style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
-                              color: isDark
-                                  ? Colors.white70
-                                  : AppColors.textPrimary,
-                            ),
-                          ),
-                          if (product.totalReviews > 0)
-                            Text(
-                              ' (${product.totalReviews})',
-                              style: GoogleFonts.outfit(
-                                fontSize: 10,
-                                color: isDark
-                                    ? Colors.white38
-                                    : AppColors.textSecondary,
-                              ),
-                            ),
-                          if (shop != null) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                                width: 3,
-                                height: 3,
-                                decoration: BoxDecoration(
+                      SizedBox(
+                        height: 16,
+                        child: shop != null && shop!.name.isNotEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  shop!.name,
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 10,
                                     color: isDark
                                         ? Colors.white38
                                         : AppColors.textSecondary,
-                                    shape: BoxShape.circle)),
-                            const SizedBox(width: 6),
-                            Icon(Icons.location_on_rounded,
-                                size: 11, color: AppColors.primary),
-                            const SizedBox(width: 2),
-                            Text(
-                              '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)} km',
-                              style: GoogleFonts.outfit(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? Colors.white54
-                                    : AppColors.textSecondary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+
+                      // Rating row
+                      SizedBox(
+                        height: 18,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.star_rounded,
+                                  color: Color(0xFFF6C90E), size: 13),
+                              const SizedBox(width: 2),
+                              Text(
+                                product.totalReviews > 0
+                                    ? product.rating.toStringAsFixed(1)
+                                    : 'New',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : AppColors.textPrimary,
+                                ),
                               ),
-                            ),
-                          ],
-                        ],
+                              if (product.totalReviews > 0)
+                                Text(
+                                  ' (${product.totalReviews})',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    color: isDark
+                                        ? Colors.white38
+                                        : AppColors.textSecondary,
+                                  ),
+                                ),
+                              if (shop != null) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                    width: 3,
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.white38
+                                            : AppColors.textSecondary,
+                                        shape: BoxShape.circle)),
+                                const SizedBox(width: 6),
+                                Icon(Icons.location_on_rounded,
+                                    size: 11, color: AppColors.primary),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)} km',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
 
                       const Spacer(),
 
                       // Price row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '₹${product.price.toStringAsFixed(0)}',
-                            style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.primary,
-                              fontSize: 15,
-                            ),
-                          ),
-                          if (hasDiscount) ...[
-                            const SizedBox(width: 4),
+                      SizedBox(
+                        height: 20,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
                             Text(
-                              '₹${product.originalPrice!.toStringAsFixed(0)}',
+                              '₹${product.price.toStringAsFixed(0)}',
                               style: GoogleFonts.outfit(
-                                color: isDark
-                                    ? Colors.white38
-                                    : AppColors.textLight,
-                                fontSize: 10,
-                                decoration: TextDecoration.lineThrough,
-                                decorationColor: isDark
-                                    ? Colors.white38
-                                    : AppColors.textLight,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.primary,
+                                fontSize: 15,
                               ),
                             ),
+                            if (hasDiscount) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                '₹${product.originalPrice!.toStringAsFixed(0)}',
+                                style: GoogleFonts.outfit(
+                                  color: isDark
+                                      ? Colors.white38
+                                      : AppColors.textLight,
+                                  fontSize: 10,
+                                  decoration: TextDecoration.lineThrough,
+                                  decorationColor: isDark
+                                      ? Colors.white38
+                                      : AppColors.textLight,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
 
                       // "You save" label
-                      if (hasDiscount && savedAmount > 0) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Save ₹${savedAmount.toStringAsFixed(0)}',
-                          style: GoogleFonts.outfit(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.success,
-                          ),
-                        ),
-                      ],
+                      SizedBox(
+                        height: 14,
+                        child: hasDiscount && savedAmount > 0
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  'Save ₹${savedAmount.toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
 
                       const SizedBox(height: 12),
 

@@ -238,19 +238,30 @@ class _FavoritesPageState extends State<FavoritesPage>
                         onRefresh: _loadFavorites,
                         color: AppColors.primary,
                         backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
-                        child: GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.54,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: 16,
-                          ),
-                          itemCount: _favoriteProducts.length,
-                          itemBuilder: (context, index) {
-                            return ProductCard(
-                                product: _favoriteProducts[index]);
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            const crossAxisCount = 2;
+                            const crossAxisSpacing = 16.0;
+                            // The parent has padding 16 left and 16 right = 32
+                            final availableWidth = constraints.maxWidth - 32;
+                            final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount - 1))) / crossAxisCount;
+                            final itemHeight = itemWidth + 178;
+                            final childAspectRatio = itemWidth / itemHeight;
+
+                            return GridView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossAxisCount,
+                                childAspectRatio: childAspectRatio,
+                                mainAxisSpacing: 16,
+                                crossAxisSpacing: crossAxisSpacing,
+                              ),
+                              itemCount: _favoriteProducts.length,
+                              itemBuilder: (context, index) {
+                                return ProductCard(
+                                    product: _favoriteProducts[index]);
+                              },
+                            );
                           },
                         ),
                       ),

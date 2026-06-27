@@ -306,21 +306,31 @@ class _RestaurantPageState extends State<RestaurantPage> {
           else
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverGrid(
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.54,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => ProductCard(
-                    product: _products[index],
-                    shop: _shop,
-                  ),
-                  childCount: _products.length,
-                ),
+              sliver: SliverLayoutBuilder(
+                builder: (context, constraints) {
+                  const crossAxisCount = 2;
+                  const crossAxisSpacing = 14.0;
+                  final availableWidth = constraints.crossAxisExtent;
+                  final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount - 1))) / crossAxisCount;
+                  final itemHeight = itemWidth + 178;
+                  final childAspectRatio = itemWidth / itemHeight;
+
+                  return SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      childAspectRatio: childAspectRatio,
+                      mainAxisSpacing: 14,
+                      crossAxisSpacing: crossAxisSpacing,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => ProductCard(
+                        product: _products[index],
+                        shop: _shop,
+                      ),
+                      childCount: _products.length,
+                    ),
+                  );
+                },
               ),
             ),
           const SliverToBoxAdapter(child: SizedBox(height: 32)),

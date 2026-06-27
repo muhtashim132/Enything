@@ -618,20 +618,31 @@ class _SheetContentState extends State<_SheetContent> {
         else
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.54,
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => ProductCard(
-                  product: filteredProducts[index],
-                  shop: shop,
-                ),
-                childCount: filteredProducts.length,
-              ),
+            sliver: SliverLayoutBuilder(
+              builder: (context, constraints) {
+                const crossAxisCount = 2;
+                const crossAxisSpacing = 14.0;
+                final availableWidth = constraints.crossAxisExtent;
+                final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount - 1))) / crossAxisCount;
+                final itemHeight = itemWidth + 178;
+                final childAspectRatio = itemWidth / itemHeight;
+
+                return SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: childAspectRatio,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: crossAxisSpacing,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => ProductCard(
+                      product: filteredProducts[index],
+                      shop: shop,
+                    ),
+                    childCount: filteredProducts.length,
+                  ),
+                );
+              },
             ),
           ),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),

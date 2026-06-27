@@ -157,8 +157,9 @@ class _AddProductPageState extends State<AddProductPage> {
         );
         if (picked == null) break;
         if (!mounted) return;
-        final cropped =
-            await cropImage(context, picked.path, title: 'Crop Product Image');
+        final cropped = await cropImage(context, picked.path,
+            title: 'Crop Product Image',
+            aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1));
         if (cropped != null) {
           setState(() {
             _images.add(XFile(cropped.path));
@@ -195,8 +196,9 @@ class _AddProductPageState extends State<AddProductPage> {
       if (picked.isNotEmpty) {
         for (var p in picked) {
           if (!mounted) return;
-          final cropped =
-              await cropImage(context, p.path, title: 'Crop Product Image');
+          final cropped = await cropImage(context, p.path,
+              title: 'Crop Product Image',
+              aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1));
           if (cropped != null) {
             _images.add(XFile(cropped.path));
           }

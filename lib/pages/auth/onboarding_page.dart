@@ -19,42 +19,45 @@ class _OnboardingPageState extends State<OnboardingPage>
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
+  late AnimationController _pulseCtrl;
+  late Animation<double> _pulseAnim;
+
   static const _slides = [
     _OnboardingSlide(
-      emoji: '🚀',
-      title: 'Delivered at\nthe speed of life',
+      emoji: '🛍️',
+      title: 'Everything you need,\ninstantly.',
       subtitle:
-          'From groceries to medicines, hot food to electronics — anything from your neighbourhood in minutes.',
-      bgColors: [Color(0xFF05093D), Color(0xFF0A1260), Color(0xFF1A2BC4)],
-      accentColor: Color(0xFFF4C542),
-      tag: '⚡ INSTANT DELIVERY',
-      floatingEmoji1: '🍕',
+          'From hot food & groceries to medicines, clothes, and shoes — anything from your neighbourhood in minutes.',
+      bgColors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF312E81)],
+      accentColor: Color(0xFF38BDF8),
+      tag: '✨ ALL IN ONE APP',
+      floatingEmoji1: '🍔',
       floatingEmoji2: '💊',
-      floatingEmoji3: '📦',
+      floatingEmoji3: '👕',
     ),
     _OnboardingSlide(
       emoji: '🏪',
-      title: 'Support your\nlocal community',
+      title: 'Grow your business\nwith Enything.',
       subtitle:
-          'Every order you place helps local shopkeepers, restaurants, and entrepreneurs in your city thrive.',
-      bgColors: [Color(0xFF0A2E14), Color(0xFF0F4C1A), Color(0xFF1E7A32)],
-      accentColor: Color(0xFF7DEFA1),
-      tag: '🌿 LOCAL FIRST',
-      floatingEmoji1: '🥦',
-      floatingEmoji2: '🧁',
-      floatingEmoji3: '💐',
+          'Reach thousands of new customers daily. Set up your digital store in minutes and watch your sales skyrocket.',
+      bgColors: [Color(0xFF022C22), Color(0xFF064E3B), Color(0xFF065F46)],
+      accentColor: Color(0xFF34D399),
+      tag: '📈 BECOME A SELLER',
+      floatingEmoji1: '💵',
+      floatingEmoji2: '📦',
+      floatingEmoji3: '🚀',
     ),
     _OnboardingSlide(
-      emoji: '📡',
-      title: 'Track your order\nin real-time',
+      emoji: '🛵',
+      title: 'Earn with us as a\nDelivery Partner.',
       subtitle:
-          'Live GPS tracking from the moment you order to your doorstep. Always know where your order is.',
-      bgColors: [Color(0xFF2A0050), Color(0xFF4A0080), Color(0xFF7B1FA2)],
-      accentColor: Color(0xFFE1BEE7),
-      tag: '📍 LIVE TRACKING',
-      floatingEmoji1: '🗺️',
-      floatingEmoji2: '🛵',
-      floatingEmoji3: '🔔',
+          'Turn your free time into earnings. Enjoy flexible hours, instant payouts, and join a fast-growing community.',
+      bgColors: [Color(0xFF450A0A), Color(0xFF7F1D1D), Color(0xFF991B1B)],
+      accentColor: Color(0xFFF87171),
+      tag: '🚀 JOIN THE FLEET',
+      floatingEmoji1: '🤝',
+      floatingEmoji2: '⚡',
+      floatingEmoji3: '💰',
     ),
   ];
 
@@ -67,12 +70,22 @@ class _OnboardingPageState extends State<OnboardingPage>
     );
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeIn);
     _fadeCtrl.forward();
+
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    );
+    _pulseAnim = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOutSine),
+    );
+    _pulseCtrl.repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     _fadeCtrl.dispose();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
@@ -190,8 +203,8 @@ class _OnboardingPageState extends State<OnboardingPage>
                           borderRadius: BorderRadius.circular(22),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              blurRadius: 20,
+                              color: slide.accentColor.withValues(alpha: 0.5),
+                              blurRadius: 25,
                               offset: const Offset(0, 8),
                             ),
                           ],
@@ -202,9 +215,10 @@ class _OnboardingPageState extends State<OnboardingPage>
                             Text(
                               isLast ? 'Get Started' : 'Continue',
                               style: GoogleFonts.outfit(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
                                 color: slide.bgColors.last,
+                                letterSpacing: -0.3,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -213,7 +227,7 @@ class _OnboardingPageState extends State<OnboardingPage>
                                   ? Icons.rocket_launch_rounded
                                   : Icons.arrow_forward_rounded,
                               color: slide.bgColors.last,
-                              size: 20,
+                              size: 22,
                             ),
                           ],
                         ),
@@ -244,63 +258,128 @@ class _OnboardingPageState extends State<OnboardingPage>
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Outer glow ring
-                  Container(
-                    width: 220,
-                    height: 220,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.06),
-                    ),
-                  ),
-                  // Inner ring
-                  Container(
-                    width: 170,
-                    height: 170,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.09),
-                    ),
-                  ),
-                  // Glassmorphism center card
-                  ClipOval(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  // Massive glowing backdrop aura
+                  AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (context, child) => Transform.scale(
+                      scale: _pulseAnim.value,
                       child: Container(
-                        width: 130,
-                        height: 130,
+                        width: 300,
+                        height: 300,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.15),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            slide.emoji,
-                            style: const TextStyle(fontSize: 60),
+                          gradient: RadialGradient(
+                            colors: [
+                              slide.accentColor.withValues(alpha: 0.25),
+                              slide.accentColor.withValues(alpha: 0.05),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.2, 0.6, 1.0],
                           ),
                         ),
                       ),
                     ),
                   ),
+                  
+                  // Pulsing center hero
+                  AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (context, child) => Transform.scale(
+                      scale: _pulseAnim.value,
+                      child: child,
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Outer glow ring
+                        Container(
+                          width: 220,
+                          height: 220,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.06),
+                            border: Border.all(
+                              color: slide.accentColor.withValues(alpha: 0.15),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        // Inner ring
+                        Container(
+                          width: 170,
+                          height: 170,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.09),
+                            border: Border.all(
+                              color: slide.accentColor.withValues(alpha: 0.25),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        // Glassmorphism center card with glowing shadow
+                        Container(
+                          width: 130,
+                          height: 130,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: slide.accentColor.withValues(alpha: 0.3),
+                                blurRadius: 30,
+                                spreadRadius: -5,
+                              )
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.4),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    slide.emoji,
+                                    style: const TextStyle(
+                                      fontSize: 60,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black26,
+                                          blurRadius: 10,
+                                          offset: Offset(0, 4),
+                                        )
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
                   // Floating emoji decorations
                   Positioned(
-                    top: 20,
-                    right: 10,
+                    top: 10,
+                    right: 0,
                     child: _FloatingEmoji(emoji: slide.floatingEmoji1, delay: 0),
                   ),
                   Positioned(
-                    bottom: 30,
-                    left: 15,
+                    bottom: 20,
+                    left: 10,
                     child: _FloatingEmoji(emoji: slide.floatingEmoji2, delay: 200),
                   ),
                   Positioned(
-                    top: 60,
-                    left: 5,
+                    top: 50,
+                    left: 0,
                     child: _FloatingEmoji(emoji: slide.floatingEmoji3, delay: 400),
                   ),
                 ],
@@ -340,11 +419,18 @@ class _OnboardingPageState extends State<OnboardingPage>
               slide.title,
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
-                fontSize: 30,
+                fontSize: 34,
                 fontWeight: FontWeight.w900,
                 color: Colors.white,
                 height: 1.15,
-                letterSpacing: -0.5,
+                letterSpacing: -1.2,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
               ),
             ),
 
@@ -413,21 +499,40 @@ class _FloatingEmojiState extends State<_FloatingEmoji>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _anim,
-      builder: (_, child) => Transform.translate(
-        offset: Offset(0, -6 * _anim.value),
-        child: Opacity(
-          opacity: 0.6 + 0.4 * _anim.value,
-          child: child,
-        ),
-      ),
+      builder: (_, child) {
+        // Create an organic floating effect using translation and slight rotation
+        final yOffset = -10 * _anim.value;
+        final rotation = 0.15 * _anim.value - 0.075; // Rotates back and forth slightly
+
+        return Transform.translate(
+          offset: Offset(0, yOffset),
+          child: Transform.rotate(
+            angle: rotation,
+            child: Opacity(
+              opacity: 0.7 + 0.3 * _anim.value,
+              child: child,
+            ),
+          ),
+        );
+      },
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+          color: Colors.white.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.3),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            )
+          ],
         ),
-        child: Text(widget.emoji, style: const TextStyle(fontSize: 22)),
+        child: Text(widget.emoji, style: const TextStyle(fontSize: 26)),
       ),
     );
   }

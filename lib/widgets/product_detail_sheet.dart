@@ -224,8 +224,8 @@ class _SheetContent extends StatelessWidget {
 
               // ── Hero image area ───────────────────────────────────────────────────
               SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 260,
+                child: AspectRatio(
+                  aspectRatio: 1.0,
                   child: Stack(
                     children: [
                       // Image carousel

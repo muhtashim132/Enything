@@ -1191,7 +1191,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               _buildSectionTitle('Recently Viewed', subtitle: 'Continue where you left off'),
                               const SizedBox(height: 12),
                               SizedBox(
-                                height: 320,
+                                height: 335,
                                 child: ListView.builder(
                                   scrollDirection: Axis.horizontal,
                                   itemCount: availableRecent.length,
@@ -1258,21 +1258,32 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           const SizedBox(height: 8),
                           _buildSectionTitle('Popular in your area'),
                           const SizedBox(height: 16),
-                          GridView.builder(
-                            padding: EdgeInsets.zero,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5),
-                              childAspectRatio: 0.54,
-                              mainAxisSpacing: 16,
-                              crossAxisSpacing: 16,
-                            ),
-                            itemCount: _products.length,
-                            itemBuilder: (context, index) {
-                              final product = _products[index];
-                              final shop = _productShops[product.id];
-                              return ProductCard(product: product, shop: shop);
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5);
+                              const crossAxisSpacing = 16.0;
+                              final availableWidth = constraints.maxWidth;
+                              final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount - 1))) / crossAxisCount;
+                              final itemHeight = itemWidth + 178;
+                              final childAspectRatio = itemWidth / itemHeight;
+
+                              return GridView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  childAspectRatio: childAspectRatio,
+                                  mainAxisSpacing: 16,
+                                  crossAxisSpacing: crossAxisSpacing,
+                                ),
+                                itemCount: _products.length,
+                                itemBuilder: (context, index) {
+                                  final product = _products[index];
+                                  final shop = _productShops[product.id];
+                                  return ProductCard(product: product, shop: shop);
+                                },
+                              );
                             },
                           ),
                         ] else if ((_selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty) && !_isLoading) ...[
