@@ -25,6 +25,7 @@ class CustomerMainPage extends StatefulWidget {
 class _CustomerMainPageState extends State<CustomerMainPage> {
   int _navIndex = 0;
   DateTime? _lastBackPressTime;
+  final GlobalKey<CustomerHomeViewState> _homeKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -59,8 +60,8 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
         extendBody: true, // Let body extend behind bottom nav
         body: IndexedStack(
           index: _navIndex,
-          children: const [
-            CustomerHomeView(),
+          children: [
+            CustomerHomeView(key: _homeKey),
             FavoritesPage(),
             OrderHistoryPage(),
             ProfileSettingsPage(),
@@ -104,7 +105,12 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavItem(0, Icons.home_rounded, Icons.home_outlined, 'Home'),
+                ValueListenableBuilder<bool>(
+                  valueListenable: CustomerHomeViewState.globalIsFiltering,
+                  builder: (context, isFiltering, _) {
+                    return _buildNavItem(0, Icons.home_rounded, Icons.home_outlined, 'Home', overrideSelected: isFiltering ? false : null);
+                  },
+                ),
                 _buildNavItem(1, Icons.favorite_rounded, Icons.favorite_border_rounded, 'Favs'),
                 
                 // Prominent Cart inside the pill
@@ -165,10 +171,15 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
   }
 
   Widget _buildNavItem(
-      int index, IconData activeIcon, IconData inactiveIcon, String label) {
-    final isSelected = _navIndex == index;
+      int index, IconData activeIcon, IconData inactiveIcon, String label, {bool? overrideSelected}) {
+    final isSelected = overrideSelected ?? _navIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _navIndex = index),
+      onTap: () {
+        if (_navIndex == 0 && index == 0) {
+          _homeKey.currentState?.resetToHome();
+        }
+        setState(() => _navIndex = index);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

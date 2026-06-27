@@ -111,4 +111,41 @@ class AppCategories {
 
   /// Flat list of category names (for Supabase queries / dropdowns).
   static List<String> get names => all.map((c) => c['name']!).toList();
+
+  /// Returns common variant suggestions for a given category.
+  static List<String> getSuggestedVariants(String categoryName) {
+    switch (categoryName) {
+      case 'Clothing':
+        return ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+      case 'Footwear':
+        return ['UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10', 'UK 11'];
+      case 'Restaurant':
+      case 'Fast Food':
+        return ['Half', 'Full', 'Regular', 'Medium', 'Large'];
+      case 'Bakery':
+      case 'Sweets & Mithai':
+        return ['250g', '500g', '1kg', '1 Pound', '2 Pounds'];
+      case 'Beverages':
+      case 'Tea & Coffee':
+      case 'Ice Cream':
+        return ['Small', 'Medium', 'Large', 'Single', 'Double'];
+      case 'Grocery':
+      case 'Supermarket / Hypermarket':
+      case 'Organic':
+        return ['100g', '250g', '500g', '1kg', '5kg'];
+      case 'Dairy & Eggs':
+        return ['250ml', '500ml', '1L', 'Half Dozen', '1 Dozen'];
+      case 'Butcher':
+      case 'Fish & Seafood':
+        return ['250g', '500g', '1kg'];
+      case 'Pharmacy':
+      case 'Medical Store':
+        return ['1 Strip (10 tabs)', '1 Strip (15 tabs)', '100ml', '200ml', '1 Tube'];
+      case 'Electronics':
+      case 'Mobile & Repair':
+        return ['64GB', '128GB', '256GB', '512GB'];
+      default:
+        return ['Small', 'Large', 'Pack of 1', 'Pack of 2', 'Pack of 5'];
+    }
+  }
 }

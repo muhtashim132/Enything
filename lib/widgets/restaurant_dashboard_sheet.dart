@@ -20,6 +20,10 @@ void showRestaurantDashboardSheet(BuildContext context, String shopId) {
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black54,
     useRootNavigator: true,
+    clipBehavior: Clip.antiAliasWithSaveLayer,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
     builder: (_) => RestaurantDashboardSheet(shopId: shopId),
   );
 }
@@ -108,6 +112,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
       snapSizes: const [0.65, 1.0],
       builder: (context, scrollController) {
         return Container(
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF7F8FC),
             borderRadius:

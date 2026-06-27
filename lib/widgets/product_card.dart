@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/product_model.dart';
@@ -13,6 +11,7 @@ import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
 import '../widgets/product_detail_sheet.dart';
 import '../utils/share_utils.dart';
+import '../widgets/common/premium_product_image.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -78,7 +77,9 @@ class _ProductCardState extends State<ProductCard>
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? PremiumAnimations.pressedScale : PremiumAnimations.normalScale,
+        scale: _isPressed
+            ? PremiumAnimations.pressedScale
+            : PremiumAnimations.normalScale,
         duration: PremiumAnimations.fast,
         curve: PremiumAnimations.defaultCurve,
         child: AnimatedContainer(
@@ -93,7 +94,8 @@ class _ProductCardState extends State<ProductCard>
                         ? AppColors.primary.withValues(alpha: 0.12)
                         : Colors.transparent,
                   ),
-            boxShadow: PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
+            boxShadow:
+                PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,20 +115,9 @@ class _ProductCardState extends State<ProductCard>
                         decoration:
                             PremiumDecorations.imageContainerBg(isDark: isDark),
                         child: product.displayImage.isNotEmpty
-                            ? CachedNetworkImage(
+                            ? PremiumProductImage(
                                 imageUrl: product.displayImage,
-                                width: double.infinity,
-                                height: double.infinity,
-                                fit: BoxFit.contain,
-                                fadeInDuration:
-                                    const Duration(milliseconds: 250),
-                                placeholder: (c, i) => Shimmer.fromColors(
-                                  baseColor: PremiumShimmer.baseColor(isDark),
-                                  highlightColor:
-                                      PremiumShimmer.highlightColor(isDark),
-                                  child: Container(color: Colors.white),
-                                ),
-                                errorWidget: (c, e, s) => _buildImageError(isDark),
+                                isDark: isDark,
                               )
                             : _buildImageError(isDark),
                       ),
@@ -200,7 +191,10 @@ class _ProductCardState extends State<ProductCard>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 7, vertical: 4),
                           decoration: PremiumDecorations.gradientBadge(
-                            colors: const [Color(0xFFFF9F43), Color(0xFFEE5A24)],
+                            colors: const [
+                              Color(0xFFFF9F43),
+                              Color(0xFFEE5A24)
+                            ],
                             borderRadius: 8,
                           ),
                           child: Row(
@@ -290,14 +284,11 @@ class _ProductCardState extends State<ProductCard>
                           child: Icon(
                             Icons.ios_share_rounded,
                             size: 13,
-                            color: isDark
-                                ? Colors.white60
-                                : AppColors.primary,
+                            color: isDark ? Colors.white60 : AppColors.primary,
                           ),
                         ),
                       ),
                     ),
-
                   ],
                 ),
               ),
@@ -317,9 +308,8 @@ class _ProductCardState extends State<ProductCard>
                         style: GoogleFonts.outfit(
                           fontWeight: FontWeight.w800,
                           fontSize: 13,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF1A1A2E),
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A1A2E),
                           letterSpacing: -0.2,
                         ),
                         maxLines: 1,
@@ -374,16 +364,26 @@ class _ProductCardState extends State<ProductCard>
                             ),
                           if (shop != null) ...[
                             const SizedBox(width: 6),
-                            Container(width: 3, height: 3, decoration: BoxDecoration(color: isDark ? Colors.white38 : AppColors.textSecondary, shape: BoxShape.circle)),
+                            Container(
+                                width: 3,
+                                height: 3,
+                                decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white38
+                                        : AppColors.textSecondary,
+                                    shape: BoxShape.circle)),
                             const SizedBox(width: 6),
-                            Icon(Icons.location_on_rounded, size: 11, color: AppColors.primary),
+                            Icon(Icons.location_on_rounded,
+                                size: 11, color: AppColors.primary),
                             const SizedBox(width: 2),
                             Text(
                               '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)} km',
                               style: GoogleFonts.outfit(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white54 : AppColors.textSecondary,
+                                color: isDark
+                                    ? Colors.white54
+                                    : AppColors.textSecondary,
                               ),
                             ),
                           ],
@@ -494,7 +494,6 @@ class _ProductCardState extends State<ProductCard>
     );
   }
 
-
   Widget _buildAddButton(CartProvider cart, bool isDark) {
     return GestureDetector(
       key: const ValueKey('add'),
@@ -522,7 +521,8 @@ class _ProductCardState extends State<ProductCard>
           ),
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-              color: AppColors.secondary.withValues(alpha: isDark ? 0.40 : 0.35),
+              color:
+                  AppColors.secondary.withValues(alpha: isDark ? 0.40 : 0.35),
               width: 1.2),
         ),
         child: Row(
@@ -567,8 +567,8 @@ class _ProductCardState extends State<ProductCard>
             onTap: () => context
                 .read<CartProvider>()
                 .updateQuantity(product.id, quantity - 1),
-            child: const Icon(Icons.remove_rounded,
-                size: 16, color: Colors.white),
+            child:
+                const Icon(Icons.remove_rounded, size: 16, color: Colors.white),
           ),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
@@ -592,8 +592,7 @@ class _ProductCardState extends State<ProductCard>
                 context.read<CartProvider>().addItem(product, shop!);
               }
             },
-            child:
-                const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+            child: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
           ),
         ],
       ),

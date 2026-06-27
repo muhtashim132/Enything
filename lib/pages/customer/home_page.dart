@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,7 +12,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../providers/platform_config_provider.dart';
+
 import '../../providers/recently_viewed_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
@@ -33,13 +34,27 @@ class CustomerHomeView extends StatefulWidget {
   const CustomerHomeView({super.key});
 
   @override
-  State<CustomerHomeView> createState() => _CustomerHomeViewState();
+  State<CustomerHomeView> createState() => CustomerHomeViewState();
 }
 
-enum _SortMode { relevant, bestRating, priceLow, priceHigh, discount }
+enum _SortMode { relevant, bestRating, priceLow, priceHigh, discount, nearest }
 
-class _CustomerHomeViewState extends State<CustomerHomeView>
+class CustomerHomeViewState extends State<CustomerHomeView>
     with SingleTickerProviderStateMixin {
+  
+  static final ValueNotifier<bool> globalIsFiltering = ValueNotifier(false);
+
+  void resetToHome() {
+    if (!mounted) return;
+    setState(() {
+      _selectedTabIndex = -1;
+      _selectedFilterCategories.clear();
+      _searchQuery = '';
+      _searchController.clear();
+    });
+    _loadAllData();
+  }
+
   final _supabase = Supabase.instance.client;
   int _selectedTabIndex = -1; // -1 = no tab selected (show ALL)
   bool _isLoading = true;
@@ -53,6 +68,15 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
   String _searchQuery = '';
   _SortMode _sortMode = _SortMode.relevant;
   final _searchController = TextEditingController();
+  Set<String> _selectedFilterCategories = {};
+
+  static const Map<String, List<String>> _searchKeywords = {
+    'Food': ['food', 'eat', 'hungry', 'pizza', 'burger', 'meal', 'restaurant', 'fast food', 'biryani', 'chicken', 'mutton', 'kebab', 'fries'],
+    'Grocery': ['grocery', 'milk', 'bread', 'eggs', 'supermarket', 'ration', 'vegetables', 'fruits', 'apple', 'banana', 'meat', 'beef', 'dal', 'rice'],
+    'Pharmacy': ['pharmacy', 'medicine', 'pill', 'tablet', 'syrup', 'medical', 'health', 'drug', 'panadol', 'paracetamol', 'clinic', 'doctor'],
+    'Clothing': ['clothing', 'clothes', 'shirt', 'pant', 'shoes', 'fashion', 'apparel', 'wear', 'dress', 'tshirt', 'jeans', 'jacket', 'sneakers'],
+    'Electronics': ['electronics', 'mobile', 'phone', 'laptop', 'charger', 'gadget', 'device', 'computer', 'earbuds', 'headphones', 'cable'],
+  };
   // Debounce timer for GPS listener to prevent race conditions
   Timer? _locationDebounceTimer;
 
@@ -68,7 +92,26 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
         list.sort((a, b) => b.price.compareTo(a.price));
       case _SortMode.discount:
         list.sort((a, b) => (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0));
+      case _SortMode.nearest:
+        list.sort((a, b) {
+          final sA = _searchProductShops[a.id];
+          final sB = _searchProductShops[b.id];
+          return (sA?.distanceKm ?? double.infinity).compareTo(sB?.distanceKm ?? double.infinity);
+        });
       case _SortMode.relevant:
+        break;
+    }
+    return list;
+  }
+
+  /// Returns search shop results sorted by the current _sortMode.
+  List<ShopModel> get _sortedShopResults {
+    final list = List<ShopModel>.from(_searchResults);
+    switch (_sortMode) {
+      case _SortMode.bestRating:
+        list.sort((a, b) => b.rating.compareTo(a.rating));
+      default:
+        list.sort((a, b) => (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity));
         break;
     }
     return list;
@@ -219,16 +262,52 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
     try {
       final locationProvider = context.read<LocationProvider>();
 
-      final shopsResponse =
-          await _supabase.from('shops').select().ilike('name', '%$query%');
+      final lowerQuery = query.toLowerCase().trim();
+      final List<String> matchedSubcategories = [];
+      _searchKeywords.forEach((catName, keywords) {
+        bool match = keywords.any((k) {
+          if (lowerQuery.length < 3) return lowerQuery == k;
+          return lowerQuery.contains(k) || k.contains(lowerQuery);
+        });
+        if (match) {
+          matchedSubcategories.addAll(_tabCategories[catName] ?? [catName]);
+        }
+      });
 
-      final productsResponse = await _supabase
-          .from('products')
-          .select('*, shops(*)')
-          .ilike('name', '%$query%');
+      List<String>? effectiveCategories;
+      if (_selectedFilterCategories.isNotEmpty) {
+        effectiveCategories = [];
+        for (final cat in _selectedFilterCategories) {
+          effectiveCategories!.addAll(_tabCategories[cat] ?? [cat]);
+        }
+      }
 
-      final allShops =
-          (shopsResponse as List).map((s) => ShopModel.fromMap(s)).toList();
+      final shopsByName = await _supabase.from('shops').select().ilike('name', '%$query%');
+      final productsByName = await _supabase.from('products').select('*, shops(*)').ilike('name', '%$query%');
+      
+      List<dynamic> shopsByCat = [];
+      List<dynamic> productsByCat = [];
+
+      if (matchedSubcategories.isNotEmpty) {
+        shopsByCat = await _supabase.from('shops').select().inFilter('category', matchedSubcategories);
+        productsByCat = await _supabase.from('products').select('*, shops(*)').inFilter('category', matchedSubcategories).limit(100);
+      }
+
+      final allShopsSet = <String, ShopModel>{};
+      
+      void addShops(List<dynamic> response, bool requireNameMatch) {
+        for (final s in response) {
+          final shop = ShopModel.fromMap(s);
+          if (requireNameMatch && !shop.name.toLowerCase().contains(lowerQuery)) continue;
+          if (effectiveCategories != null && !effectiveCategories!.contains(shop.category)) continue;
+          allShopsSet[shop.id] = shop;
+        }
+      }
+      
+      addShops(shopsByName, true);
+      addShops(shopsByCat, false);
+
+      final allShops = allShopsSet.values.toList();
 
       List<ShopModel> shopResults;
       if (locationProvider.hasLocation) {
@@ -243,59 +322,55 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
             .where((s) =>
                 s.distanceKm != null &&
                 DeliveryCalculator.isWithinRange(s.distanceKm!))
-            .toList()
-          ..sort((a, b) => (a.distanceKm ?? double.infinity)
-              .compareTo(b.distanceKm ?? double.infinity));
+            .toList();
       } else {
         shopResults = allShops;
       }
 
       final List<ProductModel> prodResults = [];
       final Map<String, ShopModel> prodShops = {};
+      final addedProductIds = <String>{};
 
-      for (final p in productsResponse as List) {
-        final product = ProductModel.fromMap(p);
-        if (!product.isAvailable) continue;
-        if (p['shops'] == null) continue;
-        
-        final shop = ShopModel.fromMap(p['shops']);
-        if (!shop.isActive) continue;
-        
-        if (locationProvider.hasLocation) {
-          if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
-          final d = locationProvider.distanceTo(shop.location);
-          if (!DeliveryCalculator.isWithinRange(d)) continue;
+      void addProducts(List<dynamic> response) {
+        for (final p in response) {
+          final product = ProductModel.fromMap(p);
+          if (!product.isAvailable) continue;
+          if (addedProductIds.contains(product.id)) continue;
+          
+          if (effectiveCategories != null && !effectiveCategories!.contains(product.category)) continue;
+          if (p['shops'] == null) continue;
+          
+          final shop = ShopModel.fromMap(p['shops']);
+          if (!shop.isActive) continue;
+          if (effectiveCategories != null && !effectiveCategories!.contains(shop.category)) continue;
+          
+          if (locationProvider.hasLocation) {
+            if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
+            final d = locationProvider.distanceTo(shop.location);
+            if (!DeliveryCalculator.isWithinRange(d)) continue;
+          }
+          
+          prodResults.add(product);
+          prodShops[product.id] = shop;
+          addedProductIds.add(product.id);
         }
-        
-        prodResults.add(product);
-        prodShops[product.id] = shop;
       }
 
-      // Ensure that if a shop matches because of a product, we don't accidentally
-      // have it in `shopResults` unless its name actually matches the query.
-      // But the Supabase query `ilike('name', '%$query%')` on `shops` already guarantees
-      // it only matches by name.
+      addProducts(productsByName);
+      addProducts(productsByCat);
 
       if (mounted) {
-        // Prevent race condition: if the user typed something else while this
-        // async request was flying, discard these results.
         if (_searchQuery != query) return;
 
-        // Enforce extra client-side check to guarantee we only show shops that match
-        // the search query by name. (This fixes an issue where shops could appear
-        // when searching for a product name that doesn't match the shop name).
-        final finalShopResults = shopResults
-            .where((s) => s.name.toLowerCase().contains(query.toLowerCase()))
-            .toList();
-
         setState(() {
-          _searchResults = finalShopResults;
+          _searchResults = shopResults;
           _searchProductResults = prodResults;
           _searchProductShops = prodShops;
           _isSearching = false;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('_searchShops ERROR: $e\n$st');
       if (mounted) setState(() => _isSearching = false);
     }
   }
@@ -345,6 +420,17 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
       'Organic'
     ],
     'Pharmacy': ['Pharmacy', 'Medical Store'],
+    'GroceryAndMed': [
+      'Grocery',
+      'Supermarket / Hypermarket',
+      'Fruits & Vegs',
+      'Dairy & Eggs',
+      'Butcher',
+      'Fish & Seafood',
+      'Organic',
+      'Pharmacy',
+      'Medical Store'
+    ],
     'Clothing': ['Clothing', 'Footwear', 'Jewellery'],
     'Electronics': ['Electronics', 'Mobile & Repair'],
     'More': [
@@ -381,9 +467,17 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
           await _supabase.from('products').select('*, shops(*)').limit(100);
 
       if (mounted) {
+        List<String>? effectiveCategories;
+        if (_selectedFilterCategories.isNotEmpty) {
+          effectiveCategories = [];
+          for (final cat in _selectedFilterCategories) {
+            effectiveCategories!.addAll(_tabCategories[cat] ?? [cat]);
+          }
+        }
+
         final allShops = (shopsResponse as List)
             .map((s) => ShopModel.fromMap(s))
-            .where((s) => s.isActive)
+            .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories!.contains(s.category)))
             .toList();
 
         List<ShopModel> nearby;
@@ -419,6 +513,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
         for (final p in productsResponse as List) {
           final product = ProductModel.fromMap(p);
           if (!product.isAvailable) continue;
+          if (effectiveCategories != null && !effectiveCategories!.contains(product.category)) continue;
           if (p['shops'] == null) continue;
           
           final shop = ShopModel.fromMap(p['shops']);
@@ -483,9 +578,17 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
           .limit(100);
 
       if (mounted) {
+        List<String>? effectiveCategories;
+        if (_selectedFilterCategories.isNotEmpty) {
+          effectiveCategories = [];
+          for (final cat in _selectedFilterCategories) {
+            effectiveCategories!.addAll(_tabCategories[cat] ?? [cat]);
+          }
+        }
+
         final allShops = (shopsResponse as List)
             .map((s) => ShopModel.fromMap(s))
-            .where((s) => s.isActive)
+            .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories!.contains(s.category)))
             .toList();
 
         List<ShopModel> nearby;
@@ -514,6 +617,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
         for (final p in productsResponse as List) {
           final product = ProductModel.fromMap(p);
           if (!product.isAvailable) continue;
+          if (effectiveCategories != null && !effectiveCategories!.contains(product.category)) continue;
           if (p['shops'] == null) continue;
           
           final shop = ShopModel.fromMap(p['shops']);
@@ -557,6 +661,13 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
 
   @override
   Widget build(BuildContext context) {
+    final currentFiltering = _selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty || _searchQuery.isNotEmpty;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (globalIsFiltering.value != currentFiltering) {
+        globalIsFiltering.value = currentFiltering;
+      }
+    });
+
     final locationProvider = context.watch<LocationProvider>();
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
@@ -704,65 +815,89 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                   tag: 'search_bar',
                   child: Material(
                     color: Colors.transparent,
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (v) {
-                        _searchDebounce?.cancel();
-                        if (v.trim().isNotEmpty) {
-                          setState(() {
-                            _searchQuery = v;
-                            _isSearching = true;
-                          });
-                        }
-                        _searchDebounce = Timer(
-                          const Duration(milliseconds: 350),
-                          () => _searchShops(v),
-                        );
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Search "Milk", "Pizza" or "Medicines"',
-                        hintStyle: GoogleFonts.outfit(
-                            color: isDark
-                                ? Colors.grey.shade500
-                                : Colors.grey.shade400,
-                            fontSize: 14),
-                        prefixIcon:
-                            const Icon(Icons.search, color: AppColors.primary),
-                        suffixIcon: _isSearching
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              )
-                            : _searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.close_rounded, size: 18),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      _searchShops('');
-                                    },
-                                  )
-                                : null,
-                        filled: true,
-                        fillColor:
-                            Theme.of(context).inputDecorationTheme.fillColor ??
-                                Colors.grey.shade100,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (v) {
+                              _searchDebounce?.cancel();
+                              if (v.trim().isNotEmpty) {
+                                setState(() {
+                                  _searchQuery = v;
+                                  _isSearching = true;
+                                });
+                              }
+                              _searchDebounce = Timer(
+                                const Duration(milliseconds: 350),
+                                () => _searchShops(v),
+                              );
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Search "Milk", "Pizza" or "Medicines"',
+                              hintStyle: GoogleFonts.outfit(
+                                  color: isDark
+                                      ? Colors.grey.shade500
+                                      : Colors.grey.shade400,
+                                  fontSize: 14),
+                              prefixIcon:
+                                  const Icon(Icons.search, color: AppColors.primary),
+                                      suffixIcon: _isSearching
+                                          ? const Padding(
+                                              padding: EdgeInsets.all(12),
+                                              child: CupertinoActivityIndicator(radius: 9),
+                                            )
+                                  : _searchController.text.isNotEmpty
+                                      ? IconButton(
+                                          icon: const Icon(Icons.close_rounded, size: 18),
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            _searchShops('');
+                                          },
+                                        )
+                                      : null,
+                              filled: true,
+                              fillColor:
+                                  Theme.of(context).inputDecorationTheme.fillColor ??
+                                      Colors.grey.shade100,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(
+                                    color: isDark ? AppColors.primaryLight : AppColors.primary, width: 1.5),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                            ),
+                          ),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                              color: isDark ? AppColors.primaryLight : AppColors.primary, width: 1.5),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => _showFilterSheet(context, isDark),
+                          child: Container(
+                            height: 48,
+                            width: 48,
+                            decoration: BoxDecoration(
+                              color: _selectedFilterCategories.isNotEmpty 
+                                  ? AppColors.primary 
+                                  : (isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade100),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isDark ? Colors.white10 : Colors.transparent,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.tune_rounded,
+                              color: _selectedFilterCategories.isNotEmpty
+                                  ? Colors.white
+                                  : (isDark ? Colors.white70 : AppColors.textPrimary),
+                            ),
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                      ),
+                      ],
                     ),
                   ),
                 ),
@@ -771,7 +906,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
           ),
 
           // ── Categories Horizontal List (premium card style) ──────────────────
-          if (_searchQuery.isEmpty)
+          if (_searchQuery.isEmpty && _selectedTabIndex < 0 && _selectedFilterCategories.isEmpty)
             SliverToBoxAdapter(
             child: SizedBox(
               height: 72,
@@ -946,10 +1081,16 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                                   Container(
                                     width: 80, height: 80,
                                     decoration: BoxDecoration(
-                                      color: isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF0F0F8),
-                                      shape: BoxShape.circle,
+                                      color: isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(24),
                                     ),
-                                    child: const Center(child: Text('🔍', style: TextStyle(fontSize: 36))),
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.search_off_rounded,
+                                        size: 36,
+                                        color: isDark ? AppColors.primaryLight : AppColors.primary,
+                                      ),
+                                    ),
                                   ),
                                   const SizedBox(height: 16),
                                   Text('No results for', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textSecondary)),
@@ -1008,7 +1149,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                                 ],
                               ),
                             ),
-                            ..._searchResults.map((shop) {
+                            ..._sortedShopResults.map((shop) {
                               final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
@@ -1024,13 +1165,16 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                       // NORMAL MODE: banner + shops + products
                       // ──────────────────────────────────────────────────
                       ] else ...[
-                        // Featured Banner
-                        _buildFeaturedBanner(),
-                        const SizedBox(height: 24),
+                        if (_selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
+                          // Featured Banner
+                          _buildFeaturedBanner(),
+                          const SizedBox(height: 24),
+                        ],
 
                         // ── Recently Viewed ─────────────────────────────
-                        Builder(builder: (ctx) {
-                          final recentProv = ctx.watch<RecentlyViewedProvider>();
+                        if (_selectedTabIndex < 0 && _selectedFilterCategories.isEmpty)
+                          Builder(builder: (ctx) {
+                            final recentProv = ctx.watch<RecentlyViewedProvider>();
                           if (!recentProv.hasItems) return const SizedBox.shrink();
                           
                           // Filter out products whose shop is closed
@@ -1069,7 +1213,8 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                           );
                         }),
 
-                        if (_shops.isNotEmpty) ...[
+                        if (_selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
+                          if (_shops.isNotEmpty) ...[
                           // ── Normal category browse ───────────────────
                           _buildSectionTitle(
                             _selectedTabIndex < 0
@@ -1105,6 +1250,7 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                           locationProvider.hasLocation
                               ? _buildNoShopsNearby()
                               : _buildLocationRequired(),
+                          ],
                         ],
 
                         // Products Section
@@ -1128,6 +1274,37 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
                               final shop = _productShops[product.id];
                               return ProductCard(product: product, shop: shop);
                             },
+                          ),
+                        ] else if ((_selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty) && !_isLoading) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 60),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Container(
+                                    width: 80, height: 80,
+                                    decoration: BoxDecoration(
+                                      color: isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.inventory_2_outlined,
+                                        size: 36,
+                                        color: isDark ? AppColors.primaryLight : AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text('No items found', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                  const SizedBox(height: 8),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                                    child: Text('We could not find any products in this category at the moment.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary, height: 1.4)),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                         const SizedBox(height: 120),
@@ -1277,47 +1454,57 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
   }
 
   Widget _buildFeaturedBanner() {
-    final config = context.watch<PlatformConfigProvider>();
     final slides = [
       {
-        'tag': '⚡ FAST DELIVERY',
-        'title': 'Delivered at the\nspeed of life!',
-        'sub':
-            'Supporting local sellers · ${config.unifiedCommissionPercent.toStringAsFixed(2)}% commission',
-        'icon': Icons.bolt_rounded,
+        'tag': '🔥 HOT & FRESH',
+        'title': 'Get Food Instantly\nDelivered to you',
+        'sub': 'Fast, fresh, and local restaurants',
+        'icon': Icons.local_dining_rounded,
         'colors': [
-          const Color(0xFF05093D),
+          const Color(0xFFFF512F),
+          const Color(0xFFF09819),
+          const Color(0xFFFF6A00)
+        ],
+        'accent': const Color(0xFFFFE082),
+        'emoji': '🍔',
+        'action': () {
+          setState(() => _selectedTabIndex = 0);
+          _loadData('Food');
+        },
+      },
+      {
+        'tag': '🛒 DAILY ESSENTIALS',
+        'title': 'Grocery & Medicines\nAt your doorstep',
+        'sub': 'Supermarkets and local pharmacies',
+        'icon': Icons.shopping_basket_rounded,
+        'colors': [
+          const Color(0xFF11998E),
+          const Color(0xFF38EF7D),
+          const Color(0xFF00B09B)
+        ],
+        'accent': const Color(0xFFB9F6CA),
+        'emoji': '🥦💊',
+        'action': () {
+          setState(() => _selectedTabIndex = -1);
+          _loadData('GroceryAndMed');
+        },
+      },
+      {
+        'tag': '👗 FASHION & MORE',
+        'title': 'Clothing, Shoes\nAnd everything else!',
+        'sub': 'Local fashion and apparel stores',
+        'icon': Icons.checkroom_rounded,
+        'colors': [
           const Color(0xFF0A1260),
-          const Color(0xFF1A2BC4)
+          const Color(0xFF142999),
+          const Color(0xFF1E3FD8)
         ],
-        'accent': const Color(0xFFF4C542),
-        'emoji': '🚀',
-      },
-      {
-        'tag': '🏪 LOCAL SHOPS',
-        'title': 'Support your\ncommunity!',
-        'sub': 'Fresh from local sellers · authentic & fast',
-        'icon': Icons.storefront_rounded,
-        'colors': [
-          const Color(0xFF0A2E14),
-          const Color(0xFF0F4C1A),
-          const Color(0xFF1E7A32)
-        ],
-        'accent': const Color(0xFF7DEFA1),
-        'emoji': '🌿',
-      },
-      {
-        'tag': '📍 LIVE TRACKING',
-        'title': 'Track your\norder live!',
-        'sub': 'Real-time GPS · always in the know',
-        'icon': Icons.map_rounded,
-        'colors': [
-          const Color(0xFF2A0050),
-          const Color(0xFF4A0080),
-          const Color(0xFF7B1FA2)
-        ],
-        'accent': const Color(0xFFE1BEE7),
-        'emoji': '📡',
+        'accent': const Color(0xFF00E5FF),
+        'emoji': '👠👗',
+        'action': () {
+          setState(() => _selectedTabIndex = 3);
+          _loadData('Clothing');
+        },
       },
     ];
 
@@ -1334,99 +1521,102 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
               final colors = s['colors'] as List<Color>;
               final accent = s['accent'] as Color;
               final emoji = s['emoji'] as String;
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: colors,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                        color: colors[1].withValues(alpha: 0.5),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10)),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    // Large background circle
-                    Positioned(
-                        right: -30,
-                        top: -30,
-                        child: Container(
-                            width: 140,
-                            height: 140,
-                            decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.05)))),
-                    // Smaller circle
-                    Positioned(
-                        left: -15,
-                        bottom: -15,
-                        child: Container(
-                            width: 70,
-                            height: 70,
-                            decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.04)))),
-                    // Background icon
-                    Positioned(
-                        right: -5,
-                        bottom: -15,
-                        child: Icon(s['icon'] as IconData,
-                            size: 90, // Reduced from 130
-                            color: Colors.white.withValues(alpha: 0.07))),
-                    // Big emoji top-right
-                    Positioned(
-                        right: 16,
-                        top: 16,
-                        child: Text(emoji,
-                            style: const TextStyle(fontSize: 36))), // Reduced from 52
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 70, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                                color: accent,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                      color: accent.withValues(alpha: 0.4),
-                                      blurRadius: 6)
-                                ]),
-                            child: Text(s['tag'] as String,
-                                style: GoogleFonts.outfit(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.black87,
-                                    letterSpacing: 0.5)),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(s['title'] as String,
-                              style: GoogleFonts.outfit(
-                                  fontSize: 18, // Reduced from 22
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                  height: 1.15,
-                                  letterSpacing: -0.3)),
-                          const SizedBox(height: 4),
-                          Text(s['sub'] as String,
-                              style: GoogleFonts.outfit(
-                                  fontSize: 10, // Reduced from 11
-                                  color: Colors.white.withValues(alpha: 0.72),
-                                  height: 1.3)),
-                        ],
-                      ),
+              return GestureDetector(
+                onTap: s['action'] as VoidCallback,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: colors,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ],
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                          color: colors[1].withValues(alpha: 0.5),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10)),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      // Large background circle
+                      Positioned(
+                          right: -30,
+                          top: -30,
+                          child: Container(
+                              width: 140,
+                              height: 140,
+                              decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.05)))),
+                      // Smaller circle
+                      Positioned(
+                          left: -15,
+                          bottom: -15,
+                          child: Container(
+                              width: 70,
+                              height: 70,
+                              decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.04)))),
+                      // Background icon
+                      Positioned(
+                          right: -5,
+                          bottom: -15,
+                          child: Icon(s['icon'] as IconData,
+                              size: 90, // Reduced from 130
+                              color: Colors.white.withValues(alpha: 0.07))),
+                      // Big emoji top-right
+                      Positioned(
+                          right: 16,
+                          top: 16,
+                          child: Text(emoji,
+                              style: const TextStyle(fontSize: 36))), // Reduced from 52
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 70, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: accent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                        color: accent.withValues(alpha: 0.4),
+                                        blurRadius: 6)
+                                  ]),
+                              child: Text(s['tag'] as String,
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black87,
+                                      letterSpacing: 0.5)),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(s['title'] as String,
+                                style: GoogleFonts.outfit(
+                                    fontSize: 18, // Reduced from 22
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    height: 1.15,
+                                    letterSpacing: -0.3)),
+                            const SizedBox(height: 4),
+                            Text(s['sub'] as String,
+                                style: GoogleFonts.outfit(
+                                    fontSize: 10, // Reduced from 11
+                                    color: Colors.white.withValues(alpha: 0.72),
+                                    height: 1.3)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -1676,7 +1866,6 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
 
   Widget _buildShimmer() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // Use stable hex constants instead of .shade getters
     final base = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFE8E8EE);
     final highlight = isDark ? const Color(0xFF26263A) : const Color(0xFFF4F4FA);
     return Shimmer.fromColors(
@@ -1787,4 +1976,135 @@ class _CustomerHomeViewState extends State<CustomerHomeView>
     );
   }
 
+  void _showFilterSheet(BuildContext context, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final catNames = AppCategories.names;
+            return Container(
+              padding: const EdgeInsets.all(24),
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Filters', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Sort By', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : Colors.black54)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildSortChip('Relevant', _SortMode.relevant, setSheetState, isDark),
+                      _buildSortChip('Nearest', _SortMode.nearest, setSheetState, isDark),
+                      _buildSortChip('Price: Low to High', _SortMode.priceLow, setSheetState, isDark),
+                      _buildSortChip('Price: High to Low', _SortMode.priceHigh, setSheetState, isDark),
+                      _buildSortChip('Best Rating', _SortMode.bestRating, setSheetState, isDark),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Text('Categories', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : Colors.black54)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: catNames.map((cat) {
+                      final isSelected = _selectedFilterCategories.contains(cat);
+                      return ChoiceChip(
+                        label: Text(cat),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setSheetState(() {
+                            if (selected) {
+                              _selectedFilterCategories.add(cat);
+                            } else {
+                              _selectedFilterCategories.remove(cat);
+                            }
+                          });
+                        },
+                        selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                        backgroundColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade100,
+                        labelStyle: TextStyle(color: isSelected ? AppColors.primary : (isDark ? Colors.white70 : Colors.black)),
+                        side: BorderSide(color: isSelected ? AppColors.primary : Colors.transparent),
+                      );
+                    }).toList(),
+                  ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        setState(() {});
+                        if (_searchQuery.isNotEmpty) {
+                          _searchShops(_searchQuery);
+                        } else {
+                          if (_selectedTabIndex < 0) {
+                            _loadAllData();
+                          } else {
+                            _loadData(_categories[_selectedTabIndex]['name']! as String);
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: Text('Apply Filters', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        );
+      },
+    );
+  }
+
+  Widget _buildSortChip(String label, _SortMode mode, StateSetter setSheetState, bool isDark) {
+    final isSelected = _sortMode == mode;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) {
+        if (selected) {
+          setSheetState(() => _sortMode = mode);
+        }
+      },
+      selectedColor: AppColors.primary,
+      backgroundColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade100,
+      labelStyle: TextStyle(color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black)),
+      side: BorderSide(color: isSelected ? AppColors.primary : Colors.transparent),
+    );
+  }
 }

@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shimmer/shimmer.dart';
 import '../models/product_model.dart';
 import '../models/shop_model.dart';
 import '../providers/cart_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
 import '../widgets/product_detail_sheet.dart';
+import 'common/premium_product_image.dart';
 
 class ProductSearchCard extends StatefulWidget {
   final ProductModel product;
@@ -91,25 +91,9 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                           width: double.infinity,
                           height: double.infinity,
                           child: product.displayImage.isNotEmpty
-                              ? CachedNetworkImage(
+                              ? PremiumProductImage(
                                   imageUrl: product.displayImage,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                  fit: BoxFit.contain,
-                                  fadeInDuration: const Duration(milliseconds: 200),
-                                  placeholder: (c, i) => Shimmer.fromColors(
-                                    baseColor: PremiumShimmer.baseColor(isDark),
-                                    highlightColor: PremiumShimmer.highlightColor(isDark),
-                                    child: Container(color: Colors.white),
-                                  ),
-                                  errorWidget: (c, e, s) => Center(
-                                    child: Icon(
-                                      Icons.shopping_bag_outlined,
-                                      size: 28,
-                                      color: AppColors.primary
-                                          .withValues(alpha: isDark ? 0.35 : 0.35),
-                                    ),
-                                  ),
+                                  isDark: isDark,
                                 )
                               : Center(
                                   child: Icon(

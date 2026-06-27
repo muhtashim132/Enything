@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,6 +19,7 @@ import '../config/app_categories.dart';
 import '../config/routes.dart';
 import '../widgets/shop_detail_sheet.dart';
 import '../widgets/restaurant_dashboard_sheet.dart';
+import 'common/premium_product_image.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public helper — call this instead of Navigator.pushNamed for productDetails
@@ -31,6 +31,10 @@ void showProductDetailSheet(BuildContext context, String productId, {bool highli
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black54,
     useRootNavigator: true,
+    clipBehavior: Clip.antiAliasWithSaveLayer,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
     builder: (_) => ProductDetailSheet(productId: productId, highlightVariants: highlightVariants),
   );
 }
@@ -111,6 +115,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       snapSizes: const [0.65, 1.0],
       builder: (context, scrollController) {
         return Container(
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF12121A) : const Color(0xFFF8F9FA),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -257,17 +262,9 @@ class _SheetContent extends StatelessWidget {
                                       );
                                     }
                                   },
-                                  child: CachedNetworkImage(
+                                  child: PremiumProductImage(
                                     imageUrl: url,
-                                    fit: BoxFit.contain,
-                                    width: double.infinity,
-                                    fadeInDuration: const Duration(milliseconds: 300),
-                                    placeholder: (c, _) => Shimmer.fromColors(
-                                      baseColor: PremiumShimmer.baseColor(isDark),
-                                      highlightColor: PremiumShimmer.highlightColor(isDark),
-                                      child: Container(color: Colors.white),
-                                    ),
-                                    errorWidget: (c, e, s) => _ImageFallback(),
+                                    isDark: isDark,
                                   ),
                                 )
                               : _ImageFallback();
