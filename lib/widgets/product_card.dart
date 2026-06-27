@@ -27,8 +27,6 @@ class _ProductCardState extends State<ProductCard>
     with SingleTickerProviderStateMixin {
   bool _isPressed = false;
   late AnimationController _addController;
-  late Animation<double> _addScaleAnim;
-  late Animation<double> _addFadeAnim;
 
   ProductModel get product => widget.product;
   ShopModel? get shop => widget.shop;
@@ -39,12 +37,6 @@ class _ProductCardState extends State<ProductCard>
     _addController = AnimationController(
       vsync: this,
       duration: PremiumAnimations.normal,
-    );
-    _addScaleAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
-      CurvedAnimation(parent: _addController, curve: Curves.elasticOut),
-    );
-    _addFadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _addController, curve: Curves.easeOut),
     );
     _addController.forward();
   }
@@ -382,18 +374,28 @@ class _ProductCardState extends State<ProductCard>
                                             ? Colors.white38
                                             : AppColors.textSecondary,
                                         shape: BoxShape.circle)),
-                                const SizedBox(width: 6),
-                                Icon(Icons.location_on_rounded,
-                                    size: 11, color: AppColors.primary),
-                                const SizedBox(width: 2),
-                                Text(
-                                  '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)} km',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark
-                                        ? Colors.white54
-                                        : AppColors.textSecondary,
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.location_on_rounded,
+                                          size: 11, color: AppColors.primary),
+                                      const SizedBox(width: 2),
+                                      Flexible(
+                                        child: Text(
+                                          '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)} km',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark
+                                                ? Colors.white54
+                                                : AppColors.textSecondary,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],

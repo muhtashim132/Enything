@@ -92,8 +92,9 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
       appBar: AppBar(
         title: const Text('Manage Products'),
       ),
@@ -130,11 +131,16 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: isDark ? AppColors.darkSurface : Colors.white,
                         borderRadius: BorderRadius.circular(16),
+                        border: isDark
+                            ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                            : null,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
+                            color: isDark
+                                ? Colors.black.withValues(alpha: 0.3)
+                                : Colors.black.withValues(alpha: 0.05),
                             blurRadius: 8,
                           ),
                         ],
@@ -165,10 +171,13 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(product.name,
-                                    style: const TextStyle(
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 14,
                                       fontFamily: 'Poppins',
+                                      color: isDark ? Colors.white : AppColors.textPrimary,
                                     )),
                                 Row(
                                   children: [
@@ -212,40 +221,53 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
                               ],
                             ),
                           ),
+                          // Actions — scaled & constrained to prevent row overflow
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Switch(
-                                value: product.isAvailable,
-                                onChanged: (_) =>
-                                    _toggleAvailability(product),
-                                activeThumbColor: AppColors.primary,
+                              Transform.scale(
+                                scale: 0.82,
+                                child: Switch(
+                                  value: product.isAvailable,
+                                  onChanged: (_) => _toggleAvailability(product),
+                                  activeThumbColor: AppColors.primary,
+                                ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined,
-                                    color: AppColors.primary),
-                                onPressed: () async {
-                                  final result = await Navigator.pushNamed(
-                                    context,
-                                    '/seller/add-product',
-                                    arguments: {'product': product},
-                                  );
-                                  if (result == true) {
-                                    if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Changes saved successfully! 🎉'),
-                                        backgroundColor: AppColors.success,
-                                      ),
+                              SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: IconButton(
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(Icons.edit_outlined,
+                                      color: AppColors.primary, size: 20),
+                                  onPressed: () async {
+                                    final result = await Navigator.pushNamed(
+                                      context,
+                                      '/seller/add-product',
+                                      arguments: {'product': product},
                                     );
-                                  }
-                                  _loadProducts();
-                                },
+                                    if (result == true) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Changes saved successfully! 🎉'),
+                                          backgroundColor: AppColors.success,
+                                        ),
+                                      );
+                                    }
+                                    _loadProducts();
+                                  },
+                                ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    color: AppColors.danger),
-                                onPressed: () =>
-                                    _deleteProduct(product),
+                              SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: IconButton(
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(Icons.delete_outline,
+                                      color: AppColors.danger, size: 20),
+                                  onPressed: () => _deleteProduct(product),
+                                ),
                               ),
                             ],
                           ),

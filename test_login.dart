@@ -1,5 +1,5 @@
 
-import 'dart:io';
+
 import 'package:supabase/supabase.dart';
 
 void main() async {

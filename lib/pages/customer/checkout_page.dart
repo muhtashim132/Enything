@@ -6,9 +6,7 @@ import '../../providers/cart_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
 import '../../widgets/common/enything_map.dart';
 import 'dart:io';
@@ -427,7 +425,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: Text('Checkout')),
+      appBar: AppBar(title: Text('Checkout', style: GoogleFonts.outfit(fontWeight: FontWeight.w700))),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: MaxWidthContainer(

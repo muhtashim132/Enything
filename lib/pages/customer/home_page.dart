@@ -68,7 +68,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   String _searchQuery = '';
   _SortMode _sortMode = _SortMode.relevant;
   final _searchController = TextEditingController();
-  Set<String> _selectedFilterCategories = {};
+  final Set<String> _selectedFilterCategories = {};
 
   static const Map<String, List<String>> _searchKeywords = {
     'Food': ['food', 'eat', 'hungry', 'pizza', 'burger', 'meal', 'restaurant', 'fast food', 'biryani', 'chicken', 'mutton', 'kebab', 'fries'],
@@ -278,7 +278,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       if (_selectedFilterCategories.isNotEmpty) {
         effectiveCategories = [];
         for (final cat in _selectedFilterCategories) {
-          effectiveCategories!.addAll(_tabCategories[cat] ?? [cat]);
+          effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
         }
       }
 
@@ -299,7 +299,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         for (final s in response) {
           final shop = ShopModel.fromMap(s);
           if (requireNameMatch && !shop.name.toLowerCase().contains(lowerQuery)) continue;
-          if (effectiveCategories != null && !effectiveCategories!.contains(shop.category)) continue;
+          if (effectiveCategories != null && !effectiveCategories.contains(shop.category)) continue;
           allShopsSet[shop.id] = shop;
         }
       }
@@ -337,12 +337,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (!product.isAvailable) continue;
           if (addedProductIds.contains(product.id)) continue;
           
-          if (effectiveCategories != null && !effectiveCategories!.contains(product.category)) continue;
+          if (effectiveCategories != null && !effectiveCategories.contains(product.category)) continue;
           if (p['shops'] == null) continue;
           
           final shop = ShopModel.fromMap(p['shops']);
           if (!shop.isActive) continue;
-          if (effectiveCategories != null && !effectiveCategories!.contains(shop.category)) continue;
+          if (effectiveCategories != null && !effectiveCategories.contains(shop.category)) continue;
           
           if (locationProvider.hasLocation) {
             if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
@@ -471,13 +471,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         if (_selectedFilterCategories.isNotEmpty) {
           effectiveCategories = [];
           for (final cat in _selectedFilterCategories) {
-            effectiveCategories!.addAll(_tabCategories[cat] ?? [cat]);
+            effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
           }
         }
 
         final allShops = (shopsResponse as List)
             .map((s) => ShopModel.fromMap(s))
-            .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories!.contains(s.category)))
+            .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories.contains(s.category)))
             .toList();
 
         List<ShopModel> nearby;
@@ -513,7 +513,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         for (final p in productsResponse as List) {
           final product = ProductModel.fromMap(p);
           if (!product.isAvailable) continue;
-          if (effectiveCategories != null && !effectiveCategories!.contains(product.category)) continue;
+          if (effectiveCategories != null && !effectiveCategories.contains(product.category)) continue;
           if (p['shops'] == null) continue;
           
           final shop = ShopModel.fromMap(p['shops']);
@@ -582,13 +582,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         if (_selectedFilterCategories.isNotEmpty) {
           effectiveCategories = [];
           for (final cat in _selectedFilterCategories) {
-            effectiveCategories!.addAll(_tabCategories[cat] ?? [cat]);
+            effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
           }
         }
 
         final allShops = (shopsResponse as List)
             .map((s) => ShopModel.fromMap(s))
-            .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories!.contains(s.category)))
+            .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories.contains(s.category)))
             .toList();
 
         List<ShopModel> nearby;
@@ -617,7 +617,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         for (final p in productsResponse as List) {
           final product = ProductModel.fromMap(p);
           if (!product.isAvailable) continue;
-          if (effectiveCategories != null && !effectiveCategories!.contains(product.category)) continue;
+          if (effectiveCategories != null && !effectiveCategories.contains(product.category)) continue;
           if (p['shops'] == null) continue;
           
           final shop = ShopModel.fromMap(p['shops']);

@@ -699,7 +699,6 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
   Widget _buildMenuItem(ProductModel product, bool isDark) {
     final cart = context.read<CartProvider>();
     final quantity = cart.getItemQuantity(product.id);
-    final isVeg = product.isVeg;
     final isBestseller =
         product.rating >= 4.2 && product.totalReviews > 10;
     final hasDiscount = product.discountPercent != null &&

@@ -546,7 +546,6 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
   Widget _buildMenuItem(ProductModel product) {
     final cart = context.read<CartProvider>();
     final quantity = cart.getItemQuantity(product.id);
-    final isVeg = product.isVeg;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),

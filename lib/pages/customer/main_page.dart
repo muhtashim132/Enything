@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../utils/responsive_layout.dart';
-
-import '../../providers/theme_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
@@ -140,18 +138,23 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
                             right: -2,
                             top: -2,
                             child: Container(
-                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(
+                                minWidth: 18,
+                                minHeight: 18,
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                               decoration: const BoxDecoration(
                                 color: AppColors.danger,
                                 shape: BoxShape.circle,
                               ),
                               child: Text(
-                                '${cart.totalItemCount}',
+                                cart.totalItemCount > 99 ? '99+' : '${cart.totalItemCount}',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 12, // Slightly larger badge font
+                                  fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           ),

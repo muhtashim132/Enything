@@ -78,11 +78,13 @@ class _AddProductPageState extends State<AddProductPage> {
       _menuCategoryController.text = p.menuCategory ?? '';
       _isVeg = p.isVeg;
       _isAvailable = p.isAvailable;
-      if (p.weightPerUnit != null)
+      if (p.weightPerUnit != null) {
         _weightController.text = p.weightPerUnit.toString();
+      }
       _unitType = p.unitType;
-      if (p.totalQuantity != null)
+      if (p.totalQuantity != null) {
         _inventoryController.text = p.totalQuantity.toString();
+      }
       _requiresPrescription = p.requiresPrescription;
       _medicineType = p.medicineType;
       _existingImageUrls = List.from(p.images);
@@ -644,13 +646,15 @@ class _AddProductPageState extends State<AddProductPage> {
                         keyboardType: TextInputType.number,
                         validator: (v) {
                           if (!_hasDiscount) return null;
-                          if (v == null || v.trim().isEmpty)
+                          if (v == null || v.trim().isEmpty) {
                             return 'Please enter original price';
+                          }
                           final op = double.tryParse(v);
                           final p = double.tryParse(_priceController.text);
                           if (op == null) return 'Invalid price';
-                          if (p != null && op <= p)
+                          if (p != null && op <= p) {
                             return 'MRP must be > Selling Price';
+                          }
                           return null;
                         },
                         decoration: const InputDecoration(
