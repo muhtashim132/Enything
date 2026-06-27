@@ -452,6 +452,7 @@ class OrderItem {
   final String id;
   final String productId;
   final String productName;
+  final String? variantName;
   final int quantity;
   final double price;
   final double weightKg;
@@ -462,6 +463,7 @@ class OrderItem {
     required this.id,
     required this.productId,
     required this.productName,
+    this.variantName,
     required this.quantity,
     required this.price,
     required this.weightKg,
@@ -474,6 +476,7 @@ class OrderItem {
       id: map['id'] ?? '',
       productId: map['product_id'] ?? '',
       productName: map['product_name'] ?? '',
+      variantName: map['variant_name'],
       quantity: map['quantity'] ?? 1,
       price: (map['price'] ?? 0.0).toDouble(),
       weightKg: (map['weight_kg'] ?? 0.0).toDouble(),

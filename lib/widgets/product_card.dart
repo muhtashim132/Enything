@@ -450,9 +450,11 @@ class _ProductCardState extends State<ProductCard>
                                 opacity: animation, child: child),
                           );
                         },
-                        child: quantity > 0
-                            ? _buildStepper(cart, quantity, isDark)
-                            : _buildAddButton(cart, isDark),
+                        child: product.variants.isNotEmpty
+                            ? _buildAddButton(cart, isDark)
+                            : quantity > 0
+                                ? _buildStepper(cart, quantity, isDark)
+                                : _buildAddButton(cart, isDark),
                       ),
                     ],
                   ),
@@ -492,11 +494,14 @@ class _ProductCardState extends State<ProductCard>
     );
   }
 
+
   Widget _buildAddButton(CartProvider cart, bool isDark) {
     return GestureDetector(
       key: const ValueKey('add'),
       onTap: () {
-        if (shop != null) {
+        if (product.variants.isNotEmpty) {
+          showProductDetailSheet(context, product.id, highlightVariants: true);
+        } else if (shop != null) {
           cart.addItem(product, shop!);
         }
       },

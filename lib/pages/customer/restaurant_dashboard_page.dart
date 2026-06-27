@@ -11,6 +11,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
+import '../../widgets/product_detail_sheet.dart';
 
 /// Full-screen premium restaurant page — Swiggy/Zomato-style layout.
 /// Used exclusively when the shop belongs to the Food / Restaurant category.
@@ -615,8 +616,38 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
               ),
               const SizedBox(height: 8),
               // Quantity stepper / ADD button
-              quantity == 0
+              product.variants.isNotEmpty
                   ? GestureDetector(
+                      onTap: () {
+                        showProductDetailSheet(context, product.id, highlightVariants: true);
+                      },
+                      child: Container(
+                        width: 100,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border:
+                              Border.all(color: AppColors.primary, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.12),
+                                blurRadius: 8),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            'ADD',
+                            style: GoogleFonts.outfit(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    )
+                  : quantity == 0
+                      ? GestureDetector(
                       onTap: () {
                         cart.addItem(product, _shop!);
                         setState(() {});

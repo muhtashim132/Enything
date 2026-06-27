@@ -47,6 +47,7 @@ class _AddProductPageState extends State<AddProductPage> {
   late List<String> _allowedCategories = [_productCategory]; // secure fallback until shop loads
   List<XFile> _images = [];
   List<String> _existingImageUrls = [];
+  List<ProductVariant> _variants = [];
 
   List<String> get _availableUnitTypes {
     if (_productCategory == 'Clothing' ||
@@ -81,6 +82,7 @@ class _AddProductPageState extends State<AddProductPage> {
       _requiresPrescription = p.requiresPrescription;
       _medicineType = p.medicineType;
       _existingImageUrls = List.from(p.images);
+      _variants = List.from(p.variants);
     }
   }
 
@@ -250,6 +252,71 @@ class _AddProductPageState extends State<AddProductPage> {
     setState(() => _existingImageUrls.removeAt(index));
   }
 
+  Future<void> _showAddVariantDialog() async {
+    final nameCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    final originalPriceCtrl = TextEditingController();
+    
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Variation'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Name (e.g., Large, Full)'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: priceCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Selling Price (₹)'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: originalPriceCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Original Price (MRP) (₹)',
+                hintText: 'Optional',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final n = nameCtrl.text.trim();
+              final p = double.tryParse(priceCtrl.text.trim());
+              final op = double.tryParse(originalPriceCtrl.text.trim());
+              if (n.isNotEmpty && p != null) {
+                if (op != null && op <= p) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('MRP must be greater than Selling Price')),
+                  );
+                  return;
+                }
+                setState(() {
+                  _variants.add(ProductVariant(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: n,
+                    price: p,
+                    originalPrice: op,
+                  ));
+                });
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
     
@@ -315,6 +382,7 @@ class _AddProductPageState extends State<AddProductPage> {
             _productCategory == 'Pharmacy' ? _requiresPrescription : false,
         'medicine_type':
             _productCategory == 'Pharmacy' ? _medicineType : 'General',
+        'variants': _variants.map((v) => v.toMap()).toList(),
       };
 
       if (widget.existingProduct == null) {
@@ -540,6 +608,62 @@ class _AddProductPageState extends State<AddProductPage> {
                       prefixIcon: Icon(Icons.description_outlined),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              _card(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Variations (Optional)',
+                              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 16)),
+                          Text('e.g., Small, Medium, Large',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        ],
+                      ),
+                      TextButton.icon(
+                        onPressed: _showAddVariantDialog,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add'),
+                      ),
+                    ],
+                  ),
+                  if (_variants.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    ..._variants.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final v = entry.value;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(v.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Row(
+                          children: [
+                            Text('₹${v.price}'),
+                            if (v.originalPrice != null && v.originalPrice! > v.price) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '₹${v.originalPrice}',
+                                style: const TextStyle(
+                                  decoration: TextDecoration.lineThrough,
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                          onPressed: () => setState(() => _variants.removeAt(idx)),
+                        ),
+                      );
+                    }),
+                  ],
                 ],
               ),
               const SizedBox(height: 16),

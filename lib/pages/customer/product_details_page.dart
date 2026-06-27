@@ -35,6 +35,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   ShopModel? _shop;
   bool _isLoading = true;
   int _currentImageIndex = 0;
+  ProductVariant? _selectedVariant;
 
   @override
   void initState() {
@@ -61,6 +62,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       setState(() {
         _product = product;
         _shop = ShopModel.fromMap(shopData);
+        if (product.variants.isNotEmpty) {
+          _selectedVariant = product.variants.first;
+        }
         _isLoading = false;
       });
     } catch (e) {
@@ -92,7 +96,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     final cart = context.watch<CartProvider>();
     final favs = context.watch<FavoritesProvider>();
     final auth = context.watch<AuthProvider>();
-    final quantity = cart.getItemQuantity(_product!.id);
+    final quantity = cart.getItemQuantity(_product!.id, variantName: _selectedVariant?.name);
     final isFav = favs.isProductFavorite(_product!.id);
     final location = context.watch<LocationProvider>();
     final distanceKm = _shop != null ? location.distanceTo(_shop!.location) : 0.0;
@@ -310,51 +314,104 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '₹${_product!.price.toStringAsFixed(0)}',
-                          style: GoogleFonts.outfit(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : AppColors.textPrimary,
-                          ),
-                        ),
-                        if (_product!.discountPercent != null) ...[
-                          const SizedBox(width: 12),
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Text(
-                              '₹${_product!.originalPrice!.toStringAsFixed(0)}',
+                    Builder(
+                      builder: (context) {
+                        final currentPrice = _selectedVariant?.price ?? _product!.price;
+                        final currentOriginalPrice = _selectedVariant?.originalPrice ?? _product!.originalPrice;
+                        final currentDiscountPercent = _selectedVariant?.discountPercent ?? _product!.discountPercent;
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹${currentPrice.toStringAsFixed(0)}',
                               style: GoogleFonts.outfit(
-                                fontSize: 18,
-                                color: isDark ? Colors.white38 : AppColors.textLight,
-                                decoration: TextDecoration.lineThrough,
-                                decorationThickness: 2,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: AppColors.successGradient,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              'SAVE ${_product!.discountPercent!.toInt()}%',
-                              style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 12,
+                                fontSize: 32,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
+                                color: isDark ? Colors.white : AppColors.textPrimary,
                               ),
                             ),
-                          ),
-                        ],
-                      ],
+                            if (currentDiscountPercent != null && currentOriginalPrice != null) ...[
+                              const SizedBox(width: 12),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  '₹${currentOriginalPrice.toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 18,
+                                    color: isDark ? Colors.white38 : AppColors.textLight,
+                                    decoration: TextDecoration.lineThrough,
+                                    decorationThickness: 2,
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.successGradient,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'SAVE ${currentDiscountPercent.toInt()}%',
+                                  style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      }
                     ),
+                    if (_product!.variants.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        'Select Variation',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _product!.variants.map((v) {
+                          final isSelected = _selectedVariant?.name == v.name;
+                          return GestureDetector(
+                            onTap: () => setState(() => _selectedVariant = v),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isSelected 
+                                    ? AppColors.primary.withValues(alpha: 0.1) 
+                                    : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100),
+                                borderRadius: BorderRadius.circular(100),
+                                border: Border.all(
+                                  color: isSelected 
+                                      ? AppColors.primary 
+                                      : Colors.transparent,
+                                ),
+                              ),
+                              child: Text(
+                                '${v.name} - ₹${v.price.toStringAsFixed(0)}',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                  color: isSelected 
+                                      ? AppColors.primary 
+                                      : (isDark ? Colors.white70 : AppColors.textSecondary),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                     const SizedBox(height: 28),
                     // Shop info Card
                     GestureDetector(
@@ -553,7 +610,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _qtyBtn(Icons.remove, () {
-                        if (_shop != null) cart.updateQuantity(_product!.id, quantity - 1);
+                        if (_shop != null) cart.updateQuantity(_product!.id, quantity - 1, variantName: _selectedVariant?.name);
                       }),
                       const SizedBox(width: 28),
                       Text(
@@ -563,7 +620,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ),
                       const SizedBox(width: 28),
                       _qtyBtn(Icons.add, () {
-                        if (_shop != null) cart.addItem(_product!, _shop!);
+                        if (_shop != null) cart.addItem(_product!, _shop!, selectedVariant: _selectedVariant);
                       }),
                       const SizedBox(width: 24),
                       Expanded(
@@ -598,7 +655,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         child: OutlinedButton(
                           onPressed: () {
                             if (_shop != null) {
-                              cart.addItem(_product!, _shop!);
+                              cart.addItem(_product!, _shop!, selectedVariant: _selectedVariant);
                               ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(

@@ -6,15 +6,17 @@ class CartItem {
   final ShopModel shop;
   int quantity;
   String? specialInstructions;
+  ProductVariant? selectedVariant;
 
   CartItem({
     required this.product,
     required this.shop,
     this.quantity = 1,
     this.specialInstructions,
+    this.selectedVariant,
   });
 
-  double get totalPrice => product.price * quantity;
+  double get totalPrice => (selectedVariant?.price ?? product.price) * quantity;
 
   double get weightKg {
     final w = product.weightPerUnit ?? 0.5;

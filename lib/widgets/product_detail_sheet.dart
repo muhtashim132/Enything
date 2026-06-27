@@ -24,14 +24,14 @@ import '../widgets/restaurant_dashboard_sheet.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // Public helper — call this instead of Navigator.pushNamed for productDetails
 // ─────────────────────────────────────────────────────────────────────────────
-void showProductDetailSheet(BuildContext context, String productId) {
+void showProductDetailSheet(BuildContext context, String productId, {bool highlightVariants = false}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black54,
     useRootNavigator: true,
-    builder: (_) => ProductDetailSheet(productId: productId),
+    builder: (_) => ProductDetailSheet(productId: productId, highlightVariants: highlightVariants),
   );
 }
 
@@ -40,7 +40,8 @@ void showProductDetailSheet(BuildContext context, String productId) {
 // ─────────────────────────────────────────────────────────────────────────────
 class ProductDetailSheet extends StatefulWidget {
   final String productId;
-  const ProductDetailSheet({super.key, required this.productId});
+  final bool highlightVariants;
+  const ProductDetailSheet({super.key, required this.productId, this.highlightVariants = false});
 
   @override
   State<ProductDetailSheet> createState() => _ProductDetailSheetState();
@@ -52,6 +53,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   ShopModel? _shop;
   bool _isLoading = true;
   int _currentImageIndex = 0;
+  ProductVariant? _selectedVariant;
+  final GlobalKey _variantKey = GlobalKey();
 
   @override
   void initState() {
@@ -81,6 +84,14 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           _shop = ShopModel.fromMap(shopData);
           _isLoading = false;
         });
+        
+        if (widget.highlightVariants && product.variants.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_variantKey.currentContext != null) {
+              Scrollable.ensureVisible(_variantKey.currentContext!, duration: const Duration(milliseconds: 600), curve: Curves.easeInOut, alignment: 0.3);
+            }
+          });
+        }
         // Track recently viewed (non-blocking, fire-and-forget)
         context.read<RecentlyViewedProvider>().addProduct(product.id);
       }
@@ -116,6 +127,10 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                       onImageChanged: (i) =>
                           setState(() => _currentImageIndex = i),
                       isDark: isDark,
+                      selectedVariant: _selectedVariant,
+                      onVariantChanged: (v) => setState(() => _selectedVariant = v),
+                      highlightVariants: widget.highlightVariants,
+                      variantKey: _variantKey,
                     ),
         );
       },
@@ -133,6 +148,10 @@ class _SheetContent extends StatelessWidget {
   final int currentImageIndex;
   final ValueChanged<int> onImageChanged;
   final bool isDark;
+  final ProductVariant? selectedVariant;
+  final ValueChanged<ProductVariant?> onVariantChanged;
+  final bool highlightVariants;
+  final GlobalKey? variantKey;
 
   const _SheetContent({
     required this.product,
@@ -141,6 +160,10 @@ class _SheetContent extends StatelessWidget {
     required this.currentImageIndex,
     required this.onImageChanged,
     required this.isDark,
+    this.selectedVariant,
+    required this.onVariantChanged,
+    this.highlightVariants = false,
+    this.variantKey,
   });
 
   static Widget _trustItem(String emoji, String label, bool isDark) {
@@ -167,7 +190,7 @@ class _SheetContent extends StatelessWidget {
     final favs = context.watch<FavoritesProvider>();
     final auth = context.watch<AuthProvider>();
     final location = context.watch<LocationProvider>();
-    final quantity = cart.getItemQuantity(product.id);
+    final quantity = cart.getItemQuantity(product.id, variantName: selectedVariant?.name);
     final isFav = favs.isProductFavorite(product.id);
 
     final distanceKm = shop != null ? location.distanceTo(shop!.location) : 0.0;
@@ -448,75 +471,167 @@ class _SheetContent extends StatelessWidget {
                         const SizedBox(height: 12),
                       ],
 
-                      // Price row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Discount label
-                                if (product.discountPercent != null)
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 4),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.success.withValues(alpha: 0.10),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '${product.discountPercent!.toInt()}% OFF',
-                                      style: GoogleFonts.outfit(
-                                        color: AppColors.success,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                // Price
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                      Builder(
+                        builder: (context) {
+                          final currentPrice = selectedVariant?.price ?? product.price;
+                          final currentOriginalPrice = selectedVariant?.originalPrice ?? product.originalPrice;
+                          final currentDiscountPercent = selectedVariant?.discountPercent ?? product.discountPercent;
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      '₹',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                    Text(
-                                      product.price.toStringAsFixed(0),
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.w900,
-                                        color: AppColors.primary,
-                                        letterSpacing: -0.5,
-                                      ),
-                                    ),
-                                    if (product.discountPercent != null) ...[
-                                      const SizedBox(width: 10),
-                                      Padding(
-                                        padding: const EdgeInsets.only(bottom: 4),
+                                    // Discount label
+                                    if (currentDiscountPercent != null)
+                                      Container(
+                                        margin: const EdgeInsets.only(bottom: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.success.withValues(alpha: 0.10),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
                                         child: Text(
-                                          '₹${product.originalPrice!.toStringAsFixed(0)}',
+                                          '${currentDiscountPercent.toInt()}% OFF',
                                           style: GoogleFonts.outfit(
-                                            fontSize: 15,
-                                            color: isDark ? Colors.white38 : AppColors.textLight,
-                                            decoration: TextDecoration.lineThrough,
-                                            decorationColor: isDark ? Colors.white38 : AppColors.textLight,
+                                            color: AppColors.success,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ),
-                                    ],
+                                    // Price
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          '₹',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                        Text(
+                                          currentPrice.toStringAsFixed(0),
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppColors.primary,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                        if (currentDiscountPercent != null && currentOriginalPrice != null) ...[
+                                          const SizedBox(width: 10),
+                                          Padding(
+                                            padding: const EdgeInsets.only(bottom: 4),
+                                            child: Text(
+                                              '₹${currentOriginalPrice.toStringAsFixed(0)}',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 15,
+                                                color: isDark ? Colors.white38 : AppColors.textLight,
+                                                decoration: TextDecoration.lineThrough,
+                                                decorationColor: isDark ? Colors.white38 : AppColors.textLight,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        ],
+                              ),
+                            ],
+                          );
+                        },
                       ),
+                      
+                      if (product.variants.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        TweenAnimationBuilder<double>(
+                          key: variantKey,
+                          tween: Tween<double>(begin: highlightVariants ? 0.0 : 1.0, end: 1.0),
+                          duration: const Duration(milliseconds: 1500),
+                          curve: Curves.elasticOut,
+                          builder: (context, value, child) {
+                            return Container(
+                              padding: highlightVariants ? const EdgeInsets.all(12) : EdgeInsets.zero,
+                              decoration: BoxDecoration(
+                                color: highlightVariants ? AppColors.primary.withValues(alpha: 0.1 * (2 - value)) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                                border: highlightVariants ? Border.all(color: AppColors.primary.withValues(alpha: 0.5 * (2 - value)), width: 2) : null,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Select Variation',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? Colors.white : AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      if (highlightVariants) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text('Required', style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: product.variants.map((v) {
+                                      final isSelected = selectedVariant?.name == v.name;
+                                      return GestureDetector(
+                                        onTap: () => onVariantChanged(v),
+                                        child: Transform.scale(
+                                          scale: highlightVariants && !isSelected ? value : 1.0,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: isSelected 
+                                                  ? AppColors.primary.withValues(alpha: 0.1) 
+                                                  : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100),
+                                              borderRadius: BorderRadius.circular(100),
+                                              border: Border.all(
+                                                color: isSelected 
+                                                    ? AppColors.primary 
+                                                    : (highlightVariants ? AppColors.primary.withValues(alpha: 0.3) : Colors.transparent),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              '${v.name} - ₹${v.price.toStringAsFixed(0)}',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 13,
+                                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                                color: isSelected 
+                                                    ? AppColors.primary 
+                                                    : (isDark ? Colors.white70 : AppColors.textSecondary),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                        ),
+                      ],
 
                       const SizedBox(height: 14),
 
@@ -690,7 +805,7 @@ class _SheetContent extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _qtyBtn(Icons.remove, () {
-                  if (shop != null) cart.updateQuantity(product.id, quantity - 1);
+                  if (shop != null) cart.updateQuantity(product.id, quantity - 1, variantName: selectedVariant?.name);
                 }, isDark),
                 const SizedBox(width: 28),
                 AnimatedSwitcher(
@@ -709,7 +824,13 @@ class _SheetContent extends StatelessWidget {
                 ),
                 const SizedBox(width: 28),
                 _qtyBtn(Icons.add, () {
-                  if (shop != null) cart.addItem(product, shop!);
+                  if (shop != null) {
+                    if (product.variants.isNotEmpty && selectedVariant == null) {
+                      _showVariantWarning(context);
+                      return;
+                    }
+                    cart.addItem(product, shop!, selectedVariant: selectedVariant);
+                  }
                 }, isDark),
                 const SizedBox(width: 20),
                 Expanded(
@@ -746,7 +867,11 @@ class _SheetContent extends StatelessWidget {
                   child: GestureDetector(
                     onTap: () {
                       if (shop != null) {
-                        cart.addItem(product, shop!);
+                        if (product.variants.isNotEmpty && selectedVariant == null) {
+                          _showVariantWarning(context);
+                          return;
+                        }
+                        cart.addItem(product, shop!, selectedVariant: selectedVariant);
                         ScaffoldMessenger.of(context).clearSnackBars();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -796,7 +921,11 @@ class _SheetContent extends StatelessWidget {
                   child: GestureDetector(
                     onTap: () {
                       if (shop != null) {
-                        cart.addItem(product, shop!);
+                        if (product.variants.isNotEmpty && selectedVariant == null) {
+                          _showVariantWarning(context);
+                          return;
+                        }
+                        cart.addItem(product, shop!, selectedVariant: selectedVariant);
                         ScaffoldMessenger.of(context).clearSnackBars();
                         Navigator.pushNamed(context, AppRoutes.cart);
                       }
@@ -824,6 +953,97 @@ class _SheetContent extends StatelessWidget {
               ],
             ),
     );
+  }
+
+  void _showVariantWarning(BuildContext context) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: 110, // Floats right above the bottom bar
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) {
+              return Transform.scale(
+                scale: value,
+                child: Opacity(
+                  opacity: value.clamp(0.0, 1.0),
+                  child: child,
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE85050), // Premium Coral/Red
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.touch_app_rounded, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Almost there!',
+                          style: GoogleFonts.outfit(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        Text(
+                          'Please select a variation to continue.',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+    
+    // Auto-remove after 2.5 seconds
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    });
+
+    if (variantKey?.currentContext != null) {
+      Scrollable.ensureVisible(variantKey!.currentContext!, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut, alignment: 0.3);
+    }
   }
 
   Widget _qtyBtn(IconData icon, VoidCallback onTap, bool isDark) {

@@ -149,6 +149,17 @@ class CartPage extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (item.selectedVariant != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Variant: ${item.selectedVariant!.name}',
+                      style: GoogleFonts.outfit(
+                        color: AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 2),
                   Text(
                     item.shop.name,
@@ -196,7 +207,7 @@ class CartPage extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _qtyBtn(Icons.remove, () {
-            cart.updateQuantity(item.product.id, item.quantity - 1);
+            cart.updateQuantity(item.product.id, item.quantity - 1, variantName: item.selectedVariant?.name);
           }, isDark),
           AnimatedSwitcher(
             duration: PremiumAnimations.fast,
@@ -216,7 +227,7 @@ class CartPage extends StatelessWidget {
             ),
           ),
           _qtyBtn(Icons.add, () {
-            final err = cart.addItem(item.product, item.shop);
+            final err = cart.addItem(item.product, item.shop, selectedVariant: item.selectedVariant);
             if (err != null) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(err),

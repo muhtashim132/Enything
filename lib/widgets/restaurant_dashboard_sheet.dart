@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../config/routes.dart';
 import 'common/sheet_skeleton_loader.dart';
+import 'product_detail_sheet.dart';
 
 void showRestaurantDashboardSheet(BuildContext context, String shopId) {
   showModalBottomSheet(
@@ -844,9 +845,47 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                 ),
                 const SizedBox(height: 8),
                 // ADD / Stepper
-                quantity == 0
+                product.variants.isNotEmpty
                     ? GestureDetector(
                         onTap: () {
+                          Navigator.pop(context); // close sheet
+                          showProductDetailSheet(context, product.id, highlightVariants: true);
+                        },
+                        child: Container(
+                          width: 100,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.secondary.withValues(alpha: 0.07),
+                                AppColors.secondary.withValues(alpha: 0.12),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(11),
+                            border: Border.all(
+                                color: AppColors.secondary.withValues(alpha: 0.5),
+                                width: 1.3),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.add_rounded,
+                                  size: 14, color: AppColors.secondary),
+                              const SizedBox(width: 3),
+                              Text(
+                                'ADD',
+                                style: GoogleFonts.outfit(
+                                    color: AppColors.secondary,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : quantity == 0
+                        ? GestureDetector(
+                            onTap: () {
                           cart.addItem(product, _shop!);
                           setState(() {});
                         },

@@ -233,7 +233,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopTaxBreakdownItems = shopItems.map((i) {
           return {
             'category': i.product.category,
-            'price': i.product.price,
+            'price': i.selectedVariant?.price ?? i.product.price,
             'quantity': i.quantity,
           };
         }).toList();
@@ -252,9 +252,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           if (!rateSnapshot.containsKey(cat)) {
             rateSnapshot[cat] = PlatformConfigProvider.instance?.getGstRate(
                   cat,
-                  itemPrice: item.product.price,
+                  itemPrice: item.selectedVariant?.price ?? item.product.price,
                 ) ??
-                TaxConfig.gstRateForCategory(cat, itemPrice: item.product.price);
+                TaxConfig.gstRateForCategory(cat, itemPrice: item.selectedVariant?.price ?? item.product.price);
           }
         }
 
@@ -326,8 +326,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 'order_id': orderId,
                 'product_id': item.product.id,
                 'product_name': item.product.name,
+                'variant_name': item.selectedVariant?.name,
                 'quantity': item.quantity,
-                'price': item.product.price,
+                'price': item.selectedVariant?.price ?? item.product.price,
                 'weight_kg': item.weightKg,
                 // BUG-23 FIX: Persist prescription flag so seller knows
                 // which item requires a valid prescription.

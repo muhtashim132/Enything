@@ -92,7 +92,8 @@ ShopModel _shopFromJson(Map<String, dynamic> m) {
 }
 
 class CartProvider extends ChangeNotifier {
-  static const String _cartKey = 'enything_cart_v1'; // Bug #20: persistence key
+  static const String _cartKey = 'enything_cart_v2'; // Bumped for variant support
+  static const String _legacyCartKey = 'enything_cart_v1';
   final List<CartItem> _items = [];
 
   List<CartItem> get items => List.unmodifiable(_items);
@@ -185,24 +186,25 @@ class CartProvider extends ChangeNotifier {
   bool get isMultiShopOrder => shops.length > 1;
 
   String? addItem(ProductModel product, ShopModel shop,
-      {int quantity = 1}) {
+      {int quantity = 1, ProductVariant? selectedVariant}) {
     if (totalItemCount + quantity > PaymentConfig.maxItemsPerOrder) {
       return 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
     }
 
-    final unitWeightKg = CartItem(product: product, shop: shop, quantity: 1).weightKg;
+    final unitWeightKg = CartItem(product: product, shop: shop, quantity: 1, selectedVariant: selectedVariant).weightKg;
     if (totalWeight + (unitWeightKg * quantity) > PaymentConfig.maxWeightKg) {
       return 'Maximum weight of ${PaymentConfig.maxWeightKg} kg allowed per order';
     }
 
     final existingIdx = _items.indexWhere(
-        (item) => item.product.id == product.id);
+        (item) => item.product.id == product.id && item.selectedVariant?.name == selectedVariant?.name);
 
     if (existingIdx == -1) {
       _items.add(CartItem(
         product: product,
         shop: shop,
         quantity: quantity,
+        selectedVariant: selectedVariant,
       ));
     } else {
       _items[existingIdx].quantity += quantity;
@@ -213,14 +215,14 @@ class CartProvider extends ChangeNotifier {
     return null;
   }
 
-  void removeItem(String productId) {
-    _items.removeWhere((item) => item.product.id == productId);
+  void removeItem(String productId, {String? variantName}) {
+    _items.removeWhere((item) => item.product.id == productId && item.selectedVariant?.name == variantName);
     _saveCart(); // Bug #20
     notifyListeners();
   }
 
-  void updateQuantity(String productId, int quantity) {
-    final idx = _items.indexWhere((item) => item.product.id == productId);
+  void updateQuantity(String productId, int quantity, {String? variantName}) {
+    final idx = _items.indexWhere((item) => item.product.id == productId && item.selectedVariant?.name == variantName);
     if (idx != -1) {
       if (quantity <= 0) {
         _items.removeAt(idx);
@@ -251,6 +253,7 @@ class CartProvider extends ChangeNotifier {
         'shop': _shopToJson(item.shop),
         'quantity': item.quantity,
         'special_instructions': item.specialInstructions,
+        'selected_variant': item.selectedVariant?.toMap(),
       }).toList());
       await prefs.setString(_cartKey, encoded);
     } catch (e) {
@@ -263,7 +266,13 @@ class CartProvider extends ChangeNotifier {
   Future<void> loadCart() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_cartKey);
+      String? raw = prefs.getString(_cartKey);
+      
+      // Fallback to legacy cart if new one doesn't exist
+      if (raw == null || raw.isEmpty) {
+        raw = prefs.getString(_legacyCartKey);
+      }
+      
       if (raw == null || raw.isEmpty) return;
 
       final List<dynamic> list = jsonDecode(raw) as List<dynamic>;
@@ -274,11 +283,14 @@ class CartProvider extends ChangeNotifier {
         final shop = _shopFromJson(map['shop'] as Map<String, dynamic>);
         final qty = (map['quantity'] as num?)?.toInt() ?? 1;
         final instructions = map['special_instructions'] as String?;
+        final variantMap = map['selected_variant'] as Map<String, dynamic>?;
+        
         _items.add(CartItem(
           product: product,
           shop: shop,
           quantity: qty,
           specialInstructions: instructions,
+          selectedVariant: variantMap != null ? ProductVariant.fromMap(variantMap) : null,
         ));
       }
       notifyListeners();
@@ -319,11 +331,11 @@ class CartProvider extends ChangeNotifier {
     return totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
   }
 
-  int getItemQuantity(String productId) {
+  int getItemQuantity(String productId, {String? variantName}) {
     try {
       return _items
-          .firstWhere((item) => item.product.id == productId)
-          .quantity;
+          .where((item) => item.product.id == productId && item.selectedVariant?.name == variantName)
+          .fold(0, (sum, item) => sum + item.quantity);
     } catch (_) {
       return 0;
     }

@@ -327,96 +327,11 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                   scale: animation,
                                   child: FadeTransition(opacity: animation, child: child),
                                 ),
-                              child: quantity > 0
-                                ? Container(
-                                    key: const ValueKey('stepper'),
-                                    height: 34,
-                                    width: 88,
-                                    decoration: BoxDecoration(
-                                      gradient: AppColors.ctaGradient,
-                                      borderRadius: BorderRadius.circular(11),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.secondary.withValues(alpha: 0.35),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        GestureDetector(
-                                          onTap: () => context
-                                              .read<CartProvider>()
-                                              .updateQuantity(product.id, quantity - 1),
-                                          child: const Icon(Icons.remove_rounded,
-                                              size: 16, color: Colors.white),
-                                        ),
-                                        AnimatedSwitcher(
-                                          duration: const Duration(milliseconds: 180),
-                                          transitionBuilder: (child, anim) =>
-                                              ScaleTransition(scale: anim, child: child),
-                                          child: Text(
-                                            '$quantity',
-                                            key: ValueKey(quantity),
-                                            style: GoogleFonts.outfit(
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 13,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                        GestureDetector(
-                                          onTap: () => context
-                                              .read<CartProvider>()
-                                              .addItem(product, shop),
-                                          child: const Icon(Icons.add_rounded,
-                                              size: 16, color: Colors.white),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : GestureDetector(
-                                    key: const ValueKey('add'),
-                                    onTap: () => context
-                                        .read<CartProvider>()
-                                        .addItem(product, shop),
-                                    child: Container(
-                                      height: 34,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: AppColors.secondary.withValues(alpha: isDark ? 0.5 : 0.8),
-                                          width: 1.5,
-                                        ),
-                                        borderRadius: BorderRadius.circular(11),
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            AppColors.secondary.withValues(alpha: isDark ? 0.15 : 0.06),
-                                            AppColors.secondary.withValues(alpha: isDark ? 0.10 : 0.10),
-                                          ],
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          // Icon(Icons.add_rounded,
-                                          //     size: 14,
-                                          //     color: isDark ? AppColors.secondaryLight : AppColors.secondary),
-                                          // const SizedBox(width: 4),
-                                          Text(
-                                            'ADD TO CART',
-                                            style: GoogleFonts.outfit(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 12,
-                                              color: isDark ? AppColors.secondaryLight : AppColors.secondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                              child: product.variants.isNotEmpty
+                                ? _buildAddButton(context, isDark)
+                                : quantity > 0
+                                  ? _buildStepper(context, quantity)
+                                  : _buildAddButton(context, isDark),
                             ),
                       ],
                     ),
@@ -430,5 +345,100 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     ),
   ),
 );
+  }
+
+  Widget _buildStepper(BuildContext context, int quantity) {
+    return Container(
+      key: const ValueKey('stepper'),
+      height: 34,
+      width: 88,
+      decoration: BoxDecoration(
+        gradient: AppColors.ctaGradient,
+        borderRadius: BorderRadius.circular(11),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.secondary.withValues(alpha: 0.35),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          GestureDetector(
+            onTap: () => context
+                .read<CartProvider>()
+                .updateQuantity(product.id, quantity - 1),
+            child: const Icon(Icons.remove_rounded,
+                size: 16, color: Colors.white),
+          ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (child, anim) =>
+                ScaleTransition(scale: anim, child: child),
+            child: Text(
+              '$quantity',
+              key: ValueKey(quantity),
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => context
+                .read<CartProvider>()
+                .addItem(product, shop),
+            child: const Icon(Icons.add_rounded,
+                size: 16, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddButton(BuildContext context, bool isDark) {
+    return GestureDetector(
+      key: const ValueKey('add'),
+      onTap: () {
+        if (product.variants.isNotEmpty) {
+          showProductDetailSheet(context, product.id, highlightVariants: true);
+        } else {
+          context.read<CartProvider>().addItem(product, shop);
+        }
+      },
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: AppColors.secondary.withValues(alpha: isDark ? 0.5 : 0.8),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(11),
+          gradient: LinearGradient(
+            colors: [
+              AppColors.secondary.withValues(alpha: isDark ? 0.15 : 0.06),
+              AppColors.secondary.withValues(alpha: isDark ? 0.10 : 0.10),
+            ],
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'ADD TO CART',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
