@@ -14,6 +14,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/notification_provider.dart';
 
 import '../../providers/recently_viewed_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../models/product_model.dart';
@@ -183,12 +184,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         curve: Curves.easeOutCubic,
       );
     });
-    // Fetch favorites and saved address
+    // Fetch favorites, saved address, and subscription state
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
       if (auth.currentUserId != null) {
         context.read<FavoritesProvider>().fetchFavorites(auth.currentUserId!);
         context.read<LocationProvider>().loadAddressFromDb(auth.currentUserId!);
+        context.read<SubscriptionProvider>().init(auth.currentUserId!);
       }
     });
   }

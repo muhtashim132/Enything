@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../widgets/common/role_switcher_card.dart';
@@ -361,11 +362,92 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
   // ── ROLE SETTINGS ──────────────────────────────────────────────────────────
 
   Widget _buildCustomerSettings(bool isDark) {
+    final sub = context.watch<SubscriptionProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Enything Pass Banner (if active) ──────────────────────────────
+        if (sub.hasActiveSub) ...[          
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Text('⚡', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sub.tierDisplay,
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        '${sub.loyaltyBalance} pts · ${sub.activeSub!.daysRemaining}d remaining',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pushNamed(context, AppRoutes.subscription),
+                  child: Text(
+                    'Manage',
+                    style: GoogleFonts.outfit(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         _buildSectionTitle('Account Settings', isDark),
         const SizedBox(height: 16),
+        // ── Enything Pass entry ───────────────────────────────────────────
+        _buildSettingTile(
+          icon: Icons.star_rounded,
+          title: sub.hasActiveSub ? sub.tierDisplay : 'Enything Pass',
+          subtitle: sub.hasActiveSub
+              ? '${sub.loyaltyBalance} loyalty points · Tap to manage'
+              : 'Free delivery, cashback & loyalty points',
+          roleColor: sub.hasActiveSub
+              ? const Color(0xFFD4A017)
+              : AppColors.primary,
+          isDark: isDark,
+          trailing: !sub.hasActiveSub
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.ctaGradient,
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: Text(
+                    'GET PASS',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                    ),
+                  ),
+                )
+              : null,
+          onTap: () => Navigator.pushNamed(context, AppRoutes.subscription),
+        ),
         _buildSettingTile(
           icon: Icons.receipt_long_outlined,
           title: 'My Orders',
@@ -474,6 +556,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
     required Color roleColor,
     required bool isDark,
     required VoidCallback onTap,
+    Widget? trailing,
   }) {
     return PressScaleButton(
       scaleDown: 0.97,
@@ -533,7 +616,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios_rounded,
+              trailing ?? Icon(Icons.arrow_forward_ios_rounded,
                   size: 14, color: Colors.grey.shade400),
             ],
           ),

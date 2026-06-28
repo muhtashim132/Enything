@@ -24,7 +24,8 @@ import 'common/premium_product_image.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // Public helper — call this instead of Navigator.pushNamed for productDetails
 // ─────────────────────────────────────────────────────────────────────────────
-void showProductDetailSheet(BuildContext context, String productId, {bool highlightVariants = false}) {
+void showProductDetailSheet(BuildContext context, String productId,
+    {bool highlightVariants = false}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -35,7 +36,8 @@ void showProductDetailSheet(BuildContext context, String productId, {bool highli
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (_) => ProductDetailSheet(productId: productId, highlightVariants: highlightVariants),
+    builder: (_) => ProductDetailSheet(
+        productId: productId, highlightVariants: highlightVariants),
   );
 }
 
@@ -45,7 +47,8 @@ void showProductDetailSheet(BuildContext context, String productId, {bool highli
 class ProductDetailSheet extends StatefulWidget {
   final String productId;
   final bool highlightVariants;
-  const ProductDetailSheet({super.key, required this.productId, this.highlightVariants = false});
+  const ProductDetailSheet(
+      {super.key, required this.productId, this.highlightVariants = false});
 
   @override
   State<ProductDetailSheet> createState() => _ProductDetailSheetState();
@@ -88,11 +91,14 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           _shop = ShopModel.fromMap(shopData);
           _isLoading = false;
         });
-        
+
         if (widget.highlightVariants && product.variants.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_variantKey.currentContext != null) {
-              Scrollable.ensureVisible(_variantKey.currentContext!, duration: const Duration(milliseconds: 600), curve: Curves.easeInOut, alignment: 0.3);
+              Scrollable.ensureVisible(_variantKey.currentContext!,
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeInOut,
+                  alignment: 0.3);
             }
           });
         }
@@ -133,7 +139,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                           setState(() => _currentImageIndex = i),
                       isDark: isDark,
                       selectedVariant: _selectedVariant,
-                      onVariantChanged: (v) => setState(() => _selectedVariant = v),
+                      onVariantChanged: (v) =>
+                          setState(() => _selectedVariant = v),
                       highlightVariants: widget.highlightVariants,
                       variantKey: _variantKey,
                     ),
@@ -195,11 +202,13 @@ class _SheetContent extends StatelessWidget {
     final favs = context.watch<FavoritesProvider>();
     final auth = context.watch<AuthProvider>();
     final location = context.watch<LocationProvider>();
-    final quantity = cart.getItemQuantity(product.id, variantName: selectedVariant?.name);
+    final quantity =
+        cart.getItemQuantity(product.id, variantName: selectedVariant?.name);
     final isFav = favs.isProductFavorite(product.id);
 
     final distanceKm = shop != null ? location.distanceTo(shop!.location) : 0.0;
-    final deliveryLabel = DeliveryCalculator.deliveryChargeLabel(distanceKm, product.price);
+    final deliveryLabel =
+        DeliveryCalculator.deliveryChargeLabel(distanceKm, product.price);
 
     return Column(
       children: [
@@ -236,7 +245,9 @@ class _SheetContent extends StatelessWidget {
                         itemBuilder: (ctx, i) {
                           final url = product.images.isEmpty
                               ? ''
-                              : (i == 0 ? product.displayImage : product.images[i]);
+                              : (i == 0
+                                  ? product.displayImage
+                                  : product.images[i]);
                           return url.isNotEmpty
                               ? GestureDetector(
                                   onTap: () {
@@ -248,10 +259,12 @@ class _SheetContent extends StatelessWidget {
                                     } else {
                                       allImages = List<String>.generate(
                                         product.images.length,
-                                        (idx) => idx == 0 ? product.displayImage : product.images[idx],
+                                        (idx) => idx == 0
+                                            ? product.displayImage
+                                            : product.images[idx],
                                       );
                                     }
-                                    
+
                                     if (allImages.isNotEmpty) {
                                       showDialog(
                                         context: context,
@@ -273,7 +286,10 @@ class _SheetContent extends StatelessWidget {
 
                       // Image background tint (top only for icons)
                       Positioned(
-                        top: 0, left: 0, right: 0, height: 80,
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 80,
                         child: IgnorePointer(
                           child: Container(
                             decoration: BoxDecoration(
@@ -334,11 +350,15 @@ class _SheetContent extends StatelessWidget {
                                 curve: PremiumAnimations.defaultCurve,
                                 width: i == currentImageIndex ? 22 : 6,
                                 height: 6,
-                                margin: const EdgeInsets.symmetric(horizontal: 2),
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 2),
                                 decoration: BoxDecoration(
                                   gradient: i == currentImageIndex
                                       ? const LinearGradient(
-                                          colors: [Color(0xFF0A2A9E), Color(0xFF1E40AF)],
+                                          colors: [
+                                            Color(0xFF0A2A9E),
+                                            Color(0xFF1E40AF)
+                                          ],
                                         )
                                       : null,
                                   color: i == currentImageIndex
@@ -388,7 +408,8 @@ class _SheetContent extends StatelessWidget {
                     color: isDark ? AppColors.darkSurface : Colors.white,
                     borderRadius: PremiumRadius.largeBorder,
                     border: isDark
-                        ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                        ? Border.all(
+                            color: Colors.white.withValues(alpha: 0.07))
                         : null,
                     boxShadow: PremiumShadows.cardLight,
                   ),
@@ -400,7 +421,9 @@ class _SheetContent extends StatelessWidget {
                         GestureDetector(
                           onTap: () {
                             Navigator.pop(context);
-                            final isFood = AppCategories.groupFor(shop!.category) == CategoryGroup.food;
+                            final isFood =
+                                AppCategories.groupFor(shop!.category) ==
+                                    CategoryGroup.food;
                             if (isFood) {
                               showRestaurantDashboardSheet(context, shop!.id);
                             } else {
@@ -470,9 +493,14 @@ class _SheetContent extends StatelessWidget {
 
                       Builder(
                         builder: (context) {
-                          final currentPrice = selectedVariant?.price ?? product.price;
-                          final currentOriginalPrice = selectedVariant?.originalPrice ?? product.originalPrice;
-                          final currentDiscountPercent = selectedVariant?.discountPercent ?? product.discountPercent;
+                          final currentPrice =
+                              selectedVariant?.price ?? product.price;
+                          final currentOriginalPrice =
+                              selectedVariant?.originalPrice ??
+                                  product.originalPrice;
+                          final currentDiscountPercent =
+                              selectedVariant?.discountPercent ??
+                                  product.discountPercent;
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -483,11 +511,15 @@ class _SheetContent extends StatelessWidget {
                                     // Discount label
                                     if (currentDiscountPercent != null)
                                       Container(
-                                        margin: const EdgeInsets.only(bottom: 4),
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                        margin:
+                                            const EdgeInsets.only(bottom: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: AppColors.success.withValues(alpha: 0.10),
-                                          borderRadius: BorderRadius.circular(20),
+                                          color: AppColors.success
+                                              .withValues(alpha: 0.10),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
                                         ),
                                         child: Text(
                                           '${currentDiscountPercent.toInt()}% OFF',
@@ -500,7 +532,8 @@ class _SheetContent extends StatelessWidget {
                                       ),
                                     // Price
                                     Row(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
                                       children: [
                                         Text(
                                           '₹',
@@ -519,17 +552,24 @@ class _SheetContent extends StatelessWidget {
                                             letterSpacing: -0.5,
                                           ),
                                         ),
-                                        if (currentDiscountPercent != null && currentOriginalPrice != null) ...[
+                                        if (currentDiscountPercent != null &&
+                                            currentOriginalPrice != null) ...[
                                           const SizedBox(width: 10),
                                           Padding(
-                                            padding: const EdgeInsets.only(bottom: 4),
+                                            padding: const EdgeInsets.only(
+                                                bottom: 4),
                                             child: Text(
                                               '₹${currentOriginalPrice.toStringAsFixed(0)}',
                                               style: GoogleFonts.outfit(
                                                 fontSize: 15,
-                                                color: isDark ? Colors.white38 : AppColors.textLight,
-                                                decoration: TextDecoration.lineThrough,
-                                                decorationColor: isDark ? Colors.white38 : AppColors.textLight,
+                                                color: isDark
+                                                    ? Colors.white38
+                                                    : AppColors.textLight,
+                                                decoration:
+                                                    TextDecoration.lineThrough,
+                                                decorationColor: isDark
+                                                    ? Colors.white38
+                                                    : AppColors.textLight,
                                               ),
                                             ),
                                           ),
@@ -543,91 +583,132 @@ class _SheetContent extends StatelessWidget {
                           );
                         },
                       ),
-                      
+
                       if (product.variants.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         TweenAnimationBuilder<double>(
-                          key: variantKey,
-                          tween: Tween<double>(begin: highlightVariants ? 0.0 : 1.0, end: 1.0),
-                          duration: const Duration(milliseconds: 1500),
-                          curve: Curves.elasticOut,
-                          builder: (context, value, child) {
-                            return Container(
-                              padding: highlightVariants ? const EdgeInsets.all(12) : EdgeInsets.zero,
-                              decoration: BoxDecoration(
-                                color: highlightVariants ? AppColors.primary.withValues(alpha: 0.1 * (2 - value)) : Colors.transparent,
-                                borderRadius: BorderRadius.circular(16),
-                                border: highlightVariants ? Border.all(color: AppColors.primary.withValues(alpha: 0.5 * (2 - value)), width: 2) : null,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        'Select Variation',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: isDark ? Colors.white : AppColors.textPrimary,
-                                        ),
-                                      ),
-                                      if (highlightVariants) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary,
-                                            borderRadius: BorderRadius.circular(10),
+                            key: variantKey,
+                            tween: Tween<double>(
+                                begin: highlightVariants ? 0.0 : 1.0, end: 1.0),
+                            duration: const Duration(milliseconds: 1500),
+                            curve: Curves.elasticOut,
+                            builder: (context, value, child) {
+                              return Container(
+                                padding: highlightVariants
+                                    ? const EdgeInsets.all(12)
+                                    : EdgeInsets.zero,
+                                decoration: BoxDecoration(
+                                  color: highlightVariants
+                                      ? AppColors.primary
+                                          .withValues(alpha: 0.1 * (2 - value))
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: highlightVariants
+                                      ? Border.all(
+                                          color: AppColors.primary.withValues(
+                                              alpha: 0.5 * (2 - value)),
+                                          width: 2)
+                                      : null,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Select Variation',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark
+                                                ? Colors.white
+                                                : AppColors.textPrimary,
                                           ),
-                                          child: Text('Required', style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                                         ),
-                                      ],
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: product.variants.map((v) {
-                                      final isSelected = selectedVariant?.name == v.name;
-                                      return GestureDetector(
-                                        onTap: () => onVariantChanged(v),
-                                        child: Transform.scale(
-                                          scale: highlightVariants && !isSelected ? value : 1.0,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                        if (highlightVariants) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: isSelected 
-                                                  ? AppColors.primary.withValues(alpha: 0.1) 
-                                                  : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100),
-                                              borderRadius: BorderRadius.circular(100),
-                                              border: Border.all(
-                                                color: isSelected 
-                                                    ? AppColors.primary 
-                                                    : (highlightVariants ? AppColors.primary.withValues(alpha: 0.3) : Colors.transparent),
-                                              ),
+                                              color: AppColors.primary,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                             ),
-                                            child: Text(
-                                              '${v.name} - ₹${v.price.toStringAsFixed(0)}',
-                                              style: GoogleFonts.outfit(
-                                                fontSize: 13,
-                                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                                color: isSelected 
-                                                    ? AppColors.primary 
-                                                    : (isDark ? Colors.white70 : AppColors.textSecondary),
+                                            child: Text('Required',
+                                                style: GoogleFonts.outfit(
+                                                    color: Colors.white,
+                                                    fontSize: 10,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: product.variants.map((v) {
+                                        final isSelected =
+                                            selectedVariant?.name == v.name;
+                                        return GestureDetector(
+                                          onTap: () => onVariantChanged(v),
+                                          child: Transform.scale(
+                                            scale:
+                                                highlightVariants && !isSelected
+                                                    ? value
+                                                    : 1.0,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 14,
+                                                      vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: isSelected
+                                                    ? AppColors.primary
+                                                        .withValues(alpha: 0.1)
+                                                    : (isDark
+                                                        ? Colors.white
+                                                            .withValues(
+                                                                alpha: 0.05)
+                                                        : Colors.grey.shade100),
+                                                borderRadius:
+                                                    BorderRadius.circular(100),
+                                                border: Border.all(
+                                                  color: isSelected
+                                                      ? AppColors.primary
+                                                      : (highlightVariants
+                                                          ? AppColors.primary
+                                                              .withValues(
+                                                                  alpha: 0.3)
+                                                          : Colors.transparent),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                '${v.name} - ₹${v.price.toStringAsFixed(0)}',
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 13,
+                                                  fontWeight: isSelected
+                                                      ? FontWeight.w700
+                                                      : FontWeight.w500,
+                                                  color: isSelected
+                                                      ? AppColors.primary
+                                                      : (isDark
+                                                          ? Colors.white70
+                                                          : AppColors
+                                                              .textSecondary),
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                        ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
                       ],
 
                       const SizedBox(height: 14),
@@ -645,32 +726,43 @@ class _SheetContent extends StatelessWidget {
                       if (shop != null) ...[
                         const SizedBox(height: 16),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withValues(alpha: 0.03) : const Color(0xFFF4F6FB),
-                            borderRadius: BorderRadius.circular(PremiumRadius.medium),
-                            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade200),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.03)
+                                : const Color(0xFFF4F6FB),
+                            borderRadius:
+                                BorderRadius.circular(PremiumRadius.medium),
+                            border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.05)
+                                    : Colors.grey.shade200),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.location_on_rounded, size: 16, color: AppColors.primary),
+                                  Icon(Icons.location_on_rounded,
+                                      size: 16, color: AppColors.primary),
                                   const SizedBox(width: 8),
                                   Text(
                                     '${distanceKm.toStringAsFixed(1)} km away',
                                     style: GoogleFonts.outfit(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 13,
-                                      color: isDark ? Colors.white70 : AppColors.textPrimary,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : AppColors.textPrimary,
                                     ),
                                   ),
                                 ],
                               ),
                               Row(
                                 children: [
-                                  const Icon(Icons.delivery_dining_rounded, size: 16, color: AppColors.success),
+                                  const Icon(Icons.delivery_dining_rounded,
+                                      size: 16, color: AppColors.success),
                                   const SizedBox(width: 8),
                                   Text(
                                     deliveryLabel,
@@ -705,18 +797,31 @@ class _SheetContent extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Highlights', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                        Text('Highlights',
+                            style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary)),
                         const SizedBox(height: 12),
                         Wrap(
-                          spacing: 8, runSpacing: 8,
-                          children: product.specialTags.map((tag) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.07),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(tag, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                          )).toList(),
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: product.specialTags
+                              .map((tag) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.07),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(tag,
+                                        style: GoogleFonts.outfit(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.primary)),
+                                  ))
+                              .toList(),
                         ),
                       ],
                     ),
@@ -724,7 +829,8 @@ class _SheetContent extends StatelessWidget {
                 ),
 
               // Full description
-              if (product.description != null && product.description!.isNotEmpty)
+              if (product.description != null &&
+                  product.description!.isNotEmpty)
                 SliverToBoxAdapter(
                   child: Container(
                     margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -737,9 +843,17 @@ class _SheetContent extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Product Details', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                        Text('Product Details',
+                            style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary)),
                         const SizedBox(height: 10),
-                        Text(product.description!, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary, height: 1.6)),
+                        Text(product.description!,
+                            style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                                height: 1.6)),
                       ],
                     ),
                   ),
@@ -755,7 +869,8 @@ class _SheetContent extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomBar(BuildContext context, int quantity, CartProvider cart, bool isDark) {
+  Widget _buildBottomBar(
+      BuildContext context, int quantity, CartProvider cart, bool isDark) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 30),
       decoration: BoxDecoration(
@@ -798,164 +913,178 @@ class _SheetContent extends StatelessWidget {
               ),
             )
           : quantity > 0
-          ? Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _qtyBtn(Icons.remove, () {
-                  if (shop != null) cart.updateQuantity(product.id, quantity - 1, variantName: selectedVariant?.name);
-                }, isDark),
-                const SizedBox(width: 28),
-                AnimatedSwitcher(
-                  duration: PremiumAnimations.fast,
-                  transitionBuilder: (child, anim) =>
-                      ScaleTransition(scale: anim, child: child),
-                  child: Text(
-                    '$quantity',
-                    key: ValueKey(quantity),
-                    style: GoogleFonts.outfit(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 28),
-                _qtyBtn(Icons.add, () {
-                  if (shop != null) {
-                    if (product.variants.isNotEmpty && selectedVariant == null) {
-                      _showVariantWarning(context);
-                      return;
-                    }
-                    cart.addItem(product, shop!, selectedVariant: selectedVariant);
-                  }
-                }, isDark),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).clearSnackBars();
-                      Navigator.pushNamed(context, AppRoutes.cart);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.ctaGradient,
-                        borderRadius: PremiumRadius.smallBorder,
-                        boxShadow: PremiumShadows.floatingButtonLight,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'View Cart',
-                          style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _qtyBtn(Icons.remove, () {
+                      if (shop != null)
+                        cart.updateQuantity(product.id, quantity - 1,
+                            variantName: selectedVariant?.name);
+                    }, isDark),
+                    const SizedBox(width: 28),
+                    AnimatedSwitcher(
+                      duration: PremiumAnimations.fast,
+                      transitionBuilder: (child, anim) =>
+                          ScaleTransition(scale: anim, child: child),
+                      child: Text(
+                        '$quantity',
+                        key: ValueKey(quantity),
+                        style: GoogleFonts.outfit(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
                         ),
                       ),
                     ),
-                  ),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
+                    const SizedBox(width: 28),
+                    _qtyBtn(Icons.add, () {
                       if (shop != null) {
-                        if (product.variants.isNotEmpty && selectedVariant == null) {
+                        if (product.variants.isNotEmpty &&
+                            selectedVariant == null) {
                           _showVariantWarning(context);
                           return;
                         }
-                        cart.addItem(product, shop!, selectedVariant: selectedVariant);
-                        ScaffoldMessenger.of(context).clearSnackBars();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${product.name} added to cart! 🛒'),
-                            backgroundColor: AppColors.success,
-                            behavior: SnackBarBehavior.floating,
-                            duration: const Duration(seconds: 2),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14)),
-                            action: SnackBarAction(
-                              label: 'View Cart',
-                              textColor: Colors.white,
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).clearSnackBars();
-                                Navigator.pushNamed(context, AppRoutes.cart);
-                              },
+                        cart.addItem(product, shop!,
+                            selectedVariant: selectedVariant);
+                      }
+                    }, isDark),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).clearSnackBars();
+                          Navigator.pushNamed(context, AppRoutes.cart);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.ctaGradient,
+                            borderRadius: PremiumRadius.smallBorder,
+                            boxShadow: PremiumShadows.floatingButtonLight,
+                          ),
+                          child: Center(
+                            child: Text(
+                              'View Cart',
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                        );
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: PremiumRadius.smallBorder,
-                        border: Border.all(
-                          color: AppColors.secondary.withValues(alpha: isDark ? 0.6 : 0.8),
-                          width: 2,
                         ),
                       ),
-                      child: Center(
-                        child: Text(
-                          'ADD TO CART',
-                          style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.secondaryLight : AppColors.secondary,
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          if (shop != null) {
+                            if (product.variants.isNotEmpty &&
+                                selectedVariant == null) {
+                              _showVariantWarning(context);
+                              return;
+                            }
+                            cart.addItem(product, shop!,
+                                selectedVariant: selectedVariant);
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content:
+                                    Text('${product.name} added to cart! 🛒'),
+                                backgroundColor: AppColors.success,
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 2),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14)),
+                                action: SnackBarAction(
+                                  label: 'View Cart',
+                                  textColor: Colors.white,
+                                  onPressed: () {
+                                    ScaffoldMessenger.of(context)
+                                        .clearSnackBars();
+                                    Navigator.pushNamed(
+                                        context, AppRoutes.cart);
+                                  },
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius: PremiumRadius.smallBorder,
+                            border: Border.all(
+                              color: AppColors.secondary
+                                  .withValues(alpha: isDark ? 0.6 : 0.8),
+                              width: 2,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'ADD TO CART',
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? AppColors.secondaryLight
+                                    : AppColors.secondary,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      if (shop != null) {
-                        if (product.variants.isNotEmpty && selectedVariant == null) {
-                          _showVariantWarning(context);
-                          return;
-                        }
-                        cart.addItem(product, shop!, selectedVariant: selectedVariant);
-                        ScaffoldMessenger.of(context).clearSnackBars();
-                        Navigator.pushNamed(context, AppRoutes.cart);
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.ctaGradient,
-                        borderRadius: PremiumRadius.smallBorder,
-                        boxShadow: PremiumShadows.floatingButtonLight,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'BUY NOW',
-                          style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          if (shop != null) {
+                            if (product.variants.isNotEmpty &&
+                                selectedVariant == null) {
+                              _showVariantWarning(context);
+                              return;
+                            }
+                            cart.addItem(product, shop!,
+                                selectedVariant: selectedVariant);
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            Navigator.pushNamed(context, AppRoutes.cart);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.ctaGradient,
+                            borderRadius: PremiumRadius.smallBorder,
+                            boxShadow: PremiumShadows.floatingButtonLight,
+                          ),
+                          child: Center(
+                            child: Text(
+                              'BUY NOW',
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
     );
   }
 
   void _showVariantWarning(BuildContext context) {
     final overlay = Overlay.of(context);
     late OverlayEntry entry;
-    
+
     entry = OverlayEntry(
       builder: (context) => Positioned(
         bottom: 110, // Floats right above the bottom bar
@@ -982,7 +1111,10 @@ class _SheetContent extends StatelessWidget {
                 color: const Color(0xFFE85050), // Premium Coral/Red
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6)),
+                  BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 16,
+                      offset: Offset(0, 6)),
                 ],
               ),
               child: Row(
@@ -993,7 +1125,8 @@ class _SheetContent extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.touch_app_rounded, color: Colors.white, size: 20),
+                    child: const Icon(Icons.touch_app_rounded,
+                        color: Colors.white, size: 20),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -1030,7 +1163,7 @@ class _SheetContent extends StatelessWidget {
     );
 
     overlay.insert(entry);
-    
+
     // Auto-remove after 2.5 seconds
     Future.delayed(const Duration(milliseconds: 2500), () {
       if (entry.mounted) {
@@ -1039,7 +1172,10 @@ class _SheetContent extends StatelessWidget {
     });
 
     if (variantKey?.currentContext != null) {
-      Scrollable.ensureVisible(variantKey!.currentContext!, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut, alignment: 0.3);
+      Scrollable.ensureVisible(variantKey!.currentContext!,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+          alignment: 0.3);
     }
   }
 
@@ -1178,7 +1314,8 @@ class _FullScreenImageViewer extends StatefulWidget {
   final List<String> images;
   final int initialIndex;
 
-  const _FullScreenImageViewer({required this.images, required this.initialIndex});
+  const _FullScreenImageViewer(
+      {required this.images, required this.initialIndex});
 
   @override
   State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
@@ -1237,7 +1374,8 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
               right: 0,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(20),
@@ -1247,11 +1385,15 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                     builder: (context, child) {
                       int currentPage = widget.initialIndex;
                       if (_pageController.hasClients) {
-                        currentPage = _pageController.page?.round() ?? widget.initialIndex;
+                        currentPage = _pageController.page?.round() ??
+                            widget.initialIndex;
                       }
                       return Text(
                         '${currentPage + 1} / ${widget.images.length}',
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
                       );
                     },
                   ),
@@ -1263,4 +1405,3 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
     );
   }
 }
-

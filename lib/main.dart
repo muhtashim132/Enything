@@ -23,6 +23,7 @@ import 'providers/audit_provider.dart';
 import 'providers/platform_config_provider.dart';
 import 'providers/coupon_provider.dart';
 import 'providers/recently_viewed_provider.dart';
+import 'providers/subscription_provider.dart';
 import 'services/notification_service.dart';
 
 // Global Supabase client access
@@ -231,6 +232,7 @@ class EnythingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CouponProvider()),
         ChangeNotifierProvider<RecentlyViewedProvider>.value(
             value: recentlyViewedProvider),
+        ChangeNotifierProvider(create: (_) => SubscriptionProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

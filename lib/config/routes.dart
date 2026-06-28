@@ -20,6 +20,7 @@ import '../pages/customer/checkout_page.dart';
 import '../pages/customer/track_order_page.dart';
 import '../pages/customer/order_history_page.dart';
 import '../pages/customer/favorites_page.dart';
+import '../pages/customer/subscription_page.dart';
 import '../pages/seller/dashboard_page.dart';
 import '../pages/seller/add_product_page.dart';
 import '../models/product_model.dart';
@@ -92,6 +93,7 @@ class AppRoutes {
   static const String sellerOrderMap     = '/seller/order-map';
   static const String aboutEnything      = '/settings/about';
   static const String contactUs          = '/legal/contact-us';
+  static const String subscription       = '/customer/subscription';
 
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
@@ -193,6 +195,8 @@ class AppRoutes {
         return _build(const AboutEnythingPage(), routeSettings);
       case contactUs:
         return _build(const ContactUsPage(), routeSettings);
+      case subscription:
+        return _build(const SubscriptionPage(), routeSettings);
       case customerOrderMap:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         if (a?['order'] == null) return _build(const SplashPage(), routeSettings);
