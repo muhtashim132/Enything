@@ -626,7 +626,7 @@ BEGIN
       'id',         p.id,
       'full_name',  p.full_name,
       'phone',      p.phone,
-      'email',      p.email,
+      'email',      NULL,
       'avatar_url', p.avatar_url
     ) AS profiles
   FROM public.delivery_partners dp
