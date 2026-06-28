@@ -621,7 +621,7 @@ BEGIN
     dp.is_online,
     dp.total_deliveries,
     dp.preferred_nav_app,
-    dp.created_at,
+    p.created_at,
     jsonb_build_object(
       'id',         p.id,
       'full_name',  p.full_name,
@@ -631,7 +631,7 @@ BEGIN
     ) AS profiles
   FROM public.delivery_partners dp
   LEFT JOIN public.profiles p ON p.id = dp.id
-  ORDER BY dp.created_at DESC;
+  ORDER BY p.created_at DESC;
 END;
 $$;
 
