@@ -663,7 +663,7 @@ BEGIN
       'address',              s.address,
       'is_active',            s.is_active,
       'verification_status',  s.verification_status,
-      'logo_url',             s.logo_url,
+      'logo_url',             NULL,
       'gst_number',           s.gst_number,
       'aadhar_number',        s.aadhar_number,
       'pan_number',           s.pan_number,
