@@ -61,6 +61,8 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
   @override
   Widget build(BuildContext context) {
     final kycDocs = widget.data['kyc_documents'] as Map<String, dynamic>? ?? {};
+    final isShop = widget.tableName == 'shops';
+    final profile = widget.data['profiles'] as Map<String, dynamic>?;
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -130,6 +132,19 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildDataCard(
+                        isShop ? 'Shop Details' : 'Rider Details',
+                        isShop ? Icons.storefront_rounded : Icons.delivery_dining_rounded,
+                        {
+                          if (isShop) 'Shop Name': widget.data['shop_name'] ?? widget.data['name'],
+                          if (isShop) 'Category': widget.data['category'],
+                          'Owner/Name': profile?['full_name'],
+                          'Phone': profile?['phone'],
+                          if (!isShop) 'Vehicle': widget.data['vehicle_type'],
+                          if (!isShop) 'Vehicle No.': widget.data['vehicle_number'] ?? widget.data['vehicle_reg_number'],
+                        },
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
