@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+﻿import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -85,7 +85,8 @@ class AuthProvider extends ChangeNotifier {
 
         // If it wasn't a manual sign out, it means the session was revoked from another device
         if (!wasManual && navigatorKey.currentState != null) {
-          navigatorKey.currentState!.pushNamedAndRemoveUntil('/roleSelect', (route) => false);
+          // FIX BUG-12: Wrong route '/roleSelect' doesn't match AppRoutes.roleSelect = '/auth/role'
+          navigatorKey.currentState!.pushNamedAndRemoveUntil('/auth/role', (route) => false);
           ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
             const SnackBar(
               content: Text('You have been logged out because your account was accessed from another device.'),
@@ -987,3 +988,4 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
+

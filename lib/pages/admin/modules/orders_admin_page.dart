@@ -42,7 +42,8 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
     try {
       final res = await _db
           .from('orders')
-          .select('*, profiles:customer_id(full_name, phone), shops:shop_id(shop_name)')
+          // FIX: 'shop_name' column does not exist on shops table; the actual column is 'name'
+          .select('*, profiles:customer_id(full_name, phone), shops:shop_id(name)')
           .order('created_at', ascending: false)
           .limit(80);
       _orders = List<Map<String, dynamic>>.from(res);
@@ -63,11 +64,14 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
         final status = (o['status'] ?? '').toString().toLowerCase();
 
         final matchesSearch = q.isEmpty || id.contains(q) || name.contains(q);
+        // FIX: Include new dual-acceptance statuses in the right filter buckets
         final matchesFilter = _activeFilter == 'All' ||
-            (_activeFilter == 'Pending' && (status == 'pending' || status == 'placed')) ||
-            (_activeFilter == 'Active' && (status == 'preparing' || status == 'picked_up' || status == 'out_for_delivery')) ||
+            (_activeFilter == 'Pending' && (status == 'pending' || status == 'placed' ||
+                status == 'awaiting_acceptance' || status == 'awaiting_payment')) ||
+            (_activeFilter == 'Active' && (status == 'confirmed' || status == 'preparing' ||
+                status == 'ready_for_pickup' || status == 'picked_up' || status == 'out_for_delivery')) ||
             (_activeFilter == 'Delivered' && status == 'delivered') ||
-            (_activeFilter == 'Cancelled' && status == 'cancelled');
+            (_activeFilter == 'Cancelled' && (status == 'cancelled' || status == 'seller_rejected' || status == 'partner_rejected'));
 
         return matchesSearch && matchesFilter;
       }).toList();
@@ -310,7 +314,7 @@ class _OrderCardState extends State<_OrderCard> {
                           style: AdminStyles.body(size: 13)),
                       const SizedBox(height: 2),
                       Text(
-                          '${profile?['full_name'] ?? 'Customer'}  •  ${shop?['shop_name'] ?? 'Shop'}',
+                          '${profile?['full_name'] ?? 'Customer'}  •  ${shop?['name'] ?? 'Shop'}', // FIX: use 'name' not 'shop_name'
                           style: AdminStyles.caption(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
@@ -441,7 +445,7 @@ class _OrderCardState extends State<_OrderCard> {
           Row(children: [
             _InfoCell(
                 label: 'Shop',
-                value: shop?['shop_name'] ?? 'Unknown'),
+                value: shop?['name'] ?? 'Unknown'), // FIX: use 'name' not 'shop_name'
             _InfoCell(
                 label: 'Payment',
                 value: paymentMethod.toUpperCase()),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -125,6 +125,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
+    // FIX BUG-6: Capture coupon ID before any await to avoid BuildContext-across-async-gaps warning
+    final appliedCouponId = context.read<CouponProvider>().appliedCoupon?.id;
     final supabase = Supabase.instance.client;
 
     try {
@@ -394,6 +396,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
           referredUserId: auth.currentUserId!,
           orderId: orderIds.isNotEmpty ? orderIds.first : '',
         );
+      }
+
+      // FIX BUG-6: Increment coupon used_count after all orders placed successfully
+      // Note: appliedCouponId is captured before the loop (pre-async) to avoid BuildContext warning.
+      // The increment call is non-fatal — order is already safely placed.
+      if (appliedCouponId != null) {
+        try {
+          await supabase.rpc('increment_coupon_used_count', params: {'p_coupon_id': appliedCouponId});
+        } catch (e) {
+          debugPrint('Coupon increment error: $e');
+        }
       }
 
       cart.clear();
@@ -1201,3 +1214,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 }
+
+
+

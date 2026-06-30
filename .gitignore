@@ -86,3 +86,8 @@ android/app/google-services.json
 /diff.txt
 
 ios/build/
+
+# Keystore files
+*.jks
+*.keystore
+android/key.properties

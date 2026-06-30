@@ -60,7 +60,8 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
     try {
       final res = await _db
           .from('reviews')
-          .select('*, profiles:user_id(full_name, avatar_url), shops:shop_id(shop_name)')
+          // FIX: 'shop_name' column does not exist on shops table; actual column is 'name'
+          .select('*, profiles:user_id(full_name, avatar_url), shops:shop_id(name)')
           .order('created_at', ascending: false)
           .limit(80);
       _reviews = List<Map<String, dynamic>>.from(res);
@@ -417,7 +418,7 @@ class _ReviewsTab extends StatelessWidget {
             final profile = r['profiles'] as Map?;
             final shop = r['shops'] as Map?;
             final rating = (r['rating'] as num?)?.toDouble() ?? 0.0;
-            final comment = (r['comment'] ?? r['review'] ?? '') as String;
+            final comment = (r['comment'] ?? r['review'] ?? r['review_text'] ?? '') as String;
             final time = r['created_at'] != null
                 ? DateFormat('dd MMM yy')
                     .format(DateTime.parse(r['created_at'].toString()).toIST())
@@ -451,7 +452,8 @@ class _ReviewsTab extends StatelessWidget {
                         children: [
                           Text(profile?['full_name'] ?? 'Anonymous',
                               style: AdminStyles.body(size: 13)),
-                          Text(shop?['shop_name'] ?? '',
+                          // FIX: use 'name' not 'shop_name' — shops table column is 'name'
+                          Text(shop?['name'] ?? '',
                               style: AdminStyles.caption()),
                         ],
                       ),

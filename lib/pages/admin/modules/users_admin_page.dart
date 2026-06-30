@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -368,7 +368,8 @@ class _SellersTabState extends State<_SellersTab> {
   Future<void> _fetch() async {
     try {
       final res = await _db.rpc('admin_get_all_shops');
-      _sellers = List<Map<String, dynamic>>.from(res);
+      // FIX: RPC returns null when there are 0 shops — guard against List.from(null)
+      _sellers = res == null ? [] : List<Map<String, dynamic>>.from(res as List);
       _filtered = _sellers;
     } catch (e) {
       debugPrint('Error fetching sellers: $e');
@@ -727,3 +728,4 @@ Widget _skelList() => ListView.builder(
         ]),
       ).animate().shimmer(duration: 1500.ms),
     );
+

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enything Screenshot Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Inter:wght@500&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .instructions {
+            text-align: center;
+            margin-bottom: 30px;
+            max-width: 600px;
+        }
+        
+        /* The Canvas to capture */
+        .canvas {
+            width: 1080px;
+            height: 1920px;
+            background-color: #02061A;
+            background-image: 
+                radial-gradient(circle at 15% 30%, rgba(10, 23, 76, 0.9), transparent 50%),
+                radial-gradient(circle at 85% 70%, rgba(59, 130, 246, 0.2), transparent 50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            transform: scale(0.4);
+            transform-origin: top center;
+            border-radius: 40px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 85px;
+            font-weight: 800;
+            color: white;
+            text-align: center;
+            margin-top: 150px;
+            margin-bottom: 100px;
+            width: 900px;
+            line-height: 1.1;
+            text-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            outline: none;
+            cursor: text;
+        }
+
+        .phone-frame {
+            width: 800px;
+            height: 1600px;
+            background-color: #000;
+            border-radius: 100px;
+            border: 25px solid #1e293b;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.8), 0 0 0 5px #334155;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .phone-notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 250px;
+            height: 70px;
+            background-color: #1e293b;
+            border-bottom-left-radius: 40px;
+            border-bottom-right-radius: 40px;
+            z-index: 10;
+        }
+
+        .screenshot-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            cursor: pointer;
+        }
+
+        .upload-hint {
+            position: absolute;
+            font-size: 30px;
+            color: #64748b;
+            pointer-events: none;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h2>Enything Store Screenshot Maker</h2>
+        <p>1. Click the title below to edit the text (e.g. "Lightning Fast Delivery").</p>
+        <p>2. Click the phone screen to upload your raw app screenshot.</p>
+        <p>3. Use a tool like Snipping Tool (Windows) to capture the beautiful canvas.</p>
+    </div>
+
+    <div class="canvas" id="canvas">
+        <h1 class="title" contenteditable="true">Hyper-Local Delivery in Minutes</h1>
+        
+        <div class="phone-frame" onclick="document.getElementById('fileUpload').click()">
+            <div class="phone-notch"></div>
+            <span class="upload-hint" id="hint">Click to upload raw screenshot</span>
+            <img src="" id="screenshot" class="screenshot-img" style="display: none;">
+        </div>
+    </div>
+
+    <input type="file" id="fileUpload" accept="image/*" onchange="loadFile(event)">
+
+    <script>
+        function loadFile(event) {
+            var output = document.getElementById('screenshot');
+            var hint = document.getElementById('hint');
+            output.src = URL.createObjectURL(event.target.files[0]);
+            output.style.display = 'block';
+            hint.style.display = 'none';
+            output.onload = function() {
+                URL.revokeObjectURL(output.src) // free memory
+            }
+        }
+    </script>
+</body>
+</html>

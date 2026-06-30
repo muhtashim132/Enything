@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/routes.dart';
 import '../providers/auth_provider.dart';
+import '../providers/subscription_provider.dart'; // FIX BUG-7: init subscription on startup
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -88,6 +89,13 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         // Active session exists, but profile wasn't created yet!
         Navigator.pushReplacementNamed(context, AppRoutes.roleSelect);
         return;
+      }
+
+      // FIX BUG-7: Initialize SubscriptionProvider so Pass features work.
+      // Must be called here because SubscriptionProvider.init() requires userId
+      // which is only available after auth profile is fetched.
+      if (auth.currentUserId != null && mounted) {
+        context.read<SubscriptionProvider>().init(auth.currentUserId!);
       }
 
       final role = auth.user?.activeSessionRole ?? auth.user?.role;
@@ -520,3 +528,4 @@ class _StarPainter extends CustomPainter {
   @override
   bool shouldRepaint(_StarPainter o) => o.t != t;
 }
+

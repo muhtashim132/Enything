@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -101,13 +101,13 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
       if (topIds.isNotEmpty) {
         final shops = await _db
             .from('shops')
-            .select('id, shop_name')
+            .select('id, name') // FIX: shop_name column does not exist; actual column is 'name'
             .inFilter('id', topIds.map((e) => e.key).toList());
         _topSellers = topIds.map((e) {
           final shop = (shops as List).firstWhere(
               (s) => s['id'].toString() == e.key,
-              orElse: () => {'shop_name': 'Unknown'});
-          return {'name': shop['shop_name'] ?? 'Unknown', 'orders': e.value};
+              orElse: () => {'name': 'Unknown'});
+          return {'name': shop['name'] ?? 'Unknown', 'orders': e.value};
         }).toList();
       }
 
@@ -530,3 +530,4 @@ class _StatusSkeleton extends StatelessWidget {
     );
   }
 }
+
