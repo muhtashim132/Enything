@@ -68,15 +68,16 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
         bottomNavigationBar: MaxWidthContainer(
           maxWidth: 600,
           alignment: Alignment.bottomCenter,
-          child: _buildFloatingBottomNav(cartProvider),
+          child: _buildFloatingBottomNav(context, cartProvider),
         ),
       ),
     );
   }
 
-  Widget _buildFloatingBottomNav(CartProvider cart) {
+  Widget _buildFloatingBottomNav(BuildContext context, CartProvider cart) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + bottomPadding),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(
