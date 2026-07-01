@@ -246,6 +246,77 @@ class ContactUsPage extends StatelessWidget {
 
             const SizedBox(height: 32),
 
+            // ── Grievance Redressal ─────────────────────────────────────
+            Text(
+              'Grievance Redressal Mechanism',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'In compliance with the Consumer Protection (E-Commerce) Rules, 2020, and IT Rules, 2021, you can reach out to our Grievance Officer / Nodal Contact Person for any complaints. We will acknowledge your complaint within 48 hours with a ticket number and resolve it within 1 month.',
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.gavel_rounded,
+                      color: AppColors.primary, size: 24),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Muhtaashim Kamran Nazki',
+                          style: GoogleFonts.outfit(
+                            color: AppColors.primary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Grievance Officer & Nodal Contact',
+                          style: GoogleFonts.outfit(
+                            color: textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$_email  |  $_phoneDisplay',
+                          style: GoogleFonts.outfit(
+                            color: textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
             // ── Support Hours ───────────────────────────────────────────
             Container(
               width: double.infinity,

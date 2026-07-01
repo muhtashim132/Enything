@@ -54,6 +54,11 @@ class LegalConstants {
       content:
           'Enything reserves the right to modify these Terms at any time. Continued use of the platform after changes constitutes acceptance of the revised Terms. The "Last Updated" date at the top of this page will reflect the most recent revision.',
     ),
+    LegalSection(
+      heading: '9. Grievance Redressal & Nodal Officer',
+      content:
+          'In compliance with the Consumer Protection (E-Commerce) Rules, 2020, and IT Rules, 2021, the Grievance Officer and Nodal Contact Person is Muhtaashim Kamran Nazki. Contact: support@enything.in or +91 7006464241. All complaints will be acknowledged within 48 hours (with a unique ticket number) and resolved within 1 month from the date of receipt.',
+    ),
   ];
 
   static final List<LegalSection> customerPrivacy = [
@@ -164,6 +169,11 @@ class LegalConstants {
       content:
           'This agreement is governed by Indian law. Disputes shall be subject to the exclusive jurisdiction of courts at Bandipora, Jammu & Kashmir.',
     ),
+    LegalSection(
+      heading: '7. Consumer Disclosures & Grievance Redressal',
+      content:
+          'As per Consumer Protection (E-Commerce) Rules, 2020, you must provide your legal name, geographic address, and GSTIN for display to consumers on the Enything platform. For grievances, the Grievance Officer and Nodal Contact Person is Muhtaashim Kamran Nazki (support@enything.in). Complaints will be acknowledged within 48 hours and resolved within 1 month.',
+    ),
   ];
 
   static final List<LegalSection> sellerPrivacy = [
@@ -238,6 +248,11 @@ class LegalConstants {
       heading: '5. Governing Law',
       content:
           'This agreement is governed by Indian law. Disputes shall be subject to the exclusive jurisdiction of courts at Bandipora, Jammu & Kashmir.',
+    ),
+    LegalSection(
+      heading: '6. Grievance Redressal',
+      content:
+          'For any grievances, the Grievance Officer and Nodal Contact Person is Muhtaashim Kamran Nazki (support@enything.in). Complaints will be acknowledged with a ticket number within 48 hours and resolved within 1 month.',
     ),
   ];
 
