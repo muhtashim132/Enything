@@ -409,7 +409,18 @@ footer {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .logo { flex-direction: column; align-items: center; gap: 5px; }
+  .logo { 
+    position: relative; 
+    display: inline-flex; 
+    justify-content: center; 
+  }
+  .logo-img { 
+    position: absolute; 
+    right: 100%; 
+    margin-right: 12px; 
+    top: 50%; 
+    transform: translateY(-50%); 
+  }
   .hero { flex-direction: column; text-align: center; }
   .hero h1 { font-size: 3rem; }
   .hero p { margin: 0 auto 2.5rem; }
