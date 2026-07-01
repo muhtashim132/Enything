@@ -412,7 +412,9 @@ footer {
   .hero h1 { font-size: 3rem; }
   .hero p { margin: 0 auto 2.5rem; }
   .cta-group { justify-content: center; }
-  nav { display: none; /* Mobile menu could be added later */ }
+  header { flex-direction: column; text-align: center; gap: 1rem; }
+  nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; }
+  nav a { margin-left: 0; font-size: 0.9rem; }
   .doc-container { padding: 1.5rem; }
   .step { flex-direction: column; text-align: center; }
   .bottom-cta h2 { font-size: 2rem; }
