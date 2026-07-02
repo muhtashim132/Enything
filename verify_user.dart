@@ -2,8 +2,8 @@
 import 'package:supabase/supabase.dart';
 
 void main() async {
-  final supabaseUrl = 'https://mmdrgcuaetwohflcvzou.supabase.co';
-  final supabaseKey = 'sb_publishable_f4uHzztf4EK76hcL0-bS5A_Ga0G2K6p';
+  const supabaseUrl = 'https://mmdrgcuaetwohflcvzou.supabase.co';
+  const supabaseKey = 'sb_publishable_f4uHzztf4EK76hcL0-bS5A_Ga0G2K6p';
   
   final client = SupabaseClient(supabaseUrl, supabaseKey);
   

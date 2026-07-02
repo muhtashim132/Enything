@@ -1,8 +1,9 @@
-﻿import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/user_model.dart';
 import '../main.dart';
 
@@ -249,6 +250,20 @@ class AuthProvider extends ChangeNotifier {
     _isAdminVerified = false;
     _adminData = null;
     notifyListeners();
+  }
+
+  /// Switch from admin mode into another role the user already holds
+  /// (e.g. customer, seller, delivery_partner) WITHOUT ending the Supabase
+  /// auth session. Clears admin verification flag and sets the new session role.
+  /// Used by the "Switch Role" button in the Admin Dashboard header.
+  Future<void> switchFromAdminToRole(String role) async {
+    if (_user == null) return;
+    if (!_user!.activeRoles.contains(role)) return;
+    // Drop admin mode — no 2FA required for the new non-admin role
+    _isAdminVerified = false;
+    _adminData = null;
+    // Reuse existing switchSessionRole to set role + persist to SharedPreferences
+    await switchSessionRole(role);
   }
 
   Future<void> _fetchProfile({String? preferredRole}) async {
@@ -966,6 +981,28 @@ class AuthProvider extends ChangeNotifier {
               .eq('id', userId);
         }
       } catch (_) {} // Never block logout on deactivation failure
+    }
+
+    // ── SECURITY FIX: Delete this device's FCM token from DB on every logout ──
+    // Without this, admin tokens registered on a device persist after logout.
+    // The stale token allows the DB send-push webhook to deliver admin-role
+    // notifications (e.g. KYC alerts) to the next user who logs in on the
+    // same physical device — a critical cross-user notification security breach.
+    if (userId != null) {
+      try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          await _supabase
+              .from('device_tokens')
+              .delete()
+              .eq('user_id', userId)
+              .eq('token', fcmToken);
+          debugPrint('Device token purged for user $userId on logout.');
+        }
+      } catch (e) {
+        // Never block logout on token cleanup failure
+        debugPrint('Failed to purge device token on logout: $e');
+      }
     }
 
     try {

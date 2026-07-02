@@ -75,12 +75,41 @@ class NotificationProvider extends ChangeNotifier {
       if (cachedToken == token) {
         debugPrint('FCM token unchanged, skipping DB upsert');
       } else {
+        // ── SECURITY FIX: Delete stale cross-user tokens before registering ──
+        // If another user was previously logged in on this device, their token
+        // row may still exist in device_tokens with the SAME FCM token but a
+        // DIFFERENT user_id. We must purge it first to prevent admin-role
+        // notifications (e.g. KYC alerts) from leaking to this device.
+        // The DB trigger `tr_enforce_single_token_per_device` handles this at
+        // the DB level too — this is client-side defense-in-depth.
+        try {
+          await _supabase
+              .from('device_tokens')
+              .delete()
+              .eq('token', token)
+              .neq('user_id', userId);
+          debugPrint('Purged stale cross-user tokens for FCM token on this device.');
+        } catch (e) {
+          debugPrint('Non-fatal: could not purge stale device tokens: $e');
+        }
+
+        // ── Retrieve or generate a stable device_id ─────────────────────────
+        // We store a UUID in SharedPreferences on first launch. This gives us
+        // a stable, device-scoped identifier that survives FCM token rotation
+        // (FCM tokens can change on uninstall/reinstall; device_id does not).
+        String? deviceId = prefs.getString('stable_device_id');
+        if (deviceId == null) {
+          deviceId = 'dev_${DateTime.now().millisecondsSinceEpoch}_${userId.substring(0, 8)}';
+          await prefs.setString('stable_device_id', deviceId);
+        }
+
         // Try upsert first, then plain insert as fallback
         final response = await _supabase.from('device_tokens').upsert({
           'user_id': userId,
           'token': token,
           'platform': Platform.isIOS ? 'ios' : 'android',
           'role': role,
+          'device_id': deviceId,
           'updated_at': DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,token');
 
@@ -101,6 +130,7 @@ class NotificationProvider extends ChangeNotifier {
             'token': token,
             'platform': Platform.isIOS ? 'ios' : 'android',
             'role': role,
+            'device_id': deviceId,
           });
           debugPrint('FCM plain INSERT result: $insertRes');
         } else {
@@ -112,45 +142,61 @@ class NotificationProvider extends ChangeNotifier {
       // Listen for token refresh and re-register
       _fcmTokenSub?.cancel();
       _fcmTokenSub = messaging.onTokenRefresh.listen((newToken) async {
+        final prefs = await SharedPreferences.getInstance();
+        final deviceId = prefs.getString('stable_device_id');
         await _supabase.from('device_tokens').upsert({
           'user_id': userId,
           'token': newToken,
           'platform': Platform.isIOS ? 'ios' : 'android',
           'role': role,
+          'device_id': deviceId,
           'updated_at': DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,token');
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setString('fcm_token_$userId', newToken);
       });
 
-      // Handle foreground messages by adding them as in-app notifications
+      // Handle foreground FCM messages — show a heads-up buzz notification
+      // identical to the behaviour when the app is closed/backgrounded.
+      //
+      // IMPORTANT: On Android, FCM does NOT display a system notification
+      // when the app is in the foreground. We must manually show one using
+      // flutter_local_notifications so sellers and riders get the same buzz
+      // whether the app is open or not.
+      //
+      // Two sub-cases:
+      //   1. notification+data message  → use notif.title/body for the buzz
+      //   2. data-only message          → use message.data['title'/'body']
       _fcmMessageSub?.cancel();
       _fcmMessageSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         final notif = message.notification;
-        if (notif == null) return;
-        
-        // Prevent duplicate notifications in the foreground:
-        // Order-related events are already handled instantly by our Postgres Realtime listeners.
-        // We only want to show non-order FCMs (like admin broadcasts or marketing pushes) here.
-        if (message.data['order_id'] != null) {
-          return;
-        }
 
-        _notifications.add(AppNotification(
-          id: message.messageId ?? DateTime.now().toIso8601String(),
-          title: notif.title ?? 'Notification',
-          body: notif.body ?? '',
-          orderId: message.data['order_id'] as String?,
+        // Resolve title/body from whichever field is present
+        final title = notif?.title ?? message.data['title'] as String? ?? 'Enything';
+        final body  = notif?.body  ?? message.data['body']  as String? ?? '';
+        final orderId = message.data['order_id'] as String?;
+
+        // Skip empty messages
+        if (title.isEmpty && body.isEmpty) return;
+
+        // ── In-app bell notification (dedup + DB persist via _add) ─────────────
+        // For order-related FCM pushes: the Supabase Realtime path (_add) already
+        // adds the in-app entry. Using _add() here as well is safe because _add()
+        // deduplicates by id — the second call is a no-op.
+        // For non-order pushes (broadcasts, admin messages): this is the only path.
+        final fcmId = orderId != null
+            ? '${orderId}_fcm_foreground' // stable dedup key per order
+            : (message.messageId ?? DateTime.now().toIso8601String());
+
+        _add(AppNotification(
+          id: fcmId,
+          title: title,
+          body: body,
+          orderId: orderId,
         ));
-        
-        // Show a heads-up buzz notification even when app is open!
-        // NotificationService().showNotification(
-        //   title: notif.title ?? 'Zappy',
-        //   body: notif.body ?? '',
-        //   payload: jsonEncode(message.data),
-        // );
-        
-        notifyListeners();
+
+        // ── System heads-up buzz ────────────────────────────────────────────────
+        // _add() already calls NotificationService().showNotification() internally,
+        // so the buzz is triggered for every call above. Nothing extra needed here.
       });
     } catch (e) {
       debugPrint('FCM token registration failed: $e');

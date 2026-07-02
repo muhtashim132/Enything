@@ -60,9 +60,9 @@ class _CustomerMainPageState extends State<CustomerMainPage> {
           index: _navIndex,
           children: [
             CustomerHomeView(key: _homeKey),
-            FavoritesPage(),
-            OrderHistoryPage(),
-            ProfileSettingsPage(),
+            const FavoritesPage(),
+            const OrderHistoryPage(),
+            const ProfileSettingsPage(),
           ],
         ),
         bottomNavigationBar: MaxWidthContainer(

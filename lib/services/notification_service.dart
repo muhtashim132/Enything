@@ -29,18 +29,36 @@ class NotificationService {
             final data = jsonDecode(response.payload!) as Map<String, dynamic>;
             final role = data['role'] as String?;
             final action = data['action'] as String?;
-            
+            final orderId = data['order_id'] as String?;
+
             if (role == 'seller') {
+              // Seller tap: go to seller dashboard then push orders on top.
               navigatorKey.currentState?.pushNamedAndRemoveUntil(
                   AppRoutes.sellerDashboard, (route) => false);
+              Future.microtask(() {
+                navigatorKey.currentState?.pushNamed(AppRoutes.sellerOrders);
+              });
             } else if (role == 'rider' || role == 'delivery' || action == 'new_order') {
+              // Rider tap: go to delivery dashboard.
               navigatorKey.currentState?.pushNamedAndRemoveUntil(
                   AppRoutes.deliveryDashboard, (route) => false);
-            } else if (data['order_id'] != null) {
-              navigatorKey.currentState?.pushNamed(
-                AppRoutes.trackOrder,
-                arguments: {'orderId': data['order_id']},
-              );
+            } else if (role == 'customer' || (role == null && orderId != null)) {
+              // Customer tap: establish customerHome as base, then push
+              // trackOrder on top so the back button works correctly.
+              if (orderId != null) {
+                navigatorKey.currentState?.pushNamedAndRemoveUntil(
+                    AppRoutes.customerHome, (route) => false);
+                Future.microtask(() {
+                  navigatorKey.currentState?.pushNamed(
+                    AppRoutes.trackOrder,
+                    arguments: {'orderId': orderId},
+                  );
+                });
+              } else {
+                // No order_id — fall back to customer home.
+                navigatorKey.currentState?.pushNamedAndRemoveUntil(
+                    AppRoutes.customerHome, (route) => false);
+              }
             }
           } catch (e) {
             debugPrint('Error parsing notification payload: $e');

@@ -508,7 +508,7 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                     Stack(
                       alignment: Alignment.topCenter,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.location_on,
                           size: 52,
                           color: AppColors.primary,

@@ -79,7 +79,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
-        body: Center(
+        body: const Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         )
       );
@@ -557,7 +557,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           children: [
                             Row(
                               children: [
-                                Icon(Icons.location_on_rounded, size: 16, color: AppColors.primary),
+                                const Icon(Icons.location_on_rounded, size: 16, color: AppColors.primary),
                                 const SizedBox(width: 8),
                                 Text(
                                   '${distanceKm.toStringAsFixed(1)} km away',

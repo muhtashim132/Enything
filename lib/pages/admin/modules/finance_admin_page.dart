@@ -894,7 +894,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           border: Border.all(color: AdminColors.cardBorder),
         ),
         child: Column(children: [
-          Icon(Icons.receipt_long_rounded, color: AdminColors.textMuted, size: 40),
+          const Icon(Icons.receipt_long_rounded, color: AdminColors.textMuted, size: 40),
           const SizedBox(height: 12),
           Text('No taxable items for $_monthLabel',
               style: AdminStyles.body(color: AdminColors.textMuted)),
@@ -1030,10 +1030,10 @@ class _GstStatementTabState extends State<_GstStatementTab> {
         child: Row(children: [
           // S.9(5) indicator
           if (row.isDeemedSupplier)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
               child: Icon(Icons.restaurant_rounded,
-                  color: const Color(0xFF51CF66), size: 12),
+                  color: Color(0xFF51CF66), size: 12),
             )
           else
             const SizedBox(width: 16),
@@ -1095,7 +1095,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           .copyWith(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
       Row(children: [
-        Icon(Icons.restaurant_rounded, color: const Color(0xFF51CF66), size: 12),
+        const Icon(Icons.restaurant_rounded, color: Color(0xFF51CF66), size: 12),
         const SizedBox(width: 6),
         Expanded(child: Text(
           'S.9(5) — Enything is the deemed supplier (restaurant/food). Enything remits GST, not the seller.',

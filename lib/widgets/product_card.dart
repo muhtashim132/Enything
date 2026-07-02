@@ -379,7 +379,7 @@ class _ProductCardState extends State<ProductCard>
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.location_on_rounded,
+                                      const Icon(Icons.location_on_rounded,
                                           size: 11, color: AppColors.primary),
                                       const SizedBox(width: 2),
                                       Flexible(

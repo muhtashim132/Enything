@@ -744,7 +744,7 @@ class _SheetContent extends StatelessWidget {
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.location_on_rounded,
+                                  const Icon(Icons.location_on_rounded,
                                       size: 16, color: AppColors.primary),
                                   const SizedBox(width: 8),
                                   Text(
@@ -917,9 +917,10 @@ class _SheetContent extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _qtyBtn(Icons.remove, () {
-                      if (shop != null)
+                      if (shop != null) {
                         cart.updateQuantity(product.id, quantity - 1,
                             variantName: selectedVariant?.name);
+                      }
                     }, isDark),
                     const SizedBox(width: 28),
                     AnimatedSwitcher(

@@ -379,7 +379,7 @@ class _AddProductPageState extends State<AddProductPage> {
     final navigator = Navigator.of(context);
     try {
       List<String> uploadedUrls = [];
-      final uploadBucket = 'products';
+      const uploadBucket = 'products';
 
       for (int i = 0; i < _images.length; i++) {
         final file = _images[i];

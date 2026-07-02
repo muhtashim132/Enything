@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -125,8 +125,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
-    // FIX BUG-6: Capture coupon ID before any await to avoid BuildContext-across-async-gaps warning
+    // FIX BUG-6: Capture coupon ID & discount before any await to avoid BuildContext-across-async-gaps warning
     final appliedCouponId = context.read<CouponProvider>().appliedCoupon?.id;
+    final appliedCouponDiscount = context.read<CouponProvider>().discountAmount;
+    // Capture subscription provider reference before any await
+    final subProvider = context.read<SubscriptionProvider>();
     final supabase = Supabase.instance.client;
 
     try {
@@ -167,7 +170,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
       // ── Enything Pass: override delivery if subscriber ──────────────────
-      final subProvider = context.read<SubscriptionProvider>();
       final passDeliveryFree = subProvider.isFreeDelivery(cart.subtotal);
       // If Pass grants free delivery, customer pays ₹0; rider still gets paid
       // from Enything's subscription margin (not from customer).
@@ -318,8 +320,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'prescription_urls': uploadedPrescriptionUrls,
               'estimated_distance_km': shopDistanceKm,
               'shop_prep_time_snapshot': shop.prepTimeMinutes,
-              'coupon_id': context.read<CouponProvider>().appliedCoupon?.id,
-              'coupon_discount': context.read<CouponProvider>().discountAmount,
+              'coupon_id': appliedCouponId,
+              'coupon_discount': appliedCouponDiscount,
             })
             .select()
             .single();
@@ -410,6 +412,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       cart.clear();
+      if (!mounted) return;
       context.read<CouponProvider>().clearCoupon();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(
@@ -548,7 +551,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       OutlinedButton.icon(
                         onPressed: () => showAddressPickerSheet(context),
                         icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
-                        label: Text('Change Address'),
+                        label: const Text('Change Address'),
                         style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
@@ -854,7 +857,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                                 color: AppColors.textPrimary)),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
                           'No money is charged now. Payment via UPI/Card is only requested after the shop & rider both accept your order.',
                           style: GoogleFonts.outfit(

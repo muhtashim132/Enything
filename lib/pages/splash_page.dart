@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/routes.dart';
 import '../providers/auth_provider.dart';
 import '../providers/subscription_provider.dart'; // FIX BUG-7: init subscription on startup
+import '../main.dart' show pendingNotificationData, handleNotificationClick;
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -109,6 +110,8 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         } else {
           Navigator.pushReplacementNamed(context, AppRoutes.sellerKycUpload);
         }
+        // Process any terminated-app notification for seller
+        _processPendingNotification();
       } else if (role == 'delivery_partner') {
         if (status == 'verified' || status == 'approved') {
           Navigator.pushReplacementNamed(context, AppRoutes.deliveryDashboard);
@@ -117,11 +120,21 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         } else {
           Navigator.pushReplacementNamed(context, AppRoutes.deliveryKycUpload);
         }
+        // Process any terminated-app notification for rider
+        _processPendingNotification();
       } else if (role == 'admin') {
         // Admin must re-pass 2FA password gate on every app restart
         Navigator.pushReplacementNamed(context, AppRoutes.adminPassword);
+        // No deep-link for admin via notifications — security gate must be passed first
+        pendingNotificationData = null;
       } else {
+        // Customer (default role)
         Navigator.pushReplacementNamed(context, AppRoutes.customerHome);
+        // Process any terminated-app notification for customer — this is the main fix.
+        // addPostFrameCallback ensures customerHome is fully mounted before we push
+        // trackOrder on top of it, preventing a race where pushNamed fires on an
+        // unready navigator.
+        _processPendingNotification();
       }
     } else {
       // No active session — show onboarding on first launch, else role selection
@@ -132,8 +145,49 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         context,
         hasSeenOnboarding ? AppRoutes.roleSelect : AppRoutes.onboarding,
       );
+      // No deep-link for unauthenticated users — clear any stale pending data
+      pendingNotificationData = null;
     }
   }
+
+  /// Consumes [pendingNotificationData] (set during a terminated-app launch)
+  /// and deep-links the user to the correct screen.
+  ///
+  /// Must be called AFTER [Navigator.pushReplacementNamed] so the destination
+  /// route is already on the stack. Uses [addPostFrameCallback] to defer the
+  /// additional push until the new route's frame is fully rendered.
+  ///
+  /// IMPORTANT: For customers, we push [AppRoutes.trackOrder] directly on top
+  /// of [AppRoutes.customerHome] (which was just pushed by pushReplacementNamed)
+  /// instead of calling [handleNotificationClick] — doing so would re-push
+  /// customerHome unnecessarily via pushNamedAndRemoveUntil.
+  void _processPendingNotification() {
+    final data = pendingNotificationData;
+    if (data == null || data.isEmpty) return;
+    // Consume immediately — prevent any chance of double-processing
+    pendingNotificationData = null;
+
+    final role = data['role'] as String?;
+    final orderId = data['order_id'] as String?;
+
+    // For customer: customerHome is already on the stack. Just push trackOrder on top.
+    // For seller/rider: delegate to handleNotificationClick — their pushNamedAndRemoveUntil
+    // correctly replaces the splash-navigated route with their own dashboard.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if ((role == 'customer' || (role == null && orderId != null)) && orderId != null) {
+        // customerHome is already on stack — push trackOrder on top
+        Navigator.of(context).pushNamed(
+          AppRoutes.trackOrder,
+          arguments: {'orderId': orderId},
+        );
+      } else {
+        // seller / rider / other: let handleNotificationClick do full routing
+        handleNotificationClick(data);
+      }
+    });
+  }
+
 
   void _showNetworkErrorRetry() {
     showDialog(

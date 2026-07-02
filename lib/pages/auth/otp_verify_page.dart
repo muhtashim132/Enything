@@ -562,8 +562,10 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                   children: [
                     const SizedBox(height: 16),
                     // Logo mark
-                    const _MiniLogo(size: 110),
-                    const SizedBox(height: 20),
+                    if (MediaQuery.of(context).viewInsets.bottom == 0) ...[
+                      const _MiniLogo(size: 110),
+                      const SizedBox(height: 20),
+                    ],
 
                     // Role badge
                     if (_requestedRole != null)
@@ -736,6 +738,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                         ]),
                       ),
                     ),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),

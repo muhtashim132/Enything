@@ -34,12 +34,14 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
   final _extraFieldsKey = GlobalKey<CategoryExtraFieldsState>();
   bool _fetchingLocation = false;
   // Delivery
+  final _deliveryAddressCtrl = TextEditingController();
   final _vehicleTypeCtrl = TextEditingController();
   final _vehicleRegCtrl = TextEditingController();
   final _insuranceCtrl = TextEditingController();
   // Common
   final _pincodeCtrl = TextEditingController();
   final _landmarkCtrl = TextEditingController();
+  final _houseNumberCtrl = TextEditingController();
   String? _phoneNumber;
 
   // Seller specific extra
@@ -56,7 +58,9 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
   void initState() {
     super.initState();
     final auth = context.read<AuthProvider>();
-    _phoneNumber = Supabase.instance.client.auth.currentUser?.phone ?? auth.pendingPhone ?? auth.user?.phone;
+    _phoneNumber = Supabase.instance.client.auth.currentUser?.phone ??
+        auth.pendingPhone ??
+        auth.user?.phone;
     _animCtrl = AnimationController(
         duration: const Duration(milliseconds: 400), vsync: this)
       ..forward();
@@ -103,11 +107,13 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       _addressCtrl,
       _shopNameCtrl,
       _shopAddressCtrl,
+      _deliveryAddressCtrl,
       _vehicleTypeCtrl,
       _vehicleRegCtrl,
       _insuranceCtrl,
       _pincodeCtrl,
       _landmarkCtrl,
+      _houseNumberCtrl,
       _gstCtrl,
     ]) {
       c.dispose();
@@ -130,7 +136,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       final locProv = context.read<LocationProvider>();
       // Seed the map from existing GPS or previously confirmed location
       final seedLoc = locProv.currentLocation;
-      final seedAddr = targetCtrl.text.trim().isNotEmpty ? targetCtrl.text.trim() : null;
+      final seedAddr =
+          targetCtrl.text.trim().isNotEmpty ? targetCtrl.text.trim() : null;
 
       final result = await Navigator.push<MapPickResult?>(
         context,
@@ -147,11 +154,15 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       if (!mounted) return;
       if (result != null) {
         locProv.setManualLocation(
-          result.location, 
-          result.address, 
+          result.location,
+          result.address,
+          house: result.houseNumber,
+          mark: result.landmark,
         );
         setState(() {
           targetCtrl.text = result.address;
+          _houseNumberCtrl.text = result.houseNumber;
+          _landmarkCtrl.text = result.landmark;
           _fetchingLocation = false;
         });
       } else {
@@ -182,7 +193,9 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       locationPoint =
           'POINT(${locProv.currentLocation!.longitude} ${locProv.currentLocation!.latitude})';
     } else {
-      _showSnack('Please tap the 📍 icon in the address field to set your exact location', isError: true);
+      _showSnack(
+          'Please tap the 📍 icon in the address field to set your exact location',
+          isError: true);
       setState(() => _loading = false);
       return;
     }
@@ -193,6 +206,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         extra = {
           'default_address': _addressCtrl.text.trim(),
           'pincode': _pincodeCtrl.text.trim(),
+          'house_number': _houseNumberCtrl.text.trim(),
           'landmark': _landmarkCtrl.text.trim(),
           'location': locationPoint,
         };
@@ -215,6 +229,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           'category': _shopCategory,
           'address': _shopAddressCtrl.text.trim(),
           'pincode': _pincodeCtrl.text.trim(),
+          'house_number': _houseNumberCtrl.text.trim(),
           'landmark': _landmarkCtrl.text.trim(),
           'is_active': false,
           'verification_status': 'unverified',
@@ -240,6 +255,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           'vehicle_reg_number': _vehicleRegCtrl.text.trim(), // RC
           'insurance_number': _insuranceCtrl.text.trim(),
           'pincode': _pincodeCtrl.text.trim(),
+          'house_number': _houseNumberCtrl.text.trim(),
           'landmark': _landmarkCtrl.text.trim(),
           'location': locationPoint,
           'is_available': false,
@@ -467,7 +483,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           _RoleCard(
             icon: '🏪',
             title: 'Seller',
-            subtitle: 'List your products — ${config.unifiedCommissionPercent.toStringAsFixed(0)}% commission on sales',
+            subtitle:
+                'List your products — ${config.unifiedCommissionPercent.toStringAsFixed(0)}% commission on sales',
             selected: _role == _Role.seller,
             onTap: () => setState(() => _role = _Role.seller),
           ),
@@ -511,7 +528,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(30),
-                child: Image.asset('logo/Enything_modern.png', fit: BoxFit.cover),
+                child:
+                    Image.asset('logo/Enything_modern.png', fit: BoxFit.cover),
               ),
             ),
           ),
@@ -560,11 +578,12 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         return [
           _buildAddressAndLocation('Default Delivery Address', _addressCtrl),
           const SizedBox(height: 16),
-          _DarkField(
-              label: 'Landmark',
-              controller: _landmarkCtrl,
-              hint: 'e.g. Near City Mall'),
-          const SizedBox(height: 16),
+          if (_addressCtrl.text.isNotEmpty) ...[
+            _buildReadOnlyField('House / Building Name', _houseNumberCtrl.text),
+            const SizedBox(height: 16),
+            _buildReadOnlyField('Landmark', _landmarkCtrl.text),
+            const SizedBox(height: 16),
+          ],
           _DarkField(
               label: 'Pincode',
               controller: _pincodeCtrl,
@@ -643,11 +662,13 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           // ── Shop Address with live GPS ────────────────────────────────
           _buildAddressAndLocation('Shop Address *', _shopAddressCtrl),
           const SizedBox(height: 16),
-          _DarkField(
-              label: 'Landmark',
-              controller: _landmarkCtrl,
-              hint: 'e.g. Near City Mall'),
-          const SizedBox(height: 16),
+          if (_shopAddressCtrl.text.isNotEmpty) ...[
+            _buildReadOnlyField(
+                'Shop No. / Building Name', _houseNumberCtrl.text),
+            const SizedBox(height: 16),
+            _buildReadOnlyField('Landmark', _landmarkCtrl.text),
+            const SizedBox(height: 16),
+          ],
           _DarkField(
               label: 'Pincode *',
               controller: _pincodeCtrl,
@@ -748,8 +769,16 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
               hint: 'e.g. INS12345678',
               caps: true),
           const SizedBox(height: 16),
-          _buildAddressAndLocation('Landmark (Home Base) *', _landmarkCtrl),
+          _buildAddressAndLocation(
+              'Home Base Location *', _deliveryAddressCtrl),
           const SizedBox(height: 16),
+          if (_deliveryAddressCtrl.text.isNotEmpty) ...[
+            _buildReadOnlyField(
+                'House No. / Building Name', _houseNumberCtrl.text),
+            const SizedBox(height: 16),
+            _buildReadOnlyField('Landmark', _landmarkCtrl.text),
+            const SizedBox(height: 16),
+          ],
           _DarkField(
               label: 'Pincode (Operational Area) *',
               controller: _pincodeCtrl,
@@ -761,7 +790,9 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
   }
 
   Widget _buildPhoneField() {
-    final displayPhone = (_phoneNumber == null || _phoneNumber!.isEmpty) ? 'Not available' : _phoneNumber!;
+    final displayPhone = (_phoneNumber == null || _phoneNumber!.isEmpty)
+        ? 'Not available'
+        : _phoneNumber!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -783,11 +814,14 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           child: Text(
             displayPhone,
             style: GoogleFonts.outfit(
-                color: Colors.white54, fontSize: 15, fontWeight: FontWeight.w500),
+                color: Colors.white54,
+                fontSize: 15,
+                fontWeight: FontWeight.w500),
           ),
         ),
         const SizedBox(height: 6),
-        Text('This number was used for verification and will be used for contact.',
+        Text(
+            'This number was used for verification and will be used for contact.',
             style: GoogleFonts.outfit(color: Colors.white30, fontSize: 11)),
       ],
     );
@@ -900,6 +934,36 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         const SizedBox(height: 6),
         Text('Tap to open interactive map and pin your location',
             style: GoogleFonts.outfit(color: Colors.white30, fontSize: 11)),
+      ],
+    );
+  }
+
+  Widget _buildReadOnlyField(String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: GoogleFonts.outfit(
+                color: Colors.white54,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.6)),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          ),
+          child: Text(
+            value,
+            style: GoogleFonts.outfit(
+                color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+          ),
+        ),
       ],
     );
   }

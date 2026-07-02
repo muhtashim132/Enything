@@ -385,7 +385,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
     if (isMagic) {
       locationProvider.setManualLocation(
-        LatLng(34.4225, 74.6366),
+        const LatLng(34.4225, 74.6366),
         'Main Market, Bandipora',
       );
     } else if (!locationProvider.hasLocation) {

@@ -90,10 +90,85 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     context.read<NotificationProvider>().stopListening();
     // APP4 FIX: Clear cart on logout
     context.read<CartProvider>().clear();
-    context.read<AuthProvider>().adminSignOut();
     context.read<RbacProvider>().clear();
+    // SECURITY FIX: Use full signOut() instead of adminSignOut() so the device
+    // FCM token is deleted from the DB. adminSignOut() only cleared in-memory
+    // state but left the device_tokens row alive, causing admin notifications
+    // (KYC alerts etc.) to be delivered to the next user on this device.
+    context.read<AuthProvider>().signOut();
     Navigator.pushNamedAndRemoveUntil(
         context, AppRoutes.roleSelect, (_) => false);
+  }
+
+  /// Plan A: Let admin switch to one of their other roles (e.g. customer)
+  /// without a full sign-out. Clears admin verification, sets new session role,
+  /// and navigates to the appropriate dashboard.
+  Future<void> _switchRole(String role) async {
+    context.read<NotificationProvider>().stopListening();
+    await context.read<AuthProvider>().switchFromAdminToRole(role);
+    if (!mounted) return;
+    // Navigate to the correct dashboard for the chosen role
+    if (role == 'seller') {
+      Navigator.pushNamedAndRemoveUntil(
+          context, AppRoutes.sellerDashboard, (_) => false);
+    } else if (role == 'delivery_partner') {
+      Navigator.pushNamedAndRemoveUntil(
+          context, AppRoutes.deliveryDashboard, (_) => false);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+          context, AppRoutes.customerHome, (_) => false);
+    }
+  }
+
+  /// Shows a bottom sheet letting the admin pick a non-admin role to switch to.
+  void _showRoleSwitcher(List<String> otherRoles) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0D1440),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Switch Role',
+              style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Exit admin mode and continue as another role',
+              style: GoogleFonts.outfit(
+                  color: Colors.white54, fontSize: 13),
+            ),
+            const SizedBox(height: 20),
+            ...otherRoles.map((role) {
+              final emoji = role == 'seller' ? '🏪' : role == 'delivery_partner' ? '🛵' : '🛍️';
+              final label = role == 'seller' ? 'Seller' : role == 'delivery_partner' ? 'Delivery Partner' : 'Customer';
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Text(emoji, style: const TextStyle(fontSize: 26)),
+                title: Text(label,
+                    style: GoogleFonts.outfit(
+                        color: Colors.white, fontWeight: FontWeight.w600)),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                    color: Colors.white38, size: 16),
+                onTap: () {
+                  Navigator.pop(context); // close sheet
+                  _switchRole(role);
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Build tabs based on permissions ─────────────────────────────
@@ -198,7 +273,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                 _Header(
                   adminName: adminName,
                   rbac: rbac,
+                  auth: auth,
                   onSignOut: _signOut,
+                  onSwitchRole: _showRoleSwitcher,
                 ),
                 Expanded(
                   child: IndexedStack(
@@ -297,17 +374,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 class _Header extends StatelessWidget {
   final String adminName;
   final RbacProvider rbac;
+  final AuthProvider auth;
   final VoidCallback onSignOut;
+  final void Function(List<String> otherRoles) onSwitchRole;
 
   const _Header({
     required this.adminName,
     required this.rbac,
+    required this.auth,
     required this.onSignOut,
+    required this.onSwitchRole,
   });
 
   @override
   Widget build(BuildContext context) {
     final role = rbac.currentAdmin?.role;
+    // Plan A: Collect the user's other (non-admin) roles for the switch button
+    final otherRoles = (auth.user?.activeRoles ?? [])
+        .where((r) => r != 'admin')
+        .toList();
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
       decoration: BoxDecoration(
@@ -369,6 +454,16 @@ class _Header extends StatelessWidget {
               containerColor: Colors.transparent,
               badgeColor: AdminColors.warning,
             ),
+            // Plan A: Show "Switch Role" icon only if user has other roles
+            if (otherRoles.isNotEmpty)
+              Tooltip(
+                message: 'Switch Role',
+                child: IconButton(
+                  icon: const Icon(Icons.swap_horiz_rounded,
+                      color: AdminColors.textMuted, size: 20),
+                  onPressed: () => onSwitchRole(otherRoles),
+                ),
+              ),
             IconButton(
               icon: const Icon(Icons.logout_rounded,
                   color: AdminColors.textMuted, size: 20),

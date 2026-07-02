@@ -93,15 +93,18 @@ void main() async {
 
   // Deep linking: Handle notification tap when app is in background
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    _handleNotificationClick(message.data);
+    handleNotificationClick(message.data);
   });
 
-  // Deep linking: Handle notification tap when app is terminated
+  // Deep linking: Handle notification tap when app is terminated.
+  // We do NOT call _handleNotificationClick() directly here because the
+  // navigator isn't ready yet and the SplashPage's own async navigation
+  // (1.8 s delay) would override any route we push. Instead, we store the
+  // data in a global and let SplashPage._navigate() process it once the
+  // navigator stack is fully established.
   final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-  if (initialMessage != null) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handleNotificationClick(initialMessage.data);
-    });
+  if (initialMessage != null && initialMessage.data.isNotEmpty) {
+    pendingNotificationData = initialMessage.data;
   }
 
   runApp(EnythingApp(
@@ -113,29 +116,57 @@ void main() async {
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void _handleNotificationClick(Map<String, dynamic> data) {
+/// Holds the FCM notification data from a terminated-app launch so that the
+/// SplashPage can process it AFTER its own navigation completes — preventing
+/// the race where handleNotificationClick fires before the navigator stack
+/// is ready and gets silently overridden by the splash's own route push.
+Map<String, dynamic>? pendingNotificationData;
+
+/// Routes a notification tap to the correct screen for each user role.
+///
+/// Called from three places:
+///   1. [FirebaseMessaging.onMessageOpenedApp] — app was backgrounded.
+///   2. SplashPage._processPendingNotification — app was terminated (safe timing).
+///   3. NotificationService.onDidReceiveNotificationResponse — local buzz tap.
+void handleNotificationClick(Map<String, dynamic> data) {
   final role = data['role'] as String?;
   final action = data['action'] as String?;
+  final orderId = data['order_id'] as String?;
 
   if (role == 'seller') {
-    // Go directly to the Seller Orders page (Pending tab is tab 0 by default)
-    // pushNamedAndRemoveUntil keeps the seller dashboard as the base so back works
+    // Go directly to the Seller Orders page (Pending tab is tab 0 by default).
+    // pushNamedAndRemoveUntil keeps the seller dashboard as the base so back works.
     navigatorKey.currentState
         ?.pushNamedAndRemoveUntil(AppRoutes.sellerDashboard, (route) => false);
-    // Then push the orders page on top so the seller sees the Pending list immediately
+    // Then push the orders page on top so the seller sees the Pending list immediately.
     Future.microtask(() {
       navigatorKey.currentState?.pushNamed(AppRoutes.sellerOrders);
     });
   } else if (role == 'rider' || role == 'delivery' || action == 'new_order') {
-    // Go to Delivery Dashboard — Available Orders section shows new orders
+    // Go to Delivery Dashboard — Available Orders section shows new orders.
     navigatorKey.currentState?.pushNamedAndRemoveUntil(
         AppRoutes.deliveryDashboard, (route) => false);
-  } else if (data['order_id'] != null) {
-    // Customer tap → go directly to their order tracking page
-    navigatorKey.currentState?.pushNamed(
-      AppRoutes.trackOrder,
-      arguments: {'orderId': data['order_id']},
-    );
+  } else if (role == 'customer' || (role == null && orderId != null)) {
+    // Customer tap (role == 'customer') OR unroled tap with an order_id —
+    // always go to the order tracking page.
+    //
+    // Strategy: push customerHome as the base (so back-navigation works
+    // correctly), then push trackOrder on top via microtask.
+    // pushNamedAndRemoveUntil clears any stale routes beneath.
+    if (orderId != null) {
+      navigatorKey.currentState
+          ?.pushNamedAndRemoveUntil(AppRoutes.customerHome, (route) => false);
+      Future.microtask(() {
+        navigatorKey.currentState?.pushNamed(
+          AppRoutes.trackOrder,
+          arguments: {'orderId': orderId},
+        );
+      });
+    } else {
+      // No order_id — fall back to customer home.
+      navigatorKey.currentState
+          ?.pushNamedAndRemoveUntil(AppRoutes.customerHome, (route) => false);
+    }
   }
 }
 
@@ -155,7 +186,7 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   // For data-only messages, title/body come from message.data
   final title = message.data['title'] as String? ??
       message.notification?.title ??
-      'Zappy';
+      'Enything';
   final body =
       message.data['body'] as String? ?? message.notification?.body ?? '';
 

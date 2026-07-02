@@ -47,6 +47,8 @@ dependencies:
   image: ^4.2.0
   flutter_background_service: ^5.0.5
   share_plus: ^13.1.0
+  crop_your_image: ^2.0.0
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
@@ -55,6 +57,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.7
 
+  supabase: any
 flutter:
   uses-material-design: true
   assets:

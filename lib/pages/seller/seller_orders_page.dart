@@ -638,13 +638,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               elevation: 0,
               backgroundColor: isDark ? const Color(0xFF141425) : Colors.white,
               surfaceTintColor: Colors.transparent,
+              title: Text('Orders',
+                  style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 24,
+                      color: isDark ? Colors.white : Colors.black)),
               flexibleSpace: FlexibleSpaceBar(
-                titlePadding: const EdgeInsets.only(left: 20, bottom: 60),
-                title: Text('Orders',
-                    style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 24,
-                        color: isDark ? Colors.white : Colors.black)),
                 background: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

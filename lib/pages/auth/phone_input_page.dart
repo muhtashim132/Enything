@@ -112,6 +112,117 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
     }
   }
 
+  void _showTermsWarning() {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.center,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF141724), // Dark background matching app
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFF4C542).withValues(alpha: 0.3),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF4C542).withValues(alpha: 0.15),
+                    blurRadius: 30,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF4C542).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.gpp_maybe_rounded,
+                      color: Color(0xFFF4C542),
+                      size: 40,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Terms & Conditions',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Please accept the terms and conditions before entering your phone number.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      color: Colors.white70,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  InkWell(
+                    onTap: () => Navigator.pop(context),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFD700), Color(0xFFF4A800)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Got it',
+                          style: GoogleFonts.outfit(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(
+            parent: anim1,
+            curve: Curves.easeOutBack,
+          ),
+          child: FadeTransition(
+            opacity: anim1,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -256,13 +367,19 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: IgnorePointer(
-                                  ignoring: !_agreedToTerms,
-                                  child: Opacity(
-                                    opacity: _agreedToTerms ? 1.0 : 0.3,
-                                    child: TextField(
-                                      controller: _phoneCtrl,
-                                      keyboardType: TextInputType.phone,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    if (!_agreedToTerms) {
+                                      _showTermsWarning();
+                                    }
+                                  },
+                                  child: AbsorbPointer(
+                                    absorbing: !_agreedToTerms,
+                                    child: Opacity(
+                                      opacity: _agreedToTerms ? 1.0 : 0.3,
+                                      child: TextField(
+                                        controller: _phoneCtrl,
+                                        keyboardType: TextInputType.phone,
                                       maxLength: 10,
                                       inputFormatters: [
                                         FilteringTextInputFormatter.digitsOnly
@@ -294,7 +411,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                                   ),
                                 ),
                               ),
-                            ],
+                            ),
+                          ],
                           ),
                         ],
                       ),
@@ -470,7 +588,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
