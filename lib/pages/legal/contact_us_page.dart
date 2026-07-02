@@ -18,6 +18,8 @@ class ContactUsPage extends StatelessWidget {
   static const String _businessName = 'Enything';
   static const String _proprietorName = 'Muhtaashim Kamran Nazki';
   static const String _udyam = 'UDYAM-JK-02-0019684';
+  static const String _gst = '01CQQPN6775H1ZD';
+  static const String _tradeLicense = 'JK-ULB-NOC/2026/08565';
 
   Future<void> _launchEmail(BuildContext context) async {
     final uri = Uri(
@@ -171,6 +173,18 @@ class ContactUsPage extends StatelessWidget {
                     Icons.verified_rounded,
                     'Udyam No.',
                     _udyam,
+                  ),
+                  const SizedBox(height: 10),
+                  _infoRow(
+                    Icons.receipt_rounded,
+                    'GST Reg No.',
+                    _gst,
+                  ),
+                  const SizedBox(height: 10),
+                  _infoRow(
+                    Icons.assignment_rounded,
+                    'Trade License No.',
+                    _tradeLicense,
                   ),
                   const SizedBox(height: 10),
                   _infoRow(

@@ -320,6 +320,10 @@ class AboutEnythingPage extends StatelessWidget {
               'Muhtaashim Kamran Nazki'),
           row(Icons.verified_rounded, 'Udyam Registration No.',
               'UDYAM-JK-02-0019684'),
+          row(Icons.receipt_rounded, 'GST Reg No.',
+              '01CQQPN6775H1ZD'),
+          row(Icons.assignment_rounded, 'Trade License No.',
+              'JK-ULB-NOC/2026/08565'),
           row(
               Icons.location_on_rounded,
               'Registered Address',

@@ -5,6 +5,8 @@ import '../pages/legal/legal_page.dart';
 //   Business Name  : Enything
 //   Proprietor     : Muhtaashim Kamran Nazki
 //   Udyam No.      : UDYAM-JK-02-0019684
+//   GST Reg No.    : 01CQQPN6775H1ZD
+//   Trade License  : JK-ULB-NOC/2026/08565
 //   Address        : Plan Bandipora, Ward No. 2, Bandipora,
 //                    Jammu & Kashmir — 193502, India
 //   Email          : support@enything.in
@@ -17,7 +19,7 @@ class LegalConstants {
     LegalSection(
       heading: '1. Platform Role & Intermediary Status',
       content:
-          'Enything (a sole proprietorship owned by Muhtaashim Kamran Nazki, Udyam Registration No. UDYAM-JK-02-0019684) operates as an intermediary marketplace facilitating hyper-local logistics in Jammu & Kashmir, India. The contract of sale is strictly between you and the respective Seller listed on the platform. Enything is not the seller of record for any product.',
+          'Enything (a sole proprietorship owned by Muhtaashim Kamran Nazki, Udyam Registration No. UDYAM-JK-02-0019684, GST Reg No. 01CQQPN6775H1ZD, Municipal Trade License No. JK-ULB-NOC/2026/08565) operates as an intermediary marketplace facilitating hyper-local logistics in Jammu & Kashmir, India. The contract of sale is strictly between you and the respective Seller listed on the platform. Enything is not the seller of record for any product.',
     ),
     LegalSection(
       heading: '2. Account Integrity & Eligibility',
@@ -142,7 +144,7 @@ class LegalConstants {
     LegalSection(
       heading: '1. Platform Intermediary',
       content:
-          'You acknowledge that Enything (operated by Muhtaashim Kamran Nazki, Udyam No. UDYAM-JK-02-0019684) is an intermediary marketplace. You are the legal retailer and bear full liability for product quality, safety, regulatory compliance, and accurate descriptions.',
+          'You acknowledge that Enything (operated by Muhtaashim Kamran Nazki, Udyam No. UDYAM-JK-02-0019684, GST Reg No. 01CQQPN6775H1ZD, Municipal Trade License No. JK-ULB-NOC/2026/08565) is an intermediary marketplace. You are the legal retailer and bear full liability for product quality, safety, regulatory compliance, and accurate descriptions.',
     ),
     LegalSection(
       heading: '2. Mandatory Licensing',
@@ -303,7 +305,7 @@ class LegalConstants {
     LegalSection(
       heading: 'About Enything',
       content:
-          'Enything is a hyper-local marketplace app operated as a sole proprietorship by Muhtaashim Kamran Nazki (Udyam Registration No. UDYAM-JK-02-0019684), based in Bandipora, Jammu & Kashmir, India. We connect Customers with local Sellers and independent Delivery Partners.',
+          'Enything is a hyper-local marketplace app operated as a sole proprietorship by Muhtaashim Kamran Nazki (Udyam Registration No. UDYAM-JK-02-0019684, GST Reg No. 01CQQPN6775H1ZD, Municipal Trade License No. JK-ULB-NOC/2026/08565), based in Bandipora, Jammu & Kashmir, India. We connect Customers with local Sellers and independent Delivery Partners.',
     ),
     ..._stripHeadingNumbers(customerTerms),
   ];
@@ -312,7 +314,7 @@ class LegalConstants {
     LegalSection(
       heading: 'About Enything',
       content:
-          'Enything is operated by Muhtaashim Kamran Nazki (Udyam No. UDYAM-JK-02-0019684), Plan Bandipora, Ward No. 2, Bandipora, Jammu & Kashmir — 193502, India. Email: support@enything.in.',
+          'Enything is operated by Muhtaashim Kamran Nazki (Udyam No. UDYAM-JK-02-0019684, GST Reg No. 01CQQPN6775H1ZD, Municipal Trade License No. JK-ULB-NOC/2026/08565), Plan Bandipora, Ward No. 2, Bandipora, Jammu & Kashmir — 193502, India. Email: support@enything.in.',
     ),
     ..._stripHeadingNumbers(customerPrivacy),
   ];
@@ -321,7 +323,7 @@ class LegalConstants {
     LegalSection(
       heading: 'Overview',
       content:
-          'This Refund & Cancellation Policy applies to all users of the Enything platform. Enything is operated by Muhtaashim Kamran Nazki (Udyam No. UDYAM-JK-02-0019684). For refund requests, contact support@enything.in.',
+          'This Refund & Cancellation Policy applies to all users of the Enything platform. Enything is operated by Muhtaashim Kamran Nazki (Udyam No. UDYAM-JK-02-0019684, GST Reg No. 01CQQPN6775H1ZD, Municipal Trade License No. JK-ULB-NOC/2026/08565). For refund requests, contact support@enything.in.',
     ),
     ..._stripHeadingNumbers(customerRefund),
   ];
