@@ -354,7 +354,7 @@ class _WithdrawalCard extends StatelessWidget {
       _           => Colors.orangeAccent,
     };
     final date = w['requested_at'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(w['requested_at'].toIST()).toIST())
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(w['requested_at'].toString()).toIST())
         : '';
 
     return Container(
