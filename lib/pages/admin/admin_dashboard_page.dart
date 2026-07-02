@@ -72,7 +72,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final supabase = Supabase.instance.client;
       int tickets = 0;
       try {
-        final t = await supabase.from('support_tickets').select('id').eq('status', 'open');
+        final t = await supabase
+            .from('support_tickets')
+            .select('id')
+            .eq('status', 'open');
         tickets = (t as List).length;
       } catch (_) {}
 
@@ -143,13 +146,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
             const SizedBox(height: 6),
             Text(
               'Exit admin mode and continue as another role',
-              style: GoogleFonts.outfit(
-                  color: Colors.white54, fontSize: 13),
+              style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13),
             ),
             const SizedBox(height: 20),
             ...otherRoles.map((role) {
-              final emoji = role == 'seller' ? '🏪' : role == 'delivery_partner' ? '🛵' : '🛍️';
-              final label = role == 'seller' ? 'Seller' : role == 'delivery_partner' ? 'Delivery Partner' : 'Customer';
+              final emoji = role == 'seller'
+                  ? '🏪'
+                  : role == 'delivery_partner'
+                      ? '🛵'
+                      : '🛍️';
+              final label = role == 'seller'
+                  ? 'Seller'
+                  : role == 'delivery_partner'
+                      ? 'Delivery Partner'
+                      : 'Customer';
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Text(emoji, style: const TextStyle(fontSize: 26)),
@@ -216,85 +226,88 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     ));
 
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        if (safeIndex != 0) {
-          setState(() {
-            _currentIndex = 0;
-            _visitedIndices.add(0);
-          });
-        } else {
-          final now = DateTime.now();
-          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
-            _lastBackPressTime = now;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Press back again to exit'),
-                duration: Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          if (safeIndex != 0) {
+            setState(() {
+              _currentIndex = 0;
+              _visitedIndices.add(0);
+            });
           } else {
-            // ignore: use_build_context_synchronously
-            SystemNavigator.pop();
+            final now = DateTime.now();
+            if (_lastBackPressTime == null ||
+                now.difference(_lastBackPressTime!) >
+                    const Duration(seconds: 2)) {
+              _lastBackPressTime = now;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Press back again to exit'),
+                  duration: Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } else {
+              // ignore: use_build_context_synchronously
+              SystemNavigator.pop();
+            }
           }
-        }
-      },
-      child: Scaffold(
-      backgroundColor: AdminColors.bg,
-      body: Stack(
-        children: [
-          // Animated gradient background auras
-          AnimatedBuilder(
-            animation: _bgCtrl,
-            builder: (_, __) => Stack(children: [
-              Positioned(
-                top: -120 + (_bgAnim.value * 40),
-                left: -80,
-                child: const _Aura(400, AdminColors.primary, 0.12),
-              ),
-              Positioned(
-                bottom: -180 - (_bgAnim.value * 30),
-                right: -60,
-                child: const _Aura(500, AdminColors.primaryEnd, 0.08),
-              ),
-              Positioned(
-                top: MediaQuery.of(context).size.height * 0.4,
-                left: MediaQuery.of(context).size.width * 0.3,
-                child: const _Aura(250, AdminColors.info, 0.05),
-              ),
-            ]),
-          ),
-
-          SafeArea(
-            child: Column(
-              children: [
-                _Header(
-                  adminName: adminName,
-                  rbac: rbac,
-                  auth: auth,
-                  onSignOut: _signOut,
-                  onSwitchRole: _showRoleSwitcher,
-                ),
-                Expanded(
-                  child: IndexedStack(
-                    index: safeIndex,
-                    children: navItems.asMap().entries.map((entry) {
-                      if (!_visitedIndices.contains(entry.key)) {
-                        return const SizedBox.shrink();
-                      }
-                      return _buildScreen(entry.value.label, adminName, rbac);
-                    }).toList(),
+        },
+        child: Scaffold(
+          backgroundColor: AdminColors.bg,
+          body: Stack(
+            children: [
+              // Animated gradient background auras
+              AnimatedBuilder(
+                animation: _bgCtrl,
+                builder: (_, __) => Stack(children: [
+                  Positioned(
+                    top: -120 + (_bgAnim.value * 40),
+                    left: -80,
+                    child: const _Aura(400, AdminColors.primary, 0.12),
                   ),
+                  Positioned(
+                    bottom: -180 - (_bgAnim.value * 30),
+                    right: -60,
+                    child: const _Aura(500, AdminColors.primaryEnd, 0.08),
+                  ),
+                  Positioned(
+                    top: MediaQuery.of(context).size.height * 0.4,
+                    left: MediaQuery.of(context).size.width * 0.3,
+                    child: const _Aura(250, AdminColors.info, 0.05),
+                  ),
+                ]),
+              ),
+
+              SafeArea(
+                child: Column(
+                  children: [
+                    _Header(
+                      adminName: adminName,
+                      rbac: rbac,
+                      auth: auth,
+                      onSignOut: _signOut,
+                      onSwitchRole: _showRoleSwitcher,
+                    ),
+                    Expanded(
+                      child: IndexedStack(
+                        index: safeIndex,
+                        children: navItems.asMap().entries.map((entry) {
+                          if (!_visitedIndices.contains(entry.key)) {
+                            return const SizedBox.shrink();
+                          }
+                          return _buildScreen(
+                              entry.value.label, adminName, rbac);
+                        }).toList(),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-      bottomNavigationBar: _buildNavBar(navItems, safeIndex),
-    ));
+          bottomNavigationBar: _buildNavBar(navItems, safeIndex),
+        ));
   }
 
   Widget _buildScreen(String label, String adminName, RbacProvider rbac) {
@@ -390,9 +403,8 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final role = rbac.currentAdmin?.role;
     // Plan A: Collect the user's other (non-admin) roles for the switch button
-    final otherRoles = (auth.user?.activeRoles ?? [])
-        .where((r) => r != 'admin')
-        .toList();
+    final otherRoles =
+        (auth.user?.activeRoles ?? []).where((r) => r != 'admin').toList();
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
       decoration: BoxDecoration(
