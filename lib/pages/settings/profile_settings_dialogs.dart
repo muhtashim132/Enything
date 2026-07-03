@@ -1,12 +1,17 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../models/saved_address_model.dart';
 import '../../widgets/address_picker_sheet.dart';
 import '../../widgets/map_pin_picker_page.dart';
+import '../../services/bell_alert_service.dart';
+import '../../services/bell_settings_service.dart';
 
 // Helper dialogs for Profile Settings Page
 
@@ -711,126 +716,481 @@ void showGenericInfoDialog(
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification & Bell Settings Dialog
+// Role-aware bottom sheet:
+//   • All roles  : push notification toggles (notif_orders/promos/system)
+//   •  + Sellers & Riders : Continuous Bell toggle + Change Bell Sound
+//   •  + Customers        : Change Bell Sound only
+// Uses DraggableScrollableSheet to prevent pixel overflow on small screens.
+// ─────────────────────────────────────────────────────────────────────────────
+
 void showNotificationSettingsDialog(BuildContext context) {
   final auth = context.read<AuthProvider>();
   final userId = auth.currentUserId;
   if (userId == null) return;
+  final role = auth.user?.activeSessionRole ?? 'customer';
 
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+    backgroundColor: Colors.transparent,
     builder: (ctx) {
-      bool isLoading = true;
-      bool orderUpdates = true;
-      bool promoOffers = true;
-      bool sysAlerts = true;
-
-      return StatefulBuilder(builder: (context, setState) {
-        if (isLoading) {
-          Supabase.instance.client
-              .from('profiles')
-              .select('notif_orders, notif_promos, notif_system')
-              .eq('id', userId)
-              .maybeSingle()
-              .then((res) {
-            if (context.mounted) {
-              setState(() {
-                if (res != null) {
-                  orderUpdates = res['notif_orders'] ?? true;
-                  promoOffers = res['notif_promos'] ?? true;
-                  sysAlerts = res['notif_system'] ?? true;
-                }
-                isLoading = false;
-              });
-            }
-          }).catchError((e) {
-            if (context.mounted) {
-              setState(() => isLoading = false);
-            }
-          });
-          return const SizedBox(
-              height: 200,
-              child: Center(child: CircularProgressIndicator()));
-        }
-
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-              24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Push Notification Settings',
-                  style: GoogleFonts.outfit(
-                      fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text(
-                  'Choose which alerts you want to receive on this device.',
-                  style: GoogleFonts.outfit(
-                      color: Colors.grey.shade600, fontSize: 14)),
-              const SizedBox(height: 24),
-              SwitchListTile(
-                title: Text('Order Updates',
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                subtitle: Text(
-                    'Status changes, rider assignments, tracking',
-                    style: GoogleFonts.outfit(
-                        fontSize: 12, color: Colors.grey.shade500)),
-                value: orderUpdates,
-                activeThumbColor: Theme.of(context).primaryColor,
-                onChanged: (val) async {
-                  setState(() => orderUpdates = val);
-                  await Supabase.instance.client
-                      .from('profiles')
-                      .update({'notif_orders': val}).eq('id', userId);
-                },
+      final isDark = Theme.of(ctx).brightness == Brightness.dark;
+      return DraggableScrollableSheet(
+        initialChildSize: 0.72,
+        maxChildSize: 0.95,
+        minChildSize: 0.45,
+        expand: false,
+        builder: (_, scrollController) {
+          return ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Container(
+              color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+              child: _BellNotifSettingsSheet(
+                userId: userId,
+                role: role,
+                scrollController: scrollController,
               ),
-              SwitchListTile(
-                title: Text('Promotions & Offers',
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                subtitle: Text('Discounts, coupons, and marketing alerts',
-                    style: GoogleFonts.outfit(
-                        fontSize: 12, color: Colors.grey.shade500)),
-                value: promoOffers,
-                activeThumbColor: Theme.of(context).primaryColor,
-                onChanged: (val) async {
-                  setState(() => promoOffers = val);
-                  await Supabase.instance.client
-                      .from('profiles')
-                      .update({'notif_promos': val}).eq('id', userId);
-                },
-              ),
-              SwitchListTile(
-                title: Text('System Alerts',
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                subtitle: Text(
-                    'App updates, security notices, maintenance',
-                    style: GoogleFonts.outfit(
-                        fontSize: 12, color: Colors.grey.shade500)),
-                value: sysAlerts,
-                activeThumbColor: Theme.of(context).primaryColor,
-                onChanged: (val) async {
-                  setState(() => sysAlerts = val);
-                  await Supabase.instance.client
-                      .from('profiles')
-                      .update({'notif_system': val}).eq('id', userId);
-                },
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 56),
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Colors.white),
-                child: const Text('Done'),
-              ),
-            ],
-          ),
-        );
-      });
+            ),
+          );
+        },
+      );
     },
   );
 }
+
+// ─── Private StatefulWidget for the settings sheet ───────────────────────────
+
+class _BellNotifSettingsSheet extends StatefulWidget {
+  final String userId;
+  final String role;
+  final ScrollController scrollController;
+
+  const _BellNotifSettingsSheet({
+    required this.userId,
+    required this.role,
+    required this.scrollController,
+  });
+
+  @override
+  State<_BellNotifSettingsSheet> createState() => _BellNotifSettingsSheetState();
+}
+
+class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
+  bool _isLoading   = true;
+  bool _orderUpdates = true;
+  bool _promoOffers  = true;
+  bool _sysAlerts    = true;
+  bool _loopBellEnabled = true;
+  String? _customBellPath;
+  bool _isPickingFile = false;
+
+  bool get _isSellerOrRider =>
+      widget.role == 'seller' || widget.role == 'delivery_partner';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('profiles')
+          .select('notif_orders, notif_promos, notif_system')
+          .eq('id', widget.userId)
+          .maybeSingle();
+
+      final loopEnabled =
+          await BellSettingsService.instance.isLoopBellEnabled(widget.userId);
+      final customPath =
+          await BellSettingsService.instance.getCustomBellPath(widget.userId);
+
+      if (mounted) {
+        setState(() {
+          if (res != null) {
+            _orderUpdates = res['notif_orders'] as bool? ?? true;
+            _promoOffers  = res['notif_promos'] as bool? ?? true;
+            _sysAlerts    = res['notif_system'] as bool? ?? true;
+          }
+          _loopBellEnabled = loopEnabled;
+          _customBellPath  = customPath;
+          _isLoading       = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  static const _audioPicker =
+      MethodChannel('com.enything/audio_picker');
+
+  Future<void> _pickBellSound() async {
+    setState(() => _isPickingFile = true);
+    try {
+      // Request audio read permission on Android 13+
+      if (Platform.isAndroid) {
+        final status = await Permission.audio.request();
+        if (!status.isGranted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Storage permission required to pick a bell sound.',
+                  style: GoogleFonts.outfit(),
+                ),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Invoke native audio picker (MainActivity MethodChannel)
+      final uriString = await _audioPicker
+          .invokeMethod<String?>('pickAudioFile');
+
+      if (uriString != null && uriString.isNotEmpty && mounted) {
+        await BellSettingsService.instance
+            .setCustomBellPath(widget.userId, uriString);
+        setState(() => _customBellPath = uriString);
+      }
+    } on PlatformException catch (e) {
+      debugPrint('[BellSettings] pickBellSound PlatformException: $e');
+    } catch (e) {
+      debugPrint('[BellSettings] pickBellSound error: $e');
+    } finally {
+      if (mounted) setState(() => _isPickingFile = false);
+    }
+  }
+
+  Future<void> _resetBellSound() async {
+    await BellSettingsService.instance.setCustomBellPath(widget.userId, null);
+    if (mounted) setState(() => _customBellPath = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    final primary = Theme.of(context).primaryColor;
+
+    return ListView(
+      controller: widget.scrollController,
+      padding: EdgeInsets.zero,
+      children: [
+        // ── Drag handle ──────────────────────────────────────────────────────
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white30 : Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Title ───────────────────────────────────────────────────
+              Text(
+                'Notification & Bell Settings',
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Manage push alerts and bell sound preferences.',
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              if (_isLoading) ...[       
+                const Center(
+                  heightFactor: 3,
+                  child: CircularProgressIndicator(),
+                ),
+              ] else ...[
+                // ── Push Notifications section ───────────────────────────
+                _sectionLabel('Push Notifications', isDark),
+                const SizedBox(height: 4),
+                _switchTile(
+                  context: context,
+                  title: 'Order Updates',
+                  subtitle: 'Status changes, rider assignments, tracking',
+                  value: _orderUpdates,
+                  isDark: isDark,
+                  onChanged: (val) async {
+                    setState(() => _orderUpdates = val);
+                    await Supabase.instance.client
+                        .from('profiles')
+                        .update({'notif_orders': val})
+                        .eq('id', widget.userId);
+                  },
+                ),
+                _switchTile(
+                  context: context,
+                  title: 'Promotions & Offers',
+                  subtitle: 'Discounts, coupons, and marketing alerts',
+                  value: _promoOffers,
+                  isDark: isDark,
+                  onChanged: (val) async {
+                    setState(() => _promoOffers = val);
+                    await Supabase.instance.client
+                        .from('profiles')
+                        .update({'notif_promos': val})
+                        .eq('id', widget.userId);
+                  },
+                ),
+                _switchTile(
+                  context: context,
+                  title: 'System Alerts',
+                  subtitle: 'App updates, security notices, maintenance',
+                  value: _sysAlerts,
+                  isDark: isDark,
+                  onChanged: (val) async {
+                    setState(() => _sysAlerts = val);
+                    await Supabase.instance.client
+                        .from('profiles')
+                        .update({'notif_system': val})
+                        .eq('id', widget.userId);
+                  },
+                ),
+
+                const SizedBox(height: 12),
+                Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
+                const SizedBox(height: 12),
+
+                // ── Alert Bell section ───────────────────────────────────
+                _sectionLabel('Alert Bell', isDark),
+                const SizedBox(height: 8),
+
+                if (_isSellerOrRider) ...[        
+                  // Continuous bell toggle (sellers & riders only)
+                  _switchTile(
+                    context: context,
+                    title: 'Continuous Alert Bell',
+                    subtitle:
+                        'Rings in a loop until you accept or cancel the order.\nTurn off for a single ring per notification.',
+                    value: _loopBellEnabled,
+                    isDark: isDark,
+                    onChanged: (val) async {
+                      setState(() => _loopBellEnabled = val);
+                      await BellSettingsService.instance
+                          .setLoopBellEnabled(widget.userId, enabled: val);
+                      // Update mode on any currently playing bell immediately
+                      await BellAlertService.instance.refreshMode();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                // Bell sound card (all roles)
+                _bellSoundCard(context, isDark, primary),
+              ],
+
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text('Done', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Sub-widgets ─────────────────────────────────────────────────────────────
+
+  Widget _sectionLabel(String label, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Text(
+        label,
+        style: GoogleFonts.outfit(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: isDark ? Colors.white70 : const Color(0xFF1A1A2E),
+        ),
+      ),
+    );
+  }
+
+  Widget _switchTile({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required bool isDark,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      title: Text(title,
+          style: GoogleFonts.outfit(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: isDark ? Colors.white : Colors.black87)),
+      subtitle: Text(subtitle,
+          style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade500)),
+      value: value,
+      activeThumbColor: Theme.of(context).primaryColor,
+      activeTrackColor: Theme.of(context).primaryColor.withValues(alpha: 0.25),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _bellSoundCard(BuildContext context, bool isDark, Color primary) {
+    // Derive a human-readable filename from both file paths and content:// URIs
+    String soundName = 'Default (Enything Bell)';
+    if (_customBellPath != null) {
+      final raw = Uri.decodeFull(_customBellPath!).split('/').last;
+      soundName = raw.contains(':') ? raw.split(':').last : raw;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF252540) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.grey.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.music_note_rounded, color: primary, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Bell Sound',
+                        style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: isDark ? Colors.white : Colors.black87)),
+                    Text(
+                      soundName,
+                      style: GoogleFonts.outfit(
+                          fontSize: 12, color: Colors.grey.shade500),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Action row
+          Row(
+            children: [
+              // Preview
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                  label: Text('Preview', style: GoogleFonts.outfit(fontSize: 13)),
+                  onPressed: () => BellAlertService.instance.previewBell(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: primary,
+                    side: BorderSide(color: primary.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Change
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: _isPickingFile
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.folder_open_rounded, size: 16),
+                  label: Text('Change', style: GoogleFonts.outfit(fontSize: 13)),
+                  onPressed: _isPickingFile ? null : _pickBellSound,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: primary,
+                    side: BorderSide(color: primary.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              // Reset (only when custom sound is active)
+              if (_customBellPath != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _resetBellSound,
+                  icon: const Icon(Icons.replay_rounded),
+                  tooltip: 'Reset to default',
+                  style: IconButton.styleFrom(
+                    foregroundColor: Colors.grey,
+                    side: BorderSide(color: Colors.grey.shade300),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (_isSellerOrRider) ...[
+            const SizedBox(height: 6),
+            Text(
+              '\u24D8  This sound plays when a new order needs your attention.',
+              style: GoogleFonts.outfit(
+                  fontSize: 11, color: Colors.grey.shade500),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+

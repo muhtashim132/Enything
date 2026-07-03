@@ -197,9 +197,24 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   await plugin
       .initialize(const InitializationSettings(android: androidSettings));
 
-  // Create the channel here too — background isolate may not have it yet
+  // Create both channels in the background isolate:
+  // • order_alert_loop_channel: primary channel with enything_bell.wav sound
+  // • enything_push_channel: kept for backward compat on existing device installs
   final androidPlugin = plugin.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
+
+  await androidPlugin?.createNotificationChannel(
+    const AndroidNotificationChannel(
+      'order_alert_loop_channel',
+      'Order Alert Bell',
+      description: 'Custom bell sound for order notifications (Enything Bell)',
+      importance: Importance.max,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('enything_bell'),
+      enableVibration: true,
+      showBadge: true,
+    ),
+  );
   await androidPlugin?.createNotificationChannel(
     const AndroidNotificationChannel(
       'enything_push_channel',
@@ -218,12 +233,13 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     body,
     const NotificationDetails(
       android: AndroidNotificationDetails(
-        'enything_push_channel',
-        'Enything Notifications',
-        channelDescription: 'Push notifications for orders and updates',
+        'order_alert_loop_channel',
+        'Order Alert Bell',
+        channelDescription: 'Custom bell sound for order notifications (Enything Bell)',
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,
+        sound: RawResourceAndroidNotificationSound('enything_bell'),
         enableVibration: true,
         icon: 'ic_notification',
       ),

@@ -85,6 +85,24 @@ class NotificationService {
       ),
     );
 
+    // CRITICAL: Create the order alert bell channel — used for all foreground
+    // buzz notifications for sellers, riders, and customers.
+    // Sound: enything_bell.wav from android/app/src/main/res/raw/
+    // NOTE: Channel sound is locked on first creation on a device (Android OS
+    // limitation). A fresh channel name guarantees the WAV is applied correctly.
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'order_alert_loop_channel',
+        'Order Alert Bell',
+        description: 'Custom bell sound for order notifications (Enything Bell)',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('enything_bell'),
+        enableVibration: true,
+        showBadge: true,
+      ),
+    );
+
     // CRITICAL: Create the order tracking channel for the persistent live tracking notification
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
@@ -137,25 +155,27 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'enything_push_channel',
-      'Enything Notifications',
-      channelDescription: 'Push notifications for orders and updates',
+    // Use order_alert_loop_channel which has the custom enything_bell.wav sound.
+    // This ensures ALL in-app buzz notifications (sellers, riders, customers)
+    // play the Enything Bell regardless of role.
+    const androidDetails = AndroidNotificationDetails(
+      'order_alert_loop_channel',
+      'Order Alert Bell',
+      channelDescription: 'Custom bell sound for order notifications (Enything Bell)',
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('enything_bell'),
       enableVibration: true,
       icon: 'ic_notification',
     );
-    const NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
+    const platformDetails = NotificationDetails(android: androidDetails);
 
     await _flutterLocalNotificationsPlugin.show(
       DateTime.now().millisecondsSinceEpoch % 100000,
       title,
       body,
-      platformChannelSpecifics,
+      platformDetails,
       payload: payload,
     );
   }

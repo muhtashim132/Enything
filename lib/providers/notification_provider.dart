@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
+import '../services/bell_alert_service.dart';
 
 /// A single in-app notification entry.
 class AppNotification {
@@ -325,6 +326,8 @@ class NotificationProvider extends ChangeNotifier {
                   'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
               orderId: orderId,
             ));
+            // [BELL] Ring alert bell for new pending order
+            if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
           },
         )
         .onPostgresChanges(
@@ -341,6 +344,19 @@ class NotificationProvider extends ChangeNotifier {
             final newStatus = payload.newRecord['status'] as String?;
             final orderId = payload.newRecord['id'] as String?;
             if (orderId == null || newStatus == null) return;
+
+            // [BELL] Remove order from bell when seller accepts or order is resolved.
+            // Checked BEFORE the status-dedup guard so seller_accepted change is caught
+            // even when the status field itself hasn’t changed yet.
+            final sellerAcceptedNow    = payload.newRecord['seller_accepted'] == true;
+            final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
+            if ((sellerAcceptedNow && !sellerAcceptedBefore) ||
+                const [
+                  'awaiting_payment', 'confirmed', 'cancelled',
+                  'seller_rejected', 'delivered'
+                ].contains(newStatus)) {
+              BellAlertService.instance.removePendingOrder(orderId);
+            }
 
             final lastStatus = _lastProcessedStatus[orderId];
             if (newStatus == lastStatus) return;
@@ -361,6 +377,8 @@ class NotificationProvider extends ChangeNotifier {
 
     // Restore persisted notification history for this user
     _loadFromDb();
+    // [BELL] Re-ring bell if there are already pending orders (e.g. app restart)
+    _initBellForPendingSeller(shopId);
   }
 
   /// Seller: watches orders for MULTIPLE shops at once.
@@ -399,6 +417,8 @@ class NotificationProvider extends ChangeNotifier {
                 'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
             orderId: orderId,
           ));
+          // [BELL] Ring alert bell for new pending order
+          if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
         },
       ).onPostgresChanges(
         event: PostgresChangeEvent.update,
@@ -414,6 +434,17 @@ class NotificationProvider extends ChangeNotifier {
           final newStatus = payload.newRecord['status'] as String?;
           final orderId = payload.newRecord['id'] as String?;
           if (orderId == null || newStatus == null) return;
+
+          // [BELL] Remove order from bell when seller accepts or order is resolved.
+          final sellerAcceptedNow    = payload.newRecord['seller_accepted'] == true;
+          final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
+          if ((sellerAcceptedNow && !sellerAcceptedBefore) ||
+              const [
+                'awaiting_payment', 'confirmed', 'cancelled',
+                'seller_rejected', 'delivered'
+              ].contains(newStatus)) {
+            BellAlertService.instance.removePendingOrder(orderId);
+          }
 
           final lastStatus = _lastProcessedStatus[orderId];
           if (newStatus == lastStatus) return;
@@ -436,6 +467,8 @@ class NotificationProvider extends ChangeNotifier {
 
     // Restore persisted notification history for this user
     _loadFromDb();
+    // [BELL] Re-ring bell if there are already pending orders (e.g. app restart)
+    _initBellForPendingSellerMulti(shopIds);
   }
 
 
@@ -466,6 +499,14 @@ class NotificationProvider extends ChangeNotifier {
 
             if (orderId == null || newStatus == null) return;
 
+            // [BELL] Ring bell when payment confirmed (rider must go pick up).
+            // Stop when rider picks up, order is cancelled, or delivered.
+            if (newStatus == 'confirmed') {
+              BellAlertService.instance.addPendingOrder(orderId);
+            } else if (const ['picked_up', 'cancelled', 'delivered'].contains(newStatus)) {
+              BellAlertService.instance.removePendingOrder(orderId);
+            }
+
             final lastStatus = _lastProcessedStatus[orderId];
             if (newStatus == lastStatus) return;
             _lastProcessedStatus[orderId] = newStatus;
@@ -485,6 +526,8 @@ class NotificationProvider extends ChangeNotifier {
 
     // Restore persisted notification history for this user
     _loadFromDb();
+    // [BELL] Re-ring bell if rider already has confirmed orders pending pickup
+    _initBellForPendingRider(partnerId);
   }
 
   /// Admin: watches for new KYC applications and complaints.
@@ -548,12 +591,15 @@ class NotificationProvider extends ChangeNotifier {
   void stopListening() {
     _channel?.unsubscribe();
     _channel = null;
-    
+
+    // [BELL] Stop and clear all pending order bells on role switch / logout
+    BellAlertService.instance.clearAll();
+
     // NOTE: FCM subscriptions (_fcmTokenSub and _fcmMessageSub) are intentionally
     // NOT cancelled here. They are user-session-level (not role-level) and must
     // persist across role switches (e.g. customer → seller → delivery).
     // They are only cancelled on full logout via clearFcmSubs().
-    
+
     _listeningUserId = null;
     _listeningRole = null;
     _lastProcessedStatus.clear();
@@ -714,6 +760,64 @@ class NotificationProvider extends ChangeNotifier {
           .eq('user_id', userId);
     } catch (e) {
       debugPrint('Failed to clear notifications from DB: $e');
+    }
+  }
+
+  // ── Bell Initialization (restore pending orders on app restart) ────────────────────
+
+  /// Query DB for seller orders that are still awaiting acceptance.
+  /// Called when the seller subscribes so the bell re-rings after app restart.
+  Future<void> _initBellForPendingSeller(String shopId) async {
+    try {
+      final rows = await _supabase
+          .from('orders')
+          .select('id')
+          .eq('shop_id', shopId)
+          .eq('seller_accepted', false)
+          .inFilter('status', ['awaiting_acceptance']);
+      for (final row in rows) {
+        final orderId = row['id'] as String?;
+        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+      }
+    } catch (e) {
+      debugPrint('[NotifProvider] _initBellForPendingSeller: $e');
+    }
+  }
+
+  /// Same as above for sellers with multiple shops.
+  Future<void> _initBellForPendingSellerMulti(List<String> shopIds) async {
+    if (shopIds.isEmpty) return;
+    try {
+      final rows = await _supabase
+          .from('orders')
+          .select('id')
+          .inFilter('shop_id', shopIds)
+          .eq('seller_accepted', false)
+          .inFilter('status', ['awaiting_acceptance']);
+      for (final row in rows) {
+        final orderId = row['id'] as String?;
+        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+      }
+    } catch (e) {
+      debugPrint('[NotifProvider] _initBellForPendingSellerMulti: $e');
+    }
+  }
+
+  /// Query DB for rider orders in 'confirmed' status (payment done, pick-up needed).
+  /// Called when the rider subscribes so the bell re-rings after app restart.
+  Future<void> _initBellForPendingRider(String partnerId) async {
+    try {
+      final rows = await _supabase
+          .from('orders')
+          .select('id')
+          .eq('delivery_partner_id', partnerId)
+          .inFilter('status', ['confirmed', 'preparing', 'ready_for_pickup']);
+      for (final row in rows) {
+        final orderId = row['id'] as String?;
+        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+      }
+    } catch (e) {
+      debugPrint('[NotifProvider] _initBellForPendingRider: $e');
     }
   }
 

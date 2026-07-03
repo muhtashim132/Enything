@@ -113,8 +113,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                         const SizedBox(height: 16),
                         _buildSettingTile(
                           icon: Icons.notifications_active_outlined,
-                          title: 'Notifications',
-                          subtitle: 'Manage push notifications',
+                          title: 'Notification & Bell Settings',
+                          subtitle: 'Alerts, loop bell & sound preferences',
                           roleColor: AppColors.roleColor(user.activeSessionRole),
                           isDark: isDark,
                           onTap: () => showNotificationSettingsDialog(context),

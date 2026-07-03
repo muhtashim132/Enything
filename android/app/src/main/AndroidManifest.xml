@@ -15,6 +15,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <!-- Android 14+: required for foreground services that access location -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <!-- Android 13+: required for file_picker to access audio files from device storage -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
 
     <application
         android:label="Enything"
@@ -61,10 +63,13 @@
         <!-- Firebase App Check: In debug builds, use the debug provider automatically.
              No secret needed in the manifest — see Firebase Console > App Check > Debug tokens. -->
 
-        <!-- Default FCM notification channel — required for Android 8+ to buzz/sound -->
+        <!-- Default FCM notification channel — routes all FCM pushes through
+             order_alert_loop_channel which plays the custom enything_bell.wav sound.
+             NOTE: The old enything_push_channel still exists on existing devices
+             for backward compat, but new installs will use this channel. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="enything_push_channel"/>
+            android:value="order_alert_loop_channel"/>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_color"/>
