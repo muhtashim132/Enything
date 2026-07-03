@@ -60,7 +60,8 @@ void main() async {
 
   await Supabase.initialize(
     url: supabaseUrl,
-    anonKey: supabaseAnonKey, // ignore: deprecated_member_use — SDK alias still works
+    anonKey:
+        supabaseAnonKey, // ignore: deprecated_member_use — SDK alias still works
   );
 
   // Set Supabase instance locally
@@ -235,7 +236,8 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       android: AndroidNotificationDetails(
         'order_alert_loop_channel',
         'Order Alert Bell',
-        channelDescription: 'Custom bell sound for order notifications (Enything Bell)',
+        channelDescription:
+            'Custom bell sound for order notifications (Enything Bell)',
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,

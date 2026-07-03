@@ -81,19 +81,19 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String terms = '/legal/terms';
   static const String privacy = '/legal/privacy';
-  static const String adminPassword      = '/admin/password';
-  static const String adminDashboard     = '/admin/dashboard';
-  static const String faqSupport         = '/settings/faq-support';
-  static const String refundPolicy       = '/legal/refund-policy';
-  static const String shippingPolicy     = '/legal/shipping-policy';
-  static const String sellerWithdrawals  = '/seller/withdrawals';
-  static const String riderWithdrawals   = '/delivery/withdrawals';
-  static const String riderInsights      = '/delivery/insights';
-  static const String customerOrderMap   = '/customer/order-map';
-  static const String sellerOrderMap     = '/seller/order-map';
-  static const String aboutEnything      = '/settings/about';
-  static const String contactUs          = '/legal/contact-us';
-  static const String subscription       = '/customer/subscription';
+  static const String adminPassword = '/admin/password';
+  static const String adminDashboard = '/admin/dashboard';
+  static const String faqSupport = '/settings/faq-support';
+  static const String refundPolicy = '/legal/refund-policy';
+  static const String shippingPolicy = '/legal/shipping-policy';
+  static const String sellerWithdrawals = '/seller/withdrawals';
+  static const String riderWithdrawals = '/delivery/withdrawals';
+  static const String riderInsights = '/delivery/insights';
+  static const String customerOrderMap = '/customer/order-map';
+  static const String sellerOrderMap = '/seller/order-map';
+  static const String aboutEnything = '/settings/about';
+  static const String contactUs = '/legal/contact-us';
+  static const String subscription = '/customer/subscription';
 
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
@@ -151,7 +151,9 @@ class AppRoutes {
         return _build(const SellerDashboardPage(), routeSettings);
       case addProduct:
         final a = routeSettings.arguments as Map<String, dynamic>?;
-        return _build(AddProductPage(existingProduct: a?['product'] as ProductModel?), routeSettings);
+        return _build(
+            AddProductPage(existingProduct: a?['product'] as ProductModel?),
+            routeSettings);
       case manageProducts:
         return _build(const ManageProductsPage(), routeSettings);
       case sellerOrders:
@@ -172,10 +174,12 @@ class AppRoutes {
         return _build(const ProfileSettingsPage(), routeSettings);
       case terms:
         final a = routeSettings.arguments as Map<String, dynamic>?;
-        return _build(TermsOfServicePage(role: a?['role'] as String?), routeSettings);
+        return _build(
+            TermsOfServicePage(role: a?['role'] as String?), routeSettings);
       case privacy:
         final a = routeSettings.arguments as Map<String, dynamic>?;
-        return _build(PrivacyPolicyPage(role: a?['role'] as String?), routeSettings);
+        return _build(
+            PrivacyPolicyPage(role: a?['role'] as String?), routeSettings);
       case adminPassword:
         return _build(const AdminPasswordPage(), routeSettings);
       case adminDashboard:
@@ -184,7 +188,8 @@ class AppRoutes {
         return _build(const FaqSupportPage(), routeSettings);
       case refundPolicy:
         final a = routeSettings.arguments as Map<String, dynamic>?;
-        return _build(RefundPolicyPage(role: a?['role'] as String?), routeSettings);
+        return _build(
+            RefundPolicyPage(role: a?['role'] as String?), routeSettings);
       case shippingPolicy:
         return _build(const ShippingPolicyPage(), routeSettings);
       case sellerWithdrawals:
@@ -199,14 +204,16 @@ class AppRoutes {
         return _build(const SubscriptionPage(), routeSettings);
       case customerOrderMap:
         final a = routeSettings.arguments as Map<String, dynamic>?;
-        if (a?['order'] == null) return _build(const SplashPage(), routeSettings);
+        if (a?['order'] == null)
+          return _build(const SplashPage(), routeSettings);
         return _build(
           CustomerOrderMapPage(order: a!['order']),
           routeSettings,
         );
       case sellerOrderMap:
         final a = routeSettings.arguments as Map<String, dynamic>?;
-        if (a?['order'] == null) return _build(const SplashPage(), routeSettings);
+        if (a?['order'] == null)
+          return _build(const SplashPage(), routeSettings);
         return _build(
           SellerOrderMapPage(
             order: a!['order'],
