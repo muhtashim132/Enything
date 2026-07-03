@@ -77,7 +77,7 @@ class CouponProvider extends ChangeNotifier {
 
       // Check usage limit
       final usageLimit = res['usage_limit'] as int?;
-      final usedCount = (res['used_count'] as num?)?.toInt() ?? 0;
+      final usedCount = (res['usage_count'] as num?)?.toInt() ?? 0;
       if (usageLimit != null && usedCount >= usageLimit) {
         _errorMessage = 'This coupon has reached its usage limit';
         _isValidating = false;
