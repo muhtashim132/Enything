@@ -58,8 +58,9 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
     // God Mode: Admins can bypass KYC verification to access any dashboard
     if (user.activeRoles.contains('admin')) return true;
     
-    if (role == 'seller') return user.sellerVerificationStatus == 'verified';
-    if (role == 'delivery_partner') return user.riderVerificationStatus == 'verified';
+    // Accept both 'verified' and 'approved' — older admin flows use 'approved'
+    if (role == 'seller') return const ['verified', 'approved'].contains(user.sellerVerificationStatus);
+    if (role == 'delivery_partner') return const ['verified', 'approved'].contains(user.riderVerificationStatus);
     return false;
   }
 
@@ -71,8 +72,9 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
     // God Mode: Admins don't get the pending lock UI
     if (user.activeRoles.contains('admin')) return false;
     
-    if (role == 'seller') return user.sellerVerificationStatus != 'verified';
-    if (role == 'delivery_partner') return user.riderVerificationStatus != 'verified';
+    // Not pending if status is 'verified' OR 'approved'
+    if (role == 'seller') return !const ['verified', 'approved'].contains(user.sellerVerificationStatus);
+    if (role == 'delivery_partner') return !const ['verified', 'approved'].contains(user.riderVerificationStatus);
     return false;
   }
 

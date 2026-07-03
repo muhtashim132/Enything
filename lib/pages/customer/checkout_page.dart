@@ -258,12 +258,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final Map<String, dynamic> rateSnapshot = {};
         for (final item in shopItems) {
           final cat = item.product.category;
+          final itemPrice = item.selectedVariant?.price ?? item.product.price;
+          // Use product-level override if set; otherwise use category rate
+          final effectiveRate = item.product.gstRateOverride ??
+              (PlatformConfigProvider.instance?.getGstRate(cat, itemPrice: itemPrice) ??
+                  TaxConfig.gstRateForCategory(cat, itemPrice: itemPrice));
           if (!rateSnapshot.containsKey(cat)) {
-            rateSnapshot[cat] = PlatformConfigProvider.instance?.getGstRate(
-                  cat,
-                  itemPrice: item.selectedVariant?.price ?? item.product.price,
-                ) ??
-                TaxConfig.gstRateForCategory(cat, itemPrice: item.selectedVariant?.price ?? item.product.price);
+            rateSnapshot[cat] = effectiveRate;
           }
         }
 

@@ -118,7 +118,7 @@ class AuthProvider extends ChangeNotifier {
           .eq('id', userId)
           .maybeSingle();
       if (customer != null) roles.add('customer');
-    } catch (_) {}
+    } catch (e) { debugPrint('_detectUserRoles[customers] error: $e'); }
 
     try {
       final seller = await _supabase
@@ -127,7 +127,7 @@ class AuthProvider extends ChangeNotifier {
           .eq('seller_id', userId)
           .maybeSingle();
       if (seller != null) roles.add('seller');
-    } catch (_) {}
+    } catch (e) { debugPrint('_detectUserRoles[shops] error: $e'); }
 
     try {
       final delivery = await _supabase
@@ -136,7 +136,7 @@ class AuthProvider extends ChangeNotifier {
           .eq('id', userId)
           .maybeSingle();
       if (delivery != null) roles.add('delivery_partner');
-    } catch (_) {}
+    } catch (e) { debugPrint('_detectUserRoles[delivery_partners] error: $e'); }
 
     // ── Admin detection ──────────────────────────────────────────────────
     try {
@@ -379,6 +379,8 @@ class AuthProvider extends ChangeNotifier {
         'activeRoles': allRoles,
         'activeSessionRole': sessionRole,
         'verification_status': verificationStatus,
+        'seller_verification_status': sellerVerificationStatus,
+        'rider_verification_status': riderVerificationStatus,
       });
       _isProfileFetched = true;
       notifyListeners();
@@ -778,6 +780,65 @@ class AuthProvider extends ChangeNotifier {
               .from('customers')
               .update(additionalData)
               .eq('id', userId);
+        }
+
+        // ── Explicitly upsert a 'Home' saved address ────────────────────────
+        // The DB trigger (trg_sync_customer_address) can be silently blocked by
+        // RLS when auth.uid() is NULL in the trigger context. We do it here in
+        // the authenticated Dart context so it is always reliable and includes
+        // house_number → flat_number which the trigger misses.
+        if (additionalData != null) {
+          final addressText = (additionalData['default_address'] as String? ?? '').trim();
+          if (addressText.isNotEmpty) {
+            try {
+              // Parse lat/lng from the locationPoint string e.g. "POINT(lng lat)"
+              double lat = 0, lng = 0;
+              final locStr = additionalData['location']?.toString() ?? '';
+              final match = RegExp(r'POINT\(([^\s]+)\s+([^\)]+)\)').firstMatch(locStr);
+              if (match != null) {
+                lng = double.tryParse(match.group(1) ?? '') ?? 0;
+                lat = double.tryParse(match.group(2) ?? '') ?? 0;
+              }
+
+              // Check if user already has a saved 'Home' address
+              final existingAddr = await _supabase
+                  .from('saved_addresses')
+                  .select('id')
+                  .eq('user_id', userId)
+                  .eq('label', 'Home')
+                  .maybeSingle();
+
+              if (existingAddr == null) {
+                // First clear any stale default flag
+                await _supabase
+                    .from('saved_addresses')
+                    .update({'is_default': false})
+                    .eq('user_id', userId);
+
+                await _supabase.from('saved_addresses').insert({
+                  'user_id': userId,
+                  'label': 'Home',
+                  'flat_number': (additionalData['house_number'] as String? ?? '').trim().isEmpty
+                      ? null
+                      : (additionalData['house_number'] as String).trim(),
+                  'address': addressText,
+                  'landmark': (additionalData['landmark'] as String? ?? '').trim().isEmpty
+                      ? null
+                      : (additionalData['landmark'] as String).trim(),
+                  'pincode': (additionalData['pincode'] as String? ?? '').trim().isEmpty
+                      ? null
+                      : (additionalData['pincode'] as String).trim(),
+                  'latitude': lat,
+                  'longitude': lng,
+                  'is_default': true,
+                });
+                debugPrint('Home saved_address created for user $userId');
+              }
+            } catch (addrErr) {
+              // Non-fatal — address can be added later from Profile settings
+              debugPrint('Failed to create saved address on signup: $addrErr');
+            }
+          }
         }
       } else if (role == 'seller') {
         final existing = await _supabase

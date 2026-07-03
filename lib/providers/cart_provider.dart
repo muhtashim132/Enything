@@ -36,6 +36,7 @@ Map<String, dynamic> _productToJson(ProductModel p) => {
   'rating': p.rating,
   'requires_prescription': p.requiresPrescription,
   'medicine_type': p.medicineType,
+  'gst_rate_override': p.gstRateOverride,
 };
 
 ProductModel _productFromJson(Map<String, dynamic> m) => ProductModel.fromMap({
@@ -133,16 +134,21 @@ class CartProvider extends ChangeNotifier {
     for (final item in _items) {
       final category = item.product.category;
       final price = item.product.price;
-      
-      final rate = PlatformConfigProvider.instance?.getGstRate(
+      // Use product-level override if set; otherwise use category rate (unchanged)
+      final rate = TaxConfig.gstRateForProduct(
         category,
-        itemPrice: price,
-      ) ?? TaxConfig.gstRateForCategory(
-        category,
+        item.product.gstRateOverride,
         itemPrice: price,
       );
-      
-      gst += item.totalPrice * rate; // base × rate (add-on, not extraction)
+      // Apply PlatformConfigProvider slab overrides only when no product override
+      final effectiveRate = item.product.gstRateOverride != null
+          ? rate
+          : (PlatformConfigProvider.instance?.getGstRate(
+                category,
+                itemPrice: price,
+              ) ??
+              rate);
+      gst += item.totalPrice * effectiveRate;
     }
     return gst;
   }
@@ -157,6 +163,7 @@ class CartProvider extends ChangeNotifier {
             'category': i.product.category,
             'price': i.product.price, // BASE price, pre-GST
             'quantity': i.quantity,
+            'gst_rate_override': i.product.gstRateOverride, // null = use category
           })
       .toList();
 

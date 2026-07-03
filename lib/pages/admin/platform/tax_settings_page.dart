@@ -25,7 +25,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   final _db = Supabase.instance.client;
 
   // Map of category -> tax_config row from DB
-  Map<String, Map<String, dynamic>> _dbRows = {};
+  final Map<String, Map<String, dynamic>> _dbRows = {};
   bool _loading = true;
 
   // Which category row is being edited inline
@@ -34,6 +34,15 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   // Extra controllers for slab threshold and high rate (Clothing/Footwear)
   final _slabThresholdCtrl = TextEditingController();
   final _slabHighRateCtrl  = TextEditingController();
+
+  // ── Product-level keyword override state ──────────────────────────────────
+  List<Map<String, dynamic>> _productOverrides = [];
+  bool _loadingOverrides = false;
+  String? _editingOverrideId; // id of the rule being edited inline
+  final _overrideKeywordCtrl  = TextEditingController();
+  final _overrideCatHintCtrl  = TextEditingController();
+  final _overrideRateCtrl     = TextEditingController();
+  final _overrideReasonCtrl   = TextEditingController();
 
   // ── Categories (updated: Sept 2025 — new categories added) ───────────────
   static const _sections = [
@@ -94,6 +103,10 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     _rateCtrl.dispose();
     _slabThresholdCtrl.dispose();
     _slabHighRateCtrl.dispose();
+    _overrideKeywordCtrl.dispose();
+    _overrideCatHintCtrl.dispose();
+    _overrideRateCtrl.dispose();
+    _overrideReasonCtrl.dispose();
     super.dispose();
   }
 
@@ -101,19 +114,35 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     setState(() => _loading = true);
     try {
       final data = await _db.from('tax_config').select();
-      final map = <String, Map<String, dynamic>>{};
+      _dbRows.clear();
       for (final row in (data as List)) {
-        map[row['category'] as String] = Map<String, dynamic>.from(row);
+        _dbRows[row['category'] as String] = Map<String, dynamic>.from(row);
       }
-      setState(() {
-        _dbRows = map;
-        _loading = false;
-      });
+      // Also fetch product keyword overrides
+      await _fetchProductOverrides();
     } catch (e) {
+      _showSnack('Failed to load: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _fetchProductOverrides() async {
+    setState(() => _loadingOverrides = true);
+    try {
+      final data = await _db
+          .from('product_gst_overrides')
+          .select()
+          .order('keyword', ascending: true);
       if (mounted) {
-        setState(() => _loading = false);
-        _showSnack('Failed to load tax config: $e', error: true);
+        setState(() {
+          _productOverrides = List<Map<String, dynamic>>.from(data as List);
+        });
       }
+    } catch (e) {
+      _showSnack('Could not load product overrides: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _loadingOverrides = false);
     }
   }
 
@@ -409,9 +438,464 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                   return _buildSection(section, rbac, canEdit, delay: (i + 1) * 80);
                 }),
 
+                const SizedBox(height: 16),
+
+                // ── Product GST Keyword Overrides Section ───────────────────
+                _buildProductOverridesSection(canEdit),
+
                 const SizedBox(height: 32),
               ],
             ),
+    );
+  }
+
+  // ── Product GST Keyword Overrides ─────────────────────────────────────────
+
+  Widget _buildProductOverridesSection(bool canEdit) {
+    const slabOptions = [0.00, 0.03, 0.05, 0.18, 0.40];
+
+    String rateLabel(double r) => '${(r * 100).toStringAsFixed(0)}%';
+
+    Color rateColor(double r) {
+      if (r == 0.00) return const Color(0xFF00C853);
+      if (r == 0.03) return const Color(0xFF9C27B0);
+      if (r == 0.05) return AdminColors.info;
+      if (r == 0.18) return AdminColors.warning;
+      return AdminColors.danger;
+    }
+
+    Future<void> saveRule({
+      String? existingId,
+      required String keyword,
+      required String? categoryHint,
+      required double rate,
+      required String reason,
+    }) async {
+      try {
+        final row = {
+          'keyword': keyword.toLowerCase().trim(),
+          'category_hint': categoryHint?.trim().isEmpty ?? true ? null : categoryHint!.trim(),
+          'gst_rate': rate,
+          'reason': reason.trim(),
+          'is_active': true,
+        };
+        if (existingId != null) {
+          await _db.from('product_gst_overrides').update(row).eq('id', existingId);
+        } else {
+          await _db.from('product_gst_overrides').insert(row);
+        }
+        // Reload engine so seller's next recommendation is fresh
+        await _fetchProductOverrides();
+        setState(() => _editingOverrideId = null);
+        _showSnack('Saved: "$keyword" → ${rateLabel(rate)}');
+      } catch (e) {
+        _showSnack('Failed to save: $e', error: true);
+      }
+    }
+
+    Future<void> deleteRule(String id, String keyword) async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AdminColors.cardBg,
+          title: Text('Delete Rule', style: AdminStyles.title(size: 16)),
+          content: Text(
+            'Remove keyword rule "$keyword"? Sellers adding new products will no longer see this recommendation.',
+            style: AdminStyles.body(size: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Cancel', style: AdminStyles.body(color: AdminColors.textMuted)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Delete', style: AdminStyles.body(color: AdminColors.danger)),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      try {
+        await _db.from('product_gst_overrides').delete().eq('id', id);
+        await _fetchProductOverrides();
+        _showSnack('Keyword rule "$keyword" deleted.');
+      } catch (e) {
+        _showSnack('Failed to delete: $e', error: true);
+      }
+    }
+
+    void startEdit(Map<String, dynamic> rule) {
+      setState(() {
+        _editingOverrideId    = rule['id'];
+        _overrideKeywordCtrl.text  = rule['keyword'] ?? '';
+        _overrideCatHintCtrl.text  = rule['category_hint'] ?? '';
+        _overrideRateCtrl.text     = rule['gst_rate']?.toString() ?? '0.18';
+        _overrideReasonCtrl.text   = rule['reason'] ?? '';
+      });
+    }
+
+    void startAdd() {
+      setState(() {
+        _editingOverrideId   = 'new';
+        _overrideKeywordCtrl.text = '';
+        _overrideCatHintCtrl.text = '';
+        _overrideRateCtrl.text    = '0.18';
+        _overrideReasonCtrl.text  = '';
+      });
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: AdminColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AdminColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Section Header ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C4DFF).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.auto_awesome_rounded,
+                      color: Color(0xFF7C4DFF), size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Product GST Keyword Rules',
+                          style: AdminStyles.title(size: 15)),
+                      Text(
+                        'Auto-recommend correct GST rate when seller types a product name. '
+                        'Matched case-insensitively. Category hint narrows match to that category only.',
+                        style: AdminStyles.caption(color: AdminColors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_loadingOverrides)
+                  const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AdminColors.primary)),
+                if (canEdit) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline_rounded,
+                        color: Color(0xFF7C4DFF)),
+                    tooltip: 'Add keyword rule',
+                    onPressed: startAdd,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const Divider(height: 1, color: AdminColors.cardBorder),
+
+          // ── Add New Rule Row (shown when _editingOverrideId == 'new') ────
+          if (_editingOverrideId == 'new') ...[
+            _buildOverrideEditRow(
+              rateLabel: rateLabel,
+              rateColor: rateColor,
+              slabOptions: slabOptions,
+              onSave: () async {
+                final rate = double.tryParse(_overrideRateCtrl.text) ?? 0.18;
+                final kw   = _overrideKeywordCtrl.text.trim();
+                if (kw.isEmpty) {
+                  _showSnack('Keyword cannot be empty', error: true);
+                  return;
+                }
+                await saveRule(
+                  keyword: kw,
+                  categoryHint: _overrideCatHintCtrl.text.trim().isEmpty
+                      ? null
+                      : _overrideCatHintCtrl.text.trim(),
+                  rate: rate,
+                  reason: _overrideReasonCtrl.text.trim(),
+                );
+              },
+              onCancel: () => setState(() => _editingOverrideId = null),
+            ),
+            const Divider(height: 1, color: AdminColors.cardBorder),
+          ],
+
+          // ── Keyword Rules List ────────────────────────────────────────────
+          if (_productOverrides.isEmpty && !_loadingOverrides)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'No custom keyword rules.\nThe engine uses 200+ built-in rules from the migration seed.',
+                  textAlign: TextAlign.center,
+                  style: AdminStyles.caption(color: AdminColors.textMuted),
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _productOverrides.length,
+              separatorBuilder: (_, __) =>
+                  const Divider(height: 1, color: AdminColors.cardBorder),
+              itemBuilder: (ctx, i) {
+                final rule = _productOverrides[i];
+                final id       = rule['id'] as String;
+                final keyword  = rule['keyword'] as String? ?? '';
+                final catHint  = rule['category_hint'] as String?;
+                final rate     = double.tryParse(rule['gst_rate'].toString()) ?? 0.18;
+                final reason   = rule['reason'] as String? ?? '';
+                final isActive = rule['is_active'] as bool? ?? true;
+                final isEditing = _editingOverrideId == id;
+
+                if (isEditing) {
+                  return _buildOverrideEditRow(
+                    rateLabel: rateLabel,
+                    rateColor: rateColor,
+                    slabOptions: slabOptions,
+                    onSave: () async {
+                      final r = double.tryParse(_overrideRateCtrl.text) ?? 0.18;
+                      await saveRule(
+                        existingId: id,
+                        keyword: _overrideKeywordCtrl.text.trim(),
+                        categoryHint: _overrideCatHintCtrl.text.trim().isEmpty
+                            ? null
+                            : _overrideCatHintCtrl.text.trim(),
+                        rate: r,
+                        reason: _overrideReasonCtrl.text.trim(),
+                      );
+                    },
+                    onCancel: () => setState(() => _editingOverrideId = null),
+                  );
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      // Rate badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: rateColor(rate).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: rateColor(rate).withValues(alpha: 0.3)),
+                        ),
+                        child: Text(rateLabel(rate),
+                            style: AdminStyles.title(
+                                size: 13, color: rateColor(rate))),
+                      ),
+                      const SizedBox(width: 12),
+                      // Keyword + category hint + reason
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(keyword,
+                                    style: AdminStyles.body(
+                                        size: 13,
+                                        color: isActive
+                                            ? AdminColors.textPrimary
+                                            : AdminColors.textMuted)),
+                                if (catHint != null) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AdminColors.primary
+                                          .withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(catHint,
+                                        style: AdminStyles.caption(
+                                            color: AdminColors.primary)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (reason.isNotEmpty)
+                              Text(reason,
+                                  style: AdminStyles.caption(
+                                      color: AdminColors.textMuted)),
+                          ],
+                        ),
+                      ),
+                      // Actions
+                      if (canEdit) ...[
+                        IconButton(
+                          icon: const Icon(Icons.edit_rounded,
+                              color: AdminColors.textMuted, size: 18),
+                          tooltip: 'Edit',
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(8),
+                          onPressed: () => startEdit(rule),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              color: AdminColors.danger, size: 18),
+                          tooltip: 'Delete',
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(8),
+                          onPressed: () => deleteRule(id, keyword),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 300.ms);
+  }
+
+  /// Shared inline edit row for both add-new and edit-existing keyword rules.
+  Widget _buildOverrideEditRow({
+    required String Function(double) rateLabel,
+    required Color Function(double) rateColor,
+    required List<double> slabOptions,
+    required VoidCallback onSave,
+    required VoidCallback onCancel,
+  }) {
+    final currentRate =
+        double.tryParse(_overrideRateCtrl.text) ?? 0.18;
+
+    return StatefulBuilder(
+      builder: (ctx, setLocal) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Keyword + category hint row
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _overrideKeywordCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Keyword (lowercase)',
+                      hintText: 'e.g., shampoo',
+                      isDense: true,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    style: AdminStyles.body(size: 13),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: _overrideCatHintCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Category hint (opt.)',
+                      hintText: 'e.g., Pharmacy',
+                      isDense: true,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    style: AdminStyles.body(size: 13),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Reason field
+            TextField(
+              controller: _overrideReasonCtrl,
+              decoration: InputDecoration(
+                labelText: 'Reason shown to seller',
+                hintText: 'e.g., Shampoo — 5% FMCG Merit Rate',
+                isDense: true,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              style: AdminStyles.body(size: 13),
+            ),
+            const SizedBox(height: 10),
+            // Rate selector
+            Text('GST Rate:', style: AdminStyles.caption()),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              children: slabOptions.map((r) {
+                final selected = currentRate == r;
+                return GestureDetector(
+                  onTap: () {
+                    setLocal(() {
+                      _overrideRateCtrl.text = r.toString();
+                    });
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? rateColor(r).withValues(alpha: 0.15)
+                          : AdminColors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: selected ? rateColor(r) : AdminColors.cardBorder,
+                          width: selected ? 2.0 : 1.0),
+                    ),
+                    child: Text(rateLabel(r),
+                        style: AdminStyles.title(
+                            size: 13,
+                            color: selected
+                                ? rateColor(r)
+                                : AdminColors.textMuted)),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: onCancel,
+                  child: Text('Cancel',
+                      style:
+                          AdminStyles.body(size: 13, color: AdminColors.textMuted)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C4DFF),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                  ),
+                  onPressed: onSave,
+                  child: Text('Save Rule',
+                      style: AdminStyles.body(size: 13, color: Colors.white)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 

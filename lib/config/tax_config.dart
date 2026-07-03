@@ -223,6 +223,31 @@ class TaxConfig {
     return _categoryGstRate[category] ?? 0.18;
   }
 
+  /// Returns the effective GST rate for a [ProductModel] (or any map with
+  /// `gstRateOverride` and `category` keys).
+  ///
+  /// Priority:
+  ///   1. `product.gstRateOverride` — seller/admin selected product-level rate
+  ///   2. `gstRateForCategory(product.category, itemPrice: itemPrice)` — existing logic
+  ///
+  /// This wrapper is the ONLY change to checkout logic. Existing code that calls
+  /// [gstRateForCategory] directly is NOT touched — it still works identically.
+  static double gstRateForProduct(
+    String category,
+    double? gstRateOverride, {
+    double? itemPrice,
+    double? slabThreshold,
+    double? slabHighRate,
+  }) {
+    if (gstRateOverride != null) return gstRateOverride;
+    return gstRateForCategory(
+      category,
+      itemPrice: itemPrice,
+      slabThreshold: slabThreshold,
+      slabHighRate: slabHighRate,
+    );
+  }
+
   /// Returns a human-readable GST label e.g. "GST 5%".
   static String gstLabel(
     String category, {
@@ -430,8 +455,16 @@ class OrderTaxBreakdown {
       final price = (item['price'] as num).toDouble(); // BASE price, pre-GST
       final qty = (item['quantity'] as num).toInt();
       final lineBase = price * qty;
-      final gstRate = PlatformConfigProvider.instance?.getGstRate(category, itemPrice: price) 
-          ?? TaxConfig.gstRateForCategory(category, itemPrice: price);
+
+      // ── Product-level GST override takes priority over category rate ──────
+      final productOverride = item['gst_rate_override'] != null
+          ? double.tryParse(item['gst_rate_override'].toString())
+          : null;
+
+      final gstRate = productOverride ??
+          (PlatformConfigProvider.instance?.getGstRate(category, itemPrice: price)
+              ?? TaxConfig.gstRateForCategory(category, itemPrice: price));
+
       final lineGst = lineBase * gstRate;
 
       baseSubtotal += lineBase;

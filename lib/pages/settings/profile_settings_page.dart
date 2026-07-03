@@ -27,6 +27,19 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
     with SingleTickerProviderStateMixin {
 
   @override
+  void initState() {
+    super.initState();
+    // Always re-fetch the profile when the settings page opens so that the
+    // latest verification status from the database is reflected without
+    // requiring the user to sign out and back in.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().retryProfileFetch();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;

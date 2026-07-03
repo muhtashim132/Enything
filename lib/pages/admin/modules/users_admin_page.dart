@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -212,37 +212,39 @@ class _CustomersTabState extends State<_CustomersTab> {
           backgroundColor: AdminColors.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text('Promote to Admin', style: AdminStyles.title()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Make ${user['full_name'] ?? 'User'} an admin.',
-                  style: AdminStyles.body(size: 13, color: AdminColors.textSecondary)),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<RoleModel>(
-                initialValue: selectedRole,
-                dropdownColor: AdminColors.surface,
-                style: AdminStyles.body(),
-                decoration: InputDecoration(
-                  filled: true, fillColor: AdminColors.cardBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Make ${user['full_name'] ?? 'User'} an admin.',
+                    style: AdminStyles.body(size: 13, color: AdminColors.textSecondary)),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<RoleModel>(
+                  initialValue: selectedRole,
+                  dropdownColor: AdminColors.surface,
+                  style: AdminStyles.body(),
+                  decoration: InputDecoration(
+                    filled: true, fillColor: AdminColors.cardBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  items: roles.map((r) => DropdownMenuItem(value: r, child: Text(r.name))).toList(),
+                  onChanged: (v) => setS(() => selectedRole = v),
                 ),
-                items: roles.map((r) => DropdownMenuItem(value: r, child: Text(r.name))).toList(),
-                onChanged: (v) => setS(() => selectedRole = v),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: passCtrl,
-                obscureText: true,
-                style: AdminStyles.body(),
-                decoration: InputDecoration(
-                  hintText: 'Set admin password',
-                  hintStyle: AdminStyles.body(color: AdminColors.textMuted),
-                  filled: true, fillColor: AdminColors.cardBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passCtrl,
+                  obscureText: true,
+                  style: AdminStyles.body(),
+                  decoration: InputDecoration(
+                    hintText: 'Set admin password',
+                    hintStyle: AdminStyles.body(color: AdminColors.textMuted),
+                    filled: true, fillColor: AdminColors.cardBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AdminStyles.body(size: 13))),

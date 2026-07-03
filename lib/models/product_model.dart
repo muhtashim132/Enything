@@ -63,6 +63,9 @@ class ProductModel {
   final bool requiresPrescription;
   final String medicineType;
   final List<ProductVariant> variants;
+  /// Product-level GST override rate (e.g. 0.05 = 5%).
+  /// If null, the checkout falls back to the category-level rate from tax_config.
+  final double? gstRateOverride;
 
   ProductModel({
     required this.id,
@@ -88,6 +91,7 @@ class ProductModel {
     this.requiresPrescription = false,
     this.medicineType = 'General',
     this.variants = const [],
+    this.gstRateOverride,
   });
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
@@ -127,6 +131,9 @@ class ProductModel {
               ?.map((v) => ProductVariant.fromMap(v as Map<String, dynamic>))
               .toList() ??
           [],
+      gstRateOverride: map['gst_rate_override'] != null
+          ? double.tryParse(map['gst_rate_override'].toString())
+          : null,
     );
   }
 
@@ -151,6 +158,7 @@ class ProductModel {
     'requires_prescription': requiresPrescription,
     'medicine_type': medicineType,
     'variants': variants.map((v) => v.toMap()).toList(),
+    'gst_rate_override': gstRateOverride,
   };
 
   String get firstImage => images.isNotEmpty ? images.first : '';

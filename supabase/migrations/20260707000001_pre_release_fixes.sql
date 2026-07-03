@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- Migration: 20260707000001_pre_release_fixes.sql
 -- Description: Additive-only fixes for all issues found during pre-release audit.
 --

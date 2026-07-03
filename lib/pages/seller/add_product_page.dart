@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -7,12 +8,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/app_categories.dart';
+import '../../config/tax_config.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/validators.dart';
 import '../../models/product_model.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
+import '../../services/gst_recommendation_engine.dart';
 
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
@@ -51,6 +54,13 @@ class _AddProductPageState extends State<AddProductPage> {
   List<String> _existingImageUrls = [];
   List<ProductVariant> _variants = [];
 
+  // ── GST Recommendation Engine ────────────────────────────────────────────
+  GstRecommendation? _gstRecommendation;
+  double? _gstRateOverride;
+  bool _gstLoading = false;
+  bool _gstUserOverridden = false;
+  Timer? _gstDebounce;
+
   List<String> get _availableUnitTypes {
     if (_productCategory == 'Clothing' ||
         _productCategory == 'Electronics' ||
@@ -64,7 +74,11 @@ class _AddProductPageState extends State<AddProductPage> {
   @override
   void initState() {
     super.initState();
+    // Pre-load DB keyword rules so first recommendation is instant
+    GstRecommendationEngine.instance.ensureLoaded();
     _fetchShopId();
+    // Debounced listener: re-run GST recommendation when product name changes
+    _nameController.addListener(_scheduleGstUpdate);
     if (widget.existingProduct != null) {
       final p = widget.existingProduct!;
       _nameController.text = p.name;
@@ -89,6 +103,17 @@ class _AddProductPageState extends State<AddProductPage> {
       _medicineType = p.medicineType;
       _existingImageUrls = List.from(p.images);
       _variants = List.from(p.variants);
+      // Restore saved product-level GST override
+      if (p.gstRateOverride != null) {
+        _gstRateOverride = p.gstRateOverride;
+        _gstUserOverridden = true;
+        _gstRecommendation = GstRecommendation(
+          rate: p.gstRateOverride!,
+          reason:
+              '${(p.gstRateOverride! * 100).toStringAsFixed(0)}% — Previously saved',
+          isAmbiguous: false,
+        );
+      }
     }
   }
 
@@ -266,8 +291,9 @@ class _AddProductPageState extends State<AddProductPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Add Variation'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
@@ -315,6 +341,7 @@ class _AddProductPageState extends State<AddProductPage> {
               ),
             ),
           ],
+        ),
         ),
         actions: [
           TextButton(
@@ -420,10 +447,18 @@ class _AddProductPageState extends State<AddProductPage> {
             : int.tryParse(_inventoryController.text.trim()),
         'images': uploadedUrls,
         'requires_prescription':
-            _productCategory == 'Pharmacy' ? _requiresPrescription : false,
+            (_productCategory == 'Pharmacy' ||
+                    _productCategory == 'Medical Store')
+                ? _requiresPrescription
+                : false,
         'medicine_type':
-            _productCategory == 'Pharmacy' ? _medicineType : 'General',
+            (_productCategory == 'Pharmacy' ||
+                    _productCategory == 'Medical Store')
+                ? _medicineType
+                : 'General',
         'variants': _variants.map((v) => v.toMap()).toList(),
+        // Product-level GST override (null = use category default)
+        'gst_rate_override': _gstRateOverride,
       };
 
       if (widget.existingProduct == null) {
@@ -449,6 +484,318 @@ class _AddProductPageState extends State<AddProductPage> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  // ── GST Recommendation Helpers ───────────────────────────────────────────
+
+  /// Schedules a debounced GST recommendation refresh (400ms).
+  void _scheduleGstUpdate() {
+    _gstDebounce?.cancel();
+    _gstDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) _triggerGstRecommendation();
+    });
+  }
+
+  /// Runs the engine and updates state with the recommendation.
+  Future<void> _triggerGstRecommendation() async {
+    if (!mounted) return;
+    setState(() => _gstLoading = true);
+    await GstRecommendationEngine.instance.ensureLoaded();
+    final name = _nameController.text.trim();
+    final rec =
+        GstRecommendationEngine.instance.recommend(name, _productCategory);
+    if (!mounted) return;
+    setState(() {
+      _gstLoading = false;
+      _gstRecommendation = rec;
+      // Auto-apply only when the user hasn't manually overridden
+      if (!_gstUserOverridden) {
+        _gstRateOverride = rec.rate;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _gstDebounce?.cancel();
+    _nameController.removeListener(_scheduleGstUpdate);
+    _nameController.dispose();
+    _priceController.dispose();
+    _originalPriceController.dispose();
+    _descriptionController.dispose();
+    _menuCategoryController.dispose();
+    _weightController.dispose();
+    _inventoryController.dispose();
+    super.dispose();
+  }
+
+  // ── GST Card Widget ───────────────────────────────────────────────────────
+
+  Widget _buildGstCard() {
+    final rec = _gstRecommendation;
+    final currentRate = _gstRateOverride;
+    final isSlabCat =
+        _productCategory == 'Clothing' || _productCategory == 'Footwear';
+
+    // Color coding by rate
+    Color rateColor(double r) {
+      if (r == 0.00) return const Color(0xFF00C853); // green — exempt
+      if (r == 0.05) return const Color(0xFF2196F3); // blue — merit
+      if (r == 0.18) return const Color(0xFFFF9800); // orange — standard
+      if (r >= 0.40) return const Color(0xFFF44336); // red — sin
+      if (r == 0.03) return const Color(0xFF9C27B0); // purple — jewellery
+      return const Color(0xFF607D8B);
+    }
+
+    // Human-readable slab label
+    String rateLabel(double r) => '${(r * 100).toStringAsFixed(0)}%';
+
+    final alternatives = rec?.alternatives ?? [0.00, 0.05, 0.18, 0.40];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: currentRate != null
+              ? rateColor(currentRate).withValues(alpha: 0.4)
+              : AppColors.border,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: currentRate != null
+                ? rateColor(currentRate).withValues(alpha: 0.06)
+                : Colors.transparent,
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ────────────────────────────────────────────────────
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C4DFF).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded,
+                      color: Color(0xFF7C4DFF), size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('GST Rate',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: AppColors.textPrimary)),
+                      Text(
+                        'Goods & Services Tax — applied on top of your price',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color:
+                                AppColors.textSecondary.withValues(alpha: 0.8)),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_gstLoading)
+                  const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            // ── Recommendation Chip ───────────────────────────────────────
+            if (rec != null) ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7C4DFF).withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: const Color(0xFF7C4DFF).withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.auto_awesome_rounded,
+                        size: 14, color: Color(0xFF7C4DFF)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        rec.reason,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF7C4DFF),
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // ── Slab selector ─────────────────────────────────────────────
+            if (isSlabCat) ...[
+              // Clothing/Footwear: show price-based slab note
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border:
+                      Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        size: 14, color: Colors.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        TaxConfig.slabDescription(_productCategory) ??
+                            '5% for ≤₹2,500 | 18% for >₹2,500',
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.amber,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // ── Rate buttons ──────────────────────────────────────────────
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: alternatives.map((rate) {
+                final isSelected = currentRate == rate;
+                final color = rateColor(rate);
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _gstRateOverride = rate;
+                      _gstUserOverridden = true;
+                    });
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? color.withValues(alpha: 0.15)
+                          : AppColors.surfaceColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isSelected ? color : AppColors.border,
+                        width: isSelected ? 2.0 : 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isSelected) ...[
+                          Icon(Icons.check_circle_rounded,
+                              size: 14, color: color),
+                          const SizedBox(width: 5),
+                        ],
+                        Text(
+                          rateLabel(rate),
+                          style: TextStyle(
+                              fontWeight: isSelected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                              fontSize: 15,
+                              color:
+                                  isSelected ? color : AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            if (currentRate != null) ...[
+              const SizedBox(height: 12),
+              // Summary line: "Customer pays ₹XXX + 5% GST"
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: rateColor(currentRate).withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.receipt_rounded,
+                        size: 13, color: rateColor(currentRate)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Customer pays: Base Price + ${rateLabel(currentRate)} GST',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: rateColor(currentRate),
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // ── Reset to category default ─────────────────────────────────
+            if (_gstUserOverridden) ...[
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _gstUserOverridden = false;
+                    final rec2 = _gstRecommendation;
+                    if (rec2 != null) _gstRateOverride = rec2.rate;
+                  });
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.restart_alt_rounded,
+                        size: 13,
+                        color: AppColors.textSecondary.withValues(alpha: 0.7)),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Reset to recommended',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary.withValues(alpha: 0.7),
+                          decoration: TextDecoration.underline),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -791,11 +1138,17 @@ class _AddProductPageState extends State<AddProductPage> {
                           if (v != null) {
                             setState(() {
                               _productCategory = v;
-
                               if (!_availableUnitTypes.contains(_unitType)) {
                                 _unitType = _availableUnitTypes.first;
                               }
+                              // Reset user override when category changes
+                              // so the engine can auto-apply the new category rate
+                              if (!_gstUserOverridden) {
+                                _gstRateOverride = null;
+                              }
                             });
+                            // Re-run GST recommendation for the new category
+                            _triggerGstRecommendation();
                           }
                         },
                       ),
@@ -810,6 +1163,10 @@ class _AddProductPageState extends State<AddProductPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+
+                // ── GST Recommendation Card ──────────────────────────────────
+                _buildGstCard(),
                 const SizedBox(height: 16),
 
                 _card(
@@ -895,7 +1252,8 @@ class _AddProductPageState extends State<AddProductPage> {
                     ),
                   ],
                 ),
-                if (_productCategory == 'Pharmacy') ...[
+                if (_productCategory == 'Pharmacy' ||
+                    _productCategory == 'Medical Store') ...[
                   const SizedBox(height: 16),
                   _card(
                     children: [

@@ -369,26 +369,28 @@ class _MemberCard extends StatelessWidget {
         backgroundColor: const Color(0xFF12091F),
         title: Text('Reset Password',
             style: GoogleFonts.outfit(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Enter new password for ${member.fullName}:',
-                style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: ctrl,
-              obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'New Password',
-                hintStyle: const TextStyle(color: Colors.white24),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Enter new password for ${member.fullName}:',
+                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                obscureText: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'New Password',
+                  hintStyle: const TextStyle(color: Colors.white24),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
