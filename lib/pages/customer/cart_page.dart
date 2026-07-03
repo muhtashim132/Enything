@@ -11,7 +11,7 @@ import '../../config/payment_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../utils/responsive_layout.dart';
-
+import '../../config/tax_config.dart';
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
 
@@ -343,8 +343,18 @@ class CartPage extends StatelessWidget {
     final heavyFee = cart.heavyOrderFee;
     final discount = cart.calculateDeliveryDiscount(distanceKm);
     final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
-    final totalDelivery = effectiveBase + surcharge + heavyFee + cart.smallCartFee - discount;
-    final total = cart.subtotal + totalDelivery + cart.platformFee;
+    final totalDelivery = cart.totalDeliveryCharges(distanceKm);
+    final riderBase = effectiveBase + surcharge + heavyFee;
+    final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
+
+    final gstBreakdown = OrderTaxBreakdown.calculate(
+      items: cart.taxBreakdownItems,
+      deliveryCharge: totalDelivery,
+      riderEarnings: riderEarnings,
+      platformFee: cart.platformFee,
+      paymentMethod: 'upi',
+    );
+    final total = gstBreakdown.grandTotal;
     final canCheckout = cart.meetsMinimumOrder && baseCharge >= 0;
 
     return SafeArea(
@@ -436,10 +446,20 @@ class CartPage extends StatelessWidget {
             const SizedBox(height: 6),
             _summaryRow(
               'Handling/Platform Fee',
-              '+₹${cart.platformFee.toStringAsFixed(0)}',
+              '+₹${(cart.platformFee - gstBreakdown.platformFeeGst).toStringAsFixed(2)}',
               hint: 'Supports app operations',
               isDark: isDark,
             ),
+            if (gstBreakdown.totalGst > 0) ...[
+              const SizedBox(height: 6),
+              _summaryRow(
+                'TOTAL GST',
+                '+₹${gstBreakdown.totalGst.toStringAsFixed(2)}',
+                hint: 'Govt. taxes on items & services',
+                valueColor: const Color(0xFF1565C0), // Consistent with checkout
+                isDark: isDark,
+              ),
+            ],
 
             Divider(
               height: 20,

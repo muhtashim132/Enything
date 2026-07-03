@@ -660,9 +660,26 @@ void showDocumentsDialog(BuildContext context) {
   }).catchError((_) {
     if (context.mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'Permission denied: Ask admin to grant SELECT on KYC columns.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+          backgroundColor: Colors.redAccent.shade700,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Permission denied: Ask admin to grant SELECT on KYC columns.',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   });
 }
@@ -831,16 +848,54 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
   Future<void> _pickBellSound() async {
     setState(() => _isPickingFile = true);
     try {
-      // Request audio read permission on Android 13+
+      // Request audio/storage permission depending on Android version
       if (Platform.isAndroid) {
-        final status = await Permission.audio.request();
-        if (!status.isGranted) {
+        bool isGranted = false;
+        
+        var audioStatus = await Permission.audio.status;
+        if (audioStatus.isGranted) {
+          isGranted = true;
+        } else {
+          audioStatus = await Permission.audio.request();
+          isGranted = audioStatus.isGranted;
+        }
+        
+        if (!isGranted) {
+          var storageStatus = await Permission.storage.status;
+          if (storageStatus.isGranted) {
+            isGranted = true;
+          } else {
+            storageStatus = await Permission.storage.request();
+            isGranted = storageStatus.isGranted;
+          }
+        }
+
+        if (!isGranted) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(
-                  'Storage permission required to pick a bell sound.',
-                  style: GoogleFonts.outfit(),
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+                backgroundColor: Colors.redAccent.shade700,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                content: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.white),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Storage permission is required to select a bell sound.',
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+                action: SnackBarAction(
+                  label: 'SETTINGS',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    openAppSettings();
+                  },
                 ),
               ),
             );

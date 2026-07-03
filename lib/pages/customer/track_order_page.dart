@@ -351,6 +351,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     return active.fold(0.0, (sum, o) => sum + o.gstItemTotal);
   }
 
+  double _computeGroupGstDelivery() {
+    final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    return active.fold(0.0, (sum, o) => sum + o.gstDelivery);
+  }
+
+  double _computeGroupGstPlatform() {
+    final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+    return active.fold(0.0, (sum, o) => sum + o.gstPlatform);
+  }
+
   double _computeGroupGrandTotal() {
     final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
     return active.fold(0.0, (sum, o) => sum + (o.grandTotalCollected > 0 ? o.grandTotalCollected : o.grandTotal));
@@ -1925,18 +1935,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           isDark: isDark),
                       const SizedBox(height: 8),
                       _billRow('Delivery Fee',
-                          '₹${_computeGroupDeliveryCharges().toStringAsFixed(0)}',
+                          '₹${(_computeGroupDeliveryCharges() - _computeGroupGstDelivery()).toStringAsFixed(0)}',
                           isDark: isDark),
                       if (_computeGroupPlatformFee() > 0) ...[
                         const SizedBox(height: 8),
                         _billRow('Handling Fee',
-                            '₹${_computeGroupPlatformFee().toStringAsFixed(0)}',
+                            '₹${(_computeGroupPlatformFee() - _computeGroupGstPlatform()).toStringAsFixed(2)}',
                             isDark: isDark),
                       ],
-                      if (_computeGroupGstItemTotal() > 0) ...[
+                      if ((_computeGroupGstItemTotal() + _computeGroupGstDelivery() + _computeGroupGstPlatform()) > 0) ...[
                         const SizedBox(height: 8),
-                        _billRow('GST on Items',
-                            '₹${_computeGroupGstItemTotal().toStringAsFixed(0)}',
+                        _billRow('TOTAL GST',
+                            '₹${(_computeGroupGstItemTotal() + _computeGroupGstDelivery() + _computeGroupGstPlatform()).toStringAsFixed(2)}',
                             isDark: isDark),
                       ],
                       Divider(

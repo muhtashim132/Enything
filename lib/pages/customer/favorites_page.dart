@@ -126,7 +126,13 @@ class _FavoritesPageState extends State<FavoritesPage>
           ),
           const SizedBox(height: 32),
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              } else {
+                Navigator.maybePop(context);
+              }
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               decoration: BoxDecoration(
@@ -166,7 +172,7 @@ class _FavoritesPageState extends State<FavoritesPage>
         backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: GestureDetector(
+        leading: Navigator.canPop(context) ? GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(
             margin: const EdgeInsets.all(10),
@@ -177,7 +183,7 @@ class _FavoritesPageState extends State<FavoritesPage>
             child: Icon(Icons.arrow_back_ios_new_rounded,
                 size: 16, color: isDark ? Colors.white70 : AppColors.textPrimary),
           ),
-        ),
+        ) : null,
         title: Text(
           'Favorites',
           style: GoogleFonts.outfit(

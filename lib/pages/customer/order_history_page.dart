@@ -104,17 +104,26 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           ? '$added items added to cart ($skipped no longer available)'
           : '$added items added to cart!';
 
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(msg),
-          backgroundColor: AppColors.success,
+          content: Text(
+            msg,
+            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: const Color(0xFF10B981), // Modern green
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16), // Avoid overlapping bottom nav and checkout
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 10,
+          duration: const Duration(seconds: 4),
           action: SnackBarAction(
-            label: 'View Cart',
+            label: 'VIEW CART',
             textColor: Colors.white,
-            onPressed: () =>
-                Navigator.pushNamed(context, AppRoutes.cart),
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              Navigator.pushNamed(context, AppRoutes.cart);
+            },
           ),
         ),
       );
@@ -294,7 +303,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: GestureDetector(
+        leading: Navigator.canPop(context) ? GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(
             margin: const EdgeInsets.all(10),
@@ -305,7 +314,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             child: Icon(Icons.arrow_back_ios_new_rounded,
                 size: 16, color: isDark ? Colors.white70 : AppColors.textPrimary),
           ),
-        ),
+        ) : null,
         title: Text(
           'My Orders',
           style: GoogleFonts.outfit(

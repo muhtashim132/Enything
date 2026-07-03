@@ -50,7 +50,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                   ? AppColors.darkBg
                   : AppColors.roleColor(user.activeSessionRole),
               surfaceTintColor: Colors.transparent,
-              leading: Padding(
+              leading: Navigator.canPop(context) ? Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: PressScaleButton(
                   onTap: () => Navigator.pop(context),
@@ -67,7 +67,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                     ),
                   ),
                 ),
-              ),
+              ) : const SizedBox.shrink(),
               flexibleSpace: FlexibleSpaceBar(
                 collapseMode: CollapseMode.parallax,
                 background: _buildHeroCard(user, isDark),
