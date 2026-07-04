@@ -455,7 +455,9 @@ class _RefundsTab extends StatelessWidget {
 //   orders.gst_platform       → Platform Fee GST (18% embedded) — Enything remits
 //   orders.enything_commission → Commission; 18% GST on this — Enything remits
 //   orders.non_food_gst_amount → Non-food GST — Seller remits (pass-through)
-//   orders.tcs_amount         → 1% TCS — Enything files GSTR-8; sellers claim
+//   orders.tcs_amount         → GST TCS (§52): 1% ONLY on non-food taxable supplies;
+//                                0 for §9(5) food & 0% GST categories (fixed)
+//   orders.tds_amount         → IT TDS (§194-O): 0.1% on ALL gross sales (new)
 //
 // CATEGORY GST BREAKDOWN:
 //   Fetches order_items (product_id, price, quantity)
@@ -501,7 +503,12 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
   // ── Seller-owned (not Enything's liability) ──
   double _nonFoodGst    = 0; // Passed through to seller; seller remits
-  double _tcsCollected  = 0; // Enything deducts 1% TCS, files GSTR-8
+  // GST TCS §52: 1% ONLY on taxable non-food supplies. 0 for §9(5) food &
+  // 0% GST categories (Fruits/Vegs, Butcher, Fish/Seafood). Enything files GSTR-8.
+  double _tcsCollected  = 0;
+  // IT TDS §194-O: 0.1% on ALL gross sales. Finance Act 2024 (eff. Oct 1 2024).
+  // Enything files Form 26QE by 7th of next month. Seller claims via Form 26AS.
+  double _tdsCollected  = 0;
 
   int _deliveredOrders = 0;
 
@@ -562,7 +569,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
       // ── 1. Fetch orders for the selected month ─────────────────────────
       final rawOrders = await _db
           .from('orders')
-          .select('id, status, s9_5_gst_amount, non_food_gst_amount, gst_delivery, gst_platform, enything_commission, tcs_amount')
+          .select('id, status, s9_5_gst_amount, non_food_gst_amount, gst_delivery, gst_platform, enything_commission, tcs_amount, tds_amount')
           .gte('created_at', start.toIso8601String())
           .lt('created_at', end.toIso8601String());
 
@@ -570,7 +577,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
       final delivered   = allOrders.where((o) => o['status'] == 'delivered').toList();
       final orderIds    = delivered.map((o) => o['id'] as String).toList();
 
-      double s95 = 0, delGst = 0, platGst = 0, comm = 0, nonFood = 0, tcs = 0;
+      double s95 = 0, delGst = 0, platGst = 0, comm = 0, nonFood = 0, tcs = 0, tds = 0;
       for (final o in delivered) {
         s95     += (o['s9_5_gst_amount']    as num? ?? 0).toDouble();
         delGst  += (o['gst_delivery']        as num? ?? 0).toDouble();
@@ -578,6 +585,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
         comm    += (o['enything_commission'] as num? ?? 0).toDouble();
         nonFood += (o['non_food_gst_amount'] as num? ?? 0).toDouble();
         tcs     += (o['tcs_amount']          as num? ?? 0).toDouble();
+        tds     += (o['tds_amount']          as num? ?? 0).toDouble();
       }
 
       // ── 2. Fetch order_items for delivered orders (chunked) ────────────
@@ -653,6 +661,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           _commissionGst = comm * 0.18;
           _nonFoodGst    = nonFood;
           _tcsCollected  = tcs;
+          _tdsCollected  = tds;
           _deliveredOrders = delivered.length;
           _slabMap
             ..clear()
@@ -704,10 +713,13 @@ class _GstStatementTabState extends State<_GstStatementTab> {
     sb.writeln('TOTAL ENYTHING GST PAYABLE            : ₹${_fraw(_enythingTotalPayable)}');
     sb.writeln();
     sb.writeln('════════════════════════════════════════════════');
-    sb.writeln("SELLER PASS-THROUGH (NOT ENYTHING'S LIABILITY)");
+    sb.writeln("SELLER PASS-THROUGH & TAX DEDUCTIONS (NOT ENYTHING'S GST LIABILITY)");
     sb.writeln('════════════════════════════════════════════════');
     sb.writeln('Non-Food Item GST (Seller remits)    : ₹${_fraw(_nonFoodGst)}');
-    sb.writeln('TCS Collected 1%  (Sellers claim)    : ₹${_fraw(_tcsCollected)}');
+    sb.writeln('GST TCS 1% (§52, non-food only)      : ₹${_fraw(_tcsCollected)}');
+    sb.writeln('  (§9(5) food & 0% GST categories exempt from TCS)');
+    sb.writeln('IT TDS 0.1% (§194-O, all categories)  : ₹${_fraw(_tdsCollected)}');
+    sb.writeln('  (Finance Act 2024, eff. Oct 1 2024. File Form 26QE by 7th.)');
     sb.writeln();
     sb.writeln('════════════════════════════════════════════════');
     sb.writeln('CATEGORY-WISE GST BREAKDOWN');
@@ -799,17 +811,19 @@ class _GstStatementTabState extends State<_GstStatementTab> {
         ).animate().fadeIn(delay: 100.ms),
         const SizedBox(height: 12),
 
-        // ── Card 2: Seller Pass-Through (not Enything's liability) ───────
+        // ── Card 2: Seller Pass-Through + TDS (not Enything's liability) ────────
         _GstSectionCard(
-          title: "Seller GST Pass-Through",
+          title: "Seller GST Pass-Through & Tax Deductions",
           subtitle: 'Collected on behalf of sellers — NOT Enything\'s liability',
           accentColor: AdminColors.warning,
           icon: Icons.store_rounded,
           rows: [
             _GstLineItem("Non-Food Item GST (Sellers remit via GSTR-1/3B)", _nonFoodGst,
                 tag: 'SELLER', tagColor: AdminColors.warning),
-            _GstLineItem("TCS Collected 1% (Sellers claim in GSTR-2B)", _tcsCollected,
+            _GstLineItem("GST TCS 1% — §52 (non-food only; 0 for food/exempt)", _tcsCollected,
                 tag: 'GSTR-8', tagColor: AdminColors.info),
+            _GstLineItem("IT TDS 0.1% — §194-O (all categories, Finance Act 2024)", _tdsCollected,
+                tag: '26QE', tagColor: const Color(0xFF4DABF7)),
           ],
         ).animate().fadeIn(delay: 150.ms),
         const SizedBox(height: 16),
@@ -841,7 +855,8 @@ class _GstStatementTabState extends State<_GstStatementTab> {
         const SizedBox(height: 8),
         Text(
           '📌  Copy this report and share with your CA via WhatsApp or email.\n'
-          '    File GSTR-3B by 20th. Sellers check GSTR-2B after Enything files GSTR-8 by 10th.',
+          '    File GSTR-3B by 20th. File Form 26QE (TDS) by 7th.\n'
+          '    Sellers check GSTR-2B after Enything files GSTR-8 by 10th.',
           style: AdminStyles.caption(color: AdminColors.textMuted).copyWith(height: 1.6),
           textAlign: TextAlign.center,
         ),

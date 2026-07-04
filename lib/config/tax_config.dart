@@ -296,6 +296,83 @@ class TaxConfig {
     return s9_5Categories.contains(category);
   }
 
+  // ── GST TCS (CGST §52) — Category-Precise Rates ─────────────────────────────
+  //
+  // TCS applies ONLY to the "net value of taxable supplies" through the ECO
+  // (Section 52(1), CGST Act).  Two categories of supplies are excluded:
+  //
+  //   A) Section 9(5) supplies (deemed-supplier food/restaurant):
+  //      Enything already pays the GST directly as deemed supplier.
+  //      §52 explicitly carves out §9(5) supplies from "net taxable supply".
+  //      Source: CBIC Circular 167/23/2021-GST, FAQ No. 3.
+  //
+  //   B) Zero-GST / genuinely exempt supplies (0% GST categories):
+  //      TCS applies only to TAXABLE supplies. A supply with 0% GST rate
+  //      is either exempt or zero-rated. Exempt supplies are excluded from
+  //      the TCS base by definition (Section 52 "taxable supply" ≠ exempt).
+  //      Affected categories: Fruits & Vegs, Butcher, Fish & Seafood.
+  //      Note: Dairy & Eggs has a blended 5% rate (butter/paneer attract
+  //      GST) — conservative approach is to apply TCS; seller can adjust.
+  //
+  //   All other categories → TCS = 1% of base seller subtotal.
+  //   Rate: 0.5% CGST + 0.5% SGST = 1% total (Section 52(1)).
+  //   Filing: Enything files GSTR-8 by 10th of next month.
+  //   Seller claims credit via GSTR-2B after Enything's GSTR-8 is filed.
+
+  /// GST TCS rate (§52) = 1% for taxable non-deemed-supplier supplies.
+  static const double gcTcsRate = 0.01; // 0.5% CGST + 0.5% SGST
+
+  /// Categories where GST TCS (§52) is ZERO:
+  ///   — §9(5) deemed-supplier food (Enything already pays GST directly)
+  ///   — Zero-GST / genuinely exempt supplies (fresh produce, fresh meat/fish)
+  static const Set<String> _tcsZeroCategories = {
+    // ── Section 9(5) deemed-supplier food ── NO TCS (ECO is deemed supplier)
+    'Restaurant',
+    'Fast Food',
+    'Bakery',
+    'Sweets & Mithai',
+    'Tea & Coffee',
+    'Ice Cream',
+    'Paan Shop',
+    // ── Genuinely exempt / zero-GST fresh produce ── NO TCS (non-taxable supply)
+    'Fruits & Vegs',   // 0% GST — fresh, unpackaged produce
+    'Butcher',         // 0% GST — fresh meat
+    'Fish & Seafood',  // 0% GST — fresh fish/seafood
+  };
+
+  /// Returns the GST TCS rate (§52 CGST) for a given [category].
+  ///
+  /// Returns 0.0 for:
+  ///   — Section 9(5) deemed-supplier food categories
+  ///   — Zero-GST / genuinely exempt categories (fresh produce)
+  /// Returns [gcTcsRate] (1%) for all other taxable non-food categories.
+  static double tcsRateForCategory(String category) {
+    return _tcsZeroCategories.contains(category) ? 0.0 : gcTcsRate;
+  }
+
+  // ── Income Tax TDS (IT Act §194-O, Finance Act 2024) ─────────────────────────
+  //
+  // Section 194-O mandates e-commerce operators to deduct TDS on the GROSS
+  // consideration paid to ALL e-commerce participants (sellers).
+  //
+  // KEY FACTS (as of FY 2025-26):
+  //   • Rate: 0.1% (reduced from 1% by Finance Act 2024, effective Oct 1, 2024)
+  //   • Basis: Gross amount of consideration = base item subtotal (total_amount)
+  //   • Scope: ALL categories — goods AND services.
+  //             No categorical exemption exists (confirmed: CBIC, ClearTax,
+  //             IncomeTaxIndia.gov.in, TaxGuru).
+  //   • Threshold: Individual/HUF sellers with annual sales < ₹5 lakh AND
+  //                PAN/Aadhaar furnished → exempt. This is handled operationally
+  //                at the annual CA level, NOT per-order at checkout.
+  //   • Filing: Enything files Form 26QE by 7th of following month.
+  //   • Seller credit: Via Form 26AS / AIS after Enything's filing.
+  //
+  // IMPLICATION: Apply 0.1% TDS to ALL categories uniformly at checkout.
+
+  /// Income Tax TDS rate (§194-O, Finance Act 2024) = 0.1% on gross amount.
+  /// Effective from October 1, 2024 (reduced from 1%).
+  static const double itTdsRate = 0.001; // 0.1% = 0.001
+
   // ── GST Helpers for Enything's own services (delivery + platform) ────────────
 
   /// GST extracted from a delivery charge (18% inside).

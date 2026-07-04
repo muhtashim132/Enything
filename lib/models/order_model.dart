@@ -100,9 +100,17 @@ class OrderModel {
   /// 18% GST embedded in the platform/handling fee — Enything remits to Govt.
   final double gstPlatform;
 
-  /// 1% Tax Collected at Source deducted from seller by Enything (CGST §52).
+  /// GST TCS: Tax Collected at Source deducted from seller by Enything (CGST §52).
+  /// Rate: 1% on taxable non-deemed-supplier supplies only.
+  /// §9(5) food and 0% GST categories → tcsAmount = 0.
   /// Enything files GSTR-8 by 10th. Seller claims credit via GSTR-2B.
   final double tcsAmount;
+
+  /// Income Tax TDS: Tax Deducted at Source under §194-O (Finance Act 2024).
+  /// Rate: 0.1% on gross base consideration. Applies to ALL categories.
+  /// Enything files Form 26QE by 7th of next month.
+  /// Seller claims credit via Form 26AS / AIS.
+  final double tdsAmount;
 
   /// Penalty fee applied for orders below the minimum cart threshold.
   final double smallCartFee;
@@ -192,6 +200,7 @@ class OrderModel {
     this.gstDelivery = 0.0,
     this.gstPlatform = 0.0,
     this.tcsAmount = 0.0,
+    this.tdsAmount = 0.0,
     this.enythingCommission = 0.0,
     this.sellerPayout = 0.0,
     this.gatewayDeduction = 0.0,
@@ -265,6 +274,7 @@ class OrderModel {
       gstDelivery: (map['gst_delivery'] ?? 0.0).toDouble(),
       gstPlatform: (map['gst_platform'] ?? 0.0).toDouble(),
       tcsAmount: (map['tcs_amount'] ?? 0.0).toDouble(),
+      tdsAmount: (map['tds_amount'] ?? 0.0).toDouble(),
       enythingCommission: (map['enything_commission'] ?? 0.0).toDouble(),
       sellerPayout: (map['seller_payout'] ?? 0.0).toDouble(),
       gatewayDeduction: (map['gateway_deduction'] ?? 0.0).toDouble(),
@@ -383,6 +393,7 @@ class OrderModel {
       gstDelivery: gstDelivery,
       gstPlatform: gstPlatform,
       tcsAmount: tcsAmount,
+      tdsAmount: tdsAmount,
       enythingCommission: enythingCommission,
       sellerPayout: sellerPayout,
       gatewayDeduction: gatewayDeduction,

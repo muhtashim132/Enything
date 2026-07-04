@@ -1053,22 +1053,26 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 size: 14, color: AppColors.primary),
                             const SizedBox(width: 6),
                             Flexible(
-                              child: Text(
-                                'Rider delivers in ~${DeliveryCalculator.etaLabel(order.estimatedDistanceKm, 0)}',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                ),
+                              child: RichText(
                                 overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'by ${DeliveryCalculator.etaArrivalTime(order.estimatedDistanceKm, 0)}',
-                              style: GoogleFonts.outfit(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
+                                text: TextSpan(
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                  ),
+                                  children: [
+                                    TextSpan(text: 'Rider delivers in ~${DeliveryCalculator.etaLabel(order.estimatedDistanceKm, 0)} '),
+                                    TextSpan(
+                                      text: 'by ${DeliveryCalculator.etaArrivalTime(order.estimatedDistanceKm, 0)}',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],

@@ -7,13 +7,14 @@ import '../../providers/auth_provider.dart';
 import '../../utils/responsive_layout.dart';
 
 // ============================================================================
-// CA Report Page — Monthly GST & Payout Report for Chartered Accountant
+// CA Report Page — Monthly GST, TCS & TDS Report for Chartered Accountant
 // ============================================================================
-// Produces the 4 documents required by your CA every month by the 20th:
+// Produces the 5 documents required by your CA every month:
 //   Doc 1 — Sales Register       → GSTR-1 & GSTR-3B filing
 //   Doc 2 — Commission Invoice   → Input Tax Credit (ITC) claim
 //   Doc 3 — Section 9(5) Statement → Proves Enything paid food GST
-//   Doc 4 — TCS Statement        → GSTR-8 credit in GSTR-2B
+//   Doc 4 — TDS Statement (§194-O) → Income Tax credit via Form 26AS
+//   Doc 5 — GST TCS Statement (§52) → Only if non-food orders exist; GSTR-8 credit
 // ============================================================================
 
 class CaReportPage extends StatefulWidget {
@@ -35,7 +36,8 @@ class _CaReportPageState extends State<CaReportPage> {
   double _s9_5Gst = 0;         // Enything remits (exempt for seller)
   double _deliveryGst = 0;
   double _platformGst = 0;
-  double _tcsDeducted = 0;     // GSTR-8 TCS credit
+  double _tcsDeducted = 0;     // GST TCS §52 — GSTR-8 credit in GSTR-2B (only on taxable non-food)
+  double _tdsDeducted = 0;     // Income Tax TDS §194-O — Form 26AS credit (all categories, 0.1%)
   double _commission = 0;
   double _sellerPayout = 0;
   double _grandCollected = 0;
@@ -79,7 +81,7 @@ class _CaReportPageState extends State<CaReportPage> {
           .lt('created_at', end.toIso8601String());
 
       double baseSales = 0, nonFood = 0, s9_5 = 0, delGst = 0, platGst = 0,
-          tcs = 0, comm = 0, payout = 0, grand = 0, gw = 0;
+          tcs = 0, comm = 0, payout = 0, grand = 0, gw = 0, tds = 0;
 
       for (final o in (orders as List)) {
         baseSales += (o['total_amount'] ?? 0.0).toDouble();
@@ -92,6 +94,7 @@ class _CaReportPageState extends State<CaReportPage> {
         payout    += (o['seller_payout'] ?? 0.0).toDouble();
         grand     += (o['grand_total_collected'] ?? 0.0).toDouble();
         gw        += (o['gateway_deduction'] ?? 0.0).toDouble();
+        tds       += (o['tds_amount'] ?? 0.0).toDouble();
       }
 
       setState(() {
@@ -101,6 +104,7 @@ class _CaReportPageState extends State<CaReportPage> {
         _deliveryGst    = delGst;
         _platformGst    = platGst;
         _tcsDeducted    = tcs;
+        _tdsDeducted    = tds;
         _commission     = comm;
         _sellerPayout   = payout;
         _grandCollected = grand;
@@ -156,54 +160,68 @@ class _CaReportPageState extends State<CaReportPage> {
 
   String _buildFullReport() {
     final commGst = _commission * 0.18;
+    final tcsBlock = _tcsDeducted > 0
+        ? '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n'
+            'DOC 5 \u2014 GST TCS STATEMENT (\u00a752 CGST \u2014 Non-food only)\n'
+            '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n'
+            'GST TCS Deducted by Enything (1%): \u20b9${_f(_tcsDeducted)}\n'
+            'Legal basis: CGST Act \u00a752 (taxable non-food supplies only)\n'
+            '\u00a79(5) food and 0% GST categories are exempt from TCS.\n'
+            '\u2192 Enything files GSTR-8 by 10th of next month.\n'
+            '\u2192 Claim \u20b9${_f(_tcsDeducted)} as credit in your GSTR-2B after Enything files GSTR-8.\n'
+        : '(No GST TCS \u2014 all your orders are food/\u00a79(5) or 0% GST categories)';
+    
     return '''
-ENYTHING — CA MONTHLY TAX REPORT
+ENYTHING \u2014 CA MONTHLY TAX REPORT
 Period : $_monthLabel
 Shop   : $_shopName
 Orders : $_deliveredOrders delivered
 Generated: ${DateTime.now().toString().substring(0, 16)}
 
-════════════════════════════════════════
-DOC 1 — SALES REGISTER (for GSTR-1 / 3B)
-════════════════════════════════════════
-Taxable Base Sales (excl. GST) : ₹${_f(_totalBaseSales)}
-GST Seller Must Remit (non-food): ₹${_f(_nonFoodGst)}
-GST Paid by Enything — S.9(5) Food : ₹${_f(_s9_5Gst)}  ← YOU OWE NOTHING ON THIS
-Total GST in Orders             : ₹${_f(_nonFoodGst + _s9_5Gst)}
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+DOC 1 \u2014 SALES REGISTER (for GSTR-1 / 3B)
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+Taxable Base Sales (excl. GST) : \u20b9${_f(_totalBaseSales)}
+GST Seller Must Remit (non-food): \u20b9${_f(_nonFoodGst)}
+GST Paid by Enything \u2014 S.9(5) Food : \u20b9${_f(_s9_5Gst)}  \u2190 YOU OWE NOTHING ON THIS
+Total GST in Orders             : \u20b9${_f(_nonFoodGst + _s9_5Gst)}
 
-════════════════════════════════════════
-DOC 2 — COMMISSION INVOICE (for ITC)
-════════════════════════════════════════
-Enything Commission                : ₹${_f(_commission)}
-GST on Commission (18%)         : ₹${_f(commGst)}
-Total Commission + GST          : ₹${_f(_commission + commGst)}
-→ Claim ₹${_f(commGst)} as Input Tax Credit in GSTR-3B
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+DOC 2 \u2014 COMMISSION INVOICE (for ITC)
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+Enything Commission                : \u20b9${_f(_commission)}
+GST on Commission (18%)         : \u20b9${_f(commGst)}
+Total Commission + GST          : \u20b9${_f(_commission + commGst)}
+\u2192 Claim \u20b9${_f(commGst)} as Input Tax Credit in GSTR-3B
 
-════════════════════════════════════════
-DOC 3 — SECTION 9(5) STATEMENT
-════════════════════════════════════════
-Food/Restaurant GST paid by Enything: ₹${_f(_s9_5Gst)}
-Legal basis: CGST Notification 17/2021-CT(R) §9(5)
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+DOC 3 \u2014 SECTION 9(5) STATEMENT
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+Food/Restaurant GST paid by Enything: \u20b9${_f(_s9_5Gst)}
+Legal basis: CGST Notification 17/2021-CT(R) \u00a79(5)
 You are NOT the deemed supplier for these orders.
 Do NOT include this in your GSTR-1.
 
-════════════════════════════════════════
-DOC 4 — TCS STATEMENT (GSTR-8 / GSTR-2B)
-════════════════════════════════════════
-TCS Deducted by Enything (1%)      : ₹${_f(_tcsDeducted)}
-Legal basis: CGST Act §52
-→ Claim this as credit in your GSTR-2B after Enything files GSTR-8 by 10th.
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+DOC 4 \u2014 INCOME TAX TDS (\u00a7194-O \u2014 Finance Act 2024)
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+TDS Deducted by Enything (0.1%)    : \u20b9${_f(_tdsDeducted)}
+Legal basis: IT Act \u00a7194-O (rate 0.1% eff. Oct 1 2024)
+\u2192 Enything files Form 26QE by 7th of next month.
+\u2192 Claim this as credit in your Form 26AS / AIS after Enything files.
 
-════════════════════════════════════════
+$tcsBlock
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 PAYOUT RECONCILIATION
-════════════════════════════════════════
-Gross Collected from Customers  : ₹${_f(_grandCollected)}
-Seller Net Payout (incl. GST)   : ₹${_f(_sellerPayout)}
-Enything Commission                : ₹${_f(_commission)}
-TCS Withheld                    : ₹${_f(_tcsDeducted)}
-Delivery GST (Enything remits)     : ₹${_f(_deliveryGst)}
-Platform GST (Enything remits)     : ₹${_f(_platformGst)}
-Gateway Fees                    : ₹${_f(_gatewayFees)}
+\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+Gross Collected from Customers  : \u20b9${_f(_grandCollected)}
+Seller Net Payout (incl. GST)   : \u20b9${_f(_sellerPayout)}
+Enything Commission                : \u20b9${_f(_commission)}
+IT TDS Withheld (\u00a7194-O, 0.1%)  : \u20b9${_f(_tdsDeducted)}
+GST TCS Withheld (\u00a752, 1%)      : \u20b9${_f(_tcsDeducted)}
+Delivery GST (Enything remits)     : \u20b9${_f(_deliveryGst)}
+Platform GST (Enything remits)     : \u20b9${_f(_platformGst)}
+Gateway Fees                    : \u20b9${_f(_gatewayFees)}
 ''';
   }
 
@@ -321,25 +339,57 @@ Platform GST           : ₹${_f(_platformGst)}
 Total Enything Pays       : ₹${_f(_s9_5Gst + _deliveryGst + _platformGst)}
 Do NOT include food GST in your GSTR-1.''',
                 ),
-                // ── Document 4 — TCS Statement ────────────────────────────
+                // ── Document 4 — Income Tax TDS Statement (§194-O) ──────────────────
                 _docCard(
                   docNumber: '04',
-                  title: 'TCS Statement',
-                  subtitle: 'Claim this credit in GSTR-2B after Enything files GSTR-8',
-                  accentColor: const Color(0xFFF4C542),
+                  title: 'TDS Statement (Income Tax §194-O)',
+                  subtitle: 'Claim this as credit in Form 26AS after Enything files 26QE',
+                  accentColor: const Color(0xFF4DABF7),
                   rows: [
-                    _row('TCS Withheld by Enything (1%)', _tcsDeducted,
-                        color: const Color(0xFFF4C542), tag: 'GSTR-2B CREDIT'),
-                    _row('Net Taxable Supply Basis', _totalBaseSales),
+                    _row('IT TDS Withheld by Enything (0.1%)', _tdsDeducted,
+                        color: const Color(0xFF4DABF7), tag: 'FORM 26AS CREDIT'),
+                    _row('Gross Sales Basis (all categories)', _totalBaseSales),
                     _divider(),
-                    _infoRow('Enything files GSTR-8 by 10th of next month.\nClaim credit in your GSTR-2B after that.'),
+                    _infoRow(
+                      'Finance Act 2024: Rate 0.1% (was 1%) effective Oct 1 2024.\n'
+                      'Applies to ALL categories — food, retail, pharmacy. No exceptions.\n'
+                      'Enything files Form 26QE by 7th of next month. Claim in Form 26AS / AIS.',
+                    ),
                   ],
-                  copyText: '''TCS Statement — $_monthLabel
-Legal basis: CGST Act §52
-TCS Deducted (1%)  : ₹${_f(_tcsDeducted)}
-Taxable Supply     : ₹${_f(_totalBaseSales)}
-→ Claim ₹${_f(_tcsDeducted)} in GSTR-2B after Enything files GSTR-8 by 10th.''',
+                  copyText: '''TDS Statement (§194-O) — $_monthLabel
+Legal basis: IT Act §194-O (Finance Act 2024, rate 0.1% eff. Oct 1 2024)
+TDS Deducted (0.1%) : ₹${_f(_tdsDeducted)}
+Gross Sales Basis   : ₹${_f(_totalBaseSales)}
+→ Enything files Form 26QE by 7th of next month.
+→ Claim ₹${_f(_tdsDeducted)} as credit in your Form 26AS / AIS.''',
                 ),
+                // ── Document 5 — GST TCS Statement (§52) — conditional ──────────────
+                // Only shown when TCS > 0 (i.e., seller has taxable non-food orders).
+                // Pure restaurant/food sellers will never see this card.
+                if (_tcsDeducted > 0)
+                  _docCard(
+                    docNumber: '05',
+                    title: 'GST TCS Statement (§52 CGST)',
+                    subtitle: 'Only on taxable non-food orders — claim in GSTR-2B',
+                    accentColor: const Color(0xFFF4C542),
+                    rows: [
+                      _row('GST TCS Withheld by Enything (1%)', _tcsDeducted,
+                          color: const Color(0xFFF4C542), tag: 'GSTR-2B CREDIT'),
+                      _row('Net Taxable Supply Basis (non-food)', _totalBaseSales - (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales)),
+                      _divider(),
+                      _infoRow(
+                        'CGST §52: TCS = 1% on taxable non-food supplies only.\n'
+                        '§9(5) food & 0% GST categories (Fruits, Butcher, Fish) are exempt from TCS.\n'
+                        'Enything files GSTR-8 by 10th of next month. Claim credit in GSTR-2B after that.',
+                      ),
+                    ],
+                    copyText: '''GST TCS Statement (§52) — $_monthLabel
+Legal basis: CGST Act §52 (taxable non-food supplies only)
+GST TCS Deducted (1%)     : ₹${_f(_tcsDeducted)}
+Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales))}
+→ §9(5) food orders and 0% GST categories are excluded from TCS.
+→ Enything files GSTR-8 by 10th. Claim ₹${_f(_tcsDeducted)} in your GSTR-2B.''',
+                  ),
                 // ── Payout Reconciliation ─────────────────────────────────
                 _docCard(
                   docNumber: '✓',
@@ -351,16 +401,20 @@ Taxable Supply     : ₹${_f(_totalBaseSales)}
                     _row('Seller Net Payout (incl. GST)', _sellerPayout,
                         color: const Color(0xFF51CF66), isBold: true),
                     _row('Enything Commission', _commission),
-                    _row('TCS Withheld', _tcsDeducted),
+                    _row('IT TDS Withheld (§194-O, 0.1%)', _tdsDeducted),
+                    if (_tcsDeducted > 0)
+                      _row('GST TCS Withheld (§52, 1%)', _tcsDeducted),
                     _row('Gateway Fees (Razorpay)', _gatewayFees),
                   ],
-                  copyText: '''Payout Reconciliation — $_monthLabel
-Gross Collected    : ₹${_f(_grandCollected)}
-Seller Payout      : ₹${_f(_sellerPayout)}
-Enything Commission   : ₹${_f(_commission)}
-TCS Withheld       : ₹${_f(_tcsDeducted)}
-Gateway Fees       : ₹${_f(_gatewayFees)}''',
+                  copyText: 'Payout Reconciliation — $_monthLabel\n'
+                      'Gross Collected    : ₹${_f(_grandCollected)}\n'
+                      'Seller Payout      : ₹${_f(_sellerPayout)}\n'
+                      'Enything Commission   : ₹${_f(_commission)}\n'
+                      'IT TDS (§194-O)    : ₹${_f(_tdsDeducted)}\n'
+                      '${_tcsDeducted > 0 ? "GST TCS (§52)      : ₹${_f(_tcsDeducted)}\n" : ""}'
+                      'Gateway Fees       : ₹${_f(_gatewayFees)}',
                 ),
+
                 // ── Copy Full Report Button ───────────────────────────────
                 const SizedBox(height: 8),
                 ElevatedButton.icon(
@@ -379,7 +433,8 @@ Gateway Fees       : ₹${_f(_gatewayFees)}''',
                 const SizedBox(height: 12),
                 Text(
                   '📌  Share this text report with your CA on WhatsApp or email.\n'
-                  '    Enything files GSTR-8 by the 10th — your CA should check GSTR-2B after that.',
+                  '    Enything files Form 26QE (TDS) by the 7th & GSTR-8 (GST TCS) by the 10th.\n'
+                  '    Check Form 26AS for TDS credit; check GSTR-2B for GST TCS credit.',
                   style: GoogleFonts.outfit(
                       color: Colors.white38, fontSize: 11, height: 1.6),
                   textAlign: TextAlign.center,

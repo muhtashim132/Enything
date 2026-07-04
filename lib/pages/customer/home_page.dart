@@ -107,6 +107,31 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     return list;
   }
 
+  /// Returns normal product results sorted by the current _sortMode.
+  List<ProductModel> get _sortedNormalProducts {
+    final list = List<ProductModel>.from(_products);
+    switch (_sortMode) {
+      case _SortMode.bestRating:
+        list.sort((a, b) => b.rating.compareTo(a.rating));
+      case _SortMode.priceLow:
+        list.sort((a, b) => a.price.compareTo(b.price));
+      case _SortMode.priceHigh:
+        list.sort((a, b) => b.price.compareTo(a.price));
+      case _SortMode.discount:
+        list.sort((a, b) => (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0));
+      case _SortMode.nearest:
+        list.sort((a, b) {
+          final sA = _productShops[a.id];
+          final sB = _productShops[b.id];
+          return (sA?.distanceKm ?? double.infinity).compareTo(sB?.distanceKm ?? double.infinity);
+        });
+      case _SortMode.relevant:
+        list.sort((a, b) => b.rating.compareTo(a.rating)); // Default rating sort for relevant
+        break;
+    }
+    return list;
+  }
+
   /// Returns search shop results sorted by the current _sortMode.
   List<ShopModel> get _sortedShopResults {
     final list = List<ShopModel>.from(_searchResults);
@@ -114,6 +139,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       case _SortMode.bestRating:
         list.sort((a, b) => b.rating.compareTo(a.rating));
       default:
+        list.sort((a, b) => (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity));
+        break;
+    }
+    return list;
+  }
+
+  /// Returns normal shop results sorted by the current _sortMode.
+  List<ShopModel> get _sortedNormalShops {
+    final list = List<ShopModel>.from(_shops);
+    switch (_sortMode) {
+      case _SortMode.bestRating:
+        list.sort((a, b) => b.rating.compareTo(a.rating));
+      case _SortMode.nearest:
+      case _SortMode.priceLow:
+      case _SortMode.priceHigh:
+      case _SortMode.discount:
+      case _SortMode.relevant:
         list.sort((a, b) => (a.distanceKm ?? double.infinity).compareTo(b.distanceKm ?? double.infinity));
         break;
     }
@@ -1221,8 +1263,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           );
                         }),
 
-                        if (_selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
-                          if (_shops.isNotEmpty) ...[
+                        if (_shops.isNotEmpty) ...[
                           // ── Normal category browse ───────────────────
                           _buildSectionTitle(
                             _selectedTabIndex < 0
@@ -1242,7 +1283,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 1, tablet: 2, desktop: 3);
                               const spacing = 16.0;
                               final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
-                              final displayShops = _shops.take(_shopsDisplayLimit).toList();
+                              final displayShops = _sortedNormalShops.take(_shopsDisplayLimit).toList();
                               return Wrap(
                                 spacing: spacing,
                                 runSpacing: 0,
@@ -1281,11 +1322,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 ),
                               ),
                             ),
-                        ] else if (!_isLoading) ...[
+                        ] else if (!_isLoading && _selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
                           locationProvider.hasLocation
                               ? _buildNoShopsNearby()
                               : _buildLocationRequired(),
-                          ],
                         ],
 
                         // Products Section
@@ -1306,7 +1346,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount - 1))) / crossAxisCount;
                               final itemHeight = itemWidth + 178;
                               final childAspectRatio = itemWidth / itemHeight;
-                              final displayProducts = _products.take(_productsDisplayLimit).toList();
+                              final displayProducts = _sortedNormalProducts.take(_productsDisplayLimit).toList();
 
                               return GridView.builder(
                                 padding: EdgeInsets.zero,
@@ -1350,7 +1390,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 ),
                               ),
                             ),
-                        ] else if ((_selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty) && !_isLoading) ...[
+                        ] else if (_shops.isEmpty && (_selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty) && !_isLoading) ...[
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 60),
                             child: Center(

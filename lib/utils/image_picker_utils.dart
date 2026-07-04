@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
-import 'package:enythingmobilenew/widgets/common/custom_image_cropper.dart';
 
 /// Shows a premium bottom sheet letting the user choose between
 /// Camera and Gallery. Returns the chosen [ImageSource] or null if dismissed.
@@ -186,24 +185,6 @@ Future<CroppedFile?> cropImage(
   String path, 
   {CropAspectRatio? aspectRatio, String title = 'Crop Image'}
 ) async {
-  // Use pure Flutter cropper on Android to fix notch/status bar overlap issues.
-  // The iOS native cropper is excellent and handles safe areas natively, so we keep it.
-  if (Platform.isAndroid) {
-    double? ratio;
-    if (aspectRatio != null) {
-      ratio = aspectRatio.ratioX / aspectRatio.ratioY;
-    }
-    return await Navigator.of(context).push<CroppedFile>(
-      MaterialPageRoute(
-        builder: (_) => CustomImageCropperPage(
-          imagePath: path,
-          aspectRatio: ratio,
-          title: title,
-        ),
-      ),
-    );
-  }
-
   final isDark = Theme.of(context).brightness == Brightness.dark;
   
   return await ImageCropper().cropImage(

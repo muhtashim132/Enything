@@ -531,6 +531,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               's9_5_gst_amount': order.s9_5GstAmount,
               'non_food_gst_amount': order.nonFoodGstAmount,
               'tcs_amount': order.tcsAmount,
+              'tds_amount': order.tdsAmount,
               'grand_total_collected': order.grandTotalCollected,
               'gst_rate_snapshot': order.gstRateSnapshot,
               'estimated_distance_km': order.estimatedDistanceKm,

@@ -338,7 +338,24 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopS9_5Gst = shopBreakdown.s9_5GstToRemit;
         final shopNonFoodGst = shopBreakdown.nonFoodGstPassThrough;
 
-        final shopTcs = shopBaseSubtotal * 0.01;
+        // ── GST TCS (CGST §52) — Category-Precise ───────────────────────────
+        // TCS applies ONLY to taxable supplies where seller is the supplier.
+        // §9(5) food and 0% GST categories (Fruits/Vegs, Butcher, Fish) → TCS = ₹0.
+        // All other taxable non-food categories → TCS = 1% of their base subtotal.
+        // Computed per-item using TaxConfig.tcsRateForCategory().
+        double shopTcs = 0.0;
+        for (final item in shopItems) {
+          final cat = item.product.category;
+          final itemBase = (item.selectedVariant?.price ?? item.product.price) * item.quantity;
+          shopTcs += itemBase * TaxConfig.tcsRateForCategory(cat);
+        }
+
+        // ── Income Tax TDS (§194-O, Finance Act 2024) — Universal 0.1% ─────
+        // Applies to ALL categories — goods and services, no categorical exemption.
+        // Rate reduced from 1% to 0.1% (Finance Act 2024, effective Oct 1 2024).
+        // Basis: gross base consideration = shopBaseSubtotal.
+        final shopTds = shopBaseSubtotal * TaxConfig.itTdsRate;
+
         final shopGrandTotal = shopBreakdown.grandTotal;
 
         final orderResponse = await supabase
@@ -378,11 +395,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'gst_delivery': shopBreakdown.deliveryGst,
               'gst_platform': shopBreakdown.platformFeeGst,
               'enything_commission': shopBreakdown.enythingGrossCommission,
-              'seller_payout': shopBreakdown.sellerPayout - shopTcs,
+              // seller_payout reduced by both GST TCS (§52) and IT TDS (§194-O)
+              'seller_payout': shopBreakdown.sellerPayout - shopTcs - shopTds,
               'gateway_deduction': shopBreakdown.gatewayDeduction,
               's9_5_gst_amount': shopS9_5Gst,
               'non_food_gst_amount': shopNonFoodGst,
-              'tcs_amount': shopTcs,
+              'tcs_amount': shopTcs,     // GST TCS §52 — 0 for food/exempt categories
+              'tds_amount': shopTds,     // IT TDS §194-O — 0.1% on all categories
               'grand_total_collected': shopGrandTotal,
               'gst_rate_snapshot': rateSnapshot,
               'prescription_urls': uploadedPrescriptionUrls,
@@ -393,6 +412,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             })
             .select()
             .single();
+
 
         final orderId = orderResponse['id'];
         orderIds.add(orderId);
