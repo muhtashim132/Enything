@@ -1232,6 +1232,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     : 'Shops near you',
                             subtitle: '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
                             count: _shops.length,
+                            onSeeAllTap: _shops.length > _shopsDisplayLimit
+                                ? () => setState(() => _shopsDisplayLimit = _shops.length)
+                                : null,
                           ),
                           const SizedBox(height: 16),
                           LayoutBuilder(
@@ -1288,7 +1291,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         // Products Section
                         if (_products.isNotEmpty) ...[
                           const SizedBox(height: 8),
-                          _buildSectionTitle('Popular in your area'),
+                          _buildSectionTitle(
+                            'Popular in your area',
+                            onSeeAllTap: _products.length > _productsDisplayLimit
+                                ? () => setState(() => _productsDisplayLimit = _products.length)
+                                : null,
+                          ),
                           const SizedBox(height: 16),
                           LayoutBuilder(
                             builder: (context, constraints) {
@@ -1728,6 +1736,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     String? subtitle,
     int? count,
     bool isHighlighted = false,
+    VoidCallback? onSeeAllTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
@@ -1835,38 +1844,39 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             ],
           ),
         ),
-        GestureDetector(
-          onTap: () {},
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.07)
-                  : AppColors.primary.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'See all',
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+        if (onSeeAllTap != null)
+          GestureDetector(
+            onTap: onSeeAllTap,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.07)
+                    : AppColors.primary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'See all',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white70 : AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 14,
                     color: isDark ? Colors.white70 : AppColors.primary,
                   ),
-                ),
-                const SizedBox(width: 3),
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 14,
-                  color: isDark ? Colors.white70 : AppColors.primary,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }

@@ -132,15 +132,6 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                           onTap: () => showNotificationSettingsDialog(context),
                         ),
                         _buildSettingTile(
-                          icon: Icons.help_outline_rounded,
-                          title: 'Help & Support',
-                          subtitle: 'FAQs and contact support',
-                          roleColor: AppColors.roleColor(user.activeSessionRole),
-                          isDark: isDark,
-                          onTap: () => Navigator.pushNamed(
-                              context, '/settings/faq-support'),
-                        ),
-                        _buildSettingTile(
                           icon: Icons.contact_support_rounded,
                           title: 'Contact Us',
                           subtitle: 'Email, phone & office address',
@@ -591,12 +582,14 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Need Help?',
+                      'Need help and support',
                       style: GoogleFonts.outfit(
                         color: Colors.white,
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
