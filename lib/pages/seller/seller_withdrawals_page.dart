@@ -397,3 +397,4 @@ class _WithdrawalCard extends StatelessWidget {
     );
   }
 }
+

@@ -80,7 +80,12 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
       // Seller and Rider earnings match their own dashboards (only delivered orders)
       final delivered = orders.where((o) => o['status'] == 'delivered').toList();
       _sellerPayouts = delivered.fold<double>(
-          0, (s, o) => s + ((o['seller_payout'] as num?)?.toDouble() ?? 0));
+          0, (s, o) {
+            final spRaw = (o['seller_payout'] as num?)?.toDouble() ?? 0;
+            final tds = (o['tds_amount'] as num?)?.toDouble() ?? 0;
+            final tcs = (o['tcs_amount'] as num?)?.toDouble() ?? 0;
+            return s + (spRaw - tds - tcs);
+          });
       _riderEarnings = delivered.fold<double>(
           0, (s, o) => s + ((o['rider_earnings'] as num?)?.toDouble() ?? 0));
       _pendingSettlements = orders.where((o) => o['status'] == 'delivered').length;
@@ -1425,3 +1430,4 @@ class _DetailRow extends StatelessWidget {
     );
   }
 }
+

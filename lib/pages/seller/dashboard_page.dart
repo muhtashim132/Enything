@@ -136,7 +136,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           if (createdAt != null &&
               (createdAt.isAfter(todayStart) ||
                   createdAt.isAtSameMomentAs(todayStart))) {
-            return s + ((o['seller_payout'] as num?)?.toDouble() ?? 0.0);
+            final sp = (o['seller_payout'] as num?)?.toDouble() ?? 0.0;
+            final tds = (o['tds_amount'] as num?)?.toDouble() ?? 0.0;
+            final tcs = (o['tcs_amount'] as num?)?.toDouble() ?? 0.0;
+            return s + (sp - tds - tcs);
           }
           return s;
         },
