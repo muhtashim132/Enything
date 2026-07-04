@@ -1,10 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../models/saved_address_model.dart';
@@ -385,7 +383,31 @@ void _showAddressDetailSheet(
                                 pin: pincodeCtrl.text.trim(),
                                 addressText: pickedAddressDisplay,
                               );
+                              final messenger = ScaffoldMessenger.of(ctx);
                               Navigator.pop(ctx);
+                              
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  behavior: SnackBarBehavior.floating,
+                                  margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+                                  backgroundColor: Colors.green.shade700,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle_outline, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          existingAddress != null 
+                                            ? 'Address updated successfully!' 
+                                            : 'Address saved successfully!',
+                                          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
                             }
                           }
                         },
@@ -433,10 +455,11 @@ void showBusinessHoursDialog(BuildContext context) {
     builder: (ctx) => Padding(
       padding: EdgeInsets.fromLTRB(
           24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Text('Business Hours',
               style: GoogleFonts.outfit(
                   fontSize: 20, fontWeight: FontWeight.w700)),
@@ -465,6 +488,7 @@ void showBusinessHoursDialog(BuildContext context) {
             child: const Text('Save Hours'),
           ),
         ],
+        ),
       ),
     ),
   );
@@ -504,10 +528,11 @@ void showPayoutSettingsDialog(
             return Padding(
               padding: EdgeInsets.fromLTRB(
                   24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Text('Bank Details (Payouts)',
                       style: GoogleFonts.outfit(
                           fontSize: 20, fontWeight: FontWeight.w700)),
@@ -568,6 +593,7 @@ void showPayoutSettingsDialog(
                   ),
                 ],
               ),
+              ),
             );
           });
     },
@@ -603,13 +629,14 @@ void showDocumentsDialog(BuildContext context) {
           return Padding(
             padding: EdgeInsets.fromLTRB(
                 24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('KYC Documents',
-                    style: GoogleFonts.outfit(
-                        fontSize: 20, fontWeight: FontWeight.w700)),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('KYC Documents',
+                      style: GoogleFonts.outfit(
+                          fontSize: 20, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 24),
                 _buildReadOnlyFieldDialog(
                     'Aadhaar Number',
@@ -646,6 +673,7 @@ void showDocumentsDialog(BuildContext context) {
                   ),
                 ),
               ],
+            ),
             ),
           );
         },
@@ -848,62 +876,6 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
   Future<void> _pickBellSound() async {
     setState(() => _isPickingFile = true);
     try {
-      // Request audio/storage permission depending on Android version
-      if (Platform.isAndroid) {
-        bool isGranted = false;
-        
-        var audioStatus = await Permission.audio.status;
-        if (audioStatus.isGranted) {
-          isGranted = true;
-        } else {
-          audioStatus = await Permission.audio.request();
-          isGranted = audioStatus.isGranted;
-        }
-        
-        if (!isGranted) {
-          var storageStatus = await Permission.storage.status;
-          if (storageStatus.isGranted) {
-            isGranted = true;
-          } else {
-            storageStatus = await Permission.storage.request();
-            isGranted = storageStatus.isGranted;
-          }
-        }
-
-        if (!isGranted) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-                backgroundColor: Colors.redAccent.shade700,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                content: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.white),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Storage permission is required to select a bell sound.',
-                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-                action: SnackBarAction(
-                  label: 'SETTINGS',
-                  textColor: Colors.white,
-                  onPressed: () {
-                    openAppSettings();
-                  },
-                ),
-              ),
-            );
-          }
-          return;
-        }
-      }
-
       // Invoke native audio picker (MainActivity MethodChannel)
       final uriString = await _audioPicker
           .invokeMethod<String?>('pickAudioFile');

@@ -18,6 +18,7 @@ import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
+import '../../widgets/order_countdown_timer.dart';
 import 'order_route_map_page.dart';
 import '../../utils/time_utils.dart';
 import '../../models/order_group.dart';
@@ -1717,6 +1718,34 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           ),
                         );
                       }),
+                      if (group.orders.isNotEmpty && group.orders.first.acceptanceDeadline != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.red.withValues(alpha: 0.18)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Acceptance Time Left',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.red,
+                                ),
+                              ),
+                              OrderCountdownTimer(
+                                acceptanceDeadline: group.orders.first.acceptanceDeadline!,
+                                fontSize: 13,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       Row(children: [
                         OutlinedButton.icon(

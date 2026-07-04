@@ -52,11 +52,58 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   Future<void> _pickPrescription() async {
     final picker = ImagePicker();
-    final List<XFile> picked = await picker.pickMultiImage(imageQuality: 70);
-    if (picked.isNotEmpty) {
-      setState(() {
-        _prescriptions.addAll(picked);
-      });
+    
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'Upload Prescription',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+              title: Text('Take a Photo', style: GoogleFonts.outfit()),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
+              title: Text('Choose from Gallery', style: GoogleFonts.outfit()),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    if (source == ImageSource.camera) {
+      final picked = await picker.pickImage(source: source, imageQuality: 70);
+      if (picked != null) {
+        setState(() {
+          _prescriptions.add(picked);
+        });
+      }
+    } else {
+      final picked = await picker.pickMultiImage(imageQuality: 70);
+      if (picked.isNotEmpty) {
+        setState(() {
+          _prescriptions.addAll(picked);
+        });
+      }
     }
   }
 
@@ -74,10 +121,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
     // Prescription guard
     if (cart.requiresPrescription && _prescriptions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'A valid prescription is required for medicines in your cart.'),
-            backgroundColor: AppColors.danger),
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Please upload a prescription to order these medicines.',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 4),
+        ),
       );
       setState(() => _isProcessing = false);
       return;
@@ -85,9 +147,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (!location.hasLocation) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please set your delivery location first.'),
-            backgroundColor: AppColors.danger),
+        SnackBar(
+          content: const Text('Please set your delivery location first.'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
       setState(() => _isProcessing = false);
       return;
@@ -106,6 +172,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             duration: const Duration(seconds: 5),
+            margin: const EdgeInsets.all(16),
           ),
         );
         setState(() => _isProcessing = false);
@@ -181,9 +248,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final cartGroupId = const Uuid().v4();
       final numShops = cart.shops.length;
 
-      // Acceptance deadline: 2 minutes from now (enforces 2-minute cancellation rule)
+      // Acceptance deadline: 3 minutes from now (enforces 3-minute cancellation rule)
       final acceptanceDeadline =
-          DateTime.now().toUtc().add(const Duration(minutes: 2));
+          DateTime.now().toUtc().add(const Duration(minutes: 3));
 
       // Fetch customer phone
       String? customerPhone;

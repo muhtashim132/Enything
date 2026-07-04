@@ -49,9 +49,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Timer? _paymentCountdownTimer;
   int _paymentSecondsLeft = 600; // 10 minutes
 
-  // Acceptance countdown (2 minutes)
+  // Acceptance countdown (3 minutes)
   Timer? _acceptanceCountdownTimer;
-  int _acceptanceSecondsLeft = 120;
+  int _acceptanceSecondsLeft = 180;
 
   bool _isRetrying = false;
 
@@ -426,9 +426,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       final remaining = order.acceptanceDeadline!
           .difference(DateTime.now().toUtc())
           .inSeconds;
-      _acceptanceSecondsLeft = remaining.clamp(0, 120);
+      _acceptanceSecondsLeft = remaining.clamp(0, 180);
     } else {
-      _acceptanceSecondsLeft = 120;
+      _acceptanceSecondsLeft = 180;
     }
     _acceptanceCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
@@ -487,7 +487,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     setState(() => _isRetrying = true);
     try {
       final newDeadline =
-          DateTime.now().toUtc().add(const Duration(minutes: 2));
+          DateTime.now().toUtc().add(const Duration(minutes: 3));
       final notifProv = context.read<NotificationProvider>();
       String? firstNewOrderId;
       final shopsToRetry = _groupOrders.isEmpty ? [_order!] : _groupOrders;
@@ -556,9 +556,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               .inFilter('id', productIds);
 
           for (final item in oldItems) {
-            final dbProduct = (latestProducts as List).firstWhere(
+            final dbProduct = (latestProducts as List).firstWhereOrNull(
               (p) => p['id'] == item['product_id'],
-              orElse: () => null,
             );
             if (dbProduct == null || dbProduct['is_available'] == false) {
               throw Exception('${item['product_name']} is no longer available. Cannot retry.');
@@ -639,7 +638,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     setState(() => _isRetrying = true);
     try {
       final newDeadline =
-          DateTime.now().toUtc().add(const Duration(minutes: 2));
+          DateTime.now().toUtc().add(const Duration(minutes: 3));
       // BUG-PAY1 FIX (CRITICAL): Must null out delivery_partner_id.
       // Without this the order remains assigned to the old rider and is
       // filtered out by the rider dashboard (.isFilter('delivery_partner_id', null)),
@@ -1553,7 +1552,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 child: TweenAnimationBuilder<double>(
                                   tween: Tween<double>(
                                       begin: 1.0,
-                                      end: _acceptanceSecondsLeft / 120.0),
+                                      end: _acceptanceSecondsLeft / 180.0),
                                   duration: const Duration(milliseconds: 500),
                                   builder: (_, v, __) =>
                                       CircularProgressIndicator(

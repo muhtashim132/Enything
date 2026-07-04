@@ -113,10 +113,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           ),
           backgroundColor: const Color(0xFF10B981), // Modern green
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16), // Avoid overlapping bottom nav and checkout
+          margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 10,
-          duration: const Duration(seconds: 4),
+          duration: const Duration(seconds: 3),
           action: SnackBarAction(
             label: 'VIEW CART',
             textColor: Colors.white,

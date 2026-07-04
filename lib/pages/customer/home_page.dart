@@ -60,6 +60,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   int _selectedTabIndex = -1; // -1 = no tab selected (show ALL)
   bool _isLoading = true;
   bool _isSearching = false;
+  int _shopsDisplayLimit = 12;
+  int _productsDisplayLimit = 10;
   List<ShopModel> _shops = [];
   List<ShopModel> _searchResults = [];
   List<ProductModel> _searchProductResults = [];
@@ -534,6 +536,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         // Atomic update: swap data and clear loading in a single setState
         setState(() {
+          _shopsDisplayLimit = 12;
+          _productsDisplayLimit = 10;
           _shops = nearby;
           _products = prods;
           _productShops = prodShops;
@@ -639,6 +643,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // Atomic update: swap data in a single setState so there is no
         // intermediate blank-screen state
         setState(() {
+          _shopsDisplayLimit = 12;
+          _productsDisplayLimit = 10;
           _shops = nearby;
           _products = prods;
           _productShops = prodShops;
@@ -1233,10 +1239,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 1, tablet: 2, desktop: 3);
                               const spacing = 16.0;
                               final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
+                              final displayShops = _shops.take(_shopsDisplayLimit).toList();
                               return Wrap(
                                 spacing: spacing,
                                 runSpacing: 0,
-                                children: _shops.map((shop) {
+                                children: displayShops.map((shop) {
                                   final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
                                   return SizedBox(
                                     width: itemWidth,
@@ -1248,6 +1255,29 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               );
                             },
                           ),
+                          if (_shops.length > _shopsDisplayLimit)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: Center(
+                                child: TextButton(
+                                  onPressed: () => setState(() => _shopsDisplayLimit += 20),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                    backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                                        ? Colors.white.withValues(alpha: 0.05) 
+                                        : AppColors.primary.withValues(alpha: 0.05),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  ),
+                                  child: Text(
+                                    'Load more shops',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                         ] else if (!_isLoading) ...[
                           locationProvider.hasLocation
                               ? _buildNoShopsNearby()
@@ -1268,6 +1298,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount - 1))) / crossAxisCount;
                               final itemHeight = itemWidth + 178;
                               final childAspectRatio = itemWidth / itemHeight;
+                              final displayProducts = _products.take(_productsDisplayLimit).toList();
 
                               return GridView.builder(
                                 padding: EdgeInsets.zero,
@@ -1279,15 +1310,38 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   mainAxisSpacing: 16,
                                   crossAxisSpacing: crossAxisSpacing,
                                 ),
-                                itemCount: _products.length,
+                                itemCount: displayProducts.length,
                                 itemBuilder: (context, index) {
-                                  final product = _products[index];
+                                  final product = displayProducts[index];
                                   final shop = _productShops[product.id];
                                   return ProductCard(product: product, shop: shop);
                                 },
                               );
                             },
                           ),
+                          if (_products.length > _productsDisplayLimit)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: Center(
+                                child: TextButton(
+                                  onPressed: () => setState(() => _productsDisplayLimit += 20),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                    backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                                        ? Colors.white.withValues(alpha: 0.05) 
+                                        : AppColors.primary.withValues(alpha: 0.05),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  ),
+                                  child: Text(
+                                    'Load more products',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                         ] else if ((_selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty) && !_isLoading) ...[
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 60),

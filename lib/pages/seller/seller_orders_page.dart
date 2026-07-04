@@ -10,6 +10,8 @@ import '../../providers/notification_provider.dart';
 import '../../models/order_model.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/rating_bottom_sheet.dart';
+
+import '../../widgets/order_countdown_timer.dart';
 import '../../widgets/common/notification_bell.dart';
 import '../../pages/seller/seller_order_map_page.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -81,17 +83,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
       // Get the seller's shop IDs for filtering realtime events
       try {
-        final shopsResp = await _supabase
-            .from('shops')
-            .select('id')
-            .eq('seller_id', userId);
+        final shopsResp =
+            await _supabase.from('shops').select('id').eq('seller_id', userId);
         final shops = shopsResp as List;
         if (shops.isEmpty) return;
         final shopIds = shops.map((s) => s['id'] as String).toList();
-        
+
         if (!mounted) return;
         final notifProvider = context.read<NotificationProvider>();
-        
+
         notifProvider.listenAsSellerMultiShop(shopIds);
 
         for (final shopId in shopIds) {
@@ -147,7 +147,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       final shopsList = shopsRaw as List;
       if (shopsList.isEmpty) {
         try {
-          await _supabase.from('app_logs').insert({'message': 'Seller order load: shopsList is empty for user ${auth.currentUserId}'});
+          await _supabase.from('app_logs').insert({
+            'message':
+                'Seller order load: shopsList is empty for user ${auth.currentUserId}'
+          });
         } catch (_) {}
         if (mounted) setState(() => _isLoading = false);
         return;
@@ -165,7 +168,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           .select('*, order_items(*)')
           .inFilter('shop_id', shopIds)
           .order('created_at', ascending: false)
-          .limit(150); // C1: Prevent OOM for high-volume sellers; 150 covers ~2 weeks at 10 orders/day
+          .limit(
+              150); // C1: Prevent OOM for high-volume sellers; 150 covers ~2 weeks at 10 orders/day
 
       if (mounted) {
         setState(() {
@@ -184,7 +188,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     } catch (e, stacktrace) {
       debugPrint('Seller _loadOrders error: $e');
       try {
-        await _supabase.from('app_logs').insert({'message': 'Seller order load error: $e\n$stacktrace'});
+        await _supabase
+            .from('app_logs')
+            .insert({'message': 'Seller order load error: $e\n$stacktrace'});
       } catch (_) {}
       if (mounted) setState(() => _isLoading = false);
     }
@@ -199,36 +205,53 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     try {
       // SE1 FIX: Fetch BOTH partner_accepted AND current status to prevent TOCTOU.
       // If the order was cancelled/rejected between load and click, abort.
-      final latest = await _supabase.from('orders').select('partner_accepted, status').eq('id', order.id).maybeSingle();
+      final latest = await _supabase
+          .from('orders')
+          .select('partner_accepted, status')
+          .eq('id', order.id)
+          .maybeSingle();
       if (latest == null || latest['status'] != 'awaiting_acceptance') {
-        if (mounted) _showSnack('Order is no longer available to accept.', isError: true);
+        if (mounted) {
+          _showSnack('Order is no longer available to accept.', isError: true);
+        }
         _loadOrders();
         return;
       }
       final riderAlreadyAccepted = latest['partner_accepted'] == true;
 
       final paymentDeadline = riderAlreadyAccepted
-          ? DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String()
+          ? DateTime.now()
+              .toUtc()
+              .add(const Duration(minutes: 10))
+              .toIso8601String()
           : null;
 
       // Update DB
-      await _supabase.from('orders').update({
-        'seller_accepted': true,
-        if (riderAlreadyAccepted) 'status': 'awaiting_payment',
-        if (paymentDeadline != null) 'payment_deadline': paymentDeadline,
-      }).eq('id', order.id).eq('shop_id', order.shopId ?? '').eq('status', 'awaiting_acceptance');
+      await _supabase
+          .from('orders')
+          .update({
+            'seller_accepted': true,
+            if (riderAlreadyAccepted) 'status': 'awaiting_payment',
+            if (paymentDeadline != null) 'payment_deadline': paymentDeadline,
+          })
+          .eq('id', order.id)
+          .eq('shop_id', order.shopId ?? '')
+          .eq('status', 'awaiting_acceptance');
 
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
 
         if (riderAlreadyAccepted) {
           // ── Both now accepted → push customer to pay NOW ──────────────
-          _showSnack('✅ Both you & rider accepted. Waiting for customer to pay.', isError: false);
+          _showSnack(
+              '✅ Both you & rider accepted. Waiting for customer to pay.',
+              isError: false);
 
           notifProv.sendBackgroundPush(
             targetUserId: order.customerId,
             title: '✅ Shop & Rider Ready! Pay Now 💳',
-            body: 'Both the shop and rider accepted your order. Complete payment within 10 minutes.',
+            body:
+                'Both the shop and rider accepted your order. Complete payment within 10 minutes.',
             data: {'order_id': order.id, 'action': 'pay'},
           );
 
@@ -237,25 +260,26 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             notifProv.sendBackgroundPush(
               targetUserId: order.deliveryPartnerId!,
               title: '⌛ Waiting for Customer Payment',
-              body: 'The shop accepted. Both of you are confirmed — customer is completing payment now.',
+              body:
+                  'The shop accepted. Both of you are confirmed — customer is completing payment now.',
               data: {'order_id': order.id, 'role': 'rider'},
             );
           }
         } else {
           // ── Seller accepted first → broadcast riders + notify customer ─
-          _showSnack('✅ Your acceptance saved. Waiting for a delivery partner.', isError: false);
-
-
+          _showSnack('✅ Your acceptance saved. Waiting for a delivery partner.',
+              isError: false);
 
           // Notify customer that shop accepted, waiting for rider
           notifProv.sendBackgroundPush(
             targetUserId: order.customerId,
             title: '🏪 Shop Accepted!',
-            body: 'The shop accepted your order. Now waiting for a rider to also confirm.',
+            body:
+                'The shop accepted your order. Now waiting for a rider to also confirm.',
             data: {'order_id': order.id, 'role': 'customer'},
           );
         }
-        
+
         // Auto-switch to Active tab
         _tabController.animateTo(1);
       }
@@ -268,15 +292,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   Future<void> _sellerReject(OrderModel order) async {
     final messageController = TextEditingController();
-    String rejectReason = order.prescriptionUrls.isNotEmpty ? 'prescription' : 'other';
-    
+    String rejectReason =
+        order.prescriptionUrls.isNotEmpty ? 'prescription' : 'other';
+
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
           child: Container(
             decoration: const BoxDecoration(
               color: Color(0xFF1A1A2E),
@@ -289,7 +315,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               children: [
                 Center(
                   child: Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: Colors.white24,
                       borderRadius: BorderRadius.circular(2),
@@ -306,7 +333,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 const SizedBox(height: 12),
                 if (order.prescriptionUrls.isNotEmpty) ...[
                   RadioListTile<String>(
-                    title: Text('Prescription Issue', style: GoogleFonts.outfit(color: Colors.white)),
+                    title: Text('Prescription Issue',
+                        style: GoogleFonts.outfit(color: Colors.white)),
                     value: 'prescription',
                     // ignore: deprecated_member_use
                     groupValue: rejectReason,
@@ -316,7 +344,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     onChanged: (val) => setState(() => rejectReason = val!),
                   ),
                   RadioListTile<String>(
-                    title: Text('Other Reason (e.g. Out of stock)', style: GoogleFonts.outfit(color: Colors.white)),
+                    title: Text('Other Reason (e.g. Out of stock)',
+                        style: GoogleFonts.outfit(color: Colors.white)),
                     value: 'other',
                     // ignore: deprecated_member_use
                     groupValue: rejectReason,
@@ -328,7 +357,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   const SizedBox(height: 12),
                 ],
                 Text('Send an optional message to the customer explaining why.',
-                    style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13)),
+                    style: GoogleFonts.outfit(
+                        color: Colors.white54, fontSize: 13)),
                 const SizedBox(height: 20),
                 TextField(
                   controller: messageController,
@@ -336,7 +366,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   style: GoogleFonts.outfit(color: Colors.white),
                   decoration: InputDecoration(
                     hintText: 'e.g. "This item is currently out of stock"',
-                    hintStyle: GoogleFonts.outfit(color: Colors.white30, fontSize: 13),
+                    hintStyle:
+                        GoogleFonts.outfit(color: Colors.white30, fontSize: 13),
                     filled: true,
                     fillColor: Colors.white.withValues(alpha: 0.07),
                     border: OutlineInputBorder(
@@ -354,11 +385,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         onPressed: () => Navigator.pop(ctx, false),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Colors.white24),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         child: Text('Go Back',
-                            style: GoogleFonts.outfit(color: Colors.white70, fontWeight: FontWeight.w600)),
+                            style: GoogleFonts.outfit(
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w600)),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -367,11 +401,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         onPressed: () => Navigator.pop(ctx, true),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.danger,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         child: Text('Send & Decline',
-                            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+                            style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ],
@@ -389,23 +426,38 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       // SE2 FIX: Only allow rejection if the order hasn't been paid yet.
       // Once status reaches 'confirmed' or later, payment is captured —
       // cancelling here would leave the customer charged with no order.
-      final latestStatus = await _supabase.from('orders').select('status').eq('id', order.id).maybeSingle();
+      final latestStatus = await _supabase
+          .from('orders')
+          .select('status')
+          .eq('id', order.id)
+          .maybeSingle();
       final currentStatus = latestStatus?['status'] as String?;
       const rejectableStatuses = ['awaiting_acceptance', 'awaiting_payment'];
-      if (currentStatus != null && !rejectableStatuses.contains(currentStatus)) {
-        if (mounted) _showSnack('Cannot decline — payment is already confirmed. Contact support.', isError: true);
+      if (currentStatus != null &&
+          !rejectableStatuses.contains(currentStatus)) {
+        if (mounted) {
+          _showSnack(
+              'Cannot decline — payment is already confirmed. Contact support.',
+              isError: true);
+        }
         return;
       }
 
       final msg = messageController.text.trim();
-      await _supabase.from('orders').update({
-        'status': rejectReason == 'prescription' ? 'verification_failed' : 'seller_rejected',
-        'seller_accepted': false,
-        // D1: Always reset rider assignment so the rider isn't tied to a dead order
-        'delivery_partner_id': null,
-        'partner_accepted': false,
-        if (msg.isNotEmpty) 'rejection_message': msg,
-      }).eq('id', order.id).eq('shop_id', order.shopId ?? '');
+      await _supabase
+          .from('orders')
+          .update({
+            'status': rejectReason == 'prescription'
+                ? 'verification_failed'
+                : 'seller_rejected',
+            'seller_accepted': false,
+            // D1: Always reset rider assignment so the rider isn't tied to a dead order
+            'delivery_partner_id': null,
+            'partner_accepted': false,
+            if (msg.isNotEmpty) 'rejection_message': msg,
+          })
+          .eq('id', order.id)
+          .eq('shop_id', order.shopId ?? '');
 
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
@@ -429,45 +481,64 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   void _showPrescriptionImages(List<String> urls) {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF1E1E2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: SizedBox(
-          width: double.infinity,
-          height: 500,
-          child: Column(
-            children: [
-              Padding(
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Column(
+          children: [
+            SafeArea(
+              child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Prescription Images', style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                    IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context)),
+                    Text(
+                      'Prescription Images',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close,
+                          color: Colors.white, size: 28),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ],
                 ),
               ),
-              Expanded(
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: urls.length,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      width: 300,
-                      margin: const EdgeInsets.only(right: 16),
+            ),
+            Expanded(
+              child: PageView.builder(
+                itemCount: urls.length,
+                itemBuilder: (context, index) {
+                  return InteractiveViewer(
+                    panEnabled: true,
+                    minScale: 1.0,
+                    maxScale: 4.0,
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white12),
-                        image: DecorationImage(image: NetworkImage(urls[index]), fit: BoxFit.contain),
+                        borderRadius: BorderRadius.circular(16),
+                        image: DecorationImage(
+                          image: NetworkImage(urls[index]),
+                          fit: BoxFit.contain,
+                        ),
                       ),
-                    );
-                  },
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (urls.length > 1)
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Swipe to see more (${urls.length} images)',
+                  style: GoogleFonts.outfit(color: Colors.white70),
                 ),
               ),
-              const SizedBox(height: 16),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -479,9 +550,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       if (status == 'ready_for_pickup') {
         final readyTime = DateTime.now();
         updateData['order_ready_time'] = readyTime.toIso8601String();
-        
+
         if (order.arrivedAtShopTime != null) {
-          final waitMins = readyTime.difference(order.arrivedAtShopTime!).inMinutes;
+          final waitMins =
+              readyTime.difference(order.arrivedAtShopTime!).inMinutes;
           final prepLimit = order.shopPrepTimeSnapshot;
           if (waitMins > prepLimit) {
             updateData['wait_time_penalty'] = (waitMins - prepLimit) * 2.0;
@@ -489,8 +561,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         }
       }
 
-      await _supabase.from('orders').update(updateData).eq('id', order.id).eq('shop_id', order.shopId ?? '');
-      
+      await _supabase
+          .from('orders')
+          .update(updateData)
+          .eq('id', order.id)
+          .eq('shop_id', order.shopId ?? '');
+
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
         if (status == 'preparing') {
@@ -525,7 +601,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           }
         }
       }
-      
+
       _loadOrders();
       _showSnack('Status → ${status.replaceAll('_', ' ')}', isError: false);
     } catch (e) {
@@ -581,7 +657,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         'rating': rating,
         'review': review.isEmpty ? null : review,
       });
-      await _supabase.from('orders')
+      await _supabase
+          .from('orders')
           .update({'has_seller_rated': true}).eq('id', orderId);
       _loadOrders();
       _showSnack('⭐ Rider rated successfully!', isError: false);
@@ -599,7 +676,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   List<OrderModel> _activeOrders() => _orders
       .where((o) =>
-          ((o.status == 'awaiting_acceptance' || o.status == 'pending') && o.sellerAccepted) ||
+          ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
+              o.sellerAccepted) ||
           [
             'awaiting_payment',
             'confirmed',
@@ -630,109 +708,124 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       body: MaxWidthContainer(
         child: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          return [
-            SliverAppBar(
-              expandedHeight: 120,
-              pinned: true,
-              elevation: 0,
-              backgroundColor: isDark ? const Color(0xFF141425) : Colors.white,
-              surfaceTintColor: Colors.transparent,
-              title: Text('Orders',
-                  style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 24,
-                      color: isDark ? Colors.white : Colors.black)),
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF4C6EF5).withValues(alpha: 0.15),
-                        Colors.transparent,
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            return [
+              SliverAppBar(
+                expandedHeight: 120,
+                pinned: true,
+                elevation: 0,
+                backgroundColor:
+                    isDark ? const Color(0xFF141425) : Colors.white,
+                surfaceTintColor: Colors.transparent,
+                title: Text('Orders',
+                    style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 24,
+                        color: isDark ? Colors.white : Colors.black)),
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF4C6EF5).withValues(alpha: 0.15),
+                          Colors.transparent,
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              actions: const [
-                Padding(
-                  padding: EdgeInsets.only(right: 8.0, bottom: 48.0),
-                  child: NotificationBell(),
-                ),
-              ],
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(60),
-                child: Container(
-                  height: 60,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                actions: const [
+                  Padding(
+                    padding: EdgeInsets.only(right: 8.0, bottom: 48.0),
+                    child: NotificationBell(),
+                  ),
+                ],
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(60),
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      indicator: BoxDecoration(
-                        color: AppColors.primary,
+                    height: 60,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF1E1E2E)
+                            : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
+                      ),
+                      child: TabBar(
+                        controller: _tabController,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        indicator: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(30),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        labelColor: Colors.white,
+                        unselectedLabelColor:
+                            isDark ? Colors.white54 : Colors.black54,
+                        dividerColor: Colors.transparent,
+                        tabs: [
+                          Tab(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('Pending',
+                                    style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w600)),
+                                if (pendingCount > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: AppColors.danger,
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                    child: Text('$pendingCount',
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800)),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
+                          Tab(
+                              child: Text('Active',
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w600))),
+                          Tab(
+                              child: Text('Done',
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w600))),
                         ],
                       ),
-                      labelColor: Colors.white,
-                      unselectedLabelColor: isDark ? Colors.white54 : Colors.black54,
-                      dividerColor: Colors.transparent,
-                      tabs: [
-                        Tab(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('Pending', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                              if (pendingCount > 0) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                      color: AppColors.danger,
-                                      borderRadius: BorderRadius.circular(10)),
-                                  child: Text('$pendingCount',
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800)),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        Tab(child: Text('Active', style: GoogleFonts.outfit(fontWeight: FontWeight.w600))),
-                        Tab(child: Text('Done', style: GoogleFonts.outfit(fontWeight: FontWeight.w600))),
-                      ],
                     ),
                   ),
                 ),
               ),
-            ),
-          ];
-        },
-        body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildList(_pendingOrders(), 'pending'),
-                _buildList(_activeOrders(), 'active'),
-                _buildList(_doneOrders(), 'done'),
-              ],
-            ),
+            ];
+          },
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildList(_pendingOrders(), 'pending'),
+                    _buildList(_activeOrders(), 'active'),
+                    _buildList(_doneOrders(), 'done'),
+                  ],
+                ),
         ),
       ),
     );
@@ -748,20 +841,21 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  )
-                ]
-              ),
+                  color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    )
+                  ]),
               child: Icon(
-                tab == 'pending' ? Icons.inbox_outlined : 
-                tab == 'active' ? Icons.local_shipping_outlined : 
-                Icons.check_circle_outline,
+                tab == 'pending'
+                    ? Icons.inbox_outlined
+                    : tab == 'active'
+                        ? Icons.local_shipping_outlined
+                        : Icons.check_circle_outline,
                 size: 64,
                 color: AppColors.primary.withValues(alpha: 0.5),
               ),
@@ -774,7 +868,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                       ? 'No Active Orders'
                       : 'No Completed Orders',
               style: GoogleFonts.outfit(
-                  color: isDark ? Colors.white : Colors.black87, 
+                  color: isDark ? Colors.white : Colors.black87,
                   fontSize: 20,
                   fontWeight: FontWeight.bold),
             ),
@@ -787,8 +881,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                       : 'Your past orders will be saved here.',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
-                  color: AppColors.textSecondary, 
-                  fontSize: 14),
+                  color: AppColors.textSecondary, fontSize: 14),
             ),
           ],
         ),
@@ -821,13 +914,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                  color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.05), 
+                  color: isDark
+                      ? Colors.black26
+                      : Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4))
             ],
             border: Border.all(
-                color: isDark ? Colors.white10 : Colors.transparent,
-                width: 1,
+              color: isDark ? Colors.white10 : Colors.transparent,
+              width: 1,
             ),
           ),
           child: ClipRRect(
@@ -846,437 +941,555 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-          // Header row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Order #${order.id.substring(0, 8).toUpperCase()}',
-                style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.w700, fontSize: 14),
-              ),
-              Text(
-                DateFormat('hh:mm a').format(order.createdAt.toIST()),
-                style: GoogleFonts.outfit(
-                    color: AppColors.textSecondary, fontSize: 12),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // Amount + status badge
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '₹${order.grandTotal.toStringAsFixed(0)}',
-                style: GoogleFonts.outfit(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary),
-              ),
-              order.status == 'awaiting_payment'
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
-                      ),
-                      child: Text('Waiting for Payment', style: GoogleFonts.outfit(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.w700)),
-                    )
-                  : _statusBadge(order, statusColor),
-            ],
-          ),
-
-          // ── ETA strip for active orders (seller sees rider arrival time) ──
-          if ([
-            'confirmed', 'preparing', 'ready_for_pickup',
-          ].contains(order.status) && order.estimatedDistanceKm > 0) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.access_time_rounded, size: 14, color: AppColors.primary),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Rider delivers in ~${DeliveryCalculator.etaLabel(order.estimatedDistanceKm, 0)}',
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'by ${DeliveryCalculator.etaArrivalTime(order.estimatedDistanceKm, 0)}',
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          // ── Order Items (Collapsible) ───────────────────────────────────
-          if (order.items.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: () {
-                setState(() {
-                  if (isExpanded) {
-                    _expandedOrderIds.remove(order.id);
-                  } else {
-                    _expandedOrderIds.add(order.id);
-                  }
-                  isExpanded = !isExpanded;
-                });
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF2A2A3A) : AppColors.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? Colors.white10 : Colors.grey.shade200,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    // Header row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Items (${order.items.length})',
-                            style: GoogleFonts.outfit(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: isDark ? Colors.white70 : AppColors.textSecondary)),
-                        Icon(
-                          isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                          size: 20,
-                          color: isDark ? Colors.white54 : Colors.grey,
+                        Text(
+                          'Order #${order.id.substring(0, 8).toUpperCase()}',
+                          style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
+                        Text(
+                          DateFormat('hh:mm a').format(order.createdAt.toIST()),
+                          style: GoogleFonts.outfit(
+                              color: AppColors.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
-                    if (isExpanded) ...[
-                      const SizedBox(height: 8),
-                      const Divider(height: 1),
-                      const SizedBox(height: 8),
-                      ...order.items.map((item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  margin: const EdgeInsets.only(top: 4, right: 8),
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    '${item.quantity}x',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
+                    const SizedBox(height: 6),
+
+                    // Amount + status badge
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '₹${order.grandTotal.toStringAsFixed(0)}',
+                            style: GoogleFonts.outfit(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        order.status == 'awaiting_payment'
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color:
+                                          Colors.orange.withValues(alpha: 0.4)),
                                 ),
+                                child: Text('Waiting for Payment',
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.orange,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700)),
+                              )
+                            : _statusBadge(order, statusColor),
+                      ],
+                    ),
+
+                    if (order.status == 'awaiting_acceptance' &&
+                        order.acceptanceDeadline != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: Colors.red.withValues(alpha: 0.18)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Acceptance Time Left',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.red,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            OrderCountdownTimer(
+                              acceptanceDeadline: order.acceptanceDeadline!,
+                              fontSize: 13,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // ── ETA strip for active orders (seller sees rider arrival time) ──
+                    if ([
+                          'confirmed',
+                          'preparing',
+                          'ready_for_pickup',
+                        ].contains(order.status) &&
+                        order.estimatedDistanceKm > 0) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.18)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.access_time_rounded,
+                                size: 14, color: AppColors.primary),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Rider delivers in ~${DeliveryCalculator.etaLabel(order.estimatedDistanceKm, 0)}',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'by ${DeliveryCalculator.etaArrivalTime(order.estimatedDistanceKm, 0)}',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // ── Order Items (Collapsible) ───────────────────────────────────
+                    if (order.items.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (isExpanded) {
+                              _expandedOrderIds.remove(order.id);
+                            } else {
+                              _expandedOrderIds.add(order.id);
+                            }
+                            isExpanded = !isExpanded;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF2A2A3A)
+                                : AppColors.background,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white10
+                                  : Colors.grey.shade200,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Items (${order.items.length})',
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark
+                                              ? Colors.white70
+                                              : AppColors.textSecondary)),
+                                  Icon(
+                                    isExpanded
+                                        ? Icons.keyboard_arrow_up
+                                        : Icons.keyboard_arrow_down,
+                                    size: 20,
+                                    color:
+                                        isDark ? Colors.white54 : Colors.grey,
+                                  ),
+                                ],
+                              ),
+                              if (isExpanded) ...[
+                                const SizedBox(height: 8),
+                                const Divider(height: 1),
+                                const SizedBox(height: 8),
+                                ...order.items.map((item) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            margin: const EdgeInsets.only(
+                                                top: 4, right: 8),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              '${item.quantity}x',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              item.productName,
+                                              style: GoogleFonts.outfit(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500),
+                                            ),
+                                          ),
+                                          Text(
+                                            '₹${item.totalPrice.toStringAsFixed(0)}',
+                                            style: GoogleFonts.outfit(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700),
+                                          ),
+                                        ],
+                                      ),
+                                    )),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    if (order.deliveryNotes != null &&
+                        order.deliveryNotes!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: Colors.orange.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.note_alt_outlined,
+                                size: 18, color: Colors.orange),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Customer Note',
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.orange.shade800)),
+                                  const SizedBox(height: 4),
+                                  Text(order.deliveryNotes!,
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          color: AppColors.textPrimary)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Dual-acceptance progress bar
+                    if (order.status == 'awaiting_acceptance' ||
+                        order.status == 'pending') ...[
+                      const SizedBox(height: 12),
+                      _buildAcceptanceProgress(order),
+                    ],
+
+                    // Contact Buttons
+                    if ((order.customerPhone != null &&
+                            order.customerPhone!.isNotEmpty) ||
+                        (order.riderPhone != null &&
+                            order.riderPhone!.isNotEmpty)) ...[
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        if (order.customerPhone != null &&
+                            order.customerPhone!.isNotEmpty)
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _callPhone(order.customerPhone!),
+                              icon: const Icon(Icons.phone_outlined, size: 16),
+                              label: Text('Customer',
+                                  style: GoogleFonts.outfit(fontSize: 12)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side:
+                                    const BorderSide(color: AppColors.primary),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        if ((order.customerPhone != null &&
+                                order.customerPhone!.isNotEmpty) &&
+                            (order.riderPhone != null &&
+                                order.riderPhone!.isNotEmpty))
+                          const SizedBox(width: 8),
+                        if (order.riderPhone != null &&
+                            order.riderPhone!.isNotEmpty)
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _callPhone(order.riderPhone!),
+                              icon: const Icon(Icons.delivery_dining_outlined,
+                                  size: 16),
+                              label: Text('Rider',
+                                  style: GoogleFonts.outfit(fontSize: 12)),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.accent,
+                                side: const BorderSide(color: AppColors.accent),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                      ]),
+                    ],
+
+                    // ── Track on Map button (active orders with coords) ──────────────
+                    if (tab == 'active' &&
+                        order.shopLat != null &&
+                        order.shopLng != null &&
+                        order.deliveryLat != null &&
+                        order.deliveryLng != null) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SellerOrderMapPage(
+                                order: order,
+                                shopName: _shopNames[order.shopId] ?? 'My Shop',
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Icons.map_outlined, size: 16),
+                          label: Text(
+                            'Track on Map',
+                            style: GoogleFonts.outfit(
+                                fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    if (order.prescriptionUrls.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: AppColors.danger.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.medical_information,
+                                    color: AppColors.danger, size: 18),
+                                const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    item.productName,
-                                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w500),
+                                    'Prescription Required',
+                                    style: GoogleFonts.outfit(
+                                        color: AppColors.danger,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13),
                                   ),
-                                ),
-                                Text(
-                                  '₹${item.totalPrice.toStringAsFixed(0)}',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 13, fontWeight: FontWeight.w700),
                                 ),
                               ],
                             ),
-                          )),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          if (order.deliveryNotes != null && order.deliveryNotes!.trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.note_alt_outlined, size: 18, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Customer Note', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade800)),
-                        const SizedBox(height: 4),
-                        Text(order.deliveryNotes!, style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textPrimary)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          // Dual-acceptance progress bar
-          if (order.status == 'awaiting_acceptance' || order.status == 'pending') ...[
-            const SizedBox(height: 12),
-            _buildAcceptanceProgress(order),
-          ],
-
-          // Contact Buttons
-          if ((order.customerPhone != null && order.customerPhone!.isNotEmpty) || 
-              (order.riderPhone != null && order.riderPhone!.isNotEmpty)) ...[
-            const SizedBox(height: 12),
-            Row(children: [
-              if (order.customerPhone != null && order.customerPhone!.isNotEmpty)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _callPhone(order.customerPhone!),
-                    icon: const Icon(Icons.phone_outlined, size: 16),
-                    label: Text('Customer', style: GoogleFonts.outfit(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              if ((order.customerPhone != null && order.customerPhone!.isNotEmpty) && 
-                  (order.riderPhone != null && order.riderPhone!.isNotEmpty))
-                const SizedBox(width: 8),
-              if (order.riderPhone != null && order.riderPhone!.isNotEmpty)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _callPhone(order.riderPhone!),
-                    icon: const Icon(Icons.delivery_dining_outlined, size: 16),
-                    label: Text('Rider', style: GoogleFonts.outfit(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.accent,
-                      side: const BorderSide(color: AppColors.accent),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-            ]),
-          ],
-
-          // ── Track on Map button (active orders with coords) ──────────────
-          if (tab == 'active' &&
-              order.shopLat != null &&
-              order.shopLng != null &&
-              order.deliveryLat != null &&
-              order.deliveryLng != null) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SellerOrderMapPage(
-                      order: order,
-                      shopName: _shopNames[order.shopId] ?? 'My Shop',
-                    ),
-                  ),
-                ),
-                icon: const Icon(Icons.map_outlined, size: 16),
-                label: Text(
-                  'Track on Map',
-                  style: GoogleFonts.outfit(
-                      fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-            ),
-          ],
-
-          if (order.prescriptionUrls.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.medical_information, color: AppColors.danger, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Prescription Required',
-                          style: GoogleFonts.outfit(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 13),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _showPrescriptionImages(
+                                    order.prescriptionUrls),
+                                icon:
+                                    const Icon(Icons.image_outlined, size: 16),
+                                label: Text(
+                                    'View ${order.prescriptionUrls.length} Prescription Images'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.danger,
+                                  side:
+                                      const BorderSide(color: AppColors.danger),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                            if (tab == 'pending') ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Please verify the prescription before accepting the order.',
+                                style: GoogleFonts.outfit(
+                                    color: AppColors.danger, fontSize: 11),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _showPrescriptionImages(order.prescriptionUrls),
-                      icon: const Icon(Icons.image_outlined, size: 16),
-                      label: Text('View ${order.prescriptionUrls.length} Prescription Images'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.danger,
-                        side: const BorderSide(color: AppColors.danger),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                  ),
-                  if (tab == 'pending') ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Please verify the prescription before accepting the order.',
-                      style: GoogleFonts.outfit(color: AppColors.danger, fontSize: 11),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
 
-          // Action buttons
-          if (tab == 'pending') ...[
-            const Divider(height: 20),
-            Row(children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _sellerReject(order),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.danger,
-                    side: const BorderSide(color: AppColors.danger),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text('Reject',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _sellerAccept(order),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text('Accept',
-                      style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w700, color: Colors.white)),
-                ),
-              ),
-            ]),
-          ] else if (tab == 'active' && order.status == 'confirmed') ...[
-            const Divider(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _updateOrderStatus(order, 'preparing'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text('Start Preparing',
-                    style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.w700, color: Colors.white)),
-              ),
-            ),
-          ] else if (tab == 'active' && order.status == 'preparing') ...[
-            const Divider(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () =>
-                    _updateOrderStatus(order, 'ready_for_pickup'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text('Mark Ready for Pickup',
-                    style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.w700, color: Colors.black)),
-              ),
-            ),
-          ] else if (tab == 'done' &&
-              order.status == 'delivered' &&
-              order.deliveryPartnerId != null &&
-              !order.hasSellerRated) ...[
-            const Divider(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _showSellerRatingFlow(order),
-                icon: const Icon(Icons.star_outline_rounded, color: Colors.amber),
-                label: Text('Rate Delivery Partner',
-                    style: GoogleFonts.outfit(
-                        color: Colors.amber, fontWeight: FontWeight.w700)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.amber),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-          ] else if (tab == 'done' && order.hasSellerRated) ...[
-            const Divider(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.check_circle_outline,
-                    color: AppColors.success, size: 16),
-                const SizedBox(width: 6),
-                Text('Rider Rated',
-                    style: GoogleFonts.outfit(
-                        color: AppColors.success,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ],
+                    // Action buttons
+                    if (tab == 'pending') ...[
+                      const Divider(height: 20),
+                      Row(children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _sellerReject(order),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.danger,
+                              side: const BorderSide(color: AppColors.danger),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Reject',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => _sellerAccept(order),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.success,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Accept',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white)),
+                          ),
+                        ),
+                      ]),
+                    ] else if (tab == 'active' &&
+                        order.status == 'confirmed') ...[
+                      const Divider(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () =>
+                              _updateOrderStatus(order, 'preparing'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text('Start Preparing',
+                              style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white)),
+                        ),
+                      ),
+                    ] else if (tab == 'active' &&
+                        order.status == 'preparing') ...[
+                      const Divider(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () =>
+                              _updateOrderStatus(order, 'ready_for_pickup'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.accent,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text('Mark Ready for Pickup',
+                              style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black)),
+                        ),
+                      ),
+                    ] else if (tab == 'done' &&
+                        order.status == 'delivered' &&
+                        order.deliveryPartnerId != null &&
+                        !order.hasSellerRated) ...[
+                      const Divider(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showSellerRatingFlow(order),
+                          icon: const Icon(Icons.star_outline_rounded,
+                              color: Colors.amber),
+                          label: Text('Rate Delivery Partner',
+                              style: GoogleFonts.outfit(
+                                  color: Colors.amber,
+                                  fontWeight: FontWeight.w700)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.amber),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                    ] else if (tab == 'done' && order.hasSellerRated) ...[
+                      const Divider(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.check_circle_outline,
+                              color: AppColors.success, size: 16),
+                          const SizedBox(width: 6),
+                          Text('Rider Rated',
+                              style: GoogleFonts.outfit(
+                                  color: AppColors.success,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

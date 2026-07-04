@@ -33,16 +33,16 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   final _rateCtrl = TextEditingController();
   // Extra controllers for slab threshold and high rate (Clothing/Footwear)
   final _slabThresholdCtrl = TextEditingController();
-  final _slabHighRateCtrl  = TextEditingController();
+  final _slabHighRateCtrl = TextEditingController();
 
   // ── Product-level keyword override state ──────────────────────────────────
   List<Map<String, dynamic>> _productOverrides = [];
   bool _loadingOverrides = false;
   String? _editingOverrideId; // id of the rule being edited inline
-  final _overrideKeywordCtrl  = TextEditingController();
-  final _overrideCatHintCtrl  = TextEditingController();
-  final _overrideRateCtrl     = TextEditingController();
-  final _overrideReasonCtrl   = TextEditingController();
+  final _overrideKeywordCtrl = TextEditingController();
+  final _overrideCatHintCtrl = TextEditingController();
+  final _overrideRateCtrl = TextEditingController();
+  final _overrideReasonCtrl = TextEditingController();
 
   // ── Categories (updated: Sept 2025 — new categories added) ───────────────
   static const _sections = [
@@ -51,8 +51,13 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       icon: Icons.restaurant_rounded,
       color: AdminColors.warning,
       categories: [
-        'Restaurant', 'Fast Food', 'Bakery', 'Sweets & Mithai',
-        'Tea & Coffee', 'Ice Cream', 'Paan Shop',
+        'Restaurant',
+        'Fast Food',
+        'Bakery',
+        'Sweets & Mithai',
+        'Tea & Coffee',
+        'Ice Cream',
+        'Paan Shop',
       ],
     ),
     _Section(
@@ -60,7 +65,10 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       icon: Icons.eco_rounded,
       color: AdminColors.success,
       categories: [
-        'Fruits & Vegs', 'Butcher', 'Fish & Seafood', 'Dairy & Eggs',
+        'Fruits & Vegs',
+        'Butcher',
+        'Fish & Seafood',
+        'Dairy & Eggs',
       ],
     ),
     _Section(
@@ -68,8 +76,12 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       icon: Icons.local_grocery_store_rounded,
       color: AdminColors.info,
       categories: [
-        'Grocery', 'Organic', 'Supermarket / Hypermarket',
-        'Beverages', 'Pharmacy', 'Medical Store',
+        'Grocery',
+        'Organic',
+        'Supermarket / Hypermarket',
+        'Beverages',
+        'Pharmacy',
+        'Medical Store',
       ],
     ),
     _Section(
@@ -77,7 +89,11 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       icon: Icons.devices_rounded,
       color: AdminColors.primary,
       categories: [
-        'Clothing', 'Footwear', 'Electronics', 'Mobile & Repair', 'Jewellery',
+        'Clothing',
+        'Footwear',
+        'Electronics',
+        'Mobile & Repair',
+        'Jewellery',
       ],
     ),
     _Section(
@@ -85,9 +101,18 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       icon: Icons.store_rounded,
       color: Color(0xFFEC4899),
       categories: [
-        'Stationery', 'Toys & Games', 'Sports', 'Pet Supplies',
-        'Salon & Beauty', 'Cosmetics & Beauty', 'Flowers', 'Home Decor',
-        'Furniture', 'Hardware Store', 'Auto Parts', 'Other',
+        'Stationery',
+        'Toys & Games',
+        'Sports',
+        'Pet Supplies',
+        'Salon & Beauty',
+        'Cosmetics & Beauty',
+        'Flowers',
+        'Home Decor',
+        'Furniture',
+        'Hardware Store',
+        'Auto Parts',
+        'Other',
       ],
     ),
   ];
@@ -193,9 +218,11 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   void _startEdit(String category) {
     _rateCtrl.text = _getRate(category).toStringAsFixed(0);
     final threshold = _getSlabThreshold(category);
-    final highRate  = _getSlabHighRate(category);
-    _slabThresholdCtrl.text = threshold != null ? threshold.toStringAsFixed(0) : '';
-    _slabHighRateCtrl.text  = highRate  != null ? (highRate * 100).toStringAsFixed(0) : '';
+    final highRate = _getSlabHighRate(category);
+    _slabThresholdCtrl.text =
+        threshold != null ? threshold.toStringAsFixed(0) : '';
+    _slabHighRateCtrl.text =
+        highRate != null ? (highRate * 100).toStringAsFixed(0) : '';
     setState(() => _editingCategory = category);
   }
 
@@ -210,11 +237,13 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
 
     // Parse optional slab fields (Clothing/Footwear only)
     final slabThresholdText = _slabThresholdCtrl.text.trim();
-    final slabHighRateText  = _slabHighRateCtrl.text.trim();
-    final double? slabThreshold =
-        slabThresholdText.isNotEmpty ? double.tryParse(slabThresholdText) : null;
-    final double? slabHighRate =
-        slabHighRateText.isNotEmpty ? (double.tryParse(slabHighRateText) ?? 18.0) / 100 : null;
+    final slabHighRateText = _slabHighRateCtrl.text.trim();
+    final double? slabThreshold = slabThresholdText.isNotEmpty
+        ? double.tryParse(slabThresholdText)
+        : null;
+    final double? slabHighRate = slabHighRateText.isNotEmpty
+        ? (double.tryParse(slabHighRateText) ?? 18.0) / 100
+        : null;
 
     try {
       await _db.from('tax_config').upsert({
@@ -240,7 +269,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
             'new_rate': '$val%',
             if (slabThreshold != null) 'slab_threshold': slabThreshold,
             if (slabHighRate != null)
-              'slab_high_rate_pct': '${(slabHighRate * 100).toStringAsFixed(0)}%',
+              'slab_high_rate_pct':
+                  '${(slabHighRate * 100).toStringAsFixed(0)}%',
           },
         });
       } catch (_) {}
@@ -262,7 +292,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     }
   }
 
-  Future<void> _toggleDeemedSupplier(String category, bool value, RbacProvider rbac) async {
+  Future<void> _toggleDeemedSupplier(
+      String category, bool value, RbacProvider rbac) async {
     final rate = _getRate(category) / 100;
     try {
       await _db.from('tax_config').upsert({
@@ -288,12 +319,14 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   }
 
   Future<void> _resetToDefault(String category, RbacProvider rbac) async {
-    final defaultRate    = TaxConfig.gstRateForCategory(category);
-    final defaultDeemed  = TaxConfig.isEnythingDeemedSupplier(category);
+    final defaultRate = TaxConfig.gstRateForCategory(category);
+    final defaultDeemed = TaxConfig.isEnythingDeemedSupplier(category);
     final defaultThreshold = (category == 'Clothing' || category == 'Footwear')
-        ? TaxConfig.defaultSlabThreshold : null;
+        ? TaxConfig.defaultSlabThreshold
+        : null;
     final defaultHighRate = (category == 'Clothing' || category == 'Footwear')
-        ? TaxConfig.defaultSlabHighRate : null;
+        ? TaxConfig.defaultSlabHighRate
+        : null;
 
     try {
       await _db.from('tax_config').upsert({
@@ -318,7 +351,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
         };
         if (_editingCategory == category) _editingCategory = null;
       });
-      _showSnack('$category reset to Sept 2025 default (${(defaultRate * 100).toStringAsFixed(0)}%)');
+      _showSnack(
+          '$category reset to Sept 2025 default (${(defaultRate * 100).toStringAsFixed(0)}%)');
     } catch (e) {
       _showSnack('Failed to reset: $e', error: true);
     }
@@ -338,7 +372,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final rbac   = context.watch<RbacProvider>();
+    final rbac = context.watch<RbacProvider>();
     final config = context.watch<PlatformConfigProvider>();
     final canEdit = rbac.isSuperAdmin;
 
@@ -354,30 +388,37 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AdminColors.textMuted),
+            icon:
+                const Icon(Icons.refresh_rounded, color: AdminColors.textMuted),
             onPressed: _fetchTaxConfig,
             tooltip: 'Refresh',
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AdminColors.primary))
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // ── Sept 2025 GST Reform Banner ─────────────────────────────
+          ? const Center(
+              child: CircularProgressIndicator(color: AdminColors.primary))
+          : CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      // ── Sept 2025 GST Reform Banner ─────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(14),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: AdminColors.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AdminColors.warning.withValues(alpha: 0.4)),
+                    border: Border.all(
+                        color: AdminColors.warning.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.new_releases_rounded, color: AdminColors.warning, size: 18),
+                      const Icon(Icons.new_releases_rounded,
+                          color: AdminColors.warning, size: 18),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -385,7 +426,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                           children: [
                             Text(
                               'Sept 2025 GST Reform Applied',
-                              style: AdminStyles.body(size: 13, color: AdminColors.warning),
+                              style: AdminStyles.body(
+                                  size: 13, color: AdminColors.warning),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -394,7 +436,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                               'Clothing/Footwear threshold raised to ₹2,500 per item/pair. '
                               'Beverages, Stationery, Toys & Games, Sports raised to 18%. '
                               'Use this page to update rates when the government issues new notifications.',
-                              style: AdminStyles.caption(color: AdminColors.warning),
+                              style: AdminStyles.caption(
+                                  color: AdminColors.warning),
                             ),
                           ],
                         ),
@@ -410,11 +453,13 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                   decoration: BoxDecoration(
                     color: AdminColors.info.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AdminColors.info.withValues(alpha: 0.3)),
+                    border: Border.all(
+                        color: AdminColors.info.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline_rounded, color: AdminColors.info, size: 18),
+                      const Icon(Icons.info_outline_rounded,
+                          color: AdminColors.info, size: 18),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -433,17 +478,21 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
 
                 // ── Per-Category Sections ───────────────────────────────────
                 ..._sections.asMap().entries.map((entry) {
-                  final i       = entry.key;
+                  final i = entry.key;
                   final section = entry.value;
-                  return _buildSection(section, rbac, canEdit, delay: (i + 1) * 80);
+                  return _buildSection(section, rbac, canEdit,
+                      delay: (i + 1) * 80);
                 }),
 
                 const SizedBox(height: 16),
+                    ]),
+                  ),
+                ),
 
                 // ── Product GST Keyword Overrides Section ───────────────────
-                _buildProductOverridesSection(canEdit),
+                ..._buildProductOverridesSectionSlivers(canEdit),
 
-                const SizedBox(height: 32),
+                const SliverToBoxAdapter(child: SizedBox(height: 32)),
               ],
             ),
     );
@@ -451,7 +500,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
 
   // ── Product GST Keyword Overrides ─────────────────────────────────────────
 
-  Widget _buildProductOverridesSection(bool canEdit) {
+  List<Widget> _buildProductOverridesSectionSlivers(bool canEdit) {
     const slabOptions = [0.00, 0.03, 0.05, 0.18, 0.40];
 
     String rateLabel(double r) => '${(r * 100).toStringAsFixed(0)}%';
@@ -474,13 +523,18 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       try {
         final row = {
           'keyword': keyword.toLowerCase().trim(),
-          'category_hint': categoryHint?.trim().isEmpty ?? true ? null : categoryHint!.trim(),
+          'category_hint': categoryHint?.trim().isEmpty ?? true
+              ? null
+              : categoryHint!.trim(),
           'gst_rate': rate,
           'reason': reason.trim(),
           'is_active': true,
         };
         if (existingId != null) {
-          await _db.from('product_gst_overrides').update(row).eq('id', existingId);
+          await _db
+              .from('product_gst_overrides')
+              .update(row)
+              .eq('id', existingId);
         } else {
           await _db.from('product_gst_overrides').insert(row);
         }
@@ -506,11 +560,13 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Cancel', style: AdminStyles.body(color: AdminColors.textMuted)),
+              child: Text('Cancel',
+                  style: AdminStyles.body(color: AdminColors.textMuted)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Delete', style: AdminStyles.body(color: AdminColors.danger)),
+              child: Text('Delete',
+                  style: AdminStyles.body(color: AdminColors.danger)),
             ),
           ],
         ),
@@ -527,163 +583,183 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
 
     void startEdit(Map<String, dynamic> rule) {
       setState(() {
-        _editingOverrideId    = rule['id'];
-        _overrideKeywordCtrl.text  = rule['keyword'] ?? '';
-        _overrideCatHintCtrl.text  = rule['category_hint'] ?? '';
-        _overrideRateCtrl.text     = rule['gst_rate']?.toString() ?? '0.18';
-        _overrideReasonCtrl.text   = rule['reason'] ?? '';
+        _editingOverrideId = rule['id'];
+        _overrideKeywordCtrl.text = rule['keyword'] ?? '';
+        _overrideCatHintCtrl.text = rule['category_hint'] ?? '';
+        _overrideRateCtrl.text = rule['gst_rate']?.toString() ?? '0.18';
+        _overrideReasonCtrl.text = rule['reason'] ?? '';
       });
     }
 
     void startAdd() {
       setState(() {
-        _editingOverrideId   = 'new';
+        _editingOverrideId = 'new';
         _overrideKeywordCtrl.text = '';
         _overrideCatHintCtrl.text = '';
-        _overrideRateCtrl.text    = '0.18';
-        _overrideReasonCtrl.text  = '';
+        _overrideRateCtrl.text = '0.18';
+        _overrideReasonCtrl.text = '';
       });
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: AdminColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AdminColors.cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Section Header ───────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverToBoxAdapter(
+          child: Container(
+            decoration: BoxDecoration(
+              color: AdminColors.cardBg,
+              borderRadius: BorderRadius.vertical(
+                  top: const Radius.circular(16),
+                  bottom: _productOverrides.isEmpty && !_loadingOverrides
+                      ? const Radius.circular(16)
+                      : Radius.zero),
+              border: Border(
+                top: BorderSide(color: AdminColors.cardBorder),
+                left: BorderSide(color: AdminColors.cardBorder),
+                right: BorderSide(color: AdminColors.cardBorder),
+                bottom: _productOverrides.isEmpty && !_loadingOverrides
+                    ? BorderSide(color: AdminColors.cardBorder)
+                    : BorderSide.none,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF7C4DFF).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.auto_awesome_rounded,
-                      color: Color(0xFF7C4DFF), size: 18),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // ── Section Header ───────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
                     children: [
-                      Text('Product GST Keyword Rules',
-                          style: AdminStyles.title(size: 15)),
-                      Text(
-                        'Auto-recommend correct GST rate when seller types a product name. '
-                        'Matched case-insensitively. Category hint narrows match to that category only.',
-                        style: AdminStyles.caption(color: AdminColors.textMuted),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7C4DFF).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.auto_awesome_rounded,
+                            color: Color(0xFF7C4DFF), size: 18),
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Product GST Keyword Rules',
+                                style: AdminStyles.title(size: 15)),
+                            Text(
+                              'Auto-recommend correct GST rate when seller types a product name. '
+                              'Matched case-insensitively. Category hint narrows match to that category only.',
+                              style:
+                                  AdminStyles.caption(color: AdminColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_loadingOverrides)
+                        const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AdminColors.primary)),
+                      if (canEdit) ...[
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline_rounded,
+                              color: Color(0xFF7C4DFF)),
+                          tooltip: 'Add keyword rule',
+                          onPressed: startAdd,
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                if (_loadingOverrides)
-                  const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AdminColors.primary)),
-                if (canEdit) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline_rounded,
-                        color: Color(0xFF7C4DFF)),
-                    tooltip: 'Add keyword rule',
-                    onPressed: startAdd,
-                  ),
-                ],
-              ],
-            ),
-          ),
 
-          const Divider(height: 1, color: AdminColors.cardBorder),
+                const Divider(height: 1, color: AdminColors.cardBorder),
 
-          // ── Add New Rule Row (shown when _editingOverrideId == 'new') ────
-          if (_editingOverrideId == 'new') ...[
-            _buildOverrideEditRow(
-              rateLabel: rateLabel,
-              rateColor: rateColor,
-              slabOptions: slabOptions,
-              onSave: () async {
-                final rate = double.tryParse(_overrideRateCtrl.text) ?? 0.18;
-                final kw   = _overrideKeywordCtrl.text.trim();
-                if (kw.isEmpty) {
-                  _showSnack('Keyword cannot be empty', error: true);
-                  return;
-                }
-                await saveRule(
-                  keyword: kw,
-                  categoryHint: _overrideCatHintCtrl.text.trim().isEmpty
-                      ? null
-                      : _overrideCatHintCtrl.text.trim(),
-                  rate: rate,
-                  reason: _overrideReasonCtrl.text.trim(),
-                );
-              },
-              onCancel: () => setState(() => _editingOverrideId = null),
-            ),
-            const Divider(height: 1, color: AdminColors.cardBorder),
-          ],
-
-          // ── Keyword Rules List ────────────────────────────────────────────
-          if (_productOverrides.isEmpty && !_loadingOverrides)
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: Text(
-                  'No custom keyword rules.\nThe engine uses 200+ built-in rules from the migration seed.',
-                  textAlign: TextAlign.center,
-                  style: AdminStyles.caption(color: AdminColors.textMuted),
-                ),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _productOverrides.length,
-              separatorBuilder: (_, __) =>
-                  const Divider(height: 1, color: AdminColors.cardBorder),
-              itemBuilder: (ctx, i) {
-                final rule = _productOverrides[i];
-                final id       = rule['id'] as String;
-                final keyword  = rule['keyword'] as String? ?? '';
-                final catHint  = rule['category_hint'] as String?;
-                final rate     = double.tryParse(rule['gst_rate'].toString()) ?? 0.18;
-                final reason   = rule['reason'] as String? ?? '';
-                final isActive = rule['is_active'] as bool? ?? true;
-                final isEditing = _editingOverrideId == id;
-
-                if (isEditing) {
-                  return _buildOverrideEditRow(
+                // ── Add New Rule Row (shown when _editingOverrideId == 'new') ────
+                if (_editingOverrideId == 'new') ...[
+                  _buildOverrideEditRow(
                     rateLabel: rateLabel,
                     rateColor: rateColor,
                     slabOptions: slabOptions,
                     onSave: () async {
-                      final r = double.tryParse(_overrideRateCtrl.text) ?? 0.18;
+                      final rate = double.tryParse(_overrideRateCtrl.text) ?? 0.18;
+                      final kw = _overrideKeywordCtrl.text.trim();
+                      if (kw.isEmpty) {
+                        _showSnack('Keyword cannot be empty', error: true);
+                        return;
+                      }
                       await saveRule(
-                        existingId: id,
-                        keyword: _overrideKeywordCtrl.text.trim(),
+                        keyword: kw,
                         categoryHint: _overrideCatHintCtrl.text.trim().isEmpty
                             ? null
                             : _overrideCatHintCtrl.text.trim(),
-                        rate: r,
+                        rate: rate,
                         reason: _overrideReasonCtrl.text.trim(),
                       );
                     },
                     onCancel: () => setState(() => _editingOverrideId = null),
-                  );
-                }
+                  ),
+                  const Divider(height: 1, color: AdminColors.cardBorder),
+                ],
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                // ── Empty State ────────────────────────────────────────────
+                if (_productOverrides.isEmpty && !_loadingOverrides)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Center(
+                      child: Text(
+                        'No custom keyword rules.\nThe engine uses 200+ built-in rules from the migration seed.',
+                        textAlign: TextAlign.center,
+                        style: AdminStyles.caption(color: AdminColors.textMuted),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      if (_productOverrides.isNotEmpty)
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList.builder(
+            itemCount: _productOverrides.length,
+            itemBuilder: (ctx, i) {
+              final rule = _productOverrides[i];
+              final id = rule['id'] as String;
+              final keyword = rule['keyword'] as String? ?? '';
+              final catHint = rule['category_hint'] as String?;
+              final rate = double.tryParse(rule['gst_rate'].toString()) ?? 0.18;
+              final reason = rule['reason'] as String? ?? '';
+              final isActive = rule['is_active'] as bool? ?? true;
+              final isEditing = _editingOverrideId == id;
+              final isLast = i == _productOverrides.length - 1;
+
+              Widget child;
+              if (isEditing) {
+                child = _buildOverrideEditRow(
+                  rateLabel: rateLabel,
+                  rateColor: rateColor,
+                  slabOptions: slabOptions,
+                  onSave: () async {
+                    final r = double.tryParse(_overrideRateCtrl.text) ?? 0.18;
+                    await saveRule(
+                      existingId: id,
+                      keyword: _overrideKeywordCtrl.text.trim(),
+                      categoryHint: _overrideCatHintCtrl.text.trim().isEmpty
+                          ? null
+                          : _overrideCatHintCtrl.text.trim(),
+                      rate: r,
+                      reason: _overrideReasonCtrl.text.trim(),
+                    );
+                  },
+                  onCancel: () => setState(() => _editingOverrideId = null),
+                );
+              } else {
+                child = Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Row(
                     children: [
                       // Rate badge
@@ -706,7 +782,9 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
                               children: [
                                 Text(keyword,
                                     style: AdminStyles.body(
@@ -714,8 +792,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                                         color: isActive
                                             ? AdminColors.textPrimary
                                             : AdminColors.textMuted)),
-                                if (catHint != null) ...[
-                                  const SizedBox(width: 6),
+                                if (catHint != null)
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 6, vertical: 2),
@@ -728,7 +805,6 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                                         style: AdminStyles.caption(
                                             color: AdminColors.primary)),
                                   ),
-                                ],
                               ],
                             ),
                             if (reason.isNotEmpty)
@@ -760,11 +836,32 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                     ],
                   ),
                 );
-              },
-            ),
-        ],
-      ),
-    ).animate().fadeIn(delay: 300.ms);
+              }
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: AdminColors.cardBg,
+                  borderRadius: isLast
+                      ? const BorderRadius.vertical(bottom: Radius.circular(16))
+                      : BorderRadius.zero,
+                  border: Border(
+                    left: BorderSide(color: AdminColors.cardBorder),
+                    right: BorderSide(color: AdminColors.cardBorder),
+                    bottom: isLast ? BorderSide(color: AdminColors.cardBorder) : BorderSide.none,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    if (i != 0) const Divider(height: 1, color: AdminColors.cardBorder),
+                    child,
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+    ];
   }
 
   /// Shared inline edit row for both add-new and edit-existing keyword rules.
@@ -775,8 +872,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
     required VoidCallback onSave,
     required VoidCallback onCancel,
   }) {
-    final currentRate =
-        double.tryParse(_overrideRateCtrl.text) ?? 0.18;
+    final currentRate = double.tryParse(_overrideRateCtrl.text) ?? 0.18;
 
     return StatefulBuilder(
       builder: (ctx, setLocal) => Padding(
@@ -826,8 +922,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                 labelText: 'Reason shown to seller',
                 hintText: 'e.g., Shampoo — 5% FMCG Merit Rate',
                 isDense: true,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
               style: AdminStyles.body(size: 13),
             ),
@@ -847,15 +943,16 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: selected
                           ? rateColor(r).withValues(alpha: 0.15)
                           : AdminColors.surface,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: selected ? rateColor(r) : AdminColors.cardBorder,
+                          color:
+                              selected ? rateColor(r) : AdminColors.cardBorder,
                           width: selected ? 2.0 : 1.0),
                     ),
                     child: Text(rateLabel(r),
@@ -875,8 +972,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                 TextButton(
                   onPressed: onCancel,
                   child: Text('Cancel',
-                      style:
-                          AdminStyles.body(size: 13, color: AdminColors.textMuted)),
+                      style: AdminStyles.body(
+                          size: 13, color: AdminColors.textMuted)),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
@@ -901,7 +998,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
 
   // ── Service tax section (delivery + platform GST) ──────────────────────────
 
-  Widget _buildServiceTaxSection(PlatformConfigProvider config, RbacProvider rbac, bool canEdit) {
+  Widget _buildServiceTaxSection(
+      PlatformConfigProvider config, RbacProvider rbac, bool canEdit) {
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
@@ -922,10 +1020,12 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                     color: AdminColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.local_shipping_rounded, color: AdminColors.primary, size: 18),
+                  child: const Icon(Icons.local_shipping_rounded,
+                      color: AdminColors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
-                Text('Enything Service Taxes', style: AdminStyles.title(size: 15)),
+                Text('Enything Service Taxes',
+                    style: AdminStyles.title(size: 15)),
               ],
             ),
           ),
@@ -974,7 +1074,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
               children: [
                 Text(label, style: AdminStyles.body(size: 14)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: AdminStyles.caption(color: AdminColors.textMuted)),
+                Text(subtitle,
+                    style: AdminStyles.caption(color: AdminColors.textMuted)),
               ],
             ),
           ),
@@ -986,12 +1087,14 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                   Expanded(
                     child: TextField(
                       controller: _rateCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       style: AdminStyles.body(),
                       decoration: InputDecoration(
                         suffixText: '%',
                         suffixStyle: AdminStyles.caption(),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
                         isDense: true,
                         filled: true,
                         fillColor: AdminColors.surface,
@@ -1003,7 +1106,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.check_circle_rounded, color: AdminColors.success, size: 24),
+                    icon: const Icon(Icons.check_circle_rounded,
+                        color: AdminColors.success, size: 24),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: () async {
@@ -1013,7 +1117,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                         key: key,
                         value: (val / 100).toString(),
                         actorId: rbac.currentAdmin?.id ?? '',
-                        actorRole: rbac.currentAdmin?.role?.name ?? 'Super Admin',
+                        actorRole:
+                            rbac.currentAdmin?.role?.name ?? 'Super Admin',
                       );
                       setState(() => _editingCategory = null);
                     },
@@ -1023,12 +1128,15 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
             )
           else
             GestureDetector(
-              onTap: canEdit ? () {
-                _rateCtrl.text = currentValue.toStringAsFixed(0);
-                setState(() => _editingCategory = key);
-              } : null,
+              onTap: canEdit
+                  ? () {
+                      _rateCtrl.text = currentValue.toStringAsFixed(0);
+                      setState(() => _editingCategory = key);
+                    }
+                  : null,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: AdminColors.surface,
                   borderRadius: BorderRadius.circular(8),
@@ -1038,10 +1146,12 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('${currentValue.toStringAsFixed(0)}%',
-                        style: AdminStyles.title(size: 14, color: AdminColors.primary)),
+                        style: AdminStyles.title(
+                            size: 14, color: AdminColors.primary)),
                     if (canEdit) ...[
                       const SizedBox(width: 8),
-                      const Icon(Icons.edit_rounded, color: AdminColors.textMuted, size: 14),
+                      const Icon(Icons.edit_rounded,
+                          color: AdminColors.textMuted, size: 14),
                     ],
                   ],
                 ),
@@ -1054,7 +1164,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
 
   // ── Category section builder ────────────────────────────────────────────────
 
-  Widget _buildSection(_Section section, RbacProvider rbac, bool canEdit, {int delay = 0}) {
+  Widget _buildSection(_Section section, RbacProvider rbac, bool canEdit,
+      {int delay = 0}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
@@ -1079,7 +1190,9 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                   child: Icon(section.icon, color: section.color, size: 18),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text(section.title, style: AdminStyles.title(size: 14))),
+                Expanded(
+                    child: Text(section.title,
+                        style: AdminStyles.title(size: 14))),
               ],
             ),
           ),
@@ -1089,26 +1202,30 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
             return Column(
               children: [
                 _buildCategoryRow(e.value, rbac, canEdit),
-                if (!isLast) const Divider(height: 1, color: AdminColors.cardBorder),
+                if (!isLast)
+                  const Divider(height: 1, color: AdminColors.cardBorder),
               ],
             );
           }),
         ],
       ),
-    ).animate().fadeIn(delay: Duration(milliseconds: delay)).slideX(begin: -0.05);
+    )
+        .animate()
+        .fadeIn(delay: Duration(milliseconds: delay))
+        .slideX(begin: -0.05);
   }
 
   // ── Category row ────────────────────────────────────────────────────────────
 
   Widget _buildCategoryRow(String category, RbacProvider rbac, bool canEdit) {
-    final isEditing     = _editingCategory == category;
-    final rate          = _getRate(category);
-    final deemed        = _getDeemedSupplier(category);
-    final custom        = _isCustom(category);
-    final isSlab        = (category == 'Clothing' || category == 'Footwear');
+    final isEditing = _editingCategory == category;
+    final rate = _getRate(category);
+    final deemed = _getDeemedSupplier(category);
+    final custom = _isCustom(category);
+    final isSlab = (category == 'Clothing' || category == 'Footwear');
     final slabThreshold = _getSlabThreshold(category);
-    final slabHighRate  = _getSlabHighRate(category);
-    final slabDesc      = isSlab
+    final slabHighRate = _getSlabHighRate(category);
+    final slabDesc = isSlab
         ? TaxConfig.slabDescription(
             category,
             slabThreshold: slabThreshold,
@@ -1134,25 +1251,31 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                         if (custom) ...[
                           const SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
-                              color: AdminColors.primary.withValues(alpha: 0.15),
+                              color:
+                                  AdminColors.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: Text('CUSTOM', style: AdminStyles.label(color: AdminColors.primary, size: 9)),
+                            child: Text('CUSTOM',
+                                style: AdminStyles.label(
+                                    color: AdminColors.primary, size: 9)),
                           ),
                         ],
                       ],
                     ),
                     if (deemed)
                       Text('Enything deemed supplier (S.9(5))',
-                          style: AdminStyles.label(color: AdminColors.warning, size: 9)),
+                          style: AdminStyles.label(
+                              color: AdminColors.warning, size: 9)),
                     if (slabDesc != null && !isEditing)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
                           slabDesc,
-                          style: AdminStyles.label(color: AdminColors.info, size: 9),
+                          style: AdminStyles.label(
+                              color: AdminColors.info, size: 9),
                         ),
                       ),
                   ],
@@ -1172,7 +1295,9 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                           Expanded(
                             child: TextField(
                               controller: _rateCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
                               style: AdminStyles.body(size: 13),
                               autofocus: true,
                               decoration: InputDecoration(
@@ -1180,7 +1305,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                                 labelStyle: AdminStyles.label(size: 10),
                                 suffixText: '%',
                                 suffixStyle: AdminStyles.caption(),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 6),
                                 isDense: true,
                                 filled: true,
                                 fillColor: AdminColors.surface,
@@ -1193,16 +1319,19 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.check_circle_rounded, color: AdminColors.success, size: 22),
+                            icon: const Icon(Icons.check_circle_rounded,
+                                color: AdminColors.success, size: 22),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                             onPressed: () => _saveRate(category, rbac),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close_rounded, color: AdminColors.textMuted, size: 20),
+                            icon: const Icon(Icons.close_rounded,
+                                color: AdminColors.textMuted, size: 20),
                             padding: const EdgeInsets.only(left: 2),
                             constraints: const BoxConstraints(),
-                            onPressed: () => setState(() => _editingCategory = null),
+                            onPressed: () =>
+                                setState(() => _editingCategory = null),
                           ),
                         ],
                       ),
@@ -1211,16 +1340,19 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                         const SizedBox(height: 6),
                         TextField(
                           controller: _slabThresholdCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: false),
                           style: AdminStyles.body(size: 12),
                           decoration: InputDecoration(
                             labelText: 'Threshold ₹',
                             labelStyle: AdminStyles.label(size: 10),
                             hintText: '2500',
-                            hintStyle: AdminStyles.caption(color: AdminColors.textMuted),
+                            hintStyle: AdminStyles.caption(
+                                color: AdminColors.textMuted),
                             prefixText: '₹',
                             prefixStyle: AdminStyles.caption(),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 6),
                             isDense: true,
                             filled: true,
                             fillColor: AdminColors.surface,
@@ -1233,15 +1365,18 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                         const SizedBox(height: 4),
                         TextField(
                           controller: _slabHighRateCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                           style: AdminStyles.body(size: 12),
                           decoration: InputDecoration(
                             labelText: 'High slab %',
                             labelStyle: AdminStyles.label(size: 10),
                             suffixText: '%',
                             hintText: '18',
-                            hintStyle: AdminStyles.caption(color: AdminColors.textMuted),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            hintStyle: AdminStyles.caption(
+                                color: AdminColors.textMuted),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 6),
                             isDense: true,
                             filled: true,
                             fillColor: AdminColors.surface,
@@ -1263,9 +1398,11 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                     // Deemed supplier toggle
                     if (canEdit)
                       GestureDetector(
-                        onTap: () => _toggleDeemedSupplier(category, !deemed, rbac),
+                        onTap: () =>
+                            _toggleDeemedSupplier(category, !deemed, rbac),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
                           margin: const EdgeInsets.only(right: 8),
                           decoration: BoxDecoration(
                             color: deemed
@@ -1281,7 +1418,9 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                           child: Text(
                             'S.9(5)',
                             style: AdminStyles.label(
-                              color: deemed ? AdminColors.warning : AdminColors.textMuted,
+                              color: deemed
+                                  ? AdminColors.warning
+                                  : AdminColors.textMuted,
                               size: 9,
                             ),
                           ),
@@ -1291,7 +1430,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                     GestureDetector(
                       onTap: canEdit ? () => _startEdit(category) : null,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: AdminColors.surface,
                           borderRadius: BorderRadius.circular(8),
@@ -1301,10 +1441,12 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text('${rate.toStringAsFixed(0)}%',
-                                style: AdminStyles.title(size: 13, color: AdminColors.primary)),
+                                style: AdminStyles.title(
+                                    size: 13, color: AdminColors.primary)),
                             if (canEdit) ...[
                               const SizedBox(width: 6),
-                              const Icon(Icons.edit_rounded, color: AdminColors.textMuted, size: 12),
+                              const Icon(Icons.edit_rounded,
+                                  color: AdminColors.textMuted, size: 12),
                             ],
                           ],
                         ),
@@ -1314,7 +1456,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                     if (canEdit && custom) ...[
                       const SizedBox(width: 4),
                       IconButton(
-                        icon: const Icon(Icons.restart_alt_rounded, color: AdminColors.textMuted, size: 18),
+                        icon: const Icon(Icons.restart_alt_rounded,
+                            color: AdminColors.textMuted, size: 18),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         tooltip: 'Reset to Sept 2025 default',
