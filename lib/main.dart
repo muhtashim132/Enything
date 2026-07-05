@@ -25,6 +25,8 @@ import 'providers/coupon_provider.dart';
 import 'providers/recently_viewed_provider.dart';
 import 'providers/referral_provider.dart';
 import 'services/notification_service.dart';
+import 'config/route_observer.dart';
+import 'widgets/customer/multi_shop_cart_bubble.dart';
 
 
 void main() async {
@@ -283,6 +285,8 @@ class EnythingApp extends StatelessWidget {
         builder: (context, themeProvider, _) {
           return MaterialApp(
             navigatorKey: navigatorKey,
+            navigatorObservers: [GlobalRouteObserver()],
+            builder: (context, child) => MultiShopCartBubbleOverlay(child: child!),
             title: 'Enything',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,

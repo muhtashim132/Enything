@@ -36,7 +36,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     try {
       final itemsData = await _supabase
           .from('order_items')
-          .select('product_id, quantity')
+          .select('product_id, quantity, variant_name')
           .eq('order_id', order.id);
 
       if (!mounted) return;
@@ -79,6 +79,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       for (final item in itemsData) {
         final productId = item['product_id'] as String;
         final quantity = item['quantity'] as int? ?? 1;
+        final variantName = item['variant_name'] as String?;
         final product = products.cast<ProductModel?>().firstWhere(
           (p) => p?.id == productId,
           orElse: () => null,
@@ -86,9 +87,13 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         if (product != null) {
           final shop = shopMap[product.shopId];
           if (shop != null) {
-            for (int i = 0; i < quantity; i++) {
-              cart.addItem(product, shop);
+            ProductVariant? selectedVariant;
+            if (variantName != null && product.variants.isNotEmpty) {
+              try {
+                selectedVariant = product.variants.firstWhere((v) => v.name == variantName);
+              } catch (_) {}
             }
+            cart.addItem(product, shop, quantity: quantity, selectedVariant: selectedVariant);
             added++;
           } else {
             skipped++; // shop data unavailable

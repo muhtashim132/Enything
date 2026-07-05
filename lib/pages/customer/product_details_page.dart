@@ -620,7 +620,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ),
                       const SizedBox(width: 28),
                       _qtyBtn(Icons.add, () {
-                        if (_shop != null) cart.addItem(_product!, _shop!, selectedVariant: _selectedVariant);
+                        if (_shop != null) cart.addItemWithFeedback(context, _product!, _shop!, selectedVariant: _selectedVariant);
                       }),
                       const SizedBox(width: 24),
                       Expanded(
@@ -655,25 +655,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         child: OutlinedButton(
                           onPressed: () {
                             if (_shop != null) {
-                              cart.addItem(_product!, _shop!, selectedVariant: _selectedVariant);
-                              ScaffoldMessenger.of(context).clearSnackBars();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('${_product!.name} added to cart! 🛒', style: GoogleFonts.outfit()),
-                                  backgroundColor: AppColors.success,
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: const Duration(seconds: 2),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  action: SnackBarAction(
-                                    label: 'View Cart',
-                                    textColor: Colors.white,
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(context).clearSnackBars();
-                                      Navigator.pushNamed(context, AppRoutes.cart);
-                                    },
-                                  ),
-                                ),
-                              );
+                              cart.addItemWithFeedback(context, _product!, _shop!, selectedVariant: _selectedVariant);
                             }
                           },
                           style: OutlinedButton.styleFrom(
@@ -690,8 +672,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         child: GestureDetector(
                           onTap: () {
                             if (_shop != null) {
-                              cart.addItem(_product!, _shop!);
-                              ScaffoldMessenger.of(context).clearSnackBars();
+                              cart.addItemWithFeedback(context, _product!, _shop!, selectedVariant: _selectedVariant);
                               Navigator.pushNamed(context, AppRoutes.cart);
                             }
                           },

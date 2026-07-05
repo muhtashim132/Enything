@@ -390,7 +390,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
         if (product.variants.isNotEmpty) {
           showProductDetailSheet(context, product.id, highlightVariants: true);
         } else {
-          context.read<CartProvider>().addItem(product, shop);
+          context.read<CartProvider>().addItemWithFeedback(context, product, shop);
         }
       },
       child: Container(

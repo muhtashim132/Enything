@@ -523,7 +523,7 @@ class _ProductCardState extends State<ProductCard>
         if (product.variants.isNotEmpty) {
           showProductDetailSheet(context, product.id, highlightVariants: true);
         } else if (shop != null) {
-          cart.addItem(product, shop!);
+          cart.addItemWithFeedback(context, product, shop!);
         }
       },
       child: Container(
@@ -611,7 +611,7 @@ class _ProductCardState extends State<ProductCard>
           GestureDetector(
             onTap: () {
               if (shop != null) {
-                context.read<CartProvider>().addItem(product, shop!);
+                context.read<CartProvider>().addItemWithFeedback(context, product, shop!);
               }
             },
             child: const Icon(Icons.add_rounded, size: 16, color: Colors.white),

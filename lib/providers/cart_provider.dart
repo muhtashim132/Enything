@@ -208,6 +208,12 @@ class CartProvider extends ChangeNotifier {
       return 'Maximum weight of ${PaymentConfig.maxWeightKg} kg allowed per order';
     }
 
+    // Enforce max 3 unique shops
+    final currentShops = shops.map((s) => s.id).toSet();
+    if (!currentShops.contains(shop.id) && currentShops.length >= 3) {
+      return 'Maximum 3 shops allowed per order. Please complete your current order first.';
+    }
+
     final existingIdx = _items.indexWhere(
         (item) => item.product.id == product.id && item.selectedVariant?.name == selectedVariant?.name);
 
@@ -225,6 +231,44 @@ class CartProvider extends ChangeNotifier {
     _saveCart(); // Bug #20
     notifyListeners();
     return null;
+  }
+
+  void addItemWithFeedback(BuildContext context, ProductModel product, ShopModel shop,
+      {int quantity = 1, ProductVariant? selectedVariant}) {
+    final err = addItem(product, shop, quantity: quantity, selectedVariant: selectedVariant);
+    ScaffoldMessenger.of(context).clearSnackBars();
+    
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: const Color(0xFFEF4444), // AppColors.danger fallback
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      final remaining = 3 - shops.length;
+      final msg = remaining > 0
+          ? '${shops.length} shop${shops.length > 1 ? 's' : ''} selected, $remaining remaining if needed'
+          : 'Max 3 shops selected';
+          
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${product.name} added to cart! 🛒', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(msg, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+          backgroundColor: const Color(0xFF10B981), // AppColors.success fallback
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   void removeItem(String productId, {String? variantName}) {

@@ -945,7 +945,7 @@ class _SheetContent extends StatelessWidget {
                           _showVariantWarning(context);
                           return;
                         }
-                        cart.addItem(product, shop!,
+                        cart.addItemWithFeedback(context, product, shop!,
                             selectedVariant: selectedVariant);
                       }
                     }, isDark),
@@ -989,30 +989,8 @@ class _SheetContent extends StatelessWidget {
                               _showVariantWarning(context);
                               return;
                             }
-                            cart.addItem(product, shop!,
+                            cart.addItemWithFeedback(context, product, shop!,
                                 selectedVariant: selectedVariant);
-                            ScaffoldMessenger.of(context).clearSnackBars();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content:
-                                    Text('${product.name} added to cart! 🛒'),
-                                backgroundColor: AppColors.success,
-                                behavior: SnackBarBehavior.floating,
-                                duration: const Duration(seconds: 2),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14)),
-                                action: SnackBarAction(
-                                  label: 'View Cart',
-                                  textColor: Colors.white,
-                                  onPressed: () {
-                                    ScaffoldMessenger.of(context)
-                                        .clearSnackBars();
-                                    Navigator.pushNamed(
-                                        context, AppRoutes.cart);
-                                  },
-                                ),
-                              ),
-                            );
                           }
                         },
                         child: Container(
@@ -1051,9 +1029,8 @@ class _SheetContent extends StatelessWidget {
                               _showVariantWarning(context);
                               return;
                             }
-                            cart.addItem(product, shop!,
+                            cart.addItemWithFeedback(context, product, shop!,
                                 selectedVariant: selectedVariant);
-                            ScaffoldMessenger.of(context).clearSnackBars();
                             Navigator.pushNamed(context, AppRoutes.cart);
                           }
                         },

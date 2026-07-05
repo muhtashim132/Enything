@@ -890,7 +890,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                     : quantity == 0
                         ? GestureDetector(
                             onTap: () {
-                          cart.addItem(product, _shop!);
+                          cart.addItemWithFeedback(context, product, _shop!);
                           setState(() {});
                         },
                         child: Container(
@@ -957,7 +957,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                     fontSize: 14)),
                             GestureDetector(
                               onTap: () {
-                                cart.addItem(product, _shop!);
+                                cart.addItemWithFeedback(context, product, _shop!);
                                 setState(() {});
                               },
                               child: const Icon(Icons.add_rounded,

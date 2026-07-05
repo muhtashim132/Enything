@@ -296,9 +296,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
           shopDistanceKm = location.distanceTo(shop.location);
         }
 
-        final shopDelivery = totalDelivery / numShops;
-        final shopRiderEarnings = riderEarnings / numShops;
-        final shopPlatformFee = cart.platformFee / numShops;
+        final proportion = cart.subtotal > 0 ? (shopBaseSubtotal / cart.subtotal) : (1.0 / numShops);
+
+        final shopDelivery = totalDelivery * proportion;
+        final shopRiderEarnings = riderEarnings * proportion;
+        final shopPlatformFee = cart.platformFee * proportion;
 
         final shopTaxBreakdownItems = shopItems.map((i) {
           return {
@@ -366,10 +368,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'total_amount': shopBaseSubtotal,
               'delivery_charges': shopDelivery,
               'rider_earnings': shopRiderEarnings,
-              'multi_shop_surcharge': surcharge / numShops,
-              'small_cart_fee': smallCartFee / numShops,
-              'heavy_order_fee': heavyFee / numShops,
-              'delivery_discount': deliveryDiscount / numShops,
+              'multi_shop_surcharge': surcharge * proportion,
+              'small_cart_fee': smallCartFee * proportion,
+              'heavy_order_fee': heavyFee * proportion,
+              'delivery_discount': deliveryDiscount * proportion,
               'platform_fee': shopPlatformFee,
               'address': location.currentAddress,
               'address_label': location.activeLabel.isNotEmpty
