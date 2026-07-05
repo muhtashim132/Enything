@@ -12,6 +12,8 @@ import '../../providers/platform_config_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../utils/responsive_layout.dart';
 import '../../config/tax_config.dart';
+import '../../providers/auth_provider.dart';
+
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
 
@@ -478,7 +480,22 @@ class CartPage extends StatelessWidget {
             // Checkout button
             GestureDetector(
               onTap: canCheckout
-                  ? () => Navigator.pushNamed(context, AppRoutes.checkout)
+                  ? () {
+                      final auth = context.read<AuthProvider>();
+                      if (auth.currentUserId == null) {
+                        Navigator.pushNamed(context, AppRoutes.login);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Please login to continue checkout.', style: GoogleFonts.outfit(color: Colors.white)),
+                            backgroundColor: AppColors.primary,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        );
+                      } else {
+                        Navigator.pushNamed(context, AppRoutes.checkout);
+                      }
+                    }
                   : null,
               child: AnimatedContainer(
                 duration: PremiumAnimations.normal,

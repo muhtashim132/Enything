@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +38,7 @@ Map<String, dynamic> _productToJson(ProductModel p) => {
   'requires_prescription': p.requiresPrescription,
   'medicine_type': p.medicineType,
   'gst_rate_override': p.gstRateOverride,
+  'variants': p.variants.map((v) => v.toMap()).toList(),
 };
 
 ProductModel _productFromJson(Map<String, dynamic> m) => ProductModel.fromMap({
@@ -97,6 +99,25 @@ class CartProvider extends ChangeNotifier {
   static const String _legacyCartKey = 'enything_cart_v1';
   final List<CartItem> _items = [];
 
+  CartProvider() {
+    _safeAddPlatformListener();
+  }
+
+  void _safeAddPlatformListener() {
+    if (PlatformConfigProvider.instance != null) {
+      PlatformConfigProvider.instance!.addListener(notifyListeners);
+    } else {
+      Future.delayed(const Duration(milliseconds: 500), _safeAddPlatformListener);
+    }
+  }
+
+  @override
+  void dispose() {
+    PlatformConfigProvider.instance?.removeListener(notifyListeners);
+    _saveDebounce?.cancel();
+    super.dispose();
+  }
+
   List<CartItem> get items => List.unmodifiable(_items);
   bool get isEmpty => _items.isEmpty;
 
@@ -119,11 +140,8 @@ class CartProvider extends ChangeNotifier {
 
   bool get meetsMinimumOrder => subtotal >= PaymentConfig.minimumOrderValue;
 
-  // M7 FIX (Doc Note): platformFee reads from PlatformConfigProvider singleton.
-  // If the admin changes the fee remotely, this getter will instantly return the
-  // new value on the next read. However, CartProvider does NOT listen to
-  // PlatformConfigProvider changes, meaning UI already displaying the cart
-  // won't auto-rebuild until the cart is modified or the page is reopened.
+  // PlatformConfigProvider.instance now safely attaches its listener even if it's delayed.
+  // This ensures UI rebuilds instantly when admin updates platform fee or rates.
   double get platformFee => PlatformConfigProvider.instance?.platformFee ?? PaymentConfig.platformFee;
 
   bool get requiresPrescription => _items.any((item) => item.product.requiresPrescription);
@@ -300,21 +318,26 @@ class CartProvider extends ChangeNotifier {
   // Bug #20: Persistence — save & load cart via shared_preferences
   // ---------------------------------------------------------------------------
 
-  /// Serialises the current cart to shared_preferences.
+  Timer? _saveDebounce;
+
+  /// Serialises the current cart to shared_preferences with debounce.
   Future<void> _saveCart() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final encoded = jsonEncode(_items.map((item) => {
-        'product': _productToJson(item.product),
-        'shop': _shopToJson(item.shop),
-        'quantity': item.quantity,
-        'special_instructions': item.specialInstructions,
-        'selected_variant': item.selectedVariant?.toMap(),
-      }).toList());
-      await prefs.setString(_cartKey, encoded);
-    } catch (e) {
-      debugPrint('CartProvider: failed to save cart: $e');
-    }
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final encoded = jsonEncode(_items.map((item) => {
+          'product': _productToJson(item.product),
+          'shop': _shopToJson(item.shop),
+          'quantity': item.quantity,
+          'special_instructions': item.specialInstructions,
+          'selected_variant': item.selectedVariant?.toMap(),
+        }).toList());
+        await prefs.setString(_cartKey, encoded);
+      } catch (e) {
+        debugPrint('CartProvider: failed to save cart: $e');
+      }
+    });
   }
 
   /// Restores the cart from shared_preferences.

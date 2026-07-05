@@ -32,6 +32,7 @@ class OrderModel {
   String? deliveryPartnerId;
   final String? shopId;
   final String? address;
+
   /// Emoji + label string saved at checkout — e.g. "🏠 Home", "💼 Office".
   /// Null for legacy orders placed before this feature.
   final String? addressLabel;
@@ -42,11 +43,12 @@ class OrderModel {
   final String? paymentMethod;
 
   // Cancellation metadata
-  final String? cancelledReason;    // 'shop_rejected' | 'no_rider' | 'timeout' | 'customer'
-  final String? rejectionMessage;   // seller's freetext message to customer
-  final String? cartGroupId;        // groups orders from same checkout (up to 3 shops)
+  final String?
+      cancelledReason; // 'shop_rejected' | 'no_rider' | 'timeout' | 'customer'
+  final String? rejectionMessage; // seller's freetext message to customer
+  final String? cartGroupId; // groups orders from same checkout (up to 3 shops)
   final DateTime? acceptanceDeadline; // when the 2-min window expires
-  final DateTime? paymentDeadline;    // when the 10-min payment window expires
+  final DateTime? paymentDeadline; // when the 10-min payment window expires
 
   // Dual-acceptance flags (stored in DB columns)
   bool sellerAccepted;
@@ -223,7 +225,8 @@ class OrderModel {
       status: map['status'] ?? 'pending',
       totalAmount: (map['total_amount'] ?? 0.0).toDouble(),
       deliveryCharges: (map['delivery_charges'] ?? 0.0).toDouble(),
-      riderEarnings: (map['rider_earnings'] ?? (map['delivery_charges'] ?? 0.0)).toDouble(),
+      riderEarnings: (map['rider_earnings'] ?? (map['delivery_charges'] ?? 0.0))
+          .toDouble(),
       multiShopSurcharge: (map['multi_shop_surcharge'] ?? 0.0).toDouble(),
       platformFee: (map['platform_fee'] ?? 0.0).toDouble(),
       createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
@@ -279,9 +282,10 @@ class OrderModel {
       sellerPayout: (map['seller_payout'] ?? 0.0).toDouble(),
       gatewayDeduction: (map['gateway_deduction'] ?? 0.0).toDouble(),
       grandTotalCollected: (map['grand_total_collected'] ?? 0.0).toDouble(),
-      gstRateSnapshot: (map['gst_rate_snapshot'] as Map<String, dynamic>?) ?? {},
-      prescriptionUrls: map['prescription_urls'] != null 
-          ? List<String>.from(map['prescription_urls']) 
+      gstRateSnapshot:
+          (map['gst_rate_snapshot'] as Map<String, dynamic>?) ?? {},
+      prescriptionUrls: map['prescription_urls'] != null
+          ? List<String>.from(map['prescription_urls'])
           : [],
       estimatedDistanceKm: (map['estimated_distance_km'] ?? 0.0).toDouble(),
       shopPrepTimeSnapshot: map['shop_prep_time_snapshot'] ?? 30,
@@ -301,8 +305,14 @@ class OrderModel {
   /// (where grandTotalCollected == 0) display the correct amount.
   double get grandTotal => grandTotalCollected > 0
       ? grandTotalCollected
-      : totalAmount + gstItemTotal + deliveryCharges + multiShopSurcharge +
-            platformFee + smallCartFee + heavyOrderFee - deliveryDiscount;
+      : totalAmount +
+          gstItemTotal +
+          deliveryCharges +
+          multiShopSurcharge +
+          platformFee +
+          smallCartFee +
+          heavyOrderFee -
+          deliveryDiscount;
 
   /// Total GST across the entire order (items + delivery + platform).
   double get totalGstInOrder => gstItemTotal + gstDelivery + gstPlatform;
@@ -385,7 +395,8 @@ class OrderModel {
       deliveryLng: deliveryLng ?? this.deliveryLng,
       riderLat: riderLat ?? this.riderLat,
       riderLng: riderLng ?? this.riderLng,
-      riderLocationUpdatedAt: riderLocationUpdatedAt ?? this.riderLocationUpdatedAt,
+      riderLocationUpdatedAt:
+          riderLocationUpdatedAt ?? this.riderLocationUpdatedAt,
       shopLat: shopLat ?? this.shopLat,
       shopLng: shopLng ?? this.shopLng,
       // Preserve frozen financial fields unchanged
@@ -441,12 +452,18 @@ class OrderModel {
         return 'Delivered';
       case 'cancelled':
         switch (cancelledReason) {
-          case 'shop_rejected': return 'Shop Declined';
-          case 'no_rider':      return 'No Rider Available';
-          case 'timeout':       return 'Order Expired';
-          case 'customer':      return 'Cancelled by You';
-          case 'shop_dispute':  return 'Cancelled — Shop Issue';
-          default:              return 'Cancelled';
+          case 'shop_rejected':
+            return 'Shop Declined';
+          case 'no_rider':
+            return 'No Rider Available';
+          case 'timeout':
+            return 'Order Expired';
+          case 'customer':
+            return 'Cancelled by You';
+          case 'shop_dispute':
+            return 'Cancelled — Shop Issue';
+          default:
+            return 'Cancelled';
         }
       case 'seller_rejected':
         return 'Shop Declined';

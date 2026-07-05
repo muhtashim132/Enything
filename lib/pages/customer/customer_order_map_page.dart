@@ -40,7 +40,7 @@ class CustomerOrderMapPage extends StatefulWidget {
 }
 
 class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final MapController _mapCtrl = MapController();
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -61,6 +61,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Seed rider position from current order snapshot
     final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
@@ -89,14 +90,29 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulseCtrl.dispose();
     if (_channel != null) _supabase.removeChannel(_channel!);
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _subscribeToRider();
+      }
+    }
+  }
+
   // ── Supabase Realtime ────────────────────────────────────────────────────
 
   void _subscribeToRider() {
+    if (_channel != null) {
+      _supabase.removeChannel(_channel!);
+      _channel = null;
+    }
+
     final cartGroupId = widget.order.cartGroupId;
     final channelName = cartGroupId != null ? 'customer-map-group-$cartGroupId' : 'customer-map-${widget.order.id}';
 
@@ -134,37 +150,48 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   // ── ORS Route Fetching ───────────────────────────────────────────────────
 
   Future<List<LatLng>> _fetchORSRoute(LatLng from, LatLng to) async {
-    try {
-      final key = dotenv.maybeGet('ORS_API_KEY') ?? '';
-      if (key.isEmpty) throw Exception('ORS_API_KEY not set');
+    int maxRetries = 3;
+    int retryDelaySeconds = 2;
+    
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final key = dotenv.maybeGet('ORS_API_KEY') ?? '';
+        if (key.isEmpty) throw Exception('ORS_API_KEY not set');
 
-      final url = Uri.parse(
-        'https://api.openrouteservice.org/v2/directions/driving-car'
-        '?api_key=$key'
-        '&start=${from.longitude},${from.latitude}'
-        '&end=${to.longitude},${to.latitude}',
-      );
+        final url = Uri.parse(
+          'https://api.openrouteservice.org/v2/directions/driving-car'
+          '?api_key=$key'
+          '&start=${from.longitude},${from.latitude}'
+          '&end=${to.longitude},${to.latitude}',
+        );
 
-      final resp = await http.get(url).timeout(const Duration(seconds: 10));
-      if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');
+        final resp = await http.get(url).timeout(const Duration(seconds: 10));
+        if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');
 
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      final features = data['features'] as List?;
-      if (features == null || features.isEmpty) throw Exception('No features');
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final features = data['features'] as List?;
+        if (features == null || features.isEmpty) throw Exception('No features');
 
-      final geometry = features.first['geometry'] as Map<String, dynamic>;
-      final coords = geometry['coordinates'] as List;
+        final geometry = features.first['geometry'] as Map<String, dynamic>;
+        final coords = geometry['coordinates'] as List;
 
-      return coords
-          .map((c) => LatLng(
-                (c[1] as num).toDouble(),
-                (c[0] as num).toDouble(),
-              ))
-          .toList();
-    } catch (e) {
-      debugPrint('ORS route error: $e — falling back to straight line');
-      return [from, to];
+        return coords
+            .map((c) => LatLng(
+                  (c[1] as num).toDouble(),
+                  (c[0] as num).toDouble(),
+                ))
+            .toList();
+      } catch (e) {
+        debugPrint('ORS route error (attempt $attempt): $e');
+        if (attempt == maxRetries) {
+          debugPrint('Falling back to straight line after $maxRetries attempts');
+          return [from, to];
+        }
+        await Future.delayed(Duration(seconds: retryDelaySeconds));
+        retryDelaySeconds *= 2; // exponential backoff
+      }
     }
+    return [from, to];
   }
 
   Future<void> _fetchRoutes() async {

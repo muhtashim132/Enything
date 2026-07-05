@@ -69,7 +69,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       for (final p in productsData as List) {
         if (p['shops'] != null) {
           final shop = ShopModel.fromMap(p['shops']);
-          shopMap[shop.id] = shop;
+          if (shop.isActive) {
+            shopMap[shop.id] = shop;
+          }
         }
       }
 

@@ -81,6 +81,13 @@ class AuthProvider extends ChangeNotifier {
         _mockUserId = null;
         _pendingPhone = null;
         _isProfileFetched = false;
+        
+        // C1 FIX: Clear cart from shared preferences on logout to prevent dirty state
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.remove('enything_cart_v2');
+          prefs.remove('enything_cart_v1');
+        });
+
         notifyListeners();
 
         // If it wasn't a manual sign out, it means the session was revoked from another device

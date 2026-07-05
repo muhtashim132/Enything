@@ -136,30 +136,31 @@ class TaxConfig {
 
   static const Map<String, double> _categoryGstRate = {
     // ── Food: Enything is deemed supplier (Section 9(5)) ─────────────────────
-    'Restaurant':      0.05, // 5% — no ITC for seller
-    'Fast Food':       0.05,
-    'Bakery':          0.05,
+    'Restaurant': 0.05, // 5% — no ITC for seller
+    'Fast Food': 0.05,
+    'Bakery': 0.05,
     'Sweets & Mithai': 0.05,
-    'Tea & Coffee':    0.05,
-    'Ice Cream':       0.05,
-    'Paan Shop':       0.05, // blended avg (paan 5%; tobacco component excluded)
+    'Tea & Coffee': 0.05,
+    'Ice Cream': 0.05,
+    'Paan Shop': 0.05, // blended avg (paan 5%; tobacco component excluded)
 
     // ── Perishables / Raw ─────────────────────────────────────────────────────
-    'Fruits & Vegs':  0.00, // 0% — fresh produce
-    'Butcher':        0.00, // 0% — fresh meat
+    'Fruits & Vegs': 0.00, // 0% — fresh produce
+    'Butcher': 0.00, // 0% — fresh meat
     'Fish & Seafood': 0.00, // 0% — fresh fish
-    'Dairy & Eggs':   0.05, // blended: eggs 0%, loose milk 0%, butter/paneer 5%
+    'Dairy & Eggs': 0.05, // blended: eggs 0%, loose milk 0%, butter/paneer 5%
 
     // ── Grocery / Organic ─────────────────────────────────────────────────────
-    'Grocery':                    0.05, // 5% blended (staples 5%, loose items 0%)
-    'Organic':                    0.05,
-    'Supermarket / Hypermarket':  0.05, // 5% grocery blended [Sept 2025 — new category]
+    'Grocery': 0.05, // 5% blended (staples 5%, loose items 0%)
+    'Organic': 0.05,
+    'Supermarket / Hypermarket':
+        0.05, // 5% grocery blended [Sept 2025 — new category]
 
     // ── Beverages (Sept 2025: 12% slab removed → 18%) ────────────────────────
     'Beverages': 0.18, // 18% packaged drinks (was 12% — updated Sept 2025)
 
     // ── Pharmacy ──────────────────────────────────────────────────────────────
-    'Pharmacy':     0.05, // 5% — life-saving & OTC medicines
+    'Pharmacy': 0.05, // 5% — life-saving & OTC medicines
     'Medical Store': 0.05,
 
     // ── Clothing & Footwear (price-slab — Sept 2025) ──────────────────────────
@@ -171,25 +172,25 @@ class TaxConfig {
     'Footwear': 0.05,
 
     // ── Electronics ───────────────────────────────────────────────────────────
-    'Electronics':    0.18,
+    'Electronics': 0.18,
     'Mobile & Repair': 0.18,
 
     // ── Jewellery (unchanged — 3% on gold/gem value) ──────────────────────────
     'Jewellery': 0.03,
 
     // ── General Retail (Sept 2025: 12% slab removed → 18%) ───────────────────
-    'Stationery':        0.18, // was 12% — updated Sept 2025
-    'Toys & Games':      0.18, // was 12% — updated Sept 2025
-    'Sports':            0.18, // was 12% — updated Sept 2025
-    'Pet Supplies':      0.18,
-    'Salon & Beauty':    0.18,
+    'Stationery': 0.18, // was 12% — updated Sept 2025
+    'Toys & Games': 0.18, // was 12% — updated Sept 2025
+    'Sports': 0.18, // was 12% — updated Sept 2025
+    'Pet Supplies': 0.18,
+    'Salon & Beauty': 0.18,
     'Cosmetics & Beauty': 0.18, // [Sept 2025 — new category, same as Salon]
-    'Flowers':           0.05, // 5% cut flowers
-    'Home Decor':        0.18,
-    'Furniture':         0.18,
-    'Hardware Store':    0.18,
-    'Auto Parts':        0.18,
-    'Other':             0.18, // conservative default
+    'Flowers': 0.05, // 5% cut flowers
+    'Home Decor': 0.18,
+    'Furniture': 0.18,
+    'Hardware Store': 0.18,
+    'Auto Parts': 0.18,
+    'Other': 0.18, // conservative default
   };
 
   /// The default price-slab threshold for Clothing & Footwear (Sept 2025 reform).
@@ -210,13 +211,13 @@ class TaxConfig {
   static double gstRateForCategory(
     String category, {
     double? itemPrice,
-    double? slabThreshold,  // DB-driven override of defaultSlabThreshold
-    double? slabHighRate,   // DB-driven override of defaultSlabHighRate
+    double? slabThreshold, // DB-driven override of defaultSlabThreshold
+    double? slabHighRate, // DB-driven override of defaultSlabHighRate
   }) {
     if ((category == 'Clothing' || category == 'Footwear') &&
         itemPrice != null) {
       final threshold = slabThreshold ?? defaultSlabThreshold;
-      final highRate  = slabHighRate  ?? defaultSlabHighRate;
+      final highRate = slabHighRate ?? defaultSlabHighRate;
       // ≤ threshold → low slab (5%), > threshold → high slab (18%)
       return itemPrice > threshold ? highRate : 0.05;
     }
@@ -266,15 +267,18 @@ class TaxConfig {
 
   /// Returns a human-readable slab description for UI display.
   /// e.g. "5% for ≤₹2,500 | 18% for >₹2,500 per pair" for Footwear.
-  static String? slabDescription(String category, {double? slabThreshold, double? slabHighRate}) {
+  static String? slabDescription(String category,
+      {double? slabThreshold, double? slabHighRate}) {
     if (category == 'Footwear') {
       final t = (slabThreshold ?? defaultSlabThreshold).toStringAsFixed(0);
-      final h = ((slabHighRate ?? defaultSlabHighRate) * 100).toStringAsFixed(0);
+      final h =
+          ((slabHighRate ?? defaultSlabHighRate) * 100).toStringAsFixed(0);
       return '5% for ≤₹$t | $h% for >₹$t per pair';
     }
     if (category == 'Clothing') {
       final t = (slabThreshold ?? defaultSlabThreshold).toStringAsFixed(0);
-      final h = ((slabHighRate ?? defaultSlabHighRate) * 100).toStringAsFixed(0);
+      final h =
+          ((slabHighRate ?? defaultSlabHighRate) * 100).toStringAsFixed(0);
       return '5% for ≤₹$t | $h% for >₹$t per item';
     }
     return null;
@@ -335,9 +339,9 @@ class TaxConfig {
     'Ice Cream',
     'Paan Shop',
     // ── Genuinely exempt / zero-GST fresh produce ── NO TCS (non-taxable supply)
-    'Fruits & Vegs',   // 0% GST — fresh, unpackaged produce
-    'Butcher',         // 0% GST — fresh meat
-    'Fish & Seafood',  // 0% GST — fresh fish/seafood
+    'Fruits & Vegs', // 0% GST — fresh, unpackaged produce
+    'Butcher', // 0% GST — fresh meat
+    'Fish & Seafood', // 0% GST — fresh fish/seafood
   };
 
   /// Returns the GST TCS rate (§52 CGST) for a given [category].
@@ -539,8 +543,9 @@ class OrderTaxBreakdown {
           : null;
 
       final gstRate = productOverride ??
-          (PlatformConfigProvider.instance?.getGstRate(category, itemPrice: price)
-              ?? TaxConfig.gstRateForCategory(category, itemPrice: price));
+          (PlatformConfigProvider.instance
+                  ?.getGstRate(category, itemPrice: price) ??
+              TaxConfig.gstRateForCategory(category, itemPrice: price));
 
       final lineGst = lineBase * gstRate;
 
@@ -548,11 +553,14 @@ class OrderTaxBreakdown {
       itemGst += lineGst;
 
       // Category-specific commission
-      final commissionRate = PlatformConfigProvider.instance?.getCommissionRateForCategory(category) ?? 0.05;
+      final commissionRate = PlatformConfigProvider.instance
+              ?.getCommissionRateForCategory(category) ??
+          0.05;
       pureCommission += lineBase * commissionRate;
 
-      final isDeemed = PlatformConfigProvider.instance?.getIsDeemedSupplier(category) 
-          ?? TaxConfig.isEnythingDeemedSupplier(category);
+      final isDeemed =
+          PlatformConfigProvider.instance?.getIsDeemedSupplier(category) ??
+              TaxConfig.isEnythingDeemedSupplier(category);
 
       if (isDeemed) {
         s9_5Gst += lineGst;
@@ -584,11 +592,14 @@ class OrderTaxBreakdown {
     // ── 6. Gateway split (Seller pays their share, Enything pays remainder) ──
     //   Seller pays 2.36% on their payout portion.
     final sellerBasePayout = baseSubtotal - pureCommission;
-    final sellerGwShare = isOnline ? (sellerBasePayout + nonFoodGst) * TaxConfig.effectiveGatewayDeductionPercent : 0.0;
+    final sellerGwShare = isOnline
+        ? (sellerBasePayout + nonFoodGst) *
+            TaxConfig.effectiveGatewayDeductionPercent
+        : 0.0;
     final enythingGwShare = gwDeduct - sellerGwShare;
 
     // ── 7. Unified Commission ────────────────────────────────────────────────────
-    //   Combine pure commission and gateway fee into one 'Total Commission' 
+    //   Combine pure commission and gateway fee into one 'Total Commission'
     //   so the seller sees 7.36% everywhere instead of 5% + 2.36%.
     final enythingGross = pureCommission + sellerGwShare;
     final enythingNet = pureCommission;
@@ -627,7 +638,9 @@ class OrderTaxBreakdown {
   /// Note: deliverySubsidy is included — if you gave a discount, you see it here.
   double get enythingNetProfit =>
       enythingNetCommission +
-      (deliveryCharge - deliveryGst - riderEarnings) + // delivery net after GST remittance & rider payout
+      (deliveryCharge -
+          deliveryGst -
+          riderEarnings) + // delivery net after GST remittance & rider payout
       (platformFee - platformFeeGst) - // platform net after GST remittance
       enythingGatewayShare; // Enything's gateway share
 

@@ -60,6 +60,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   int _selectedTabIndex = -1; // -1 = no tab selected (show ALL)
   bool _isLoading = true;
   bool _isSearching = false;
+  bool _searchError = false;
   int _shopsDisplayLimit = 12;
   int _productsDisplayLimit = 10;
   List<ShopModel> _shops = [];
@@ -169,6 +170,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   int _bannerIndex = 0;
   Timer? _bannerTimer;
   Timer? _searchDebounce;
+  bool _pendingLocationUpdate = false;
 
   /// True when a food-type tab is currently selected.
   bool get _isFoodTab {
@@ -216,6 +218,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     // Load ALL shops/products on startup — no tab pre-selected
     _checkLocationAndLoad();
     _startNotifications();
+    _checkActiveOrders();
     // Subscribe to live GPS updates so distance filter stays accurate
     _startLiveLocationUpdates();
     // Auto-scroll banner every 4 seconds
@@ -239,23 +242,75 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     });
   }
 
+  Future<void> _checkActiveOrders() async {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = context.read<AuthProvider>();
+      if (auth.currentUserId == null) return;
+      try {
+        final activeOrder = await _supabase
+            .from('orders')
+            .select('id, status')
+            .eq('customer_id', auth.currentUserId!)
+            .inFilter('status', ['awaiting_payment', 'pending', 'preparing'])
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+            
+        if (activeOrder != null && mounted) {
+           if (activeOrder['status'] == 'awaiting_payment') {
+             Navigator.pushNamed(context, AppRoutes.trackOrder, arguments: {'orderId': activeOrder['id']});
+           } else {
+             ScaffoldMessenger.of(context).showSnackBar(
+               SnackBar(
+                 content: const Text('You have an active order in progress.'),
+                 action: SnackBarAction(
+                   label: 'Track',
+                   textColor: Colors.white,
+                   onPressed: () {
+                     Navigator.pushNamed(context, AppRoutes.trackOrder, arguments: {'orderId': activeOrder['id']});
+                   },
+                 ),
+                 backgroundColor: AppColors.primary,
+                 duration: const Duration(seconds: 10),
+               )
+             );
+           }
+        }
+      } catch (e) {
+        debugPrint('Failed to check active orders: $e');
+      }
+    });
+  }
+
+  LocationProvider? _locationProvider;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _locationProvider ??= context.read<LocationProvider>();
+  }
+
   void _startLiveLocationUpdates() {
     // Re-fetch data whenever GPS location changes significantly
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LocationProvider>().addListener(_onLocationChanged);
+      _locationProvider?.addListener(_onLocationChanged);
     });
   }
 
   void _onLocationChanged() {
-    // When location provider updates (new GPS fix), refresh the shop list.
-    // IMPORTANT: Debounce to prevent race conditions where:
-    //   1) User taps a category → _loadData() starts
-    //   2) GPS fires → _onLocationChanged triggers another _loadData()
-    //   3) Second load sets _isLoading=true, wiping the first load's results
-    if (!mounted || _isLoading || _searchQuery.isNotEmpty) return;
+    if (!mounted || _searchQuery.isNotEmpty) return;
+    
+    if (_isLoading) {
+      _pendingLocationUpdate = true;
+      return;
+    }
+    
     _locationDebounceTimer?.cancel();
     _locationDebounceTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted || _isLoading) return;
+      if (!mounted || _isLoading) {
+        if (_isLoading) _pendingLocationUpdate = true;
+        return;
+      }
       if (_selectedTabIndex < 0) {
         _loadAllData();
       } else {
@@ -282,9 +337,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _locationDebounceTimer?.cancel();
     _searchDebounce?.cancel();
     // Remove live location listener to avoid memory leaks
-    context.read<LocationProvider>().removeListener(_onLocationChanged);
+    _locationProvider?.removeListener(_onLocationChanged);
     _searchController.dispose();
     _bannerController.dispose();
+    globalIsFiltering.value = false; // Reset state leakage
     super.dispose();
   }
 
@@ -297,6 +353,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _searchProductResults = [];
         _searchProductShops = {};
         _isSearching = false;
+        _searchError = false;
         _sortMode = _SortMode.relevant; // reset sort on clear
       });
       return;
@@ -304,6 +361,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     setState(() {
       _searchQuery = query;
       _isSearching = true;
+      _searchError = false;
     });
     try {
       final locationProvider = context.read<LocationProvider>();
@@ -328,8 +386,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         }
       }
 
-      final shopsByName = await _supabase.from('shops').select().ilike('name', '%$query%');
-      final productsByName = await _supabase.from('products').select('*, shops(*)').ilike('name', '%$query%');
+      final shopsByName = await _supabase.from('shops').select().ilike('name', '%$query%').limit(50);
+      final productsByName = await _supabase.from('products').select('*, shops(*)').ilike('name', '%$query%').limit(50);
       
       List<dynamic> shopsByCat = [];
       List<dynamic> productsByCat = [];
@@ -417,7 +475,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }
     } catch (e, st) {
       debugPrint('_searchShops ERROR: $e\n$st');
-      if (mounted) setState(() => _isSearching = false);
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+          _searchError = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Search failed. Please check your connection.'),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -586,6 +656,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           _isLoading = false;
           _hasLoadedOnce = true;
         });
+        
+        if (_pendingLocationUpdate) {
+          _pendingLocationUpdate = false;
+          _onLocationChanged();
+        }
       }
     } catch (e, st) {
       // Log full error so we can debug exactly what Supabase query failed
@@ -616,14 +691,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       final subcategories = _tabCategories[tabName] ?? [tabName];
 
       // Fetch all, filter locally
-      final shopsResponse =
-          await _supabase.from('shops').select().inFilter('category', subcategories).limit(100);
+      final shopsResponse = await _supabase
+          .from('shops')
+          .select()
+          .inFilter('category', subcategories)
+          .limit(1000); 
 
       final productsResponse = await _supabase
           .from('products')
           .select('*, shops(*)')
           .inFilter('category', subcategories)
-          .limit(100);
+          .limit(1000);
 
       if (mounted) {
         List<String>? effectiveCategories;
@@ -693,6 +771,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           _isLoading = false;
           _hasLoadedOnce = true;
         });
+        
+        if (_pendingLocationUpdate) {
+          _pendingLocationUpdate = false;
+          _onLocationChanged();
+        }
       }
     } catch (e, st) {
       debugPrint('_loadData ERROR: $e\n$st');
@@ -1120,6 +1203,43 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         // Skeleton while loading
                         if (_isSearching)
                           Column(children: List.generate(3, (_) => _buildSearchSkeleton(isDark)))
+
+                        // Error state
+                        else if (_searchError)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 60),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Container(
+                                    width: 80, height: 80,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.danger.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    child: const Center(
+                                      child: Icon(Icons.wifi_off_rounded, size: 36, color: AppColors.danger),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text('Search Failed', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                  const SizedBox(height: 8),
+                                  Text('Please check your internet connection', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary)),
+                                  const SizedBox(height: 24),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _searchShops(_searchQuery),
+                                    icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+                                    label: Text('Retry Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
 
                         // Empty state
                         else if (_searchResults.isEmpty && _searchProductResults.isEmpty)

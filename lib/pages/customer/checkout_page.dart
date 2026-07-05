@@ -12,6 +12,7 @@ import '../../widgets/common/enything_map.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../config/payment_config.dart';
 import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
@@ -32,13 +33,78 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage> {
   bool _isProcessing = false;
-  bool _isCreatingOrder = false; // O1 FIX: Idempotency lock — prevents duplicate order creation
+  bool _isCreatingOrder =
+      false; // O1 FIX: Idempotency lock — prevents duplicate order creation
   final _notesController = TextEditingController();
   final List<XFile> _prescriptions = [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _validateStockPreCheckout();
+    });
+  }
+
+  Future<void> _validateStockPreCheckout() async {
+    final cart = context.read<CartProvider>();
+    if (cart.items.isEmpty) return;
+
+    try {
+      final productIds = cart.items.map((i) => i.product.id).toList();
+      final latestProducts = await Supabase.instance.client
+          .from('products')
+          .select('id, name, is_available, total_quantity')
+          .inFilter('id', productIds);
+
+      final outOfStockItems = <String>[];
+
+      for (var cartItem in cart.items) {
+        final dbProduct = latestProducts
+            .where((p) => p['id'] == cartItem.product.id)
+            .firstOrNull;
+        if (dbProduct == null || dbProduct['is_available'] == false) {
+          outOfStockItems.add(cartItem.product.name);
+        } else if (dbProduct['total_quantity'] != null &&
+            dbProduct['total_quantity'] < cartItem.quantity) {
+          outOfStockItems.add(cartItem.product.name);
+        }
+      }
+
+      if (outOfStockItems.isNotEmpty && mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text('Items Unavailable',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            content: Text(
+                'Some items in your cart are no longer available in the requested quantity:\n\n${outOfStockItems.join('\n')}\n\nPlease update your cart before checking out.',
+                style: GoogleFonts.outfit()),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text('Back to Cart',
+                    style: GoogleFonts.outfit(
+                        color: Colors.white, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Pre-checkout stock validation error: $e');
+    }
   }
 
   @override
@@ -52,7 +118,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   Future<void> _pickPrescription() async {
     final picker = ImagePicker();
-    
+
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -73,12 +139,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+              leading: const Icon(Icons.camera_alt_outlined,
+                  color: AppColors.primary),
               title: Text('Take a Photo', style: GoogleFonts.outfit()),
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: AppColors.primary),
               title: Text('Choose from Gallery', style: GoogleFonts.outfit()),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
@@ -129,7 +197,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               Expanded(
                 child: Text(
                   'Please upload a prescription to order these medicines.',
-                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.outfit(
+                      color: Colors.white, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -137,7 +206,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 4),
         ),
       );
@@ -145,14 +215,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    if (!location.hasLocation) {
+    if (!location.hasLocation ||
+        location.currentLocation?.latitude == null ||
+        location.currentLocation?.longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please set your delivery location first.'),
+          content: const Text('Please set a valid delivery location first.'),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       setState(() => _isProcessing = false);
@@ -197,21 +270,32 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final appliedCouponDiscount = context.read<CouponProvider>().discountAmount;
     final supabase = Supabase.instance.client;
 
+    List<String> uploadedPaths = [];
+
     try {
       // Stock Validation
       final productIds = cart.items.map((i) => i.product.id).toList();
-      final latestProducts = await supabase.from('products').select('id, name, is_available, total_quantity').inFilter('id', productIds);
-      
+      final latestProducts = await supabase
+          .from('products')
+          .select('id, name, is_available, total_quantity')
+          .inFilter('id', productIds);
+
       for (var cartItem in cart.items) {
-        final dbProduct = latestProducts.where((p) => p['id'] == cartItem.product.id).firstOrNull;
+        final dbProduct = latestProducts
+            .where((p) => p['id'] == cartItem.product.id)
+            .firstOrNull;
         if (dbProduct == null) {
-          throw Exception("${cartItem.product.name} is no longer available."); // C3 FIX: was \${...}
+          throw Exception(
+              "${cartItem.product.name} is no longer available."); // C3 FIX: was \${...}
         }
         if (dbProduct['is_available'] == false) {
-          throw Exception("${cartItem.product.name} is currently out of stock."); // C3 FIX: was \${...}
+          throw Exception(
+              "${cartItem.product.name} is currently out of stock."); // C3 FIX: was \${...}
         }
-        if (dbProduct['total_quantity'] != null && dbProduct['total_quantity'] < cartItem.quantity) {
-          throw Exception("Only ${dbProduct['total_quantity']} units of ${cartItem.product.name} are available."); // C3 FIX: was \${...}
+        if (dbProduct['total_quantity'] != null &&
+            dbProduct['total_quantity'] < cartItem.quantity) {
+          throw Exception(
+              "Only ${dbProduct['total_quantity']} units of ${cartItem.product.name} are available."); // C3 FIX: was \${...}
         }
       }
 
@@ -274,29 +358,63 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (cart.requiresPrescription && _prescriptions.isNotEmpty) {
         for (int i = 0; i < _prescriptions.length; i++) {
           final file = _prescriptions[i];
-          final bytes = await ImageCompressionService.compressFile(File(file.path)) ?? await file.readAsBytes();
+          final bytes =
+              await ImageCompressionService.compressFile(File(file.path)) ??
+                  await file.readAsBytes();
           const ext = 'jpg'; // Compressformat is jpeg
           final path = '${auth.currentUserId}/${cartGroupId}_$i.$ext';
-          await supabase.storage
-              .from('prescription_docs')
-              .uploadBinary(path, bytes);
+
+          bool uploadSuccess = false;
+          int retries = 0;
+          while (!uploadSuccess && retries < 3) {
+            try {
+              await supabase.storage
+                  .from('prescription_docs')
+                  .uploadBinary(path, bytes);
+              uploadSuccess = true;
+            } catch (e) {
+              retries++;
+              if (retries >= 3) {
+                throw Exception(
+                    'Failed to upload prescription image after 3 attempts. Please check your connection and try again.');
+              }
+              await Future.delayed(Duration(seconds: retries * 2));
+            }
+          }
+          uploadedPaths.add(path);
           uploadedPrescriptionUrls.add(
               supabase.storage.from('prescription_docs').getPublicUrl(path));
         }
       }
 
+      final List<Map<String, dynamic>> allOrders = [];
+      final List<Map<String, dynamic>> allItems = [];
       final List<String> orderIds = [];
+      final List<Map<String, dynamic>> notificationData = [];
+
+      final nowUtc = DateTime.now().toUtc().toIso8601String();
+
+      bool isTestPhone(String? phone) {
+        if (phone == null) return false;
+        final envPhones = dotenv.env['TEST_PHONES']?.split(',') ??
+            ['9999999996', '9999999997', '9999999998'];
+        return envPhones.any((p) => phone.endsWith(p.trim()));
+      }
 
       for (final shop in cart.shops) {
-        final shopItems = cart.items.where((i) => i.shop.id == shop.id).toList();
-        final shopBaseSubtotal = shopItems.fold(0.0, (sum, i) => sum + i.totalPrice);
+        final shopItems =
+            cart.items.where((i) => i.shop.id == shop.id).toList();
+        final shopBaseSubtotal =
+            shopItems.fold(0.0, (sum, i) => sum + i.totalPrice);
 
         double shopDistanceKm = 3.0;
         if (location.currentLocation != null) {
           shopDistanceKm = location.distanceTo(shop.location);
         }
 
-        final proportion = cart.subtotal > 0 ? (shopBaseSubtotal / cart.subtotal) : (1.0 / numShops);
+        final proportion = cart.subtotal > 0
+            ? (shopBaseSubtotal / cart.subtotal)
+            : (1.0 / numShops);
 
         final shopDelivery = totalDelivery * proportion;
         final shopRiderEarnings = riderEarnings * proportion;
@@ -324,7 +442,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           final itemPrice = item.selectedVariant?.price ?? item.product.price;
           // Use product-level override if set; otherwise use category rate
           final effectiveRate = item.product.gstRateOverride ??
-              (PlatformConfigProvider.instance?.getGstRate(cat, itemPrice: itemPrice) ??
+              (PlatformConfigProvider.instance
+                      ?.getGstRate(cat, itemPrice: itemPrice) ??
                   TaxConfig.gstRateForCategory(cat, itemPrice: itemPrice));
           if (!rateSnapshot.containsKey(cat)) {
             rateSnapshot[cat] = effectiveRate;
@@ -335,144 +454,120 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopNonFoodGst = shopBreakdown.nonFoodGstPassThrough;
 
         // ── GST TCS (CGST §52) — Category-Precise ───────────────────────────
-        // TCS applies ONLY to taxable supplies where seller is the supplier.
-        // §9(5) food and 0% GST categories (Fruits/Vegs, Butcher, Fish) → TCS = ₹0.
-        // All other taxable non-food categories → TCS = 1% of their base subtotal.
-        // Computed per-item using TaxConfig.tcsRateForCategory().
         double shopTcs = 0.0;
         for (final item in shopItems) {
           final cat = item.product.category;
-          final itemBase = (item.selectedVariant?.price ?? item.product.price) * item.quantity;
+          final itemBase = (item.selectedVariant?.price ?? item.product.price) *
+              item.quantity;
           shopTcs += itemBase * TaxConfig.tcsRateForCategory(cat);
         }
 
         // ── Income Tax TDS (§194-O, Finance Act 2024) — Universal 0.1% ─────
-        // Applies to ALL categories — goods and services, no categorical exemption.
-        // Rate reduced from 1% to 0.1% (Finance Act 2024, effective Oct 1 2024).
-        // Basis: gross base consideration = shopBaseSubtotal.
         final shopTds = shopBaseSubtotal * TaxConfig.itTdsRate;
-
         final shopGrandTotal = shopBreakdown.grandTotal;
 
-        final orderResponse = await supabase
-            .from('orders')
-            .insert({
-              'cart_group_id': cartGroupId,
-              'shop_id': shop.id,
-              'customer_id': auth.currentUserId,
-              // NEW STATUS — no money charged yet
-              'status': (auth.user?.phone.contains('9999999996') == true) ? 'awaiting_payment' : 'awaiting_acceptance',
-              'seller_accepted': (auth.user?.phone.contains('9999999996') == true) ? true : false,
-              'partner_accepted': (auth.user?.phone.contains('9999999996') == true) ? true : false,
-              'acceptance_deadline': acceptanceDeadline.toIso8601String(),
-              'total_amount': shopBaseSubtotal,
-              'delivery_charges': shopDelivery,
-              'rider_earnings': shopRiderEarnings,
-              'multi_shop_surcharge': surcharge * proportion,
-              'small_cart_fee': smallCartFee * proportion,
-              'heavy_order_fee': heavyFee * proportion,
-              'delivery_discount': deliveryDiscount * proportion,
-              'platform_fee': shopPlatformFee,
-              'address': location.currentAddress,
-              'address_label': location.activeLabel.isNotEmpty
-                  ? '${location.activeLabelIcon} ${location.activeLabel}'
-                  : null,
-              'delivery_lat': location.currentLocation?.latitude,
-              'delivery_lng': location.currentLocation?.longitude,
-              'delivery_notes':
-                  _notesController.text.isEmpty ? null : _notesController.text,
-              'payment_method': paymentMethod,
-              'payment_status': 'pending',    // not captured yet
-              'razorpay_payment_id': null,
-              'razorpay_order_id': null,
-              'customer_phone': customerPhone,
-              'shop_phone': shopPhones[shop.id],
-              'gst_item_total': shopBreakdown.itemGstTotal,
-              'gst_delivery': shopBreakdown.deliveryGst,
-              'gst_platform': shopBreakdown.platformFeeGst,
-              'enything_commission': shopBreakdown.enythingGrossCommission,
-              // seller_payout reduced by both GST TCS (§52) and IT TDS (§194-O)
-              'seller_payout': shopBreakdown.sellerPayout - shopTcs - shopTds,
-              'gateway_deduction': shopBreakdown.gatewayDeduction,
-              's9_5_gst_amount': shopS9_5Gst,
-              'non_food_gst_amount': shopNonFoodGst,
-              'tcs_amount': shopTcs,     // GST TCS §52 — 0 for food/exempt categories
-              'tds_amount': shopTds,     // IT TDS §194-O — 0.1% on all categories
-              'grand_total_collected': shopGrandTotal,
-              'gst_rate_snapshot': rateSnapshot,
-              'prescription_urls': uploadedPrescriptionUrls,
-              'estimated_distance_km': shopDistanceKm,
-              'shop_prep_time_snapshot': shop.prepTimeMinutes,
-              'coupon_id': appliedCouponId,
-              'coupon_discount': appliedCouponDiscount,
-            })
-            .select()
-            .single();
-
-
-        final orderId = orderResponse['id'];
+        final orderId = const Uuid().v4();
         orderIds.add(orderId);
 
-        final itemsToInsert = shopItems
-            .map((item) {
-              return {
-                'order_id': orderId,
-                'product_id': item.product.id,
-                'product_name': item.product.name,
-                'variant_name': item.selectedVariant?.name,
-                'quantity': item.quantity,
-                'price': item.selectedVariant?.price ?? item.product.price,
-                'weight_kg': item.weightKg,
-                // BUG-23 FIX: Persist prescription flag so seller knows
-                // which item requires a valid prescription.
-                'requires_prescription': item.product.requiresPrescription,
-                'special_instructions': item.specialInstructions,
-              };
-            })
-            .toList();
-        await supabase.from('order_items').insert(itemsToInsert);
+        final isMagic = isTestPhone(auth.user?.phone);
 
-        // O2 FIX: Atomically decrement inventory for each product after
-        // successful order placement. Uses coalesce to only decrement when
-        // total_quantity is tracked (non-null); unlimited items are unaffected.
-        for (final item in shopItems) {
-          try {
-            await supabase.rpc('decrement_product_stock', params: {
-              'p_product_id': item.product.id,
-              'p_quantity': item.quantity,
-            });
-          } catch (e) {
-            // Non-fatal: log and continue. Stock count may be slightly off
-            // but order is already placed — don't block the user.
-            debugPrint('Stock decrement error for ${item.product.id}: $e');
-          }
-        }
+        allOrders.add({
+          'id': orderId,
+          'created_at': nowUtc,
+          'updated_at': nowUtc,
+          'cart_group_id': cartGroupId,
+          'shop_id': shop.id,
+          'customer_id': auth.currentUserId,
+          'status': isMagic ? 'awaiting_payment' : 'awaiting_acceptance',
+          'seller_accepted': isMagic ? true : false,
+          'partner_accepted': isMagic ? true : false,
+          'acceptance_deadline': acceptanceDeadline.toIso8601String(),
+          'total_amount': shopBaseSubtotal,
+          'delivery_charges': shopDelivery,
+          'rider_earnings': shopRiderEarnings,
+          'multi_shop_surcharge': surcharge * proportion,
+          'small_cart_fee': smallCartFee * proportion,
+          'heavy_order_fee': heavyFee * proportion,
+          'delivery_discount': deliveryDiscount * proportion,
+          'platform_fee': shopPlatformFee,
+          'address': location.currentAddress,
+          'address_label': location.activeLabel.isNotEmpty
+              ? '${location.activeLabelIcon} ${location.activeLabel}'
+              : null,
+          'delivery_lat': location.currentLocation?.latitude,
+          'delivery_lng': location.currentLocation?.longitude,
+          'delivery_notes':
+              _notesController.text.isEmpty ? null : _notesController.text,
+          'payment_method': paymentMethod,
+          'payment_status': 'pending',
+          'razorpay_payment_id': null,
+          'razorpay_order_id': null,
+          'customer_phone': customerPhone,
+          'shop_phone': shopPhones[shop.id],
+          'gst_item_total': shopBreakdown.itemGstTotal,
+          'gst_delivery': shopBreakdown.deliveryGst,
+          'gst_platform': shopBreakdown.platformFeeGst,
+          'enything_commission': shopBreakdown.enythingGrossCommission,
+          'seller_payout': shopBreakdown.sellerPayout - shopTcs - shopTds,
+          'gateway_deduction': shopBreakdown.gatewayDeduction,
+          's9_5_gst_amount': shopS9_5Gst,
+          'non_food_gst_amount': shopNonFoodGst,
+          'tcs_amount': shopTcs,
+          'tds_amount': shopTds,
+          'grand_total_collected':
+              shopGrandTotal - (appliedCouponDiscount * proportion),
+          'gst_rate_snapshot': rateSnapshot,
+          'prescription_urls': uploadedPrescriptionUrls,
+          'estimated_distance_km': shopDistanceKm,
+          'shop_prep_time_snapshot': shop.prepTimeMinutes,
+          'coupon_id': appliedCouponId,
+          'coupon_discount': appliedCouponDiscount * proportion,
+        });
 
-        // Notify seller: payment NOT charged yet — safe to accept or decline
-        final isMagic = auth.user?.phone.contains('9999999996') == true;
-        if (mounted && !isMagic) {
-          context.read<NotificationProvider>().sendBackgroundPush(
-                targetUserId: shop.sellerId,
-                title: '🔔 New Order! Accept now',
-                body:
-                    'Order ₹${shopGrandTotal.toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
-                data: {'order_id': orderId, 'role': 'seller'},
-              );
-        }
+        final itemsToInsert = shopItems.map((item) {
+          return {
+            'id': const Uuid().v4(),
+            'created_at': nowUtc,
+            'order_id': orderId,
+            'product_id': item.product.id,
+            'product_name': item.product.name,
+            'variant_name': item.selectedVariant?.name,
+            'quantity': item.quantity,
+            'price': item.selectedVariant?.price ?? item.product.price,
+            'weight_kg': item.weightKg,
+            'requires_prescription': item.product.requiresPrescription,
+            'special_instructions': item.specialInstructions,
+          };
+        }).toList();
+        allItems.addAll(itemsToInsert);
+
+        notificationData.add({
+          'shop': shop,
+          'grandTotal': shopGrandTotal,
+          'orderId': orderId,
+          'isMagic': isMagic,
+        });
       }
 
+      // Execute atomic transaction RPC
+      await supabase.rpc('place_orders_transaction', params: {
+        'p_orders': allOrders,
+        'p_items': allItems,
+        if (appliedCouponId != null) 'p_coupon_id': appliedCouponId,
+      });
 
-
-
-
-      // FIX BUG-6: Increment coupon used_count after all orders placed successfully
-      // Note: appliedCouponId is captured before the loop (pre-async) to avoid BuildContext warning.
-      // The increment call is non-fatal — order is already safely placed.
-      if (appliedCouponId != null) {
-        try {
-          await supabase.rpc('increment_coupon_used_count', params: {'p_coupon_id': appliedCouponId});
-        } catch (e) {
-          debugPrint('Coupon increment error: $e');
+      // Notify sellers AFTER successful atomic insertion
+      if (mounted) {
+        for (final data in notificationData) {
+          if (!data['isMagic']) {
+            context.read<NotificationProvider>().sendBackgroundPush(
+              targetUserId: data['shop'].sellerId,
+              title: '🔔 New Order! Accept now',
+              body:
+                  'Order ₹${(data['grandTotal'] as double).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
+              data: {'order_id': data['orderId'], 'role': 'seller'},
+            );
+          }
         }
       }
 
@@ -489,6 +584,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
     } catch (e) {
       debugPrint('Order placement error: $e');
+      if (uploadedPaths.isNotEmpty) {
+        try {
+          await supabase.storage
+              .from('prescription_docs')
+              .remove(uploadedPaths);
+        } catch (cleanupError) {
+          debugPrint(
+              'Failed to clean up uploaded prescriptions: $cleanupError');
+        }
+      }
       rethrow;
     } finally {
       _isCreatingOrder = false; // O1 FIX: always release lock
@@ -533,587 +638,599 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
     // Grand total = base items + item GST + delivery + platform - coupon discount
     final couponDiscount = couponProv.discountAmount;
-    final total = (gstBreakdown.grandTotal - couponDiscount).clamp(0.0, double.infinity);
+    final total =
+        (gstBreakdown.grandTotal - couponDiscount).clamp(0.0, double.infinity);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: Text('Checkout', style: GoogleFonts.outfit(fontWeight: FontWeight.w700))),
+      appBar: AppBar(
+          title: Text('Checkout',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w700))),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: MaxWidthContainer(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Delivery Address
-            _sectionCard(
-              title: 'Delivery Address',
-              icon: Icons.location_on_outlined,
-              iconColor: AppColors.danger,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Delivery Address
+                _sectionCard(
+                  title: 'Delivery Address',
+                  icon: Icons.location_on_outlined,
+                  iconColor: AppColors.danger,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (location.activeLabel.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
+                      Row(
+                        children: [
+                          if (location.activeLabel.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(location.activeLabelIcon,
+                                      style: GoogleFonts.outfit(fontSize: 12)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    location.activeLabel,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(
+                            child: Text(
+                              location.currentAddress.isEmpty
+                                  ? 'Location not set'
+                                  : location.currentAddress,
+                              style: GoogleFonts.outfit(fontSize: 14),
+                            ),
                           ),
-                          child: Row(
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (location.hasLocation)
+                        Container(
+                          height: 120,
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: EnythingMap(
+                              center: location.currentLocation!,
+                              zoom: 15,
+                              interactive: false,
+                            ),
+                          ),
+                        ),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => showAddressPickerSheet(context),
+                            icon: const Icon(Icons.edit_location_alt_outlined,
+                                size: 16),
+                            label: const Text('Change Address'),
+                            style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                textStyle: GoogleFonts.outfit(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── ETA Banner ────────────────────────────────────────────────
+                Builder(builder: (context) {
+                  // Compute max distance and max prep time across all shops
+                  double maxDist = 3.0;
+                  int maxPrep = 30;
+                  if (location.currentLocation != null &&
+                      cart.shops.isNotEmpty) {
+                    for (final s in cart.shops) {
+                      final d = location.distanceTo(s.location);
+                      if (d > maxDist) maxDist = d;
+                      if (s.prepTimeMinutes > maxPrep) {
+                        maxPrep = s.prepTimeMinutes;
+                      }
+                    }
+                  }
+                  final etaStr = DeliveryCalculator.etaLabel(maxDist, maxPrep);
+                  final arrivalStr =
+                      DeliveryCalculator.etaArrivalTime(maxDist, maxPrep);
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.08),
+                          AppColors.primary.withValues(alpha: 0.04),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.20),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.access_time_rounded,
+                              color: AppColors.primary, size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(location.activeLabelIcon, style: GoogleFonts.outfit(fontSize: 12)),
-                              const SizedBox(width: 4),
                               Text(
-                                location.activeLabel,
+                                'Estimated Delivery',
                                 style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.7),
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                etaStr,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
                                   color: AppColors.primary,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          location.currentAddress.isEmpty
-                              ? 'Location not set'
-                              : location.currentAddress,
-                          style: GoogleFonts.outfit(fontSize: 14),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (location.hasLocation)
-                    Container(
-                      height: 120,
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: EnythingMap(
-                          center: location.currentLocation!,
-                          zoom: 15,
-                          interactive: false,
-                        ),
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => showAddressPickerSheet(context),
-                        icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
-                        label: const Text('Change Address'),
-                        style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            textStyle: GoogleFonts.outfit(fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ── ETA Banner ────────────────────────────────────────────────
-            Builder(builder: (context) {
-              // Compute max distance and max prep time across all shops
-              double maxDist = 3.0;
-              int maxPrep = 30;
-              if (location.currentLocation != null && cart.shops.isNotEmpty) {
-                for (final s in cart.shops) {
-                  final d = location.distanceTo(s.location);
-                  if (d > maxDist) maxDist = d;
-                  if (s.prepTimeMinutes > maxPrep) maxPrep = s.prepTimeMinutes;
-                }
-              }
-              final etaStr = DeliveryCalculator.etaLabel(maxDist, maxPrep);
-              final arrivalStr = DeliveryCalculator.etaArrivalTime(maxDist, maxPrep);
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary.withValues(alpha: 0.08),
-                      AppColors.primary.withValues(alpha: 0.04),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.20),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.access_time_rounded,
-                          color: AppColors.primary, size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Estimated Delivery',
-                            style: GoogleFonts.outfit(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary.withValues(alpha: 0.7),
-                              letterSpacing: 0.4,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            etaStr,
-                            style: GoogleFonts.outfit(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Arrives by',
-                          style: GoogleFonts.outfit(
-                            fontSize: 10,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          arrivalStr,
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }),
-            const SizedBox(height: 16),
-
-            // Order Items
-            _sectionCard(
-              title: 'Order Summary',
-              icon: Icons.receipt_long_outlined,
-              iconColor: AppColors.primary,
-              child: Column(
-                children: [
-                  ...cart.items.map((item) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: item.product.isVeg == true
-                                    ? AppColors.vegGreen
-                                    : AppColors.nonVegRed,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '${item.quantity}x ${item.product.name}',
-                                style: GoogleFonts.outfit(fontSize: 13),
-                              ),
-                            ),
                             Text(
-                              '₹${item.totalPrice.toStringAsFixed(0)}',
+                              'Arrives by',
                               style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                                fontSize: 10,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              arrivalStr,
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ],
                         ),
-                      )),
-                ],
-              ),
-            ),
-            if (cart.requiresPrescription) ...[
-              const SizedBox(height: 16),
-              _sectionCard(
-                title: 'Upload Prescription',
-                icon: Icons.medical_information_outlined,
-                iconColor: AppColors.danger,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Your order contains medicines that require a valid doctor\'s prescription under Govt of India norms. Please upload it here.',
-                      style: GoogleFonts.outfit(
-                          fontSize: 13, color: AppColors.textSecondary),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    if (_prescriptions.isEmpty)
-                      GestureDetector(
-                        onTap: _pickPrescription,
-                        child: Container(
-                          width: double.infinity,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: AppColors.primary.withValues(alpha: 0.3),
-                                style: BorderStyle.solid),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.add_photo_alternate_outlined,
-                                  color: AppColors.primary, size: 32),
-                              const SizedBox(height: 8),
-                              Text(
-                                  'Tap to upload prescription\n(Clear & readable image)',
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.outfit(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        height: 100,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _prescriptions.length + 1,
-                          itemBuilder: (context, index) {
-                            if (index == _prescriptions.length) {
-                              return GestureDetector(
-                                onTap: _pickPrescription,
-                                child: Container(
-                                  width: 100,
-                                  margin: const EdgeInsets.only(right: 8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                        color: AppColors.primary
-                                            .withValues(alpha: 0.3)),
-                                  ),
-                                  child: const Center(
-                                      child: Icon(Icons.add,
-                                          color: AppColors.primary)),
-                                ),
-                              );
-                            }
-                            return Stack(
+                  );
+                }),
+                const SizedBox(height: 16),
+
+                // Order Items
+                _sectionCard(
+                  title: 'Order Summary',
+                  icon: Icons.receipt_long_outlined,
+                  iconColor: AppColors.primary,
+                  child: Column(
+                    children: [
+                      ...cart.items.map((item) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
                               children: [
                                 Container(
-                                  width: 100,
-                                  margin: const EdgeInsets.only(right: 8),
+                                  width: 6,
+                                  height: 6,
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    image: DecorationImage(
-                                        image: FileImage(
-                                            File(_prescriptions[index].path)),
-                                        fit: BoxFit.cover),
+                                    color: item.product.isVeg == true
+                                        ? AppColors.vegGreen
+                                        : AppColors.nonVegRed,
+                                    shape: BoxShape.circle,
                                   ),
                                 ),
-                                Positioned(
-                                  top: 4,
-                                  right: 12,
-                                  child: GestureDetector(
-                                    onTap: () => _removePrescription(index),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                          color: Colors.black54,
-                                          shape: BoxShape.circle),
-                                      child: const Icon(Icons.close,
-                                          color: Colors.white, size: 14),
-                                    ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${item.quantity}x ${item.product.name}',
+                                    style: GoogleFonts.outfit(fontSize: 13),
+                                  ),
+                                ),
+                                Text(
+                                  '₹${item.totalPrice.toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ],
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-
-            // ── Coupon / Promo Code ──────────────────────────────────────────
-            CouponInputWidget(cartTotal: cart.subtotal),
-            const SizedBox(height: 16),
-
-            // Delivery Notes
-            _sectionCard(
-              title: 'Delivery Notes',
-              icon: Icons.note_alt_outlined,
-              iconColor: AppColors.info,
-              child: TextField(
-                controller: _notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  hintText: 'Add any special instructions...',
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Payment Info (no selector — always online, charged after acceptance)
-            _sectionCard(
-              title: 'Payment',
-              icon: Icons.lock_outline_rounded,
-              iconColor: AppColors.success,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.verified_user_outlined,
-                        color: AppColors.success, size: 22),
+                            ),
+                          )),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                ),
+                if (cart.requiresPrescription) ...[
+                  const SizedBox(height: 16),
+                  _sectionCard(
+                    title: 'Upload Prescription',
+                    icon: Icons.medical_information_outlined,
+                    iconColor: AppColors.danger,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Pay after confirmation',
-                            style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                color: AppColors.textPrimary)),
-                        const SizedBox(height: 2),
                         Text(
-                          'No money is charged now. Payment via UPI/Card is only requested after the shop & rider both accept your order.',
+                          'Your order contains medicines that require a valid doctor\'s prescription under Govt of India norms. Please upload it here.',
                           style: GoogleFonts.outfit(
-                              fontSize: 11,
-                              color: AppColors.textSecondary),
+                              fontSize: 13, color: AppColors.textSecondary),
                         ),
+                        const SizedBox(height: 12),
+                        if (_prescriptions.isEmpty)
+                          GestureDetector(
+                            onTap: _pickPrescription,
+                            child: Container(
+                              width: double.infinity,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.3),
+                                    style: BorderStyle.solid),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.add_photo_alternate_outlined,
+                                      color: AppColors.primary, size: 32),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                      'Tap to upload prescription\n(Clear & readable image)',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.outfit(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          SizedBox(
+                            height: 100,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _prescriptions.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == _prescriptions.length) {
+                                  return GestureDetector(
+                                    onTap: _pickPrescription,
+                                    child: Container(
+                                      width: 100,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary
+                                            .withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: AppColors.primary
+                                                .withValues(alpha: 0.3)),
+                                      ),
+                                      child: const Center(
+                                          child: Icon(Icons.add,
+                                              color: AppColors.primary)),
+                                    ),
+                                  );
+                                }
+                                return Stack(
+                                  children: [
+                                    Container(
+                                      width: 100,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        image: DecorationImage(
+                                            image: FileImage(File(
+                                                _prescriptions[index].path)),
+                                            fit: BoxFit.cover),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 4,
+                                      right: 12,
+                                      child: GestureDetector(
+                                        onTap: () => _removePrescription(index),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                              color: Colors.black54,
+                                              shape: BoxShape.circle),
+                                          child: const Icon(Icons.close,
+                                              color: Colors.white, size: 14),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
+                // ── Coupon / Promo Code ──────────────────────────────────────────
+                CouponInputWidget(cartTotal: cart.subtotal),
+                const SizedBox(height: 16),
 
-            _sectionCard(
-              title: 'Bill Details',
-              icon: Icons.account_balance_wallet_outlined,
-              iconColor: AppColors.success,
-              child: Column(
-                children: [
-                  _billRow(
-                    'Item Subtotal',
-                    '₹${cart.subtotal.toStringAsFixed(2)}',
-                    hint: 'Base price (excl. GST)',
+                // Delivery Notes
+                _sectionCard(
+                  title: 'Delivery Notes',
+                  icon: Icons.note_alt_outlined,
+                  iconColor: AppColors.info,
+                  child: TextField(
+                    controller: _notesController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      hintText: 'Add any special instructions...',
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  // Delivery row
-                  _billRow(
-                    'Delivery Fee',
-                    '₹${effectiveBase.toStringAsFixed(0)}',
+                ),
+                const SizedBox(height: 16),
+
+                // Payment Info (no selector — always online, charged after acceptance)
+                _sectionCard(
+                  title: 'Payment',
+                  icon: Icons.lock_outline_rounded,
+                  iconColor: AppColors.success,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.verified_user_outlined,
+                            color: AppColors.success, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Pay after confirmation',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: AppColors.textPrimary)),
+                            const SizedBox(height: 2),
+                            Text(
+                              'No money is charged now. Payment via UPI/Card is only requested after the shop & rider both accept your order.',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  if (discount > 0) ...[
-                    const SizedBox(height: 8),
-                    _billRow(
-                      'Delivery Discount',
-                      '-₹${discount.toStringAsFixed(0)}',
-                      valueColor: AppColors.success,
-                    ),
-                  ],
-                  if (cart.smallCartFee > 0) ...[
-                    const SizedBox(height: 8),
-                    _billRow(
-                      'Small Cart Fee',
-                      '+₹${cart.smallCartFee.toStringAsFixed(0)}',
-                      hint:
-                          'For orders under ₹${PlatformConfigProvider.instance?.smallCartThreshold.toInt() ?? PaymentConfig.smallCartThreshold.toInt()}',
-                      valueColor: Colors.orange.shade700,
-                    ),
-                  ],
-                  if (heavyFee > 0) ...[
-                    const SizedBox(height: 8),
-                    _billRow(
-                      'Heavy Order Fee',
-                      '+₹${heavyFee.toStringAsFixed(0)}',
-                      hint:
-                          'For orders over ${PlatformConfigProvider.instance?.heavyOrderThresholdKg.toInt() ?? PaymentConfig.heavyOrderThreshold.toInt()} kg',
-                      valueColor: Colors.orange.shade700,
-                    ),
-                  ],
-                  if (surcharge > 0) ...[
-                    const SizedBox(height: 8),
-                    _billRow(
-                      'Multi-shop fee (${cart.shops.length} shops)',
-                      '+₹${surcharge.toStringAsFixed(0)}',
-                      valueColor: Colors.orange.shade700,
-                      hint: '₹7/km between shops',
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  _billRow(
-                    'Handling Fee',
-                    '+₹${(cart.platformFee - gstBreakdown.platformFeeGst).toStringAsFixed(2)}',
-                    hint: 'Covers payment gateway & app operations',
+                ),
+                const SizedBox(height: 16),
+
+                _sectionCard(
+                  title: 'Bill Details',
+                  icon: Icons.account_balance_wallet_outlined,
+                  iconColor: AppColors.success,
+                  child: Column(
+                    children: [
+                      _billRow(
+                        'Item Subtotal',
+                        '₹${cart.subtotal.toStringAsFixed(2)}',
+                        hint: 'Base price (excl. GST)',
+                      ),
+                      const SizedBox(height: 8),
+                      // Delivery row
+                      _billRow(
+                        'Delivery Fee',
+                        '₹${effectiveBase.toStringAsFixed(0)}',
+                      ),
+                      if (discount > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow(
+                          'Delivery Discount',
+                          '-₹${discount.toStringAsFixed(0)}',
+                          valueColor: AppColors.success,
+                        ),
+                      ],
+                      if (cart.smallCartFee > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow(
+                          'Small Cart Fee',
+                          '+₹${cart.smallCartFee.toStringAsFixed(0)}',
+                          hint:
+                              'For orders under ₹${PlatformConfigProvider.instance?.smallCartThreshold.toInt() ?? PaymentConfig.smallCartThreshold.toInt()}',
+                          valueColor: Colors.orange.shade700,
+                        ),
+                      ],
+                      if (heavyFee > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow(
+                          'Heavy Order Fee',
+                          '+₹${heavyFee.toStringAsFixed(0)}',
+                          hint:
+                              'For orders over ${PlatformConfigProvider.instance?.heavyOrderThresholdKg.toInt() ?? PaymentConfig.heavyOrderThreshold.toInt()} kg',
+                          valueColor: Colors.orange.shade700,
+                        ),
+                      ],
+                      if (surcharge > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow(
+                          'Multi-shop fee (${cart.shops.length} shops)',
+                          '+₹${surcharge.toStringAsFixed(0)}',
+                          valueColor: Colors.orange.shade700,
+                          hint: '₹7/km between shops',
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      _billRow(
+                        'Handling Fee',
+                        '+₹${(cart.platformFee - gstBreakdown.platformFeeGst).toStringAsFixed(2)}',
+                        hint: 'Covers payment gateway & app operations',
+                      ),
+                      if (gstBreakdown.totalGst > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow(
+                          'TOTAL GST',
+                          '+₹${gstBreakdown.totalGst.toStringAsFixed(2)}',
+                          hint: 'Govt. taxes on items & services',
+                          valueColor: const Color(0xFF1565C0),
+                        ),
+                      ],
+                      if (couponDiscount > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow(
+                          'Promo (${couponProv.appliedCoupon!.code})',
+                          '-₹${couponDiscount.toStringAsFixed(2)}',
+                          valueColor: AppColors.success,
+                        ),
+                      ],
+                      const Divider(height: 20),
+                      _billRow(
+                        'Grand Total',
+                        '₹${total.toStringAsFixed(2)}',
+                        isBold: true,
+                        valueColor: AppColors.primary,
+                      ),
+                    ],
                   ),
-                  if (gstBreakdown.totalGst > 0) ...[
-                    const SizedBox(height: 8),
-                    _billRow(
-                      'TOTAL GST',
-                      '+₹${gstBreakdown.totalGst.toStringAsFixed(2)}',
-                      hint: 'Govt. taxes on items & services',
-                      valueColor: const Color(0xFF1565C0),
-                    ),
-                  ],
-                  if (couponDiscount > 0) ...[
-                    const SizedBox(height: 8),
-                    _billRow(
-                      'Promo (${couponProv.appliedCoupon!.code})',
-                      '-₹${couponDiscount.toStringAsFixed(2)}',
-                      valueColor: AppColors.success,
-                    ),
-                  ],
-                  const Divider(height: 20),
-                  _billRow(
-                    'Grand Total',
-                    '₹${total.toStringAsFixed(2)}',
-                    isBold: true,
-                    valueColor: AppColors.primary,
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 100),
+              ],
             ),
-            const SizedBox(height: 100),
-          ],
+          ),
         ),
       ),
-    ),
-  ),
       bottomNavigationBar: SafeArea(
         child: MaxWidthContainer(
           child: Container(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Total Amount',
-                    style: GoogleFonts.outfit(
-                        color: AppColors.textSecondary, fontSize: 13)),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('₹${total.toStringAsFixed(2)}',
-                        style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary)),
-                    if (gstBreakdown.totalGst > 0)
-                      Text(
-                        'Incl. ₹${gstBreakdown.totalGst.toStringAsFixed(2)} Total GST',
-                        style: GoogleFonts.outfit(
-                            fontSize: 10, color: AppColors.textSecondary),
-                      ),
-                  ],
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, -4),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: AppColors.ctaGradient,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.secondary.withValues(alpha: 0.4),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: ElevatedButton(
-                onPressed: _isProcessing ? null : _placeOrder,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                ),
-                child: _isProcessing
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5),
-                      )
-                    : Text(
-                        'CONFIRM ORDER',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total Amount',
                         style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            height: 1.2,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700),
+                            color: AppColors.textSecondary, fontSize: 13)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('₹${total.toStringAsFixed(2)}',
+                            style: GoogleFonts.outfit(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary)),
+                        if (gstBreakdown.totalGst > 0)
+                          Text(
+                            'Incl. ₹${gstBreakdown.totalGst.toStringAsFixed(2)} Total GST',
+                            style: GoogleFonts.outfit(
+                                fontSize: 10, color: AppColors.textSecondary),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.ctaGradient,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.secondary.withValues(alpha: 0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
                       ),
-              ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: _isProcessing ? null : _placeOrder,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: _isProcessing
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2.5),
+                          )
+                        : Text(
+                            'CONFIRM ORDER',
+                            style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                height: 1.2,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700),
+                          ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
-      ),
       ),
     );
   }
@@ -1161,7 +1278,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-
   Widget _billRow(String label, String value,
       {bool isBold = false, Color? valueColor, String? hint}) {
     return Row(
@@ -1196,6 +1312,3 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 }
-
-
-

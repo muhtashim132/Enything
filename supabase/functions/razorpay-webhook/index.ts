@@ -75,15 +75,15 @@ Deno.serve(async (req) => {
         .eq("razorpay_order_id", orderId)
         .maybeSingle();
 
-      if (pendingOrder && pendingOrder.status === "pending_payment") {
+      if (pendingOrder && pendingOrder.status === "awaiting_payment") {
         await supabaseAdmin
           .from("orders")
           .update({
             razorpay_payment_id: paymentId,
-            status: "placed",
+            status: "confirmed",
             payment_status: "captured",
           })
-          .eq("id", pendingOrder.id);
+          .eq("razorpay_order_id", orderId); // S1: Using razorpay_order_id handles multi-shop cart group!
 
         console.log(`Order ${pendingOrder.id} confirmed via webhook payment ${paymentId}.`);
       }
@@ -101,13 +101,13 @@ Deno.serve(async (req) => {
           .eq("razorpay_order_id", orderId)
           .maybeSingle();
 
-        if (pendingOrder && pendingOrder.status === "pending_payment") {
+        if (pendingOrder && pendingOrder.status === "awaiting_payment") {
           await supabaseAdmin
             .from("orders")
-            .update({ status: "payment_failed", payment_status: "failed" })
-            .eq("id", pendingOrder.id);
+            .update({ status: "cancelled", cancelled_reason: "payment_failed", payment_status: "failed" })
+            .eq("razorpay_order_id", orderId);
 
-          console.log(`Order ${pendingOrder.id} marked as payment_failed via webhook.`);
+          console.log(`Order ${pendingOrder.id} marked as cancelled (payment_failed) via webhook.`);
         }
       }
     }

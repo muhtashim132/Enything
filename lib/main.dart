@@ -75,13 +75,13 @@ void main() async {
 
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  // Load cart async to prevent blocking startup
-  final cartProvider = CartProvider();
-  cartProvider.loadCart(); // DO NOT AWAIT
-
   // Load platform config asynchronously to avoid blocking the Splash Screen
   final configProvider = PlatformConfigProvider();
   configProvider.load(); // DO NOT AWAIT
+
+  // Load cart async to prevent blocking startup
+  final cartProvider = CartProvider();
+  cartProvider.loadCart(); // DO NOT AWAIT
 
   // Load recently viewed products from SharedPreferences (non-blocking)
   final recentlyViewedProvider = RecentlyViewedProvider();

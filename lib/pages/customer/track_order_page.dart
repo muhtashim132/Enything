@@ -18,6 +18,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 import '../../services/notification_service.dart';
 import '../../utils/responsive_layout.dart';
 import 'package:collection/collection.dart';
@@ -53,7 +54,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Timer? _acceptanceCountdownTimer;
   int _acceptanceSecondsLeft = 180;
 
+  // Polling timer for network drop fallback
+  Timer? _pollingTimer;
+
   bool _isRetrying = false;
+
+  // Server time tracking
+  Duration _serverTimeOffset = Duration.zero;
+  DateTime get _serverTime => DateTime.now().toUtc().add(_serverTimeOffset);
+
 
   final List<Map<String, dynamic>> _steps = [
     {
@@ -128,6 +137,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _pulseAnim = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && !_isLoading) {
+        _fetchOrder();
+      }
+    });
     _fetchOrder();
   }
 
@@ -138,6 +152,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _pulseController.dispose();
     _paymentCountdownTimer?.cancel();
     _acceptanceCountdownTimer?.cancel();
+    _pollingTimer?.cancel();
     if (_channel != null) _supabase.removeChannel(_channel!);
     super.dispose();
   }
@@ -152,6 +167,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   List<OrderModel> _groupOrders = [];
+  bool _fetchError = false;
 
   Future<void> _fetchOrder() async {
     try {
@@ -183,6 +199,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         }
 
         setState(() {
+          if (response['updated_at'] != null) {
+            final serverUpdatedAt = DateTime.tryParse(response['updated_at']);
+            if (serverUpdatedAt != null) {
+              _serverTimeOffset = serverUpdatedAt.toUtc().difference(DateTime.now().toUtc());
+            }
+          }
+
           _order = order;
           _groupOrders = group;
           _isLoading = false;
@@ -206,13 +229,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         }
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      debugPrint('Error fetching order: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _fetchError = true;
+        });
+      }
     }
   }
 
   void _subscribeToOrder() {
     if (_order == null) return;
-    _channel?.unsubscribe();
+    if (_channel != null) {
+      _supabase.removeChannel(_channel!);
+      _channel = null;
+    }
     
     final filter = _order!.cartGroupId != null
         ? PostgresChangeFilter(
@@ -427,7 +459,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     // Calculate how many seconds remain from the stored deadline
     if (order.acceptanceDeadline != null) {
       final remaining = order.acceptanceDeadline!
-          .difference(DateTime.now().toUtc())
+          .difference(_serverTime)
           .inSeconds;
       _acceptanceSecondsLeft = remaining.clamp(0, 180);
     } else {
@@ -490,68 +522,31 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     setState(() => _isRetrying = true);
     try {
       final newDeadline =
-          DateTime.now().toUtc().add(const Duration(minutes: 3));
+          _serverTime.add(const Duration(minutes: 3));
       final notifProv = context.read<NotificationProvider>();
       String? firstNewOrderId;
       final shopsToRetry = _groupOrders.isEmpty ? [_order!] : _groupOrders;
 
-      for (final order in shopsToRetry) {
-        final response = await _supabase
-            .from('orders')
-            .insert({
-              'cart_group_id': order.cartGroupId,
-              'shop_id': order.shopId,
-              'customer_id': order.customerId,
-              'status': 'awaiting_acceptance',
-              'acceptance_deadline': newDeadline.toIso8601String(),
-              'total_amount': order.totalAmount,
-              'delivery_charges': order.deliveryCharges,
-              // BUG-RT1 FIX: rider_earnings was missing — rider would earn ₹0 on retried orders
-              'rider_earnings': order.riderEarnings,
-              'platform_fee': order.platformFee,
-              'address': order.address,
-              // BUG-RT1 FIX: address_label was missing — rider lost the Home/Office label on retry
-              'address_label': order.addressLabel,
-              'delivery_lat': order.deliveryLat,
-              'delivery_lng': order.deliveryLng,
-              'delivery_notes': order.deliveryNotes,
-              'payment_method': order.paymentMethod,
-              'payment_status': 'pending',
-              'customer_phone': order.customerPhone,
-              'shop_phone': order.shopPhone,
-              // BUG-RT1 FIX: multi_shop_surcharge, small_cart_fee, heavy_order_fee,
-              // delivery_discount were ALL missing — showed ₹0 in receipt on retry
-              'multi_shop_surcharge': order.multiShopSurcharge,
-              'small_cart_fee': order.smallCartFee,
-              'heavy_order_fee': order.heavyOrderFee,
-              'delivery_discount': order.deliveryDiscount,
-              'gst_item_total': order.gstItemTotal,
-              'gst_delivery': order.gstDelivery,
-              'gst_platform': order.gstPlatform,
-              'enything_commission': order.enythingCommission,
-              'seller_payout': order.sellerPayout,
-              'gateway_deduction': order.gatewayDeduction,
-              's9_5_gst_amount': order.s9_5GstAmount,
-              'non_food_gst_amount': order.nonFoodGstAmount,
-              'tcs_amount': order.tcsAmount,
-              'tds_amount': order.tdsAmount,
-              'grand_total_collected': order.grandTotalCollected,
-              'gst_rate_snapshot': order.gstRateSnapshot,
-              'estimated_distance_km': order.estimatedDistanceKm,
-              'shop_prep_time_snapshot': order.shopPrepTimeSnapshot,
-              'prescription_urls': order.prescriptionUrls,
-            })
-            .select()
-            .single();
+      final List<Map<String, dynamic>> allOrders = [];
+      final List<Map<String, dynamic>> allItems = [];
+      final List<Map<String, dynamic>> notificationData = [];
+      final nowUtc = _serverTime.toIso8601String();
+      String? couponIdToPass;
 
-        firstNewOrderId ??= response['id'];
+      for (final order in shopsToRetry) {
+        final newOrderId = const Uuid().v4();
+        firstNewOrderId ??= newOrderId;
+        
+        if (couponIdToPass == null && order.couponId != null) {
+            couponIdToPass = order.couponId;
+        }
 
         // O3 FIX: Re-validate product availability before inserting retried order.
-        // Prevents retrying an order for items that went out-of-stock since the original.
         final oldItems = await _supabase
             .from('order_items')
             .select()
             .eq('order_id', order.id);
+
         if ((oldItems as List).isNotEmpty) {
           final productIds = oldItems.map((i) => i['product_id']).toList();
           final latestProducts = await _supabase
@@ -576,7 +571,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
           final newItems = oldItems
               .map((item) => {
-                    'order_id': response['id'],
+                    'id': const Uuid().v4(),
+                    'created_at': nowUtc,
+                    'order_id': newOrderId,
                     'product_id': item['product_id'],
                     'product_name': item['product_name'],
                     'quantity': item['quantity'],
@@ -586,30 +583,81 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     'requires_prescription': item['requires_prescription'] ?? false,
                   })
               .toList();
-          await _supabase.from('order_items').insert(newItems);
-
-          // O2: Decrement stock for retried order items
-          for (final item in oldItems) {
-            try {
-              await _supabase.rpc('decrement_product_stock', params: {
-                'p_product_id': item['product_id'],
-                'p_quantity': item['quantity'],
-              });
-            } catch (e) {
-              debugPrint('Stock decrement error on retry: $e');
-            }
-          }
+          allItems.addAll(newItems);
         }
 
-        if (mounted && order.shopId != null) {
-          final shopData = await _supabase.from('shops').select('seller_id').eq('id', order.shopId!).maybeSingle();
+        allOrders.add({
+          'id': newOrderId,
+          'created_at': nowUtc,
+          'updated_at': nowUtc,
+          'cart_group_id': order.cartGroupId,
+          'shop_id': order.shopId,
+          'customer_id': order.customerId,
+          'status': 'awaiting_acceptance',
+          'acceptance_deadline': newDeadline.toIso8601String(),
+          'total_amount': order.totalAmount,
+          'delivery_charges': order.deliveryCharges,
+          'rider_earnings': order.riderEarnings,
+          'platform_fee': order.platformFee,
+          'address': order.address,
+          'address_label': order.addressLabel,
+          'delivery_lat': order.deliveryLat,
+          'delivery_lng': order.deliveryLng,
+          'delivery_notes': order.deliveryNotes,
+          'payment_method': order.paymentMethod,
+          'payment_status': 'pending',
+          'customer_phone': order.customerPhone,
+          'shop_phone': order.shopPhone,
+          'multi_shop_surcharge': order.multiShopSurcharge,
+          'small_cart_fee': order.smallCartFee,
+          'heavy_order_fee': order.heavyOrderFee,
+          'delivery_discount': order.deliveryDiscount,
+          'coupon_id': order.couponId,
+          'coupon_discount': order.couponDiscount,
+          'gst_item_total': order.gstItemTotal,
+          'gst_delivery': order.gstDelivery,
+          'gst_platform': order.gstPlatform,
+          'enything_commission': order.enythingCommission,
+          'seller_payout': order.sellerPayout,
+          'gateway_deduction': order.gatewayDeduction,
+          's9_5_gst_amount': order.s9_5GstAmount,
+          'non_food_gst_amount': order.nonFoodGstAmount,
+          'tcs_amount': order.tcsAmount,
+          'tds_amount': order.tdsAmount,
+          'grand_total_collected': order.grandTotalCollected,
+          'gst_rate_snapshot': order.gstRateSnapshot,
+          'estimated_distance_km': order.estimatedDistanceKm,
+          'shop_prep_time_snapshot': order.shopPrepTimeSnapshot,
+          'prescription_urls': order.prescriptionUrls,
+        });
+
+        if (order.shopId != null) {
+          notificationData.add({
+             'shop_id': order.shopId,
+             'order_id': newOrderId,
+             'grand_total': order.grandTotal,
+          });
+        }
+      }
+
+      // Execute atomic transaction RPC
+      await _supabase.rpc('place_orders_transaction', params: {
+        'p_orders': allOrders,
+        'p_items': allItems,
+        if (couponIdToPass != null) 'p_coupon_id': couponIdToPass,
+      });
+
+      // Send notifications AFTER successful atomic transaction
+      if (mounted) {
+        for (final data in notificationData) {
+          final shopData = await _supabase.from('shops').select('seller_id').eq('id', data['shop_id']!).maybeSingle();
           if (shopData != null && shopData['seller_id'] != null) {
             notifProv.sendBackgroundPush(
               targetUserId: shopData['seller_id'] as String,
               title: '🔔 New Order! Accept now',
               body:
-                  'Order ₹${order.grandTotal.toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
-              data: {'order_id': response['id'], 'role': 'seller'},
+                  'Order ₹${(data['grand_total'] as double).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
+              data: {'order_id': data['order_id'], 'role': 'seller'},
             );
           }
         }
@@ -642,7 +690,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     setState(() => _isRetrying = true);
     try {
       final newDeadline =
-          DateTime.now().toUtc().add(const Duration(minutes: 3));
+          _serverTime.add(const Duration(minutes: 3));
       // BUG-PAY1 FIX (CRITICAL): Must null out delivery_partner_id.
       // Without this the order remains assigned to the old rider and is
       // filtered out by the rider dashboard (.isFilter('delivery_partner_id', null)),
@@ -656,6 +704,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'partner_accepted': false,
           'delivery_partner_id': null,
           'rider_phone': null,
+          'rider_lat': null,
+          'rider_lng': null,
           'acceptance_deadline': newDeadline.toIso8601String(),
         }).eq('cart_group_id', _order!.cartGroupId!);
       } else {
@@ -666,6 +716,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'partner_accepted': false,
           'delivery_partner_id': null,
           'rider_phone': null,
+          'rider_lat': null,
+          'rider_lng': null,
           'acceptance_deadline': newDeadline.toIso8601String(),
         }).eq('id', widget.orderId);
       }
@@ -1150,7 +1202,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     // BUG-9 FIX: Calculate seconds remaining from payment_deadline
     if (order.paymentDeadline != null) {
       final remaining =
-          order.paymentDeadline!.difference(DateTime.now().toUtc()).inSeconds;
+          order.paymentDeadline!.difference(_serverTime).inSeconds;
       _paymentSecondsLeft = remaining.clamp(0, 600);
     } else {
       _paymentSecondsLeft = 600;
@@ -1162,7 +1214,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
       setState(() {
         if (order.paymentDeadline != null) {
-          final remaining = order.paymentDeadline!.difference(DateTime.now().toUtc()).inSeconds;
+          final remaining = order.paymentDeadline!.difference(_serverTime).inSeconds;
           _paymentSecondsLeft = remaining;
         } else {
           _paymentSecondsLeft--;
@@ -1424,13 +1476,53 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-    if (_order == null) {
+    if (_order == null || _fetchError) {
       return Scaffold(
         backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: isDark ? Colors.white : AppColors.textPrimary, size: 20),
+            onPressed: () => Navigator.maybePop(context),
+          ),
+        ),
         body: Center(
-          child: Text('Order not found',
-              style: GoogleFonts.outfit(
-                  fontSize: 16, color: AppColors.textSecondary)),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search_off_rounded, size: 80, color: AppColors.textSecondary.withValues(alpha: 0.5)),
+              const SizedBox(height: 24),
+              Text(
+                'Order Not Found',
+                style: GoogleFonts.outfit(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'This order might have been deleted\nor you do not have permission to view it.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false),
+                icon: const Icon(Icons.home_rounded, color: Colors.white, size: 20),
+                label: Text('Go to Home', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
