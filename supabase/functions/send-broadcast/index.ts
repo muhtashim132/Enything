@@ -109,19 +109,19 @@ serve(async (req: Request) => {
 
     // Map UI audience to role column in device_tokens
     if (audience === 'Customers') {
-      const res = await supabase.from('device_tokens').select('token').eq('role', 'customer');
+      const res = await supabase.from('device_tokens').select('token, user_id').eq('role', 'customer');
       rows = res.data;
       dbErr = res.error;
     } else if (audience === 'Sellers') {
-      const res = await supabase.from('device_tokens').select('token').eq('role', 'seller');
+      const res = await supabase.from('device_tokens').select('token, user_id').eq('role', 'seller');
       rows = res.data;
       dbErr = res.error;
     } else if (audience === 'Riders') {
-      const res = await supabase.from('device_tokens').select('token').eq('role', 'delivery');
+      const res = await supabase.from('device_tokens').select('token, user_id').eq('role', 'delivery');
       rows = res.data;
       dbErr = res.error;
     } else {
-      const res = await supabase.from('device_tokens').select('token');
+      const res = await supabase.from('device_tokens').select('token, user_id');
       rows = res.data;
       dbErr = res.error;
     }
@@ -132,6 +132,23 @@ serve(async (req: Request) => {
         JSON.stringify({ message: 'No device tokens for audience', sent: 0, total: 0 }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
+    }
+
+    // Insert into notifications table for all targeted users
+    const userIds = [...new Set(rows.map((r: any) => r.user_id).filter(Boolean))];
+    if (userIds.length > 0) {
+      const notifKey = `broadcast_${Date.now()}`;
+      const notifPayload = userIds.map((uid) => ({
+        user_id: uid,
+        title: title,
+        body: body,
+        notif_key: `${notifKey}_${uid.substring(0, 8)}`,
+      }));
+      // Batch insert in chunks of 1000
+      for (let i = 0; i < notifPayload.length; i += 1000) {
+        const chunk = notifPayload.slice(i, i + 1000);
+        await supabase.from('notifications').insert(chunk);
+      }
     }
 
     // Parse service account & get OAuth2 token

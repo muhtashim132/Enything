@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +25,7 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
   Map<String, int> _ordersByStatus = {};
   List<FlSpot> _hourlySpots = [];
   List<Map<String, dynamic>> _topSellers = [];
+  List<Map<String, dynamic>> _topRiders = [];
   String _peakHour = '—';
   double _churnRisk = 0;
   int _newUsersToday = 0;
@@ -39,7 +40,7 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
     try {
       // Orders
       final orders = await _db.from('orders').select(
-          'status, grand_total_collected, total_amount, created_at, shop_id');
+          'status, grand_total_collected, total_amount, created_at, shop_id, delivery_partner_id');
 
       _totalOrders = orders.length;
       _deliveredOrders = orders.where((o) => o['status'] == 'delivered').length;
@@ -108,6 +109,30 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
               (s) => s['id'].toString() == e.key,
               orElse: () => {'name': 'Unknown'});
           return {'name': shop['name'] ?? 'Unknown', 'orders': e.value};
+        }).toList();
+      }
+
+      // Top riders by order count
+      final riderCount = <String, int>{};
+      for (final o in orders) {
+        final r = o['delivery_partner_id']?.toString();
+        if (r != null) riderCount[r] = (riderCount[r] ?? 0) + 1;
+      }
+      final topRiderIds = (riderCount.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value)))
+          .take(5)
+          .toList();
+
+      if (topRiderIds.isNotEmpty) {
+        final riders = await _db
+            .from('profiles')
+            .select('id, full_name')
+            .inFilter('id', topRiderIds.map((e) => e.key).toList());
+        _topRiders = topRiderIds.map((e) {
+          final rider = (riders as List).firstWhere(
+              (r) => r['id'].toString() == e.key,
+              orElse: () => {'full_name': 'Unknown Rider'});
+          return {'name': rider['full_name'] ?? 'Unknown Rider', 'orders': e.value};
         }).toList();
       }
 
@@ -289,6 +314,48 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
                       }).toList(),
                     ),
             ).animate().fadeIn(delay: 400.ms),
+          ],
+
+          // ── Top Riders ─────────────────────────────────────
+          if (_topRiders.isNotEmpty || _loading) ...[
+            const AdminSectionHeader(title: 'Top Performing Riders'),
+            AdminCard(
+              child: _loading
+                  ? const _StatusSkeleton()
+                  : Column(
+                      children: _topRiders.asMap().entries.map((e) {
+                        final i = e.key;
+                        final r = e.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                gradient: AdminGradients.info,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Center(
+                                child: Text('${i + 1}',
+                                    style: AdminStyles.caption(
+                                        color: Colors.white)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(r['name'] as String,
+                                  style: AdminStyles.body(size: 13)),
+                            ),
+                            AdminBadge(
+                              label: '${r['orders']} orders',
+                              color: AdminColors.info,
+                            ),
+                          ]),
+                        );
+                      }).toList(),
+                    ),
+            ).animate().fadeIn(delay: 420.ms),
           ],
 
           // ── AI Fraud & Recommendations ─────────────────────

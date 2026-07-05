@@ -30,6 +30,7 @@ import '../pages/seller/analytics_page.dart';
 import '../pages/seller/ca_report_page.dart';
 import '../pages/delivery/dashboard_page.dart';
 import '../pages/delivery/earnings_page.dart';
+import '../pages/delivery/rider_order_history_page.dart';
 import '../pages/seller/shop_management_page.dart';
 import '../pages/settings/profile_settings_page.dart';
 import '../pages/legal/terms_of_service_page.dart';
@@ -77,6 +78,7 @@ class AppRoutes {
   static const String caReport = '/seller/ca-report';
   static const String deliveryDashboard = '/delivery/dashboard';
   static const String earnings = '/delivery/earnings';
+  static const String riderOrderHistory = '/delivery/orders';
   static const String shopManagement = '/seller/shop-management';
   static const String settings = '/settings';
   static const String terms = '/legal/terms';
@@ -168,6 +170,8 @@ class AppRoutes {
         return _build(const RiderInsightsPage(), routeSettings);
       case earnings:
         return _build(const EarningsPage(), routeSettings);
+      case riderOrderHistory:
+        return _build(const RiderOrderHistoryPage(), routeSettings);
       case shopManagement:
         return _build(const ShopManagementPage(), routeSettings);
       case settings:
@@ -185,7 +189,14 @@ class AppRoutes {
       case adminDashboard:
         return _build(const AdminDashboardPage(), routeSettings);
       case faqSupport:
-        return _build(const FaqSupportPage(), routeSettings);
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+          FaqSupportPage(
+            initialTabIndex: a?['initialIndex'] as int? ?? 0,
+            openTicketSheet: a?['showTicketSheet'] as bool? ?? false,
+          ), 
+          routeSettings,
+        );
       case refundPolicy:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         return _build(

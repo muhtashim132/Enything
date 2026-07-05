@@ -12,6 +12,7 @@ import '../../models/user_model.dart';
 import '../../widgets/common/role_switcher_card.dart';
 import '../../widgets/common/premium_animations.dart';
 import 'profile_settings_dialogs.dart';
+import 'refer_and_earn_page.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
 
@@ -123,6 +124,17 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                         const SizedBox(height: 8),
                         _buildSectionTitle('General', isDark),
                         const SizedBox(height: 16),
+                        _buildSettingTile(
+                          icon: Icons.card_giftcard_rounded,
+                          title: 'Refer & Earn',
+                          subtitle: 'Invite friends, earn rewards',
+                          roleColor: const Color(0xFFF4A800),
+                          isDark: isDark,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ReferAndEarnPage()),
+                          ),
+                        ),
                         _buildSettingTile(
                           icon: Icons.notifications_active_outlined,
                           title: 'Notification & Bell Settings',

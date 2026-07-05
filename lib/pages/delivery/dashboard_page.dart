@@ -427,11 +427,20 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         try {
           final deliveredResp = await _supabase
               .from('orders')
-              .select('rider_earnings, wait_time_penalty, estimated_distance_km, created_at')
+              .select('id, cart_group_id, rider_earnings, wait_time_penalty, estimated_distance_km, created_at')
               .eq('delivery_partner_id', auth.currentUserId!)
               .eq('status', 'delivered');
+              
+          final Map<String, double> groupMaxDistances = {};
+          
           for (var row in deliveredResp as List) {
-            tempTotalKmsDriven += (row['estimated_distance_km'] ?? 0.0).toDouble();
+            final groupId = row['cart_group_id'] as String? ?? row['id'].toString();
+            final dist = (row['estimated_distance_km'] ?? 0.0).toDouble();
+            
+            if (!groupMaxDistances.containsKey(groupId) || dist > groupMaxDistances[groupId]!) {
+              groupMaxDistances[groupId] = dist;
+            }
+
             final created = DateTime.tryParse(row['created_at'] ?? '')?.toIST();
             if (created != null &&
                 created.year == today.year &&
@@ -440,6 +449,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               tempTodayEarnings += (row['rider_earnings'] ?? 0.0).toDouble() + (row['wait_time_penalty'] ?? 0.0).toDouble();
             }
           }
+          
+          tempTotalKmsDriven = groupMaxDistances.values.fold(0.0, (sum, dist) => sum + dist);
         } catch (_) {}
       }
 
@@ -1138,10 +1149,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                     containerColor: Colors.transparent,
                                     badgeColor: Color(0xFFFF6B6B),
                                   ),
-                                  _iconBtn(
-                                      Icons.help_outline_rounded,
-                                      () => Navigator.pushNamed(
-                                          context, AppRoutes.faqSupport)),
+
                                   _iconBtn(
                                       Icons.settings_outlined,
                                       () => Navigator.pushNamed(

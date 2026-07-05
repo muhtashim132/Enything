@@ -163,6 +163,35 @@ class _ShopCardState extends State<ShopCard> {
                   ),
 
                   // Category badge (top-left) — glassmorphism style
+                  if (!shop.isOpenRightNow)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(PremiumRadius.large)),
+                      child: Container(
+                        height: 120,
+                        color: Colors.black.withValues(alpha: 0.65),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white38),
+                            ),
+                            child: Text(
+                              'CLOSED',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 3.0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Category badge (top-left) — glassmorphism style
                   Positioned(
                     top: 10,
                     left: 12,

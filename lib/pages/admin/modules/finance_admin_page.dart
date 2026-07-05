@@ -12,7 +12,8 @@ import '../../../theme/admin_theme.dart';
 import '../../../utils/time_utils.dart';
 
 class FinanceAdminPage extends StatefulWidget {
-  const FinanceAdminPage({super.key});
+  final int initialTabIndex;
+  const FinanceAdminPage({super.key, this.initialTabIndex = 0});
 
   @override
   State<FinanceAdminPage> createState() => _FinanceAdminPageState();
@@ -35,7 +36,7 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 4, vsync: this, initialIndex: widget.initialTabIndex);
     _fetch();
   }
 
@@ -48,7 +49,7 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
   Future<void> _fetch() async {
     try {
       final orders = await _db.from('orders').select(
-          'grand_total_collected, seller_payout, rider_earnings, enything_commission, created_at, status, id, refund_id, refund_status, gst_item_total, gst_delivery, gst_platform, payment_status, platform_fee, delivery_charges, gateway_deduction, multi_shop_surcharge');
+          'grand_total_collected, seller_payout, rider_earnings, enything_commission, created_at, status, id, refund_id, refund_status, gst_item_total, gst_delivery, gst_platform, payment_status, platform_fee, delivery_charges, gateway_deduction, multi_shop_surcharge, tcs_amount, tds_amount');
       
       try {
         final wList = await _db.from('withdrawals').select('*, profiles:user_id(full_name)').order('requested_at', ascending: false);
@@ -804,10 +805,10 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           accentColor: AdminColors.danger,
           icon: Icons.account_balance_rounded,
           rows: [
-            _GstLineItem('S.9(5) Food GST (Deemed Supplier)', _s9_5Gst,
+            _GstLineItem('S.9(5) Food GST (5% - Deemed Supplier)', _s9_5Gst,
                 tag: 'S.9(5)', tagColor: const Color(0xFF51CF66)),
-            _GstLineItem('Delivery GST   (SAC 9965/9967)', _deliveryGst),
-            _GstLineItem('Platform Fee GST (SAC 9985)', _platformGst),
+            _GstLineItem('Delivery GST 18% (SAC 9965/9967)', _deliveryGst),
+            _GstLineItem('Platform Fee GST 18% (SAC 9985)', _platformGst),
             _GstLineItem('Commission GST (18% on commission)', _commissionGst),
             const _GstDivider(),
             _GstLineItem('TOTAL PAYABLE TO GOVT', _enythingTotalPayable,
@@ -993,9 +994,12 @@ class _GstStatementTabState extends State<_GstStatementTab> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('GRAND TOTAL (All Categories)',
-                      style: AdminStyles.body(color: Colors.white, size: 13)
-                          .copyWith(fontWeight: FontWeight.w700)),
+                  Expanded(
+                    child: Text('GRAND TOTAL (All Categories)',
+                        style: AdminStyles.body(color: Colors.white, size: 13)
+                            .copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 8),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     Text('Taxable  ${_f(grandTaxable)}',
                         style: AdminStyles.caption(color: Colors.white70)),
@@ -1303,12 +1307,97 @@ class _WithdrawalActionSheet extends StatefulWidget {
 
 class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
   final _db = Supabase.instance.client;
+  final _txnIdCtrl = TextEditingController();
+  
   bool _processing = false;
+  bool _loadingDetails = true;
+  double _totalEarned = 0;
+  double _totalWithdrawn = 0;
+  double _availableBalance = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserDetails();
+  }
+  
+  @override
+  void dispose() {
+    _txnIdCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUserDetails() async {
+    try {
+      final w = widget.withdrawal;
+      final userId = w['user_id'];
+      final role = w['user_role'];
+
+      // 1. Total withdrawn (processed + pending + approved, excluding rejected)
+      final histRes = await _db
+          .from('withdrawals')
+          .select('amount, status')
+          .eq('user_id', userId)
+          .eq('user_role', role);
+      
+      double totalPaid = 0;
+      for (final h in histRes) {
+        if (h['status'] != 'rejected') {
+          totalPaid += (h['amount'] as num).toDouble();
+        }
+      }
+      _totalWithdrawn = totalPaid;
+
+      // 2. Total earned
+      double totalEarned = 0;
+      if (role == 'seller') {
+        final shopRes = await _db.from('shops').select('id').eq('seller_id', userId).maybeSingle();
+        if (shopRes != null) {
+          final earningsRes = await _db
+              .from('orders')
+              .select('seller_payout')
+              .eq('shop_id', shopRes['id'])
+              .eq('status', 'delivered');
+          for (final o in earningsRes as List) {
+            totalEarned += (o['seller_payout'] as num? ?? 0).toDouble();
+          }
+        }
+      } else if (role == 'delivery_partner') {
+        final earningsRes = await _db
+            .from('orders')
+            .select('rider_earnings, delivery_charges')
+            .eq('delivery_partner_id', userId)
+            .eq('status', 'delivered');
+        for (final o in earningsRes as List) {
+          totalEarned += (o['rider_earnings'] ?? o['delivery_charges'] ?? 0).toDouble();
+        }
+      }
+      _totalEarned = totalEarned;
+      _availableBalance = totalEarned - totalPaid;
+
+    } catch (e) {
+      debugPrint('Error loading user details: $e');
+    }
+    if (mounted) setState(() => _loadingDetails = false);
+  }
 
   Future<void> _updateStatus(String status) async {
+    if (status == 'processed' && _txnIdCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please enter a Transaction ID or Receipt', style: AdminStyles.body(color: Colors.white)),
+        backgroundColor: AdminColors.danger,
+      ));
+      return;
+    }
+
     setState(() => _processing = true);
     try {
-      await _db.from('withdrawals').update({'status': status}).eq('id', widget.withdrawal['id']);
+      final updateData = <String, dynamic>{'status': status};
+      if (status == 'processed') {
+        updateData['transaction_id'] = _txnIdCtrl.text.trim();
+      }
+
+      await _db.from('withdrawals').update(updateData).eq('id', widget.withdrawal['id']);
       widget.onProcessed();
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -1332,9 +1421,9 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
         : '';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 48),
       decoration: const BoxDecoration(
-        color: AdminColors.cardBg,
+        color: AdminColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
@@ -1349,6 +1438,17 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
           _DetailRow('Amount', '₹${amount.toStringAsFixed(0)}', highlight: true),
           const SizedBox(height: 12),
           _DetailRow('Date', time),
+          
+          if (_loadingDetails)
+             const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AdminColors.primary)))
+          else ...[
+             const SizedBox(height: 12),
+             _DetailRow('Max Allowed (Earnings)', '₹${_totalEarned.toStringAsFixed(0)}'),
+             const SizedBox(height: 12),
+             _DetailRow('Withdrawn Till Date', '₹${_totalWithdrawn.toStringAsFixed(0)}'),
+             const SizedBox(height: 12),
+             _DetailRow('Available Balance', '₹${_availableBalance.toStringAsFixed(0)}', highlight: _availableBalance >= amount),
+          ],
           
           const SizedBox(height: 20),
           const Divider(color: AdminColors.cardBorder),
@@ -1372,6 +1472,19 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
             if (_processing) 
               const Center(child: CircularProgressIndicator(color: AdminColors.primary))
             else ...[
+              TextField(
+                controller: _txnIdCtrl,
+                style: AdminStyles.body(),
+                decoration: InputDecoration(
+                  labelText: 'Transaction ID / Receipt (Required)',
+                  labelStyle: AdminStyles.caption(),
+                  filled: true,
+                  fillColor: AdminColors.bg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => _updateStatus('processed'),
                 style: ElevatedButton.styleFrom(

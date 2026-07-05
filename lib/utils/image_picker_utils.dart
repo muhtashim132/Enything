@@ -180,13 +180,10 @@ class _SourceOption extends StatelessWidget {
 }
 
 /// Helper function to launch the image cropper with standard UI styling.
-Future<CroppedFile?> cropImage(
-  BuildContext context, 
-  String path, 
-  {CropAspectRatio? aspectRatio, String title = 'Crop Image'}
-) async {
+Future<CroppedFile?> cropImage(BuildContext context, String path,
+    {CropAspectRatio? aspectRatio, String title = 'Crop Image'}) async {
   final isDark = Theme.of(context).brightness == Brightness.dark;
-  
+
   return await ImageCropper().cropImage(
     sourcePath: path,
     aspectRatio: aspectRatio,
@@ -198,7 +195,8 @@ Future<CroppedFile?> cropImage(
         initAspectRatio: CropAspectRatioPreset.original,
         lockAspectRatio: aspectRatio != null,
         hideBottomControls: false,
-        backgroundColor: isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
+        backgroundColor:
+            isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
         activeControlsWidgetColor: const Color(0xFF4C6EF5),
         dimmedLayerColor: isDark ? Colors.black87 : Colors.black54,
       ),

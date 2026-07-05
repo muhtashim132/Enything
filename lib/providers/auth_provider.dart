@@ -17,7 +17,6 @@ class AuthProvider extends ChangeNotifier {
   String? _mockUserId; // ID used for magic numbers
   bool _isManualSignOut = false;
 
-
   // ─── Admin (God Mode) State ───────────────────────────────────────────────
   bool _isAdminVerified = false; // true after 2nd-factor password gate
   Map<String, dynamic>? _adminData; // row from admin_users table
@@ -87,10 +86,12 @@ class AuthProvider extends ChangeNotifier {
         // If it wasn't a manual sign out, it means the session was revoked from another device
         if (!wasManual && navigatorKey.currentState != null) {
           // FIX BUG-12: Wrong route '/roleSelect' doesn't match AppRoutes.roleSelect = '/auth/role'
-          navigatorKey.currentState!.pushNamedAndRemoveUntil('/auth/role', (route) => false);
+          navigatorKey.currentState!
+              .pushNamedAndRemoveUntil('/auth/role', (route) => false);
           ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
             const SnackBar(
-              content: Text('You have been logged out because your account was accessed from another device.'),
+              content: Text(
+                  'You have been logged out because your account was accessed from another device.'),
               backgroundColor: Colors.redAccent,
               duration: Duration(seconds: 4),
             ),
@@ -118,7 +119,9 @@ class AuthProvider extends ChangeNotifier {
           .eq('id', userId)
           .maybeSingle();
       if (customer != null) roles.add('customer');
-    } catch (e) { debugPrint('_detectUserRoles[customers] error: $e'); }
+    } catch (e) {
+      debugPrint('_detectUserRoles[customers] error: $e');
+    }
 
     try {
       final seller = await _supabase
@@ -127,7 +130,9 @@ class AuthProvider extends ChangeNotifier {
           .eq('seller_id', userId)
           .maybeSingle();
       if (seller != null) roles.add('seller');
-    } catch (e) { debugPrint('_detectUserRoles[shops] error: $e'); }
+    } catch (e) {
+      debugPrint('_detectUserRoles[shops] error: $e');
+    }
 
     try {
       final delivery = await _supabase
@@ -136,7 +141,9 @@ class AuthProvider extends ChangeNotifier {
           .eq('id', userId)
           .maybeSingle();
       if (delivery != null) roles.add('delivery_partner');
-    } catch (e) { debugPrint('_detectUserRoles[delivery_partners] error: $e'); }
+    } catch (e) {
+      debugPrint('_detectUserRoles[delivery_partners] error: $e');
+    }
 
     // ── Admin detection ──────────────────────────────────────────────────
     try {
@@ -185,10 +192,15 @@ class AuthProvider extends ChangeNotifier {
 
         // ── Create admin session ──
         try {
-          final sessionData = await _supabase.from('admin_sessions').insert({
-            'admin_id': userId,
-            'device_info': 'Enything Admin App', // You can use device_info package later
-          }).select('id').single();
+          final sessionData = await _supabase
+              .from('admin_sessions')
+              .insert({
+                'admin_id': userId,
+                'device_info':
+                    'Enything Admin App', // You can use device_info package later
+              })
+              .select('id')
+              .single();
 
           _currentSessionId = sessionData['id'];
           final prefs = await SharedPreferences.getInstance();
@@ -310,33 +322,38 @@ class AuthProvider extends ChangeNotifier {
       if (!allRoles.contains(primaryRole)) {
         allRoles.add(primaryRole);
       }
-      
+
       // Load last active role from SharedPreferences to persist role switching across reboots
       final prefs = await SharedPreferences.getInstance();
       final lastActiveRole = prefs.getString('last_active_role');
-      
+
       String? targetRole = preferredRole;
-      if (targetRole == null && lastActiveRole != null && allRoles.contains(lastActiveRole)) {
+      if (targetRole == null &&
+          lastActiveRole != null &&
+          allRoles.contains(lastActiveRole)) {
         targetRole = lastActiveRole;
       }
-      
+
       // Prefer the requested/saved role if valid, otherwise use primary
-      final sessionRole =
-          (targetRole != null && allRoles.contains(targetRole))
-              ? targetRole
-              : primaryRole;
+      final sessionRole = (targetRole != null && allRoles.contains(targetRole))
+          ? targetRole
+          : primaryRole;
 
       // Save it immediately so it's fresh
       await prefs.setString('last_active_role', sessionRole);
 
       // ── Detect verification status for the session role ──
-      
+
       // If active role is admin, check if session is revoked
       if (sessionRole == 'admin' && _isAdminVerified) {
         final savedSessionId = prefs.getString('admin_session_id');
         if (savedSessionId != null) {
           try {
-            final sessionRow = await _supabase.from('admin_sessions').select('revoked_at').eq('id', savedSessionId).maybeSingle();
+            final sessionRow = await _supabase
+                .from('admin_sessions')
+                .select('revoked_at')
+                .eq('id', savedSessionId)
+                .maybeSingle();
             if (sessionRow == null || sessionRow['revoked_at'] != null) {
               // Session was revoked remotely! Kick them out completely.
               debugPrint('Admin session was revoked remotely.');
@@ -345,7 +362,12 @@ class AuthProvider extends ChangeNotifier {
             } else {
               _currentSessionId = savedSessionId;
               // Update last seen
-              _supabase.from('admin_sessions').update({'last_seen_at': DateTime.now().toIso8601String()}).eq('id', savedSessionId).then((_) {}).catchError((_) {});
+              _supabase
+                  .from('admin_sessions')
+                  .update({'last_seen_at': DateTime.now().toIso8601String()})
+                  .eq('id', savedSessionId)
+                  .then((_) {})
+                  .catchError((_) {});
             }
           } catch (e) {
             debugPrint('Error checking admin session: $e');
@@ -356,26 +378,39 @@ class AuthProvider extends ChangeNotifier {
       String verificationStatus = 'verified'; // Default for customer
       String sellerVerificationStatus = 'unverified';
       String riderVerificationStatus = 'unverified';
-      
+
       if (allRoles.contains('seller')) {
-        final sellerData = await _supabase.from('shops').select('verification_status').eq('seller_id', userId).maybeSingle();
-        sellerVerificationStatus = sellerData?['verification_status'] ?? 'unverified';
-        if (sessionRole == 'seller') verificationStatus = sellerVerificationStatus;
-      } 
+        final sellerData = await _supabase
+            .from('shops')
+            .select('verification_status')
+            .eq('seller_id', userId)
+            .maybeSingle();
+        sellerVerificationStatus =
+            sellerData?['verification_status'] ?? 'unverified';
+        if (sessionRole == 'seller')
+          verificationStatus = sellerVerificationStatus;
+      }
       if (allRoles.contains('delivery_partner')) {
-        final deliveryData = await _supabase.from('delivery_partners').select('verification_status').eq('id', userId).maybeSingle();
-        riderVerificationStatus = deliveryData?['verification_status'] ?? 'unverified';
-        if (sessionRole == 'delivery_partner') verificationStatus = riderVerificationStatus;
+        final deliveryData = await _supabase
+            .from('delivery_partners')
+            .select('verification_status')
+            .eq('id', userId)
+            .maybeSingle();
+        riderVerificationStatus =
+            deliveryData?['verification_status'] ?? 'unverified';
+        if (sessionRole == 'delivery_partner')
+          verificationStatus = riderVerificationStatus;
       }
 
       _user = UserModel.fromMap({
         ...data,
         'email': _supabase.auth.currentUser?.email ?? '',
-        'phone': (_supabase.auth.currentUser?.email?.contains('9999999996') == true)
-            ? '+919999999996'
-            : (_supabase.auth.currentUser?.phone?.isNotEmpty == true) 
-                ? _supabase.auth.currentUser!.phone! 
-                : (data['phone'] ?? ''),
+        'phone':
+            (_supabase.auth.currentUser?.email?.contains('9999999996') == true)
+                ? '+919999999996'
+                : (_supabase.auth.currentUser?.phone?.isNotEmpty == true)
+                    ? _supabase.auth.currentUser!.phone!
+                    : (data['phone'] ?? ''),
         'activeRoles': allRoles,
         'activeSessionRole': sessionRole,
         'verification_status': verificationStatus,
@@ -397,35 +432,46 @@ class AuthProvider extends ChangeNotifier {
     if (!_user!.activeRoles.contains(role)) return;
 
     // Auto-deactivate delivery toggle when switching away from rider role
-    if (_user!.activeSessionRole == 'delivery_partner' && role != 'delivery_partner') {
+    if (_user!.activeSessionRole == 'delivery_partner' &&
+        role != 'delivery_partner') {
       try {
-        await _supabase.from('delivery_partners')
-            .update({'is_active': false})
-            .eq('id', _user!.id);
+        await _supabase
+            .from('delivery_partners')
+            .update({'is_active': false}).eq('id', _user!.id);
       } catch (e) {
         debugPrint('Failed to deactivate delivery partner: $e');
       }
     }
-    
+
     String verificationStatus = 'verified'; // Default
     try {
       if (role == 'seller') {
-        final sellerData = await _supabase.from('shops').select('verification_status').eq('seller_id', _user!.id).maybeSingle();
+        final sellerData = await _supabase
+            .from('shops')
+            .select('verification_status')
+            .eq('seller_id', _user!.id)
+            .maybeSingle();
         verificationStatus = sellerData?['verification_status'] ?? 'unverified';
       } else if (role == 'delivery_partner') {
-        final deliveryData = await _supabase.from('delivery_partners').select('verification_status').eq('id', _user!.id).maybeSingle();
-        verificationStatus = deliveryData?['verification_status'] ?? 'unverified';
+        final deliveryData = await _supabase
+            .from('delivery_partners')
+            .select('verification_status')
+            .eq('id', _user!.id)
+            .maybeSingle();
+        verificationStatus =
+            deliveryData?['verification_status'] ?? 'unverified';
       }
     } catch (e) {
       debugPrint('Error fetching verification status on role switch: $e');
     }
 
-    _user = _user!.copyWith(activeSessionRole: role, verificationStatus: verificationStatus);
-    
+    _user = _user!.copyWith(
+        activeSessionRole: role, verificationStatus: verificationStatus);
+
     // Persist the switched role so it survives an app restart
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('last_active_role', role);
-    
+
     notifyListeners();
   }
 
@@ -449,17 +495,17 @@ class AuthProvider extends ChangeNotifier {
     return 'Enything$digits#Auth2025';
   }
 
-  // S4 FIX: Magic test numbers are ONLY active in debug builds.
-  // In release APKs, kDebugMode is false (compile-time constant), so
-  // this method always returns false and the bypass code is dead.
+  // S4 FIX: Magic test numbers are ONLY active in debug builds EXCEPT for reviewer numbers.
   bool _isMagicNumber(String phone) {
+    if (phone.contains('9999999996') ||
+        phone.contains('9999999997') ||
+        phone.contains('9999999998')) return true;
     if (!kDebugMode) return false;
     return phone.contains('9999999991') ||
         phone.contains('9999999992') ||
         phone.contains('9999999993') ||
         phone.contains('9999999994') ||
-        phone.contains('9999999995') ||
-        phone.contains('9999999996');
+        phone.contains('9999999995');
   }
 
   /// Step 1: Send OTP via the `send-otp` Supabase Edge Function (Fast2SMS).
@@ -497,12 +543,16 @@ class AuthProvider extends ChangeNotifier {
       return null; // null = success
     } on FunctionException catch (e) {
       final data = e.details;
-      _error = (data is Map ? data['error'] as String? : null) ?? 'Failed to send OTP: ${e.reasonPhrase ?? "Unknown error"}';
+      _error = (data is Map ? data['error'] as String? : null) ??
+          'Failed to send OTP: ${e.reasonPhrase ?? "Unknown error"}';
       debugPrint('sendPhoneOtp FunctionException: $e');
     } catch (e) {
       final errorStr = e.toString();
-      if (errorStr.contains('SocketException') || errorStr.contains('Failed host lookup') || errorStr.contains('ClientException')) {
-        _error = 'No internet connection. Please check your network and try again.';
+      if (errorStr.contains('SocketException') ||
+          errorStr.contains('Failed host lookup') ||
+          errorStr.contains('ClientException')) {
+        _error =
+            'No internet connection. Please check your network and try again.';
       } else {
         _error = 'Could not send OTP: $errorStr';
       }
@@ -525,7 +575,6 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
 
     // ──────────────────────────────────────────────────────────────────────
 
@@ -583,16 +632,25 @@ class AuthProvider extends ChangeNotifier {
         return null;
       }
 
-      // For Razorpay reviewer, auto-insert profile + customer + address
-      if (phone.contains('9999999996')) {
+      // For Razorpay reviewer, auto-insert profile + role specific row + address
+      if (phone.contains('9999999996') ||
+          phone.contains('9999999997') ||
+          phone.contains('9999999998')) {
+        String mockRole = 'customer';
+        if (phone.contains('9999999997')) mockRole = 'seller';
+        if (phone.contains('9999999998')) mockRole = 'delivery_partner';
+
+        final assignedRole = preferredRole ?? mockRole;
+        final hardcodedLocation = 'POINT(74.6366 34.4225)';
+
         // 1. Upsert profile — handle phone uniqueness gracefully
         try {
-          final uniquePhone = phone.contains('9999999996') 
-              ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}' 
+          final uniquePhone = phone.contains('999999999')
+              ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}'
               : phone;
           await _supabase.from('profiles').upsert({
             'id': userId,
-            'role': preferredRole ?? 'customer',
+            'role': assignedRole,
             'full_name': 'Razorpay Reviewer',
             'phone': uniquePhone
           }, onConflict: 'id');
@@ -600,13 +658,31 @@ class AuthProvider extends ChangeNotifier {
           debugPrint('Mock profile upsert failed: $e');
         }
 
-        // 2. Upsert customer row (just the id — no PostGIS geometry)
+        // 2. Upsert specific role row (with hardcoded location)
         try {
-          await _supabase.from('customers').upsert({
-            'id': userId,
-          }, onConflict: 'id');
+          if (assignedRole == 'customer') {
+            await _supabase.from('customers').upsert({
+              'id': userId,
+              'location': hardcodedLocation,
+            }, onConflict: 'id');
+          } else if (assignedRole == 'seller') {
+            await _supabase.from('shops').upsert({
+              'seller_id': userId,
+              'name': 'Reviewer Shop',
+              'is_active': true,
+              'verification_status': 'verified',
+              'location': hardcodedLocation,
+            }, onConflict: 'seller_id');
+          } else if (assignedRole == 'delivery_partner') {
+            await _supabase.from('delivery_partners').upsert({
+              'id': userId,
+              'is_active': true,
+              'verification_status': 'verified',
+              'location': hardcodedLocation,
+            }, onConflict: 'id');
+          }
         } catch (e) {
-          debugPrint('Mock customer upsert failed: $e');
+          debugPrint('Mock role upsert failed: $e');
         }
 
         // 3. Insert a saved address so the reviewer can place orders
@@ -616,7 +692,7 @@ class AuthProvider extends ChangeNotifier {
               .select()
               .eq('user_id', userId)
               .maybeSingle();
-              
+
           if (existingAddr == null) {
             await _supabase.from('saved_addresses').insert({
               'user_id': userId,
@@ -634,7 +710,7 @@ class AuthProvider extends ChangeNotifier {
         }
 
         // Always treat Razorpay reviewer as an existing user — skip setup page
-        await _fetchProfile(preferredRole: preferredRole ?? 'customer');
+        await _fetchProfile(preferredRole: assignedRole);
         _isLoading = false;
         notifyListeners();
         return 'existing';
@@ -673,15 +749,19 @@ class AuthProvider extends ChangeNotifier {
       _error = e.message;
     } on FunctionException catch (e) {
       final data = e.details;
-      _error = (data is Map ? data['error'] as String? : null) ?? 'Verification failed: ${e.reasonPhrase ?? "Unknown error"}';
+      _error = (data is Map ? data['error'] as String? : null) ??
+          'Verification failed: ${e.reasonPhrase ?? "Unknown error"}';
       debugPrint('verifyPhoneOtp FunctionException: $e');
     } on PostgrestException catch (e) {
       _error = 'Database error: ${e.message}';
       debugPrint('verifyPhoneOtp PostgrestException: $e');
     } catch (e) {
       final errorStr = e.toString();
-      if (errorStr.contains('SocketException') || errorStr.contains('Failed host lookup') || errorStr.contains('ClientException')) {
-        _error = 'No internet connection. Please check your network and try again.';
+      if (errorStr.contains('SocketException') ||
+          errorStr.contains('Failed host lookup') ||
+          errorStr.contains('ClientException')) {
+        _error =
+            'No internet connection. Please check your network and try again.';
       } else {
         _error = 'Verification failed. Please try again.';
       }
@@ -708,7 +788,7 @@ class AuthProvider extends ChangeNotifier {
       final user = _supabase.auth.currentUser;
       final userId = user?.id ??
           '00000000-0000-0000-0000-${_pendingPhone?.replaceAll("+", "").padLeft(12, "0") ?? "000000000001"}';
-      
+
       String phone = user?.phone ?? '';
       if (phone.isEmpty) {
         phone = user?.userMetadata?['phone'] as String? ?? '';
@@ -731,7 +811,8 @@ class AuthProvider extends ChangeNotifier {
       } catch (profileError) {
         final s = profileError.toString();
         if (s.contains('profiles_phone_key') || s.contains('23505')) {
-          _error = 'An account with this phone number already exists. If you recently deleted your account, please wait or contact support.';
+          _error =
+              'An account with this phone number already exists. If you recently deleted your account, please wait or contact support.';
           _isLoading = false;
           notifyListeners();
           return _error;
@@ -749,8 +830,10 @@ class AuthProvider extends ChangeNotifier {
             );
           } catch (innerError) {
             final innerStr = innerError.toString();
-            if (innerStr.contains('profiles_phone_key') || innerStr.contains('23505')) {
-              _error = 'An account with this phone number already exists. If you recently deleted your account, please wait or contact support.';
+            if (innerStr.contains('profiles_phone_key') ||
+                innerStr.contains('23505')) {
+              _error =
+                  'An account with this phone number already exists. If you recently deleted your account, please wait or contact support.';
               _isLoading = false;
               notifyListeners();
               return _error;
@@ -788,13 +871,15 @@ class AuthProvider extends ChangeNotifier {
         // the authenticated Dart context so it is always reliable and includes
         // house_number → flat_number which the trigger misses.
         if (additionalData != null) {
-          final addressText = (additionalData['default_address'] as String? ?? '').trim();
+          final addressText =
+              (additionalData['default_address'] as String? ?? '').trim();
           if (addressText.isNotEmpty) {
             try {
               // Parse lat/lng from the locationPoint string e.g. "POINT(lng lat)"
               double lat = 0, lng = 0;
               final locStr = additionalData['location']?.toString() ?? '';
-              final match = RegExp(r'POINT\(([^\s]+)\s+([^\)]+)\)').firstMatch(locStr);
+              final match =
+                  RegExp(r'POINT\(([^\s]+)\s+([^\)]+)\)').firstMatch(locStr);
               if (match != null) {
                 lng = double.tryParse(match.group(1) ?? '') ?? 0;
                 lat = double.tryParse(match.group(2) ?? '') ?? 0;
@@ -812,20 +897,26 @@ class AuthProvider extends ChangeNotifier {
                 // First clear any stale default flag
                 await _supabase
                     .from('saved_addresses')
-                    .update({'is_default': false})
-                    .eq('user_id', userId);
+                    .update({'is_default': false}).eq('user_id', userId);
 
                 await _supabase.from('saved_addresses').insert({
                   'user_id': userId,
                   'label': 'Home',
-                  'flat_number': (additionalData['house_number'] as String? ?? '').trim().isEmpty
-                      ? null
-                      : (additionalData['house_number'] as String).trim(),
+                  'flat_number':
+                      (additionalData['house_number'] as String? ?? '')
+                              .trim()
+                              .isEmpty
+                          ? null
+                          : (additionalData['house_number'] as String).trim(),
                   'address': addressText,
-                  'landmark': (additionalData['landmark'] as String? ?? '').trim().isEmpty
+                  'landmark': (additionalData['landmark'] as String? ?? '')
+                          .trim()
+                          .isEmpty
                       ? null
                       : (additionalData['landmark'] as String).trim(),
-                  'pincode': (additionalData['pincode'] as String? ?? '').trim().isEmpty
+                  'pincode': (additionalData['pincode'] as String? ?? '')
+                          .trim()
+                          .isEmpty
                       ? null
                       : (additionalData['pincode'] as String).trim(),
                   'latitude': lat,
@@ -933,7 +1024,8 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final response = await _supabase.rpc('get_invitation_details', params: {'p_token': token});
+      final response = await _supabase
+          .rpc('get_invitation_details', params: {'p_token': token});
       final List data = response as List;
       if (data.isNotEmpty) {
         _isLoading = false;
@@ -959,7 +1051,7 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
-    
+
     try {
       // 1. Sign up the user (or if they exist, it might throw, but let's assume new user)
       final authResponse = await _supabase.auth.signUp(
@@ -970,7 +1062,8 @@ class AuthProvider extends ChangeNotifier {
 
       final userId = authResponse.user?.id;
       if (userId == null) {
-        throw Exception('Failed to create user account. Check your email/password.');
+        throw Exception(
+            'Failed to create user account. Check your email/password.');
       }
 
       // 2. Accept the invitation via RPC
@@ -983,7 +1076,7 @@ class AuthProvider extends ChangeNotifier {
 
       // 3. Fetch profile and mark them verified
       await _fetchProfile(preferredRole: 'admin');
-      
+
       _isLoading = false;
       notifyListeners();
       return null;
@@ -1033,13 +1126,11 @@ class AuthProvider extends ChangeNotifier {
         if (role == 'seller') {
           await _supabase
               .from('shops')
-              .update({'is_active': false})
-              .eq('seller_id', userId);
+              .update({'is_active': false}).eq('seller_id', userId);
         } else if (role == 'delivery_partner') {
           await _supabase
               .from('delivery_partners')
-              .update({'is_active': false})
-              .eq('id', userId);
+              .update({'is_active': false}).eq('id', userId);
         }
       } catch (_) {} // Never block logout on deactivation failure
     }
@@ -1068,7 +1159,10 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       if (_currentSessionId != null) {
-        await _supabase.from('admin_sessions').delete().eq('id', _currentSessionId!);
+        await _supabase
+            .from('admin_sessions')
+            .delete()
+            .eq('id', _currentSessionId!);
       }
     } catch (_) {}
 
@@ -1086,4 +1180,3 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

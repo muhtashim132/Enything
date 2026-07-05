@@ -9,7 +9,14 @@ import '../../utils/responsive_layout.dart';
 import '../../utils/time_utils.dart';
 
 class FaqSupportPage extends StatefulWidget {
-  const FaqSupportPage({super.key});
+  final int initialTabIndex;
+  final bool openTicketSheet;
+
+  const FaqSupportPage({
+    super.key,
+    this.initialTabIndex = 0,
+    this.openTicketSheet = false,
+  });
 
   @override
   State<FaqSupportPage> createState() => _FaqSupportPageState();
@@ -26,9 +33,15 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
     _loadFaqs();
     _loadMyTickets();
+    
+    if (widget.openTicketSheet) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showSubmitTicketSheet();
+      });
+    }
   }
 
   void _loadFaqs() {

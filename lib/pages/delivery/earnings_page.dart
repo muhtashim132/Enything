@@ -243,12 +243,15 @@ class _EarningsPageState extends State<EarningsPage> {
                             style: GoogleFonts.outfit(
                                 fontSize: 18, fontWeight: FontWeight.w700),
                           ),
-                          Text(
-                            'View all',
-                            style: GoogleFonts.outfit(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primary),
+                          GestureDetector(
+                            onTap: () => Navigator.pushNamed(context, AppRoutes.riderOrderHistory),
+                            child: Text(
+                              'View all',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary),
+                            ),
                           ),
                         ],
                       ),

@@ -11,6 +11,8 @@ class ShopModel {
   final int prepTimeMinutes;
   final bool isVegOnly;
   final String? openingHours;
+  final String? openTime;
+  final String? closeTime;
   final String address;
   final LatLng location;
   final String category;
@@ -32,6 +34,8 @@ class ShopModel {
     this.prepTimeMinutes = 30,
     this.isVegOnly = false,
     this.openingHours,
+    this.openTime,
+    this.closeTime,
     required this.address,
     required this.location,
     required this.category,
@@ -101,6 +105,8 @@ class ShopModel {
       prepTimeMinutes: map['prep_time_minutes'] ?? 30,
       isVegOnly: map['is_veg_only'] ?? false,
       openingHours: map['opening_hours'],
+      openTime: map['open_time']?.toString().substring(0, 5), // e.g., '09:00' from '09:00:00'
+      closeTime: map['close_time']?.toString().substring(0, 5),
       address: map['address'] ?? '',
       location: LatLng(lat, lng),
       category: map['category'] ??
@@ -114,5 +120,36 @@ class ShopModel {
       totalOrders: map['total_orders'] ?? 0,
       bannerImage: map['banner_url'] ?? map['banner_image'],
     );
+  }
+
+  bool get isOpenRightNow {
+    if (!isActive) return false;
+    if (openTime == null || closeTime == null) return isActive;
+    
+    try {
+      final now = DateTime.now();
+      final openParts = openTime!.split(':');
+      final closeParts = closeTime!.split(':');
+      if (openParts.length < 2 || closeParts.length < 2) return isActive;
+      
+      final openH = int.parse(openParts[0]);
+      final openM = int.parse(openParts[1]);
+      final closeH = int.parse(closeParts[0]);
+      final closeM = int.parse(closeParts[1]);
+      
+      final nowMinutes = now.hour * 60 + now.minute;
+      final openMinutes = openH * 60 + openM;
+      final closeMinutes = closeH * 60 + closeM;
+      
+      if (closeMinutes < openMinutes) {
+        // Night shift
+        return (nowMinutes >= openMinutes || nowMinutes <= closeMinutes);
+      } else {
+        // Normal shift
+        return (nowMinutes >= openMinutes && nowMinutes <= closeMinutes);
+      }
+    } catch (_) {
+      return isActive;
+    }
   }
 }

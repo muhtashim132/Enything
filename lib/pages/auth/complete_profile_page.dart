@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../config/tax_config.dart';
@@ -24,6 +25,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     with SingleTickerProviderStateMixin {
   _Role _role = _Role.customer;
   final _nameCtrl = TextEditingController();
+  final _referralCtrl = TextEditingController();
   // Customer
   final _addressCtrl = TextEditingController();
   // Seller
@@ -104,6 +106,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     _animCtrl.dispose();
     for (final c in [
       _nameCtrl,
+      _referralCtrl,
       _addressCtrl,
       _shopNameCtrl,
       _shopAddressCtrl,
@@ -276,6 +279,16 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     if (err != null) {
       _showSnack(err, isError: true);
       return;
+    }
+
+    if (_referralCtrl.text.trim().isNotEmpty) {
+      final uid = context.read<AuthProvider>().user?.id;
+      if (uid != null) {
+        await context.read<SubscriptionProvider>().applyReferralCode(
+          referralCode: _referralCtrl.text.trim(),
+          newUserId: uid,
+        );
+      }
     }
 
     // Show welcome splash briefly
@@ -550,6 +563,12 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           _buildPhoneField(),
           const SizedBox(height: 16),
           ..._roleFields,
+          const SizedBox(height: 16),
+          _DarkField(
+              label: 'Referral Code (Optional)',
+              controller: _referralCtrl,
+              hint: 'e.g. REF123',
+              caps: true),
           const SizedBox(height: 32),
           _GoldButton(
               label: _loading ? '' : 'Create Account',

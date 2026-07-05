@@ -380,6 +380,14 @@ class _WithdrawalCard extends StatelessWidget {
                 Text(w['upi_id'] ?? w['bank_account_number'] ?? '',
                     style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 Text(date, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                if (w['transaction_id'] != null && w['transaction_id'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                    child: Text('Txn: ${w['transaction_id']}', style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace')),
+                  ),
+                ],
               ],
             ),
           ),

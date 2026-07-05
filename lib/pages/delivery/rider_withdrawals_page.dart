@@ -72,13 +72,13 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
       // Total earnings = sum of rider_earnings on delivered orders
       final earningsRes = await _db
           .from('orders')
-          .select('rider_earnings')
-          .eq('rider_id', userId)
+          .select('rider_earnings, delivery_charges')
+          .eq('delivery_partner_id', userId)
           .eq('status', 'delivered');
 
       double totalEarned = 0;
       for (final o in earningsRes as List) {
-        totalEarned += (o['rider_earnings'] as num? ?? 0).toDouble();
+        totalEarned += (o['rider_earnings'] ?? o['delivery_charges'] ?? 0).toDouble();
       }
 
       _availableBalance = totalEarned - totalPaid;
@@ -357,6 +357,14 @@ class _WithdrawalCard extends StatelessWidget {
               Text(w['upi_id'] ?? w['bank_account_number'] ?? '',
                   style: const TextStyle(color: Colors.white54, fontSize: 12)),
               Text(date, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              if (w['transaction_id'] != null && w['transaction_id'].toString().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                  child: Text('Txn: ${w['transaction_id']}', style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace')),
+                ),
+              ],
             ]),
           ),
           Container(

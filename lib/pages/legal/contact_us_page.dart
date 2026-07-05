@@ -381,8 +381,11 @@ class ContactUsPage extends StatelessWidget {
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: () =>
-                    Navigator.pushNamed(context, AppRoutes.faqSupport),
+                onPressed: () => Navigator.pushNamed(
+                  context,
+                  AppRoutes.faqSupport,
+                  arguments: {'initialIndex': 2, 'showTicketSheet': true},
+                ),
                 icon: const Icon(Icons.support_agent_rounded, size: 20),
                 label: Text(
                   'Submit a Support Ticket',
