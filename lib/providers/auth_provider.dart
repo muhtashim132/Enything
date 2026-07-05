@@ -944,7 +944,7 @@ class AuthProvider extends ChangeNotifier {
         if (existing == null) {
           await _supabase.from('shops').insert({
             'seller_id': userId,
-            'is_active': true, // shops are open/visible by default on creation
+            'is_active': false, // shops are inactive pending KYC
             if (additionalData != null) ...additionalData,
           });
         } else if (additionalData != null) {

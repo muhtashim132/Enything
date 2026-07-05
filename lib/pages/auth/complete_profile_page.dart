@@ -47,7 +47,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
   String? _phoneNumber;
 
   // Seller specific extra
-  final _gstCtrl = TextEditingController();
+  // Removed _gstCtrl to avoid duplication with SellerKycUploadPage
 
   bool _loading = false;
   int _step = 0; // 0=role select, 1=details
@@ -117,7 +117,6 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       _pincodeCtrl,
       _landmarkCtrl,
       _houseNumberCtrl,
-      _gstCtrl,
     ]) {
       c.dispose();
     }
@@ -203,18 +202,35 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       return;
     }
 
+    final pincode = _pincodeCtrl.text.trim();
+    if (pincode.isEmpty || pincode.length != 6 || int.tryParse(pincode) == null) {
+      _showSnack('Please enter a valid 6-digit Pincode', isError: true);
+      setState(() => _loading = false);
+      return;
+    }
+
     switch (_role) {
       case _Role.customer:
+        if (_addressCtrl.text.trim().isEmpty) {
+          _showSnack('Please provide a delivery address', isError: true);
+          setState(() => _loading = false);
+          return;
+        }
         roleName = 'customer';
         extra = {
           'default_address': _addressCtrl.text.trim(),
-          'pincode': _pincodeCtrl.text.trim(),
+          'pincode': pincode,
           'house_number': _houseNumberCtrl.text.trim(),
           'landmark': _landmarkCtrl.text.trim(),
           'location': locationPoint,
         };
         break;
       case _Role.seller:
+        if (_shopAddressCtrl.text.trim().isEmpty) {
+          _showSnack('Please provide a shop address', isError: true);
+          setState(() => _loading = false);
+          return;
+        }
         // Validate category-specific required fields
         final extraValidationError = _extraFieldsKey.currentState?.validate();
         if (extraValidationError != null) {
@@ -223,7 +239,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           return;
         }
         final categoryExtra = _extraFieldsKey.currentState?.collectData() ?? {};
-        // Note: Aadhaar, PAN, Bank Details are moved to SellerKycUploadPage
+        // Note: Aadhaar, PAN, Bank Details, and GST are moved to SellerKycUploadPage
         roleName = 'seller';
         extra = {
           'name': _shopNameCtrl.text.trim().isEmpty
@@ -231,12 +247,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
               : _shopNameCtrl.text.trim(),
           'category': _shopCategory,
           'address': _shopAddressCtrl.text.trim(),
-          'pincode': _pincodeCtrl.text.trim(),
+          'pincode': pincode,
           'house_number': _houseNumberCtrl.text.trim(),
           'landmark': _landmarkCtrl.text.trim(),
           'is_active': false,
           'verification_status': 'unverified',
-          'gst_number': _gstCtrl.text.trim(),
           'location': locationPoint,
           // Merge the group-specific fields directly into the shops row.
           // Supabase ignores keys that don't exist as columns, so unknown
@@ -246,6 +261,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         };
         break;
       case _Role.delivery:
+        if (_vehicleTypeCtrl.text.trim().isEmpty) {
+          _showSnack('Please enter your vehicle type', isError: true);
+          setState(() => _loading = false);
+          return;
+        }
         if (_vehicleRegCtrl.text.trim().isEmpty) {
           _showSnack('Please fill vehicle registration', isError: true);
           setState(() => _loading = false);
@@ -257,7 +277,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           'vehicle_type': _vehicleTypeCtrl.text.trim(),
           'vehicle_reg_number': _vehicleRegCtrl.text.trim(), // RC
           'insurance_number': _insuranceCtrl.text.trim(),
-          'pincode': _pincodeCtrl.text.trim(),
+          'pincode': pincode,
           'house_number': _houseNumberCtrl.text.trim(),
           'landmark': _landmarkCtrl.text.trim(),
           'location': locationPoint,
@@ -726,30 +746,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           const SizedBox(height: 24),
 
           // ── KYC & Legal Details ──────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                  child: Container(
-                      height: 1, color: Colors.white.withValues(alpha: 0.08))),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('Tax Details',
-                    style: GoogleFonts.outfit(
-                        color: Colors.white38, fontSize: 12)),
-              ),
-              Expanded(
-                  child: Container(
-                      height: 1, color: Colors.white.withValues(alpha: 0.08))),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _DarkField(
-              label: TaxConfig.isEnythingDeemedSupplier(_shopCategory)
-                  ? 'GSTIN (Optional for Restaurants)'
-                  : 'GSTIN Number (Optional)',
-              controller: _gstCtrl,
-              hint: '22AAAAA0000A1Z5',
-              caps: true),
+          // Note: Tax Details (GSTIN, etc.) have been moved entirely to
+          // SellerKycUploadPage to prevent duplicate entry or data loss.
         ];
       case _Role.delivery:
         return [

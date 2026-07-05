@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
@@ -111,7 +112,7 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
     setState(() => _loading = true);
 
     try {
-      final userId = _db.auth.currentUser?.id;
+      final userId = context.read<AuthProvider>().currentUserId;
       if (userId == null) throw Exception('User not logged in');
 
       // Upload Images
