@@ -50,8 +50,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   double? _deliveryKm;
 
   // Live rider position (updated via Realtime)
-  LatLng? _riderLatLng;
-  DateTime? _riderUpdatedAt;
+  final Map<String, LatLng> _riderLocations = {};
+  final Map<String, DateTime> _riderUpdatedAts = {};
   RealtimeChannel? _channel;
 
   // Pulse animation for the rider dot
@@ -63,9 +63,16 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     super.initState();
 
     // Seed rider position from current order snapshot
-    if (widget.order.riderLat != null && widget.order.riderLng != null) {
-      _riderLatLng = LatLng(widget.order.riderLat!, widget.order.riderLng!);
-      _riderUpdatedAt = widget.order.riderLocationUpdatedAt;
+    final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
+        ? widget.groupOrders!
+        : [widget.order];
+    for (final o in shops) {
+      if (o.deliveryPartnerId != null && o.riderLat != null && o.riderLng != null) {
+        _riderLocations[o.deliveryPartnerId!] = LatLng(o.riderLat!, o.riderLng!);
+        if (o.riderLocationUpdatedAt != null) {
+          _riderUpdatedAts[o.deliveryPartnerId!] = o.riderLocationUpdatedAt!;
+        }
+      }
     }
 
     _pulseCtrl = AnimationController(
@@ -109,12 +116,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
             final r = payload.newRecord;
             final lat = (r['rider_lat'] as num?)?.toDouble();
             final lng = (r['rider_lng'] as num?)?.toDouble();
-            if (lat != null && lng != null) {
+            final pid = r['delivery_partner_id'] as String?;
+            if (lat != null && lng != null && pid != null) {
               setState(() {
-                _riderLatLng = LatLng(lat, lng);
-                _riderUpdatedAt = r['rider_location_updated_at'] != null
+                _riderLocations[pid] = LatLng(lat, lng);
+                final updated = r['rider_location_updated_at'] != null
                     ? DateTime.tryParse(r['rider_location_updated_at'])
                     : null;
+                if (updated != null) _riderUpdatedAts[pid] = updated;
               });
             }
           },
@@ -213,7 +222,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final pts = <LatLng>[
       if (widget.order.deliveryLat != null && widget.order.deliveryLng != null && widget.order.deliveryLat != 0.0)
         LatLng(widget.order.deliveryLat!, widget.order.deliveryLng!),
-      if (_riderLatLng != null && _riderLatLng!.latitude != 0.0) _riderLatLng!,
+      for (final loc in _riderLocations.values)
+        if (loc.latitude != 0.0) loc,
     ];
     
     final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
@@ -421,7 +431,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final order = widget.order;
     final isOutForDelivery = order.status == 'out_for_delivery';
-    final showRiderLocation = ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(order.status) && _riderLatLng != null;
+    final showRiderLocation = ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(order.status) && _riderLocations.isNotEmpty;
 
     final custLat = order.deliveryLat;
     final custLng = order.deliveryLng;
@@ -465,12 +475,13 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
         ),
       // Live rider marker (when rider is assigned and position is known)
       if (showRiderLocation)
-        Marker(
-          point: applyJitter(_riderLatLng!.latitude, _riderLatLng!.longitude),
-          width: 80,
-          height: 72,
-          child: _riderMarker(),
-        ),
+        for (final loc in _riderLocations.values)
+          Marker(
+            point: applyJitter(loc.latitude, loc.longitude),
+            width: 80,
+            height: 72,
+            child: _riderMarker(),
+          ),
     ];
 
     // Map initial centre — prefer customer address
@@ -745,10 +756,10 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              if (_riderUpdatedAt != null) ...[
+                              if (_riderUpdatedAts.isNotEmpty) ...[
                                 const Spacer(),
                                 Text(
-                                  'Updated ${_secondsAgo(_riderUpdatedAt!)}s ago',
+                                  'Updated ${_secondsAgo(_riderUpdatedAts.values.reduce((a, b) => a.isAfter(b) ? a : b))}s ago',
                                   style: GoogleFonts.outfit(
                                     fontSize: 10,
                                     color: Colors.grey,

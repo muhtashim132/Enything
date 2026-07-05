@@ -40,7 +40,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
   RealtimeChannel? _channel;
-  LatLng? _riderLatLng;
+  final Map<String, LatLng> _riderLocations = {};
   bool _razorpayOpened = false;
 
   // Payment (Razorpay) — triggered when both seller & rider accept
@@ -186,8 +186,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           _order = order;
           _groupOrders = group;
           _isLoading = false;
-          if (order.riderLat != null && order.riderLng != null) {
-            _riderLatLng = LatLng(order.riderLat!, order.riderLng!);
+          _riderLocations.clear();
+          for (final o in group) {
+            if (o.deliveryPartnerId != null && o.riderLat != null && o.riderLng != null) {
+              _riderLocations[o.deliveryPartnerId!] = LatLng(o.riderLat!, o.riderLng!);
+            }
           }
         });
 
@@ -245,13 +248,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 // If it's the primary order, update _order
                 if (updatedOrder.id == widget.orderId) {
                   _order = updatedOrder;
-                  if (updatedOrder.riderLat != null && updatedOrder.riderLng != null) {
-                    _riderLatLng = LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
-                  }
-                  if (updatedOrder.status == 'delivered') _riderLatLng = null;
-                } else if (_order != null && updatedOrder.riderLat != null && updatedOrder.riderLng != null) {
-                  // If sibling order provides rider location
-                  _riderLatLng = LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
+                }
+                
+                if (updatedOrder.deliveryPartnerId != null && updatedOrder.riderLat != null && updatedOrder.riderLng != null) {
+                  _riderLocations[updatedOrder.deliveryPartnerId!] = LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
+                }
+                if (updatedOrder.status == 'delivered' && updatedOrder.deliveryPartnerId != null) {
+                  _riderLocations.remove(updatedOrder.deliveryPartnerId);
                 }
               });
 
@@ -995,8 +998,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   /// Returns the best available map centre for this order.
   /// Priority: rider live position → customer delivery address → Delhi fallback.
   LatLng _mapCenter() {
-    if (_riderLatLng != null && _order?.status == 'out_for_delivery') {
-      return _riderLatLng!;
+    if (_riderLocations.isNotEmpty && _order?.status == 'out_for_delivery') {
+      return _riderLocations.values.first;
     }
     if (_order?.deliveryLat != null && _order?.deliveryLng != null) {
       return LatLng(_order!.deliveryLat!, _order!.deliveryLng!);
@@ -1047,21 +1050,23 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     // Live rider marker (shown starting from 'confirmed')
     final showRider = _order != null && ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(_order!.status);
-    if (_riderLatLng != null && showRider) {
-      markers.add(Marker(
-        point: _riderLatLng!,
-        width: 52,
-        height: 52,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.success.withValues(alpha: 0.2),
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.success, width: 2),
+    if (_riderLocations.isNotEmpty && showRider) {
+      for (final riderLoc in _riderLocations.values) {
+        markers.add(Marker(
+          point: riderLoc,
+          width: 52,
+          height: 52,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.success, width: 2),
+            ),
+            child: const Icon(Icons.delivery_dining_rounded,
+                color: AppColors.success, size: 28),
           ),
-          child: const Icon(Icons.delivery_dining_rounded,
-              color: AppColors.success, size: 28),
-        ),
-      ));
+        ));
+      }
     }
     return markers;
   }
@@ -1201,6 +1206,28 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       if (activeOrders.isEmpty) {
         setState(() => _isProcessingPayment = false);
         return;
+      }
+
+      if (_order!.cartGroupId != null) {
+        try {
+          final reallocated = await _supabase.rpc('reallocate_cancelled_delivery_fees', params: {
+            'p_cart_group_id': _order!.cartGroupId!,
+          });
+          if (reallocated == true) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('A shop declined their part of the order. Adjusting your total payment...'),
+                backgroundColor: AppColors.primary,
+                duration: Duration(seconds: 5),
+              ));
+            }
+            await _fetchOrder();
+            setState(() => _isProcessingPayment = false);
+            return;
+          }
+        } catch (e) {
+          debugPrint('Fee reallocation RPC error: $e');
+        }
       }
 
       double totalAmount = 0.0;
@@ -2528,13 +2555,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     // During out_for_delivery: use live rider→customer distance for remaining time
     if (_aggregateStatus == 'out_for_delivery' &&
-        _riderLatLng != null &&
+        _riderLocations.isNotEmpty &&
         _order!.deliveryLat != null &&
         _order!.deliveryLng != null) {
-      distanceKm = DeliveryCalculator.haversineKm(
-        _riderLatLng!,
-        LatLng(_order!.deliveryLat!, _order!.deliveryLng!),
-      );
+      double maxDist = 0.0;
+      final custPt = LatLng(_order!.deliveryLat!, _order!.deliveryLng!);
+      for (final riderLoc in _riderLocations.values) {
+        final d = DeliveryCalculator.haversineKm(riderLoc, custPt);
+        if (d > maxDist) maxDist = d;
+      }
+      distanceKm = maxDist;
       prepMins = 0; // prep is done — only travel remains
     } else if (_aggregateStatus == 'picked_up' || _aggregateStatus == 'out_for_delivery') {
       // Prep is already done; only travel time remains
@@ -2842,7 +2872,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               ),
 
             // Live rider badge (top-right) when rider is active
-            if (_riderLatLng != null && ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(_order!.status))
+            if (_riderLocations.isNotEmpty && ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(_order!.status))
               Positioned(
                 top: 12,
                 right: 12,
