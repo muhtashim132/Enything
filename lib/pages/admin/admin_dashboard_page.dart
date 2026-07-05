@@ -181,7 +181,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     );
   }
 
-  // ── Build tabs based on permissions ─────────────────────────────
   List<_NavDef> _buildNavItems(RbacProvider rbac) => [
         const _NavDef(
           icon: Icons.dashboard_rounded,
@@ -189,11 +188,29 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           label: 'Home',
           visible: true,
         ),
-        const _NavDef(
-          icon: Icons.tune_outlined,
-          activeIcon: Icons.tune_rounded,
-          label: 'Settings',
-          visible: true,
+        _NavDef(
+          icon: Icons.people_outline_rounded,
+          activeIcon: Icons.people_rounded,
+          label: 'Users',
+          visible: rbac.can('users.view') || rbac.isSuperAdmin,
+        ),
+        _NavDef(
+          icon: Icons.shopping_bag_outlined,
+          activeIcon: Icons.shopping_bag_rounded,
+          label: 'Orders',
+          visible: rbac.can('orders.view') || rbac.isSuperAdmin,
+        ),
+        _NavDef(
+          icon: Icons.verified_user_outlined,
+          activeIcon: Icons.verified_user_rounded,
+          label: 'KYC',
+          visible: rbac.can('kyc.view') || rbac.isSuperAdmin,
+        ),
+        _NavDef(
+          icon: Icons.account_balance_wallet_outlined,
+          activeIcon: Icons.account_balance_wallet_rounded,
+          label: 'Finance',
+          visible: rbac.can('finance.view') || rbac.isSuperAdmin,
         ),
         _NavDef(
           icon: Icons.auto_awesome_outlined,
@@ -207,6 +224,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           label: 'Support',
           visible: rbac.can('support.view') || rbac.isSuperAdmin,
           badgeCount: _openTicketsCount,
+        ),
+        const _NavDef(
+          icon: Icons.tune_outlined,
+          activeIcon: Icons.tune_rounded,
+          label: 'Settings',
+          visible: true,
         ),
       ].where((n) => n.visible).toList();
 

@@ -507,7 +507,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       final locationProvider = context.read<LocationProvider>();
 
       // Fetch all shops, then filter is_active locally to bypass any RLS column blocks
-      final shopsResponse = await _supabase.from('shops').select();
+      final shopsResponse = await _supabase.from('shops').select().limit(100);
 
       final productsResponse =
           await _supabase.from('products').select('*, shops(*)').limit(100);
@@ -617,7 +617,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       // Fetch all, filter locally
       final shopsResponse =
-          await _supabase.from('shops').select().inFilter('category', subcategories);
+          await _supabase.from('shops').select().inFilter('category', subcategories).limit(100);
 
       final productsResponse = await _supabase
           .from('products')

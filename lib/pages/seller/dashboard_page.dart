@@ -61,11 +61,37 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     _loadStats();
   }
 
+  RealtimeChannel? _realtimeChannel;
+
   @override
   void dispose() {
     _bgCtrl.dispose();
     _entryCtrl.dispose();
+    _realtimeChannel?.unsubscribe();
     super.dispose();
+  }
+
+  void _setupRealtimeOrders(String shopId) {
+    if (_realtimeChannel != null) return;
+    
+    _realtimeChannel = _supabase
+        .channel('seller-orders-$shopId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'shop_id',
+            value: shopId,
+          ),
+          callback: (payload) {
+            if (mounted) {
+              _loadStats();
+            }
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadStats() async {
@@ -103,8 +129,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
       }
       // 'approved' and 'verified' both proceed to the dashboard normally
 
-      final shopId = shopData['id'];
-      _startNotifications(shopId as String);
+      final shopId = shopData['id'] as String;
+      _startNotifications(shopId);
 
       final rawCat = shopData['category'] ??
           (shopData['categories'] != null &&
@@ -112,38 +138,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
               ? shopData['categories'][0]
               : 'Other');
 
-      final ordersResp = await _supabase
-          .from('orders')
-          .select()
-          .eq('shop_id', shopId)
-          .neq('status', 'cancelled')
-          .neq('status', 'seller_rejected');
+      // Setup Realtime listener for incoming orders
+      _setupRealtimeOrders(shopId);
 
-      final productsResp =
-          await _supabase.from('products').select('id').eq('shop_id', shopId);
-
-      final pending = (ordersResp as List)
-          .where((o) =>
-              o['status'] == 'pending' || o['status'] == 'awaiting_acceptance')
-          .length;
-      final now = DateTime.now();
-      final todayStart = DateTime(now.year, now.month, now.day);
-      final todaysEarning = ordersResp.fold<double>(
-        0,
-        (s, o) {
-          if (o['status'] != 'delivered') return s;
-          final createdAt = DateTime.tryParse(o['created_at'] ?? '')?.toIST();
-          if (createdAt != null &&
-              (createdAt.isAfter(todayStart) ||
-                  createdAt.isAtSameMomentAs(todayStart))) {
-            final sp = (o['seller_payout'] as num?)?.toDouble() ?? 0.0;
-            final tds = (o['tds_amount'] as num?)?.toDouble() ?? 0.0;
-            final tcs = (o['tcs_amount'] as num?)?.toDouble() ?? 0.0;
-            return s + (sp - tds - tcs);
-          }
-          return s;
-        },
-      );
+      // Call RPC for stats
+      final statsResult = await _supabase.rpc('get_seller_daily_stats', params: {'p_shop_id': shopId});
 
       if (mounted) {
         setState(() {
@@ -154,12 +153,15 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           );
           _shopEmoji = catInfo['emoji']!;
 
-          _stats = {
-            'total_orders': ordersResp.length,
-            'pending_orders': pending,
-            'todays_earning': todaysEarning,
-            'products': (productsResp as List).length,
-          };
+          if (statsResult != null) {
+            _stats = {
+              'total_orders': statsResult['total_orders'] ?? 0,
+              'pending_orders': statsResult['pending_orders'] ?? 0,
+              'todays_earning': (statsResult['todays_earning'] as num?)?.toDouble() ?? 0.0,
+              'products': statsResult['products'] ?? 0,
+            };
+          }
+          
           _shopIsActive = shopData['is_active'] ?? false;
           final rawRating = shopData['average_rating'];
           _shopRating =

@@ -204,6 +204,58 @@ class _ComplaintCard extends StatelessWidget {
         ? DateFormat('dd MMM, hh:mm a')
             .format(DateTime.parse(complaint['created_at'].toString()).toIST())
         : '';
+    final adminReply = complaint['admin_reply'] as String?;
+
+    Future<void> showReplyDialog() async {
+      final ctrl = TextEditingController(text: adminReply ?? '');
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AdminColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Reply to Ticket', style: AdminStyles.title()),
+          content: TextField(
+            controller: ctrl,
+            maxLines: 4,
+            style: AdminStyles.body(),
+            decoration: InputDecoration(
+              hintText: 'Type your reply here...',
+              hintStyle: AdminStyles.body(color: AdminColors.textMuted),
+              filled: true,
+              fillColor: AdminColors.cardBg,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AdminStyles.body())),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: Text('Send Reply', style: AdminStyles.body(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true && ctrl.text.trim().isNotEmpty) {
+        try {
+          await db.from('support_tickets').update({
+            'admin_reply': ctrl.text.trim(),
+            'status': status == 'open' ? 'in_progress' : status,
+          }).eq('id', complaint['id']);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Reply sent successfully'), backgroundColor: AdminColors.success));
+          }
+          await onRefresh();
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Error: $e'), backgroundColor: AdminColors.danger));
+          }
+        }
+      }
+    }
 
     final (priorityColor, priorityLabel) = switch (priority) {
       'high' || 'urgent' => (AdminColors.danger, 'High'),
@@ -259,6 +311,26 @@ class _ComplaintCard extends StatelessWidget {
                   Text(profile?['phone'] ?? '—',
                       style: AdminStyles.caption()),
                 ]),
+                if (adminReply != null && adminReply.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AdminColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AdminColors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Admin Reply:', style: AdminStyles.label(color: AdminColors.primary)),
+                        const SizedBox(height: 4),
+                        Text(adminReply, style: AdminStyles.body(size: 13, color: AdminColors.textPrimary)),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -279,18 +351,7 @@ class _ComplaintCard extends StatelessWidget {
                 if (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.reply'))
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () async {
-                        try {
-                          await db
-                              .from('support_tickets')
-                              .update({'status': 'in_progress'}).eq(
-                                  'id', complaint['id']);
-                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status updated'), backgroundColor: AdminColors.success));
-                          await onRefresh();
-                        } catch (e) {
-                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.danger));
-                        }
-                      },
+                      onPressed: showReplyDialog,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AdminColors.info,
                         side: BorderSide(
@@ -299,7 +360,7 @@ class _ComplaintCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
-                      child: Text('Start Review',
+                      child: Text('Reply',
                           style: AdminStyles.caption(
                               color: AdminColors.info)),
                     ),
@@ -357,6 +418,43 @@ class _ReviewsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading) return _skelList();
+
+    Future<void> deleteReview(String id) async {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AdminColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Delete Review', style: AdminStyles.title(color: AdminColors.danger)),
+          content: Text('Are you sure you want to delete this review?',
+              style: AdminStyles.body(color: AdminColors.textSecondary)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AdminStyles.body())),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.danger, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: Text('Delete', style: AdminStyles.body(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        try {
+          await Supabase.instance.client.from('reviews').delete().eq('id', id);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Review deleted successfully'), backgroundColor: AdminColors.success));
+          }
+          await onRefresh();
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Error deleting review: $e'), backgroundColor: AdminColors.danger));
+          }
+        }
+      }
+    }
 
     if (reviews.isEmpty) {
       return Column(
@@ -469,6 +567,23 @@ class _ReviewsTab extends StatelessWidget {
                     Text(comment,
                         style: AdminStyles.body(
                             size: 13, color: AdminColors.textSecondary)),
+                  ],
+                  if (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.close')) ...[
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () => deleteReview(r['id'].toString()),
+                        icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                        label: Text('Delete Review', style: AdminStyles.caption()),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AdminColors.danger,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ),
                   ],
                 ],
               ),

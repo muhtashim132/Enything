@@ -12,6 +12,7 @@ import '../../providers/platform_config_provider.dart';
 import '../../widgets/seller/category_extra_fields.dart';
 import '../../utils/responsive_layout.dart';
 import '../../widgets/map_pin_picker_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum _Role { customer, seller, delivery }
 
@@ -74,24 +75,40 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     super.didChangeDependencies();
     if (_argsRead) return; // only process once
     _argsRead = true;
+    _initRoleState();
+  }
+
+  Future<void> _initRoleState() async {
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    if (args == null) return;
-    final roleArg = args['role'] as String?;
-    if (roleArg != null) {
-      switch (roleArg) {
-        case 'customer':
-          _role = _Role.customer;
-          break;
-        case 'seller':
-          _role = _Role.seller;
-          break;
-        case 'delivery_partner':
-          _role = _Role.delivery;
-          break;
-      }
-      // Skip the role-picker step — role was already chosen on RoleSelectionPage
-      _step = 1;
+    String? roleArg = args?['role'] as String?;
+
+    final prefs = await SharedPreferences.getInstance();
+    
+    // If not in args, try from cache (e.g. app crashed and restarted here)
+    if (roleArg == null) {
+      roleArg = prefs.getString('cached_signup_role');
+    } else {
+      // Save it to cache for future resilience
+      await prefs.setString('cached_signup_role', roleArg);
+    }
+
+    if (roleArg != null && mounted) {
+      setState(() {
+        switch (roleArg) {
+          case 'customer':
+            _role = _Role.customer;
+            break;
+          case 'seller':
+            _role = _Role.seller;
+            break;
+          case 'delivery_partner':
+            _role = _Role.delivery;
+            break;
+        }
+        // Skip the role-picker step — role was already chosen on RoleSelectionPage
+        _step = 1;
+      });
 
       // If the user already has a profile (adding a new role), pre-fill their name
       final auth = context.read<AuthProvider>();
@@ -191,12 +208,19 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     // Grab location if available (from tapping 📍 or auto-fetching)
     final locProv = context.read<LocationProvider>();
     String? locationPoint;
+    
+    if (locProv.currentLocation == null) {
+      // Graceful fallback: attempt to automatically fetch location
+      final success = await locProv.requestLocation();
+      if (!success && !mounted) return;
+    }
+
     if (locProv.currentLocation != null) {
       locationPoint =
           'POINT(${locProv.currentLocation!.longitude} ${locProv.currentLocation!.latitude})';
     } else {
       _showSnack(
-          'Please tap the 📍 icon in the address field to set your exact location',
+          'Could not fetch your location automatically. Please tap the 📍 icon in the address field to set your exact location',
           isError: true);
       setState(() => _loading = false);
       return;
@@ -318,16 +342,30 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
 
     switch (_role) {
       case _Role.customer:
+        // Clear the cached role upon successful submission
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('cached_signup_role');
+        
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.customerHome, (_) => false);
         break;
       case _Role.seller:
-        Navigator.pushNamedAndRemoveUntil(
-            context, AppRoutes.sellerKycUpload, (_) => false);
+        // Clear the cached role upon successful submission
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('cached_signup_role');
+
+        Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.sellerKycUpload,
+          arguments: {'shop_id': extra!['shop_id']},
+        );
         break;
       case _Role.delivery:
-        Navigator.pushNamedAndRemoveUntil(
-            context, AppRoutes.deliveryKycUpload, (_) => false);
+        // Clear the cached role upon successful submission
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('cached_signup_role');
+
+        Navigator.pushReplacementNamed(context, AppRoutes.deliveryKycUpload);
         break;
     }
   }

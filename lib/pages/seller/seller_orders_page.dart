@@ -439,7 +439,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           .eq('id', order.id)
           .maybeSingle();
       final currentStatus = latestStatus?['status'] as String?;
-      const rejectableStatuses = ['awaiting_acceptance', 'awaiting_payment'];
+      const rejectableStatuses = ['awaiting_acceptance', 'awaiting_payment', 'pending'];
       if (currentStatus != null &&
           !rejectableStatuses.contains(currentStatus)) {
         if (mounted) {
@@ -451,7 +451,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       }
 
       final msg = messageController.text.trim();
-      await _supabase
+      final updateRes = await _supabase
           .from('orders')
           .update({
             'status': rejectReason == 'prescription'
@@ -464,7 +464,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             if (msg.isNotEmpty) 'rejection_message': msg,
           })
           .eq('id', order.id)
-          .eq('shop_id', order.shopId ?? '');
+          .eq('shop_id', order.shopId ?? '')
+          .inFilter('status', const ['awaiting_acceptance', 'awaiting_payment', 'pending'])
+          .select();
+
+      if ((updateRes as List).isEmpty) {
+        if (mounted) {
+          _showSnack('Cannot decline — order status changed (likely paid).', isError: true);
+        }
+        _loadOrders();
+        return;
+      }
 
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(

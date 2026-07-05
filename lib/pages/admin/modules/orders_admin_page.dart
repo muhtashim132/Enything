@@ -556,12 +556,33 @@ class _OrderCardState extends State<_OrderCard> {
 
     if (confirmed != true) return;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-          'Refund of ₹${amount.toStringAsFixed(0)} queued. Configure Razorpay to process.'),
-      backgroundColor: AdminColors.surface,
-      behavior: SnackBarBehavior.floating,
-    ));
+    
+    setState(() => _actioning = true);
+    try {
+      await _db.from('orders').update({
+        'status': 'cancelled',
+        'refund_status': 'processing'
+      }).eq('id', orderId);
+      
+      await widget.onRefresh();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Refund of ₹${amount.toStringAsFixed(0)} queued. Status changed to processing.'),
+          backgroundColor: AdminColors.success,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error issuing refund: $e'),
+          backgroundColor: AdminColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+    if (mounted) setState(() => _actioning = false);
   }
 
   int _timelineStep(String status) => switch (status) {

@@ -92,16 +92,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         final notifProvider = context.read<NotificationProvider>();
         notifProvider.listenAsDelivery(userId);
         notifProvider.registerFcmToken(userId, 'delivery_partner'); // Register push token
+        _setupRealtimeChannel(userId);
       }
 
       // Reload available orders when a push arrives while the dashboard is open
       _fcmForegroundSub = FirebaseMessaging.onMessage.listen((_) {
         if (mounted) _loadOrders();
       });
+    });
+  }
 
-      // D3 FIX: Filter INSERT events to only orders with no delivery partner yet.
-      // Without this, every new order on the platform would trigger _loadOrders()
-      // for every connected rider, creating O(riders × orders) load spikes.
+  void _setupRealtimeChannel(String userId) {
+      _realtimeChannel?.unsubscribe();
       _realtimeChannel = _supabase
           .channel('delivery-orders-$userId')
           .onPostgresChanges(
@@ -162,8 +164,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               }
             },
           )
-          .subscribe();
-    });
+          .subscribe((status, [error]) {
+            if (status == RealtimeSubscribeStatus.closed || status == RealtimeSubscribeStatus.channelError) {
+              Future.delayed(const Duration(seconds: 5), () {
+                if (mounted && _isOnline) {
+                  _setupRealtimeChannel(userId);
+                }
+              });
+            }
+          });
   }
 
   @override
@@ -221,14 +230,33 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     );
   }
 
-  // Starts pushing GPS location to DB every 15s while online.
+  // Starts pushing GPS location to DB with dynamic intervals
   void _startLocationBroadcast() {
     _locationBroadcastTimer?.cancel();
-    _locationBroadcastTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
-      if (!_isOnline) {
-        _stopLocationBroadcast();
-        return;
-      }
+    _scheduleNextBroadcast();
+  }
+
+  void _scheduleNextBroadcast() {
+    if (!_isOnline) {
+      _stopLocationBroadcast();
+      return;
+    }
+    
+    // Dynamic interval: 10s if active on orders, 30s if idle
+    final bool isActiveDelivery = _myGroups.isNotEmpty;
+    final int intervalSeconds = isActiveDelivery ? 10 : 30;
+
+    _locationBroadcastTimer = Timer(Duration(seconds: intervalSeconds), () async {
+      await _broadcastLocationRoutine();
+      _scheduleNextBroadcast();
+    });
+  }
+
+  Future<void> _broadcastLocationRoutine() async {
+    if (!_isOnline) {
+      _stopLocationBroadcast();
+      return;
+    }
       await _fetchRiderLocation();
       if (_riderLat == null || _riderLng == null) return;
       
@@ -261,7 +289,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           debugPrint('Location broadcast error: $e');
         }
       }
-    });
   }
 
   void _stopLocationBroadcast() {
@@ -350,7 +377,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .from('orders')
           .select('*, order_items(*), shops!shop_id(id, name, location)')
           .isFilter('delivery_partner_id', null)   // no rider assigned yet
-          .inFilter('status', ['awaiting_acceptance', 'pending']);
+          .inFilter('status', ['awaiting_acceptance', 'pending', 'awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup']);
 
       final myOrders = await _supabase
           .from('orders')
@@ -528,13 +555,19 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
 
       // Fetch latest state to prevent race conditions (TOCTOU)
-      final latest = await _supabase.from('orders').select('seller_accepted').eq('id', order.id).maybeSingle();
+      final latest = await _supabase.from('orders').select('seller_accepted, status').eq('id', order.id).maybeSingle();
       final bothAccepted = latest?['seller_accepted'] == true;
+      final currentStatus = latest?['status'] as String?;
 
-      final newStatus = bothAccepted ? 'awaiting_payment' : 'awaiting_acceptance';
-      final paymentDeadline = bothAccepted
-          ? DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String()
-          : null;
+      String newStatus = currentStatus ?? 'awaiting_acceptance';
+      String? paymentDeadline;
+
+      if (currentStatus == 'pending' || currentStatus == 'awaiting_acceptance') {
+        newStatus = bothAccepted ? 'awaiting_payment' : 'awaiting_acceptance';
+        if (bothAccepted) {
+          paymentDeadline = DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String();
+        }
+      }
 
       final updateResult = await _supabase.from('orders').update({
         'delivery_partner_id': auth.currentUserId,
@@ -664,7 +697,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         await _supabase.from('orders').update({
           'delivery_partner_id': null,
           'partner_accepted': false,
-          'status': 'pending',
           'wait_time_penalty': penalty,
           'wait_time_disputed': status == 'reassign_disputed',
         }).eq('id', order.id);

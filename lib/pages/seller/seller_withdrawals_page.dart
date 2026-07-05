@@ -121,23 +121,21 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
     final userId = context.read<AuthProvider>().currentUserId ?? '';
 
     try {
-      await _db.from('withdrawals').insert({
-        'user_id':             userId,
-        'user_role':           'seller',
-        'amount':              amount,
-        'upi_id':              _useUpi ? _upiCtrl.text.trim() : null,
-        'bank_account_number': !_useUpi ? _bankAccCtrl.text.trim() : null,
-        'bank_ifsc':           !_useUpi ? _bankIfscCtrl.text.trim() : null,
-        'bank_account_holder': !_useUpi ? _bankHolderCtrl.text.trim() : null,
-        'status':              'pending',
+      await _db.rpc('request_seller_withdrawal', params: {
+        'p_amount': amount,
+        'p_upi_id': _useUpi ? _upiCtrl.text.trim() : null,
+        'p_bank_account_number': !_useUpi ? _bankAccCtrl.text.trim() : null,
+        'p_bank_ifsc': !_useUpi ? _bankIfscCtrl.text.trim() : null,
+        'p_bank_account_holder': !_useUpi ? _bankHolderCtrl.text.trim() : null,
       });
 
       _showSnack('Withdrawal request submitted! Admin will process it within 2 business days.', isError: false);
       _amountCtrl.clear();
-      _upiCtrl.clear();
+      if (_useUpi) _upiCtrl.clear();
       await _loadData();
     } catch (e) {
-      _showSnack('Failed to submit request. Please try again.', isError: true);
+      debugPrint('Withdrawal RPC Error: $e');
+      _showSnack('Failed to submit request: $e', isError: true);
     }
 
     if (mounted) setState(() => _submitting = false);
