@@ -118,7 +118,6 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
     }
 
     setState(() => _submitting = true);
-    final userId = context.read<AuthProvider>().currentUserId ?? '';
 
     try {
       await _db.rpc('request_seller_withdrawal', params: {

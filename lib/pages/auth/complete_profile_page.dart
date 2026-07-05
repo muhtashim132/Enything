@@ -7,7 +7,6 @@ import '../../providers/location_provider.dart';
 import '../../providers/referral_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
-import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../widgets/seller/category_extra_fields.dart';
 import '../../utils/responsive_layout.dart';
@@ -346,6 +345,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('cached_signup_role');
         
+        if (!mounted) return;
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.customerHome, (_) => false);
         break;
@@ -354,10 +354,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('cached_signup_role');
 
+        if (!mounted) return;
         Navigator.pushReplacementNamed(
           context,
           AppRoutes.sellerKycUpload,
-          arguments: {'shop_id': extra!['shop_id']},
+          arguments: {'shop_id': extra['shop_id']},
         );
         break;
       case _Role.delivery:
@@ -365,6 +366,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('cached_signup_role');
 
+        if (!mounted) return;
         Navigator.pushReplacementNamed(context, AppRoutes.deliveryKycUpload);
         break;
     }
