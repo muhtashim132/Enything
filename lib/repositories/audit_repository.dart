@@ -2,7 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/rbac/audit_log_model.dart';
 
 class AuditRepository {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   Future<List<AuditLogModel>> fetchLogs({
     String? actorId,

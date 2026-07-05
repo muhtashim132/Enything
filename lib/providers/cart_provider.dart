@@ -119,6 +119,11 @@ class CartProvider extends ChangeNotifier {
 
   bool get meetsMinimumOrder => subtotal >= PaymentConfig.minimumOrderValue;
 
+  // M7 FIX (Doc Note): platformFee reads from PlatformConfigProvider singleton.
+  // If the admin changes the fee remotely, this getter will instantly return the
+  // new value on the next read. However, CartProvider does NOT listen to
+  // PlatformConfigProvider changes, meaning UI already displaying the cart
+  // won't auto-rebuild until the cart is modified or the page is reopened.
   double get platformFee => PlatformConfigProvider.instance?.platformFee ?? PaymentConfig.platformFee;
 
   bool get requiresPrescription => _items.any((item) => item.product.requiresPrescription);

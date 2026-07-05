@@ -23,7 +23,7 @@ class SellerDashboardPage extends StatefulWidget {
 
 class _SellerDashboardPageState extends State<SellerDashboardPage>
     with TickerProviderStateMixin {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   Map<String, dynamic> _stats = {
     'total_orders': 0,

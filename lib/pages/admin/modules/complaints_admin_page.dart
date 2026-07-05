@@ -19,7 +19,7 @@ class ComplaintsAdminPage extends StatefulWidget {
 class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   List<Map<String, dynamic>> _complaints = [];
   List<Map<String, dynamic>> _reviews = [];

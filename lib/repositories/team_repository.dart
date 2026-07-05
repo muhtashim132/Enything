@@ -4,7 +4,7 @@ import '../models/rbac/invitation_model.dart';
 import '../models/rbac/permission_model.dart';
 
 class TeamRepository {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   // ── Fetch all team members ──────────────────────────────────
   Future<List<AdminUserModel>> fetchTeamMembers() async {

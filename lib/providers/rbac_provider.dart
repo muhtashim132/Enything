@@ -9,7 +9,7 @@ import '../repositories/roles_repository.dart';
 /// Loaded once after the admin password gate is passed.
 class RbacProvider extends ChangeNotifier {
   final _rolesRepo = RolesRepository();
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   AdminUserModel? _currentAdmin;
   Set<String> _permissionCodes = {};

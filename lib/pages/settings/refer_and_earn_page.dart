@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/auth_provider.dart';
-import '../../providers/subscription_provider.dart';
+import '../../providers/referral_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive_layout.dart';
 import '../../widgets/common/premium_animations.dart';
@@ -29,7 +29,7 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
       if (userId == null) return;
       
       await context
-          .read<SubscriptionProvider>()
+          .read<ReferralProvider>()
           .generateReferralCode(userId, displayName);
     } finally {
       if (mounted) {
@@ -56,8 +56,8 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final subProv = context.watch<SubscriptionProvider>();
-    final code = subProv.referralCode;
+    final refProv = context.watch<ReferralProvider>();
+    final code = refProv.referralCode;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBg : AppColors.background,

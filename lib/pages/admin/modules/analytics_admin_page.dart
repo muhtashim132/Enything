@@ -14,7 +14,7 @@ class AnalyticsAdminPage extends StatefulWidget {
 }
 
 class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   bool _loading = true;
 
   // Derived stats

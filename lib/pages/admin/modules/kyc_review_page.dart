@@ -16,7 +16,7 @@ class KycReviewPage extends StatefulWidget {
 
 class _KycReviewPageState extends State<KycReviewPage>
     with SingleTickerProviderStateMixin {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   late TabController _tab;
 
   List<Map<String, dynamic>> _sellerPending = [];

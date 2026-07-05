@@ -24,7 +24,7 @@ class CaReportPage extends StatefulWidget {
 }
 
 class _CaReportPageState extends State<CaReportPage> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   bool _isLoading = true;
 
   // Month selector

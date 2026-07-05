@@ -9,12 +9,12 @@ class OrderCountdownTimer extends StatefulWidget {
   final Color? color;
 
   const OrderCountdownTimer({
-    Key? key,
+    super.key,
     required this.acceptanceDeadline,
     this.onExpire,
     this.fontSize = 12,
     this.color,
-  }) : super(key: key);
+  });
 
   @override
   State<OrderCountdownTimer> createState() => _OrderCountdownTimerState();

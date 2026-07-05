@@ -214,7 +214,7 @@ class LocationProvider extends ChangeNotifier {
       return null; // success
     } catch (e) {
       debugPrint('addSavedAddress error: $e');
-      if (e.toString().contains('Maximum of 4') || e.toString().contains('Maximum of 10')) {
+      if (e.toString().contains('Maximum of 4')) {
         return 'You can save up to 4 addresses. Please delete one first.';
       }
       return 'Failed to save address: $e';
@@ -297,12 +297,21 @@ class LocationProvider extends ChangeNotifier {
     if (mark != null) _landmark = mark;
     if (pin != null) _pincode = pin;
     notifyListeners();
-    
     try {
       final db = Supabase.instance.client;
+      // H5 FIX: Fetch existing address_home to merge rather than overwrite
+      final existing = await db.from('customers').select('address_home').eq('id', userId).maybeSingle();
+      Map<String, dynamic> currentAddressHome = {};
+      if (existing != null && existing['address_home'] is Map) {
+         currentAddressHome = Map<String, dynamic>.from(existing['address_home']);
+      }
+      if (house != null) {
+         currentAddressHome['house'] = house;
+      }
+
       await db.from('customers').upsert({
         'id': userId,
-        if (house != null) 'address_home': {'house': house},
+        if (currentAddressHome.isNotEmpty) 'address_home': currentAddressHome,
         if (mark != null) 'landmark': mark,
         if (pin != null) 'pincode': pin,
         'address': currentAddress,

@@ -83,7 +83,7 @@ class ActiveSubscription {
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 class SubscriptionProvider extends ChangeNotifier {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   // State
   List<SubscriptionPlan> _plans = [];

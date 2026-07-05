@@ -17,7 +17,7 @@ class RiderWithdrawalsPage extends StatefulWidget {
 }
 
 class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   final _amountCtrl     = TextEditingController();
   final _upiCtrl        = TextEditingController();
@@ -82,9 +82,12 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
       }
 
       _availableBalance = totalEarned - totalPaid;
-    } catch (_) {}
-
-    if (mounted) setState(() => _loadingHistory = false);
+    } catch (e) {
+      debugPrint('RiderWithdrawalsPage._loadData error: $e');
+    } finally {
+      // M5 FIX: was in try-block only — errors caused infinite spinner
+      if (mounted) setState(() => _loadingHistory = false);
+    }
   }
 
   Future<void> _submitRequest() async {

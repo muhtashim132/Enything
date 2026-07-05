@@ -14,7 +14,7 @@ class RiderInsightsPage extends StatefulWidget {
 }
 
 class _RiderInsightsPageState extends State<RiderInsightsPage> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   bool _isLoading = true;
 
   int _totalOrdersDelivered = 0;

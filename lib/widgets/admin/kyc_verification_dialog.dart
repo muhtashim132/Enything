@@ -24,7 +24,7 @@ class KycVerificationDialog extends StatefulWidget {
 }
 
 class _KycVerificationDialogState extends State<KycVerificationDialog> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   bool _isProcessing = false;
 
   Future<void> _updateStatus(String status) async {

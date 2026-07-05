@@ -16,7 +16,7 @@ class OrdersAdminPage extends StatefulWidget {
 }
 
 class _OrdersAdminPageState extends State<OrdersAdminPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   List<Map<String, dynamic>> _orders = [];
   List<Map<String, dynamic>> _filtered = [];
   bool _loading = true;
@@ -255,7 +255,7 @@ class _OrderCard extends StatefulWidget {
 class _OrderCardState extends State<_OrderCard> {
   bool _expanded = false;
   bool _actioning = false;
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   static const _timeline = [
     (Icons.shopping_cart_rounded, 'Order Placed'),

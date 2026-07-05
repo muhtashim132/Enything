@@ -9,7 +9,20 @@ import 'package:enythingmobilenew/models/rbac/invitation_model.dart';
 import 'package:enythingmobilenew/providers/rbac_provider.dart';
 import 'package:enythingmobilenew/widgets/rbac/rbac_widgets.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 void main() {
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    try {
+      await Supabase.initialize(
+        url: 'https://mock.supabase.co',
+        anonKey: 'mock_key',
+      );
+    } catch (_) {}
+  });
+
   // ── 1. PermissionModel tests ─────────────────────────────────
   group('PermissionModel', () {
     test('fromMap parses correctly', () {

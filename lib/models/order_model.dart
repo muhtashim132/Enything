@@ -344,6 +344,8 @@ class OrderModel {
     double? smallCartFee,
     double? heavyOrderFee,
     double? deliveryDiscount,
+    String? couponId,
+    double? couponDiscount,
   }) {
     return OrderModel(
       id: id,
@@ -406,6 +408,8 @@ class OrderModel {
       smallCartFee: smallCartFee ?? this.smallCartFee,
       heavyOrderFee: heavyOrderFee ?? this.heavyOrderFee,
       deliveryDiscount: deliveryDiscount ?? this.deliveryDiscount,
+      couponId: couponId ?? this.couponId,
+      couponDiscount: couponDiscount ?? this.couponDiscount,
     );
   }
 

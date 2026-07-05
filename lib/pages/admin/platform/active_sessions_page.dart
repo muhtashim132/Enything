@@ -21,7 +21,7 @@ class ActiveSessionsPage extends StatefulWidget {
 }
 
 class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   List<Map<String, dynamic>> _sessions = [];
   bool _loading = true;
 

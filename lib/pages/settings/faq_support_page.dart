@@ -24,7 +24,7 @@ class FaqSupportPage extends StatefulWidget {
 
 class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   List<Map<String, dynamic>> _myTickets = [];
   bool _isLoadingTickets = true;
 

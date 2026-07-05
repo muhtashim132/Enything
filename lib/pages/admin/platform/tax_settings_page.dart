@@ -22,7 +22,7 @@ class TaxSettingsPage extends StatefulWidget {
 }
 
 class _TaxSettingsPageState extends State<TaxSettingsPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   // Map of category -> tax_config row from DB
   final Map<String, Map<String, dynamic>> _dbRows = {};
@@ -614,11 +614,11 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                       ? const Radius.circular(16)
                       : Radius.zero),
               border: Border(
-                top: BorderSide(color: AdminColors.cardBorder),
-                left: BorderSide(color: AdminColors.cardBorder),
-                right: BorderSide(color: AdminColors.cardBorder),
+                top: const BorderSide(color: AdminColors.cardBorder),
+                left: const BorderSide(color: AdminColors.cardBorder),
+                right: const BorderSide(color: AdminColors.cardBorder),
                 bottom: _productOverrides.isEmpty && !_loadingOverrides
-                    ? BorderSide(color: AdminColors.cardBorder)
+                    ? const BorderSide(color: AdminColors.cardBorder)
                     : BorderSide.none,
               ),
             ),
@@ -845,9 +845,9 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                       ? const BorderRadius.vertical(bottom: Radius.circular(16))
                       : BorderRadius.zero,
                   border: Border(
-                    left: BorderSide(color: AdminColors.cardBorder),
-                    right: BorderSide(color: AdminColors.cardBorder),
-                    bottom: isLast ? BorderSide(color: AdminColors.cardBorder) : BorderSide.none,
+                    left: const BorderSide(color: AdminColors.cardBorder),
+                    right: const BorderSide(color: AdminColors.cardBorder),
+                    bottom: isLast ? const BorderSide(color: AdminColors.cardBorder) : BorderSide.none,
                   ),
                 ),
                 child: Column(

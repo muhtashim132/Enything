@@ -33,7 +33,7 @@ class DeliveryDashboardPage extends StatefulWidget {
 
 class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   bool _isOnline = false;
   List<OrderGroup> _availableGroups = [];
   List<OrderGroup> _myGroups = [];
@@ -91,7 +91,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (userId != null) {
         final notifProvider = context.read<NotificationProvider>();
         notifProvider.listenAsDelivery(userId);
-        notifProvider.registerFcmToken(userId, 'delivery'); // Register push token
+        notifProvider.registerFcmToken(userId, 'delivery_partner'); // Register push token
       }
 
       // Reload available orders when a push arrives while the dashboard is open
@@ -420,7 +420,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       double tempTodayEarnings = 0.0;
       double tempTotalKmsDriven = 0.0;
-      final today = DateTime.now();
+      final today = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
       
       // Fetch delivered orders separately to compute earnings (they are excluded from myOrders)
       if (auth.currentUserId != null) {

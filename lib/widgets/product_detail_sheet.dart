@@ -55,7 +55,7 @@ class ProductDetailSheet extends StatefulWidget {
 }
 
 class _ProductDetailSheetState extends State<ProductDetailSheet> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   ProductModel? _product;
   ShopModel? _shop;
   bool _isLoading = true;

@@ -17,7 +17,7 @@ class EarningsPage extends StatefulWidget {
 }
 
 class _EarningsPageState extends State<EarningsPage> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   bool _isLoading = true;
   double _todayEarnings = 0;
   double _totalEarnings = 0;
@@ -36,9 +36,13 @@ class _EarningsPageState extends State<EarningsPage> {
   Future<void> _loadEarnings() async {
     final auth = context.read<AuthProvider>();
     try {
-      final now = DateTime.now();
-      final todayStart =
-          DateTime(now.year, now.month, now.day).toIso8601String();
+      // C3/H4 FIX: Compute today's IST midnight explicitly.
+      // DB stores UTC; toIST() converts delivery times to IST.
+      // todayStart must also be IST midnight for a consistent comparison.
+      // Previously used DateTime.now() (local tz) which was wrong for non-IST devices.
+      final nowUtc = DateTime.now().toUtc();
+      final nowIst = nowUtc.add(const Duration(hours: 5, minutes: 30));
+      final todayStartIst = DateTime(nowIst.year, nowIst.month, nowIst.day);
 
       final allDeliveries = await _supabase
           .from('orders')
@@ -58,11 +62,14 @@ class _EarningsPageState extends State<EarningsPage> {
         final createdAt =
             DateTime.tryParse(d['created_at'] ?? '')?.toIST() ?? DateTime(2000);
         total += charge;
-        if (createdAt.isAfter(DateTime.parse(todayStart))) today += charge;
-        // weekly breakdown
-        final daysAgo = now.difference(DateTime(
-          createdAt.year, createdAt.month, createdAt.day,
-        )).inDays;
+        // Compare IST delivery time against IST midnight
+        if (!createdAt.isBefore(todayStartIst)) today += charge;
+        // Weekly breakdown: use IST-based daysAgo
+        final daysAgo = nowIst
+            .difference(
+              DateTime(createdAt.year, createdAt.month, createdAt.day),
+            )
+            .inDays;
         if (daysAgo >= 0 && daysAgo < 7) {
           weekMap[6 - daysAgo] = (weekMap[6 - daysAgo] ?? 0) + charge;
         }
@@ -99,6 +106,7 @@ class _EarningsPageState extends State<EarningsPage> {
         });
       }
     } catch (e) {
+      debugPrint('EarningsPage._loadEarnings error: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -193,7 +201,7 @@ class _EarningsPageState extends State<EarningsPage> {
                     ),
                   ),
 
-                  // ── Withdrawal Section ─────────────────────────────────────
+                  // ── Quick Actions ──────────────────────────────────────────
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -205,7 +213,8 @@ class _EarningsPageState extends State<EarningsPage> {
                               label: 'Withdraw',
                               color: AppColors.secondary,
                               onTap: () {
-                                Navigator.pushNamed(context, AppRoutes.riderWithdrawals);
+                                Navigator.pushNamed(
+                                    context, AppRoutes.riderWithdrawals);
                               },
                             ),
                           ),
@@ -216,7 +225,8 @@ class _EarningsPageState extends State<EarningsPage> {
                               label: 'Insights',
                               color: Colors.blue,
                               onTap: () {
-                                Navigator.pushNamed(context, AppRoutes.riderInsights);
+                                Navigator.pushNamed(
+                                    context, AppRoutes.riderInsights);
                               },
                             ),
                           ),
@@ -244,7 +254,8 @@ class _EarningsPageState extends State<EarningsPage> {
                                 fontSize: 18, fontWeight: FontWeight.w700),
                           ),
                           GestureDetector(
-                            onTap: () => Navigator.pushNamed(context, AppRoutes.riderOrderHistory),
+                            onTap: () => Navigator.pushNamed(
+                                context, AppRoutes.riderOrderHistory),
                             child: Text(
                               'View all',
                               style: GoogleFonts.outfit(
@@ -273,7 +284,10 @@ class _EarningsPageState extends State<EarningsPage> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final item = _recentDeliveries[index];
-                              final date = (DateTime.tryParse(item['date'] ?? '')?.toIST()) ?? DateTime.now();
+                              final date =
+                                  DateTime.tryParse(item['date'] ?? '')
+                                      ?.toIST() ??
+                                  DateTime.now();
                               return Container(
                                 margin:
                                     const EdgeInsets.fromLTRB(20, 0, 20, 12),
@@ -283,7 +297,8 @@ class _EarningsPageState extends State<EarningsPage> {
                                   borderRadius: BorderRadius.circular(20),
                                   boxShadow: [
                                     BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.02),
+                                        color: Colors.black
+                                            .withValues(alpha: 0.02),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4)),
                                   ],
@@ -294,8 +309,8 @@ class _EarningsPageState extends State<EarningsPage> {
                                       width: 48,
                                       height: 48,
                                       decoration: BoxDecoration(
-                                        color:
-                                            AppColors.primary.withValues(alpha: 0.05),
+                                        color: AppColors.primary
+                                            .withValues(alpha: 0.05),
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(
@@ -364,14 +379,14 @@ class _EarningsPageState extends State<EarningsPage> {
     );
   }
 
-  // ── Weekly Bar Chart ──────────────────────────────────────────
+  // ── Weekly Bar Chart ────────────────────────────────────────────────────────
   Widget _buildWeeklyChart() {
     final maxY = _weeklyEarnings.reduce((a, b) => a > b ? a : b);
     final chartMax = maxY < 50 ? 200.0 : (maxY * 1.25).ceilToDouble();
 
     final dayLabels = List.generate(7, (i) {
       final dt = DateTime.now().subtract(Duration(days: 6 - i));
-      return DateFormat('E').format(dt.toIST()); // Mon, Tue...
+      return DateFormat('E').format(dt.toIST()); // Mon, Tue…
     });
 
     return Padding(
@@ -404,7 +419,8 @@ class _EarningsPageState extends State<EarningsPage> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -452,7 +468,9 @@ class _EarningsPageState extends State<EarningsPage> {
                         showTitles: true,
                         getTitlesWidget: (value, _) {
                           final i = value.toInt();
-                          if (i < 0 || i >= dayLabels.length) return const SizedBox.shrink();
+                          if (i < 0 || i >= dayLabels.length) {
+                            return const SizedBox.shrink();
+                          }
                           final isToday = i == 6;
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
@@ -460,8 +478,12 @@ class _EarningsPageState extends State<EarningsPage> {
                               dayLabels[i],
                               style: GoogleFonts.outfit(
                                 fontSize: 11,
-                                fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
-                                color: isToday ? AppColors.primary : AppColors.textSecondary,
+                                fontWeight: isToday
+                                    ? FontWeight.w800
+                                    : FontWeight.w500,
+                                color: isToday
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
                               ),
                             ),
                           );
@@ -485,7 +507,10 @@ class _EarningsPageState extends State<EarningsPage> {
                           gradient: LinearGradient(
                             colors: isToday
                                 ? [AppColors.primary, const Color(0xFF071D6B)]
-                                : [AppColors.primary.withValues(alpha: 0.4), AppColors.primary.withValues(alpha: 0.2)],
+                                : [
+                                    AppColors.primary.withValues(alpha: 0.4),
+                                    AppColors.primary.withValues(alpha: 0.2)
+                                  ],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                           ),
@@ -515,11 +540,12 @@ class _EarningsPageState extends State<EarningsPage> {
     );
   }
 
-  Widget _buildQuickAction(
-      {required IconData icon,
-      required String label,
-      required Color color,
-      required VoidCallback onTap}) {
+  Widget _buildQuickAction({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -535,7 +561,9 @@ class _EarningsPageState extends State<EarningsPage> {
             const SizedBox(height: 8),
             Text(label,
                 style: GoogleFonts.outfit(
-                    color: color, fontWeight: FontWeight.w700, fontSize: 14)),
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14)),
           ],
         ),
       ),

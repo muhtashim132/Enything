@@ -7,7 +7,7 @@ class RecentlyViewedProvider extends ChangeNotifier {
   static const _key = 'recently_viewed_ids';
   static const _maxItems = 10;
 
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   List<String> _ids = [];         // ordered list of product IDs (most recent first)
   List<ProductModel> _products = [];

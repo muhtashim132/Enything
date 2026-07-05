@@ -16,7 +16,7 @@ class SellerWithdrawalsPage extends StatefulWidget {
 }
 
 class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   // Form fields
   final _amountCtrl = TextEditingController();
@@ -72,11 +72,19 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
         }
       }
 
+      // C4 FIX: _getShopId returns '' on error or when no shop exists.
+      // Querying with empty shopId returns rows for ALL shops. Guard this.
+      final shopId = await _getShopId(userId);
+      if (shopId.isEmpty) {
+        if (mounted) setState(() => _loadingHistory = false);
+        return;
+      }
+
       // Load seller_payout from delivered orders
       final earningsRes = await _db
           .from('orders')
           .select('seller_payout')
-          .eq('shop_id', await _getShopId(userId))
+          .eq('shop_id', shopId)
           .eq('status', 'delivered');
 
       double totalEarned = 0;
@@ -85,9 +93,12 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
       }
 
       _availableBalance = totalEarned - totalPaid;
-    } catch (_) {}
-
-    if (mounted) setState(() => _loadingHistory = false);
+    } catch (e) {
+      debugPrint('SellerWithdrawalsPage._loadData error: $e');
+    } finally {
+      // M5 FIX: was in try-block only — errors caused infinite spinner
+      if (mounted) setState(() => _loadingHistory = false);
+    }
   }
 
   Future<String> _getShopId(String userId) async {

@@ -26,9 +26,11 @@ class ShareUtils {
       ..writeln()
       ..write('📲 Download the app: https://play.google.com/store/apps/details?id=com.enything.app');
 
-    await Share.share(
-      text.toString(),
-      subject: '${product.name} on Enything',
+    await SharePlus.instance.share(
+      ShareParams(
+        text: text.toString(),
+        subject: '${product.name} on Enything',
+      ),
     );
   }
 
@@ -49,9 +51,11 @@ class ShareUtils {
       ..writeln()
       ..write('📲 Download the app: https://play.google.com/store/apps/details?id=com.enything.app');
 
-    await Share.share(
-      text.toString(),
-      subject: '${shop.name} on Enything',
+    await SharePlus.instance.share(
+      ShareParams(
+        text: text.toString(),
+        subject: '${shop.name} on Enything',
+      ),
     );
   }
 }

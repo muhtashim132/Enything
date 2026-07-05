@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
-import '../../providers/subscription_provider.dart';
+import '../../providers/referral_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../config/tax_config.dart';
@@ -284,7 +284,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     if (_referralCtrl.text.trim().isNotEmpty) {
       final uid = context.read<AuthProvider>().user?.id;
       if (uid != null) {
-        await context.read<SubscriptionProvider>().applyReferralCode(
+        await context.read<ReferralProvider>().applyReferralCode(
           referralCode: _referralCtrl.text.trim(),
           newUserId: uid,
         );

@@ -48,7 +48,7 @@ class SellerOrderMapPage extends StatefulWidget {
 class _SellerOrderMapPageState extends State<SellerOrderMapPage>
     with TickerProviderStateMixin {
   final MapController _mapCtrl = MapController();
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   // Route polylines
   List<LatLng> _pickupRoute = [];

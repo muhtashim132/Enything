@@ -13,7 +13,7 @@ class ManageProductsPage extends StatefulWidget {
 }
 
 class _ManageProductsPageState extends State<ManageProductsPage> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   List<ProductModel> _products = [];
   bool _isLoading = true;
   String? _shopId;

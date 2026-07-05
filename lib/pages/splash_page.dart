@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/routes.dart';
 import '../providers/auth_provider.dart';
-import '../providers/subscription_provider.dart'; // FIX BUG-7: init subscription on startup
+import '../providers/referral_provider.dart'; // C1 FIX: init referral code on startup
 import '../main.dart' show pendingNotificationData, handleNotificationClick;
 
 class SplashPage extends StatefulWidget {
@@ -84,6 +84,10 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         }
         await Future.delayed(const Duration(milliseconds: 250));
       }
+      if (!auth.isProfileFetched) {
+        if (mounted) _showNetworkErrorRetry();
+        return;
+      }
       if (!mounted) return;
 
       if (auth.user == null) {
@@ -92,11 +96,11 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         return;
       }
 
-      // FIX BUG-7: Initialize SubscriptionProvider so Pass features work.
-      // Must be called here because SubscriptionProvider.init() requires userId
-      // which is only available after auth profile is fetched.
+      // C1 FIX: Initialize ReferralProvider so referral code is available immediately.
+      // Must be called here because init() requires userId which is only
+      // available after auth profile is fetched.
       if (auth.currentUserId != null && mounted) {
-        context.read<SubscriptionProvider>().init(auth.currentUserId!);
+        context.read<ReferralProvider>().init(auth.currentUserId!);
       }
 
       final role = auth.user?.activeSessionRole ?? auth.user?.role;

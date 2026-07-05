@@ -22,7 +22,7 @@ class OverviewAdminPage extends StatefulWidget {
 }
 
 class _OverviewAdminPageState extends State<OverviewAdminPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   bool _loading = true;
   int _totalOrders = 0;

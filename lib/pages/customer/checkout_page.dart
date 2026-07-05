@@ -20,7 +20,7 @@ import '../../utils/responsive_layout.dart';
 import '../../services/image_compression_service.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../providers/coupon_provider.dart';
-import '../../providers/subscription_provider.dart';
+
 import '../../widgets/coupon_input_widget.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -192,11 +192,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
-    // FIX BUG-6: Capture coupon ID & discount before any await to avoid BuildContext-across-async-gaps warning
+    // Capture coupon ID & discount before any await to avoid BuildContext-across-async-gaps warning
     final appliedCouponId = context.read<CouponProvider>().appliedCoupon?.id;
     final appliedCouponDiscount = context.read<CouponProvider>().discountAmount;
-    // Capture subscription provider reference before any await
-    final subProvider = context.read<SubscriptionProvider>();
     final supabase = Supabase.instance.client;
 
     try {
@@ -236,11 +234,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final riderBase = effectiveBase + surcharge + heavyFee;
       final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
-      // ── Enything Pass: override delivery if subscriber ──────────────────
-      final passDeliveryFree = subProvider.isFreeDelivery(cart.subtotal);
-      // If Pass grants free delivery, customer pays ₹0; rider still gets paid
-      // from Enything's subscription margin (not from customer).
-      final totalDelivery = passDeliveryFree ? 0.0 : cart.totalDeliveryCharges(maxDistanceKm);
+      final totalDelivery = cart.totalDeliveryCharges(maxDistanceKm);
 
       // Payment method is always 'upi' now (COD removed)
       const paymentMethod = 'upi';
@@ -467,26 +461,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
 
 
-      // ── Enything Pass: earn loyalty points for this order ────────────────
-      if (auth.currentUserId != null) {
-        final orderTotal = cart.subtotal;
-        final pointsToEarn = subProvider.pointsForOrder(orderTotal);
-        if (pointsToEarn > 0) {
-          // Fire and forget — non-blocking, order is already placed
-          subProvider.earnPoints(
-            userId: auth.currentUserId!,
-            points: pointsToEarn,
-            type: 'earn_order',
-            description: 'Earned $pointsToEarn pts from order ₹${orderTotal.toStringAsFixed(0)}',
-            orderId: orderIds.isNotEmpty ? orderIds.first : null,
-          );
-        }
-        // Check if this referred user's first order — award referrer bonus
-        subProvider.processFriendFirstOrderBonus(
-          referredUserId: auth.currentUserId!,
-          orderId: orderIds.isNotEmpty ? orderIds.first : '',
-        );
-      }
+
 
       // FIX BUG-6: Increment coupon used_count after all orders placed successfully
       // Note: appliedCouponId is captured before the loop (pre-async) to avoid BuildContext warning.
@@ -524,7 +499,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.watch<CartProvider>();
     final location = context.watch<LocationProvider>();
     final couponProv = context.watch<CouponProvider>();
-    final subProv = context.watch<SubscriptionProvider>();
 
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
@@ -543,10 +517,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final riderBase = effectiveBase + surcharge + heavyFee;
     final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
-    // ── Enything Pass: free delivery override ────────────────────────────────
-    final passDeliveryFree = subProv.isFreeDelivery(cart.subtotal);
-    final totalDelivery = passDeliveryFree ? 0.0 : cart.totalDeliveryCharges(distanceKm);
-    final passPointsToEarn = subProv.pointsForOrder(cart.subtotal);
+    // BUG-H3 FIX: Compute the breakdown ONCE so UI display and DB insertion
+    // use the exact same figures. No subscription plan — delivery is always charged.
+    final totalDelivery = cart.totalDeliveryCharges(distanceKm);
 
     // ── ADD-ON GST model: GST is a real charge on top of base prices ─────────
     final gstBreakdown = OrderTaxBreakdown.calculate(
@@ -960,81 +933,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
             const SizedBox(height: 16),
 
-            // ── Pass: loyalty points preview banner ───────────────────────────────
-            if (subProv.hasActiveSub && passPointsToEarn > 0)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: AppColors.premiumGoldGradient,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    const Text('⭐', style: TextStyle(fontSize: 20)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'You\'ll earn $passPointsToEarn loyalty pts on this order!',
-                        style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '= ₹${(passPointsToEarn * 0.10).toStringAsFixed(0)} value',
-                      style: GoogleFonts.outfit(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // ── Pass: upsell nudge for non-subscribers ───────────────────────────
-            if (!subProv.hasActiveSub && effectiveBase > 0)
-              GestureDetector(
-                onTap: () => Navigator.pushNamed(context, '/customer/subscription'),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text('⚡', style: TextStyle(fontSize: 18)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Get Enything Pass → This delivery would be FREE!',
-                          style: GoogleFonts.outfit(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        'from ₹49/mo',
-                        style: GoogleFonts.outfit(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
 
             _sectionCard(
               title: 'Bill Details',
@@ -1048,21 +946,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     hint: 'Base price (excl. GST)',
                   ),
                   const SizedBox(height: 8),
-                  // Delivery row — shows free credit if Pass is active
+                  // Delivery row
                   _billRow(
                     'Delivery Fee',
                     '₹${effectiveBase.toStringAsFixed(0)}',
                   ),
-                  if (passDeliveryFree) ...[
-                    const SizedBox(height: 4),
-                    _billRow(
-                      '${subProv.tierDisplay} — Free Delivery',
-                      '-₹${effectiveBase.toStringAsFixed(0)}',
-                      valueColor: AppColors.success,
-                      hint: 'Your Pass benefit ✓',
-                    ),
-                  ],
-                  if (!passDeliveryFree && discount > 0) ...[
+                  if (discount > 0) ...[
                     const SizedBox(height: 8),
                     _billRow(
                       'Delivery Discount',
@@ -1136,8 +1025,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ],
         ),
       ),
-      ),
-      ),
+    ),
+  ),
       bottomNavigationBar: SafeArea(
         child: MaxWidthContainer(
           child: Container(

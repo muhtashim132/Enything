@@ -30,7 +30,7 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
       final userId = auth.currentUserId;
       if (userId != null) {
         // Register Push Notification Token
-        context.read<NotificationProvider>().registerFcmToken(userId, 'delivery');
+        context.read<NotificationProvider>().registerFcmToken(userId, 'delivery_partner');
 
         // Listen for live approval
         _channel = Supabase.instance.client.channel('public:delivery_partners:id=eq.$userId')

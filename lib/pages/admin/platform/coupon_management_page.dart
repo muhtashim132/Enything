@@ -14,7 +14,7 @@ class CouponManagementPage extends StatefulWidget {
 }
 
 class _CouponManagementPageState extends State<CouponManagementPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   List<Map<String, dynamic>> _coupons = [];
   bool _loading = true;
 

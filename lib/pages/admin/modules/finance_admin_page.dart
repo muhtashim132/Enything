@@ -22,7 +22,7 @@ class FinanceAdminPage extends StatefulWidget {
 class _FinanceAdminPageState extends State<FinanceAdminPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   bool _loading = true;
   double _gmv = 0;
@@ -496,7 +496,7 @@ class _GstStatementTab extends StatefulWidget {
 }
 
 class _GstStatementTabState extends State<_GstStatementTab> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   bool _loading = true;
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
@@ -1306,7 +1306,7 @@ class _WithdrawalActionSheet extends StatefulWidget {
 }
 
 class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   final _txnIdCtrl = TextEditingController();
   
   bool _processing = false;

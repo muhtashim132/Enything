@@ -37,7 +37,7 @@ class ShopDetailSheet extends StatefulWidget {
 }
 
 class _ShopDetailSheetState extends State<ShopDetailSheet> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   ShopModel? _shop;
   List<ProductModel> _products = [];
   bool _isLoading = true;

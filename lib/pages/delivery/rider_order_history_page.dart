@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/time_utils.dart';
-import '../../config/routes.dart';
+
 
 class RiderOrderHistoryPage extends StatefulWidget {
   const RiderOrderHistoryPage({super.key});
@@ -16,7 +16,7 @@ class RiderOrderHistoryPage extends StatefulWidget {
 }
 
 class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   bool _isLoading = true;
   List<Map<String, dynamic>> _orders = [];
 

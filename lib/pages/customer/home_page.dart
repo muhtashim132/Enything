@@ -14,7 +14,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/notification_provider.dart';
 
 import '../../providers/recently_viewed_provider.dart';
-import '../../providers/subscription_provider.dart';
+import '../../providers/referral_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../models/product_model.dart';
@@ -56,7 +56,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _loadAllData();
   }
 
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   int _selectedTabIndex = -1; // -1 = no tab selected (show ALL)
   bool _isLoading = true;
   bool _isSearching = false;
@@ -234,7 +234,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       if (auth.currentUserId != null) {
         context.read<FavoritesProvider>().fetchFavorites(auth.currentUserId!);
         context.read<LocationProvider>().loadAddressFromDb(auth.currentUserId!);
-        context.read<SubscriptionProvider>().init(auth.currentUserId!);
+        context.read<ReferralProvider>().init(auth.currentUserId!);
       }
     });
   }

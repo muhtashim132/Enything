@@ -23,7 +23,7 @@ class ShopManagementPage extends StatefulWidget {
 }
 
 class _ShopManagementPageState extends State<ShopManagementPage> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   bool _isLoading = true;
   bool _isSaving = false;
 

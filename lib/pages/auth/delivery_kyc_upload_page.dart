@@ -18,7 +18,7 @@ class DeliveryKycUploadPage extends StatefulWidget {
 }
 
 class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   bool _loading = false;
 
   final _aadharCtrl = TextEditingController();

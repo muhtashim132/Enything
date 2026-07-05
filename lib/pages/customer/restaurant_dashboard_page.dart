@@ -26,7 +26,7 @@ class RestaurantDashboardPage extends StatefulWidget {
 
 class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
     with TickerProviderStateMixin {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   ShopModel? _shop;
   List<ProductModel> _products = [];
   bool _isLoading = true;

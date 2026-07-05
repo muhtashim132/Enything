@@ -4,7 +4,7 @@ void main() {
   final file = File('lib/pages/admin/modules/overview_admin_page.dart');
   var code = file.readAsStringSync();
 
-  final builderCode = '''
+  const builderCode = '''
       child: CustomScrollView(
         slivers: [
           SliverPadding(

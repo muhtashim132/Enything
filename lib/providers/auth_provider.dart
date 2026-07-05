@@ -8,7 +8,7 @@ import '../models/user_model.dart';
 import '../main.dart';
 
 class AuthProvider extends ChangeNotifier {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   UserModel? _user;
   bool _isLoading = false;
   bool _isProfileFetched = false;
@@ -387,8 +387,9 @@ class AuthProvider extends ChangeNotifier {
             .maybeSingle();
         sellerVerificationStatus =
             sellerData?['verification_status'] ?? 'unverified';
-        if (sessionRole == 'seller')
+        if (sessionRole == 'seller') {
           verificationStatus = sellerVerificationStatus;
+        }
       }
       if (allRoles.contains('delivery_partner')) {
         final deliveryData = await _supabase
@@ -398,8 +399,9 @@ class AuthProvider extends ChangeNotifier {
             .maybeSingle();
         riderVerificationStatus =
             deliveryData?['verification_status'] ?? 'unverified';
-        if (sessionRole == 'delivery_partner')
+        if (sessionRole == 'delivery_partner') {
           verificationStatus = riderVerificationStatus;
+        }
       }
 
       _user = UserModel.fromMap({
@@ -499,7 +501,9 @@ class AuthProvider extends ChangeNotifier {
   bool _isMagicNumber(String phone) {
     if (phone.contains('9999999996') ||
         phone.contains('9999999997') ||
-        phone.contains('9999999998')) return true;
+        phone.contains('9999999998')) {
+      return true;
+    }
     if (!kDebugMode) return false;
     return phone.contains('9999999991') ||
         phone.contains('9999999992') ||
@@ -641,7 +645,7 @@ class AuthProvider extends ChangeNotifier {
         if (phone.contains('9999999998')) mockRole = 'delivery_partner';
 
         final assignedRole = preferredRole ?? mockRole;
-        final hardcodedLocation = 'POINT(74.6366 34.4225)';
+        const hardcodedLocation = 'POINT(74.6366 34.4225)';
 
         // 1. Upsert profile — handle phone uniqueness gracefully
         try {

@@ -33,7 +33,7 @@ class TrackOrderPage extends StatefulWidget {
 
 class _TrackOrderPageState extends State<TrackOrderPage>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   OrderModel? _order;
   bool _isLoading = true;
   bool _isCancelling = false;
@@ -1156,9 +1156,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         return;
       }
       setState(() {
-        if (_paymentSecondsLeft > 0) {
-          _paymentSecondsLeft--;
+        if (order.paymentDeadline != null) {
+          final remaining = order.paymentDeadline!.difference(DateTime.now().toUtc()).inSeconds;
+          _paymentSecondsLeft = remaining;
         } else {
+          _paymentSecondsLeft--;
+        }
+
+        if (_paymentSecondsLeft <= 0) {
+          _paymentSecondsLeft = 0;
           t.cancel();
           _autoCancelOnTimeout('awaiting_payment');
         }

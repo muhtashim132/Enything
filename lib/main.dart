@@ -23,11 +23,9 @@ import 'providers/audit_provider.dart';
 import 'providers/platform_config_provider.dart';
 import 'providers/coupon_provider.dart';
 import 'providers/recently_viewed_provider.dart';
-import 'providers/subscription_provider.dart';
+import 'providers/referral_provider.dart';
 import 'services/notification_service.dart';
 
-// Global Supabase client access
-late final SupabaseClient supabase;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,12 +58,10 @@ void main() async {
 
   await Supabase.initialize(
     url: supabaseUrl,
-    anonKey:
-        supabaseAnonKey, // ignore: deprecated_member_use — SDK alias still works
+    publishableKey: supabaseAnonKey,
   );
 
-  // Set Supabase instance locally
-  supabase = Supabase.instance.client;
+  // All code uses Supabase.instance.client directly — no global alias needed.
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -281,7 +277,7 @@ class EnythingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CouponProvider()),
         ChangeNotifierProvider<RecentlyViewedProvider>.value(
             value: recentlyViewedProvider),
-        ChangeNotifierProvider(create: (_) => SubscriptionProvider()),
+        ChangeNotifierProvider(create: (_) => ReferralProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

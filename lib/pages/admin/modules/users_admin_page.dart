@@ -144,7 +144,7 @@ class _CustomersTab extends StatefulWidget {
 }
 
 class _CustomersTabState extends State<_CustomersTab> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _filtered = [];
   bool _loading = true;
@@ -348,7 +348,7 @@ class _SellersTab extends StatefulWidget {
 }
 
 class _SellersTabState extends State<_SellersTab> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   List<Map<String, dynamic>> _sellers = [];
   List<Map<String, dynamic>> _filtered = [];
   bool _loading = true;
@@ -502,7 +502,7 @@ class _RidersTab extends StatefulWidget {
 }
 
 class _RidersTabState extends State<_RidersTab> {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
   List<Map<String, dynamic>> _riders = [];
   List<Map<String, dynamic>> _filtered = [];
   bool _loading = true;

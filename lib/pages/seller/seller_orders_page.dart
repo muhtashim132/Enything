@@ -28,7 +28,7 @@ class SellerOrdersPage extends StatefulWidget {
 
 class _SellerOrdersPageState extends State<SellerOrdersPage>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   List<OrderModel> _orders = [];
   bool _isLoading = true;
   late TabController _tabController;
@@ -192,7 +192,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             .from('app_logs')
             .insert({'message': 'Seller order load error: $e\n$stacktrace'});
       } catch (_) {}
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        _showSnack('Failed to load orders. Pull down to refresh.', isError: true);
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -253,7 +256,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             body:
                 'Both the shop and rider accepted your order. Complete payment within 10 minutes.',
             data: {'order_id': order.id, 'action': 'pay'},
-          );
+          ).then((err) {
+            if (err != null && mounted) _showSnack(err, isError: true);
+          });
 
           // Notify rider: seller is in, customer is paying
           if (order.deliveryPartnerId != null) {
@@ -277,7 +282,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             body:
                 'The shop accepted your order. Now waiting for a rider to also confirm.',
             data: {'order_id': order.id, 'role': 'customer'},
-          );
+          ).then((err) {
+            if (err != null && mounted) _showSnack(err, isError: true);
+          });
         }
 
         // Auto-switch to Active tab

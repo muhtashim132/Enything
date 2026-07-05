@@ -36,7 +36,7 @@ class AppNotification {
 ///   - Call [stopListening] on logout / role change.
 ///   - Call [markAllRead] / [markRead] to manage unread state.
 class NotificationProvider extends ChangeNotifier {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   final List<AppNotification> _notifications = [];
   RealtimeChannel? _channel;
@@ -73,8 +73,9 @@ class NotificationProvider extends ChangeNotifier {
 
       final prefs = await SharedPreferences.getInstance();
       final cachedToken = prefs.getString('fcm_token_$userId');
-      if (cachedToken == token) {
-        debugPrint('FCM token unchanged, skipping DB upsert');
+      final cachedRole = prefs.getString('fcm_role_$userId');
+      if (cachedToken == token && cachedRole == role) {
+        debugPrint('FCM token and role unchanged, skipping DB upsert');
       } else {
         // ── SECURITY FIX: Delete stale cross-user tokens before registering ──
         // If another user was previously logged in on this device, their token
@@ -138,6 +139,7 @@ class NotificationProvider extends ChangeNotifier {
           debugPrint('FCM token confirmed saved in DB: ${check['id']}');
         }
         await prefs.setString('fcm_token_$userId', token);
+        await prefs.setString('fcm_role_$userId', role);
       }
 
       // Listen for token refresh and re-register
@@ -145,11 +147,12 @@ class NotificationProvider extends ChangeNotifier {
       _fcmTokenSub = messaging.onTokenRefresh.listen((newToken) async {
         final prefs = await SharedPreferences.getInstance();
         final deviceId = prefs.getString('stable_device_id');
+        final currentRole = prefs.getString('fcm_role_$userId') ?? role;
         await _supabase.from('device_tokens').upsert({
           'user_id': userId,
           'token': newToken,
           'platform': Platform.isIOS ? 'ios' : 'android',
-          'role': role,
+          'role': currentRole,
           'device_id': deviceId,
           'updated_at': DateTime.now().toIso8601String(),
         }, onConflict: 'user_id,token');
@@ -925,21 +928,24 @@ class NotificationProvider extends ChangeNotifier {
   
   /// Invokes the `send-push` Edge Function to deliver a Firebase Cloud Message
   /// to the target user, so they get notified even when the app is closed.
-  Future<void> sendBackgroundPush({
+  Future<String?> sendBackgroundPush({
     required String targetUserId,
     required String title,
     required String body,
     Map<String, String>? data,
   }) async {
     try {
-      await _supabase.functions.invoke('send-push', body: {
+      final res = await _supabase.functions.invoke('send-push', body: {
         'user_id': targetUserId,
         'title': title,
         'body': body,
         if (data != null) 'data': data,
       });
+      if (res.status != 200) return 'Push failed: ${res.status}';
+      return null;
     } catch (e) {
       debugPrint('Error sending background push: $e');
+      return 'Failed to send notification';
     }
   }
 

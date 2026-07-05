@@ -19,7 +19,7 @@ class AppliedCoupon {
 }
 
 class CouponProvider extends ChangeNotifier {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   AppliedCoupon? _appliedCoupon;
   bool _isValidating = false;

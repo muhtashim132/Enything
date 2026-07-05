@@ -5,7 +5,7 @@ import '../config/tax_config.dart';
 class PlatformConfigProvider extends ChangeNotifier {
   static PlatformConfigProvider? instance;
 
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   PlatformConfigProvider() {
     instance = this;

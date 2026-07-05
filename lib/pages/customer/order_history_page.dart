@@ -23,7 +23,7 @@ class OrderHistoryPage extends StatefulWidget {
 }
 
 class _OrderHistoryPageState extends State<OrderHistoryPage> {
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   List<OrderModel> _orders = [];
   bool _isLoading = true;
   final Set<String> _cancellingIds = {}; // track which orders are being cancelled

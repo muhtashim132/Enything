@@ -4,7 +4,7 @@ import '../models/rbac/permission_model.dart';
 import '../models/rbac/audit_log_model.dart';
 
 class RolesRepository {
-  final _db = Supabase.instance.client;
+  SupabaseClient get _db => Supabase.instance.client;
 
   // ── Fetch all roles with their permissions ──────────────────
   Future<List<RoleModel>> fetchRoles() async {
