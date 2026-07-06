@@ -24,6 +24,7 @@ import 'providers/platform_config_provider.dart';
 import 'providers/coupon_provider.dart';
 import 'providers/recently_viewed_provider.dart';
 import 'providers/referral_provider.dart';
+
 import 'services/notification_service.dart';
 import 'config/route_observer.dart';
 import 'widgets/customer/multi_shop_cart_bubble.dart';
@@ -280,6 +281,7 @@ class EnythingApp extends StatelessWidget {
         ChangeNotifierProvider<RecentlyViewedProvider>.value(
             value: recentlyViewedProvider),
         ChangeNotifierProvider(create: (_) => ReferralProvider()),
+
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

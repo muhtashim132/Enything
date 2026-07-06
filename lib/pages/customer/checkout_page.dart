@@ -22,6 +22,7 @@ import '../../services/image_compression_service.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../providers/coupon_provider.dart';
 
+
 import '../../widgets/coupon_input_widget.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -268,6 +269,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     // Capture coupon ID & discount before any await to avoid BuildContext-across-async-gaps warning
     final appliedCouponId = context.read<CouponProvider>().appliedCoupon?.id;
     final appliedCouponDiscount = context.read<CouponProvider>().discountAmount;
+
     final supabase = Supabase.instance.client;
 
     List<String> uploadedPaths = [];
@@ -318,7 +320,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final riderBase = effectiveBase + surcharge + heavyFee;
       final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
-      final totalDelivery = cart.totalDeliveryCharges(maxDistanceKm);
+      double totalDelivery = cart.totalDeliveryCharges(maxDistanceKm);
 
       // Payment method is always 'upi' now (COD removed)
       const paymentMethod = 'upi';
@@ -553,7 +555,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       await supabase.rpc('place_orders_transaction', params: {
         'p_orders': allOrders,
         'p_items': allItems,
-        if (appliedCouponId != null) 'p_coupon_id': appliedCouponId,
+        'p_coupon_id': appliedCouponId,
       });
 
       // Notify sellers AFTER successful atomic insertion
@@ -607,6 +609,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final location = context.watch<LocationProvider>();
     final couponProv = context.watch<CouponProvider>();
 
+
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
       distanceKm = 0.0;
@@ -625,8 +628,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
     // BUG-H3 FIX: Compute the breakdown ONCE so UI display and DB insertion
-    // use the exact same figures. No subscription plan — delivery is always charged.
-    final totalDelivery = cart.totalDeliveryCharges(distanceKm);
+    // use the exact same figures.
+    double totalDelivery = cart.totalDeliveryCharges(distanceKm);
 
     // ── ADD-ON GST model: GST is a real charge on top of base prices ─────────
     final gstBreakdown = OrderTaxBreakdown.calculate(

@@ -14,6 +14,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
+import '../settings/faq_support_page.dart';
 
 class OrderHistoryPage extends StatefulWidget {
   const OrderHistoryPage({super.key});
@@ -199,15 +200,18 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }
 
   Future<void> _cancelOrder(OrderModel order, bool isDark) async {
+    final isGroup = order.cartGroupId != null && (order.status == 'awaiting_acceptance' || order.status == 'awaiting_payment');
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Cancel Order?',
+        title: Text(isGroup ? 'Cancel Entire Cart?' : 'Cancel Order?',
             style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
         content: Text(
-            'Are you sure you want to cancel this order?',
+            isGroup 
+                ? 'This order is part of a combined cart. Cancelling it will cancel ALL items in the cart. Are you sure?'
+                : 'Are you sure you want to cancel this order?',
             style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white70 : AppColors.textSecondary)),
         actions: [
           TextButton(
@@ -231,49 +235,64 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
     setState(() => _cancellingIds.add(order.id));
     try {
-      await _supabase
-          .from('orders')
-          .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
-          .eq('id', order.id);
+      List<OrderModel> ordersToCancel = isGroup 
+          ? _orders.where((o) => o.cartGroupId == order.cartGroupId).toList() 
+          : [order];
+
+      if (isGroup) {
+        await _supabase
+            .from('orders')
+            .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
+            .eq('cart_group_id', order.cartGroupId!);
+      } else {
+        await _supabase
+            .from('orders')
+            .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
+            .eq('id', order.id);
+      }
 
       // BUG-4 FIX: Notify seller and rider that the customer cancelled
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
 
-        // Notify seller (lookup seller_id via shop_id)
-        if (order.shopId != null) {
-          _supabase
-              .from('shops')
-              .select('seller_id')
-              .eq('id', order.shopId!)
-              .maybeSingle()
-              .then((shopData) {
-            if (shopData != null && shopData['seller_id'] != null) {
-              notifProv.sendBackgroundPush(
-                targetUserId: shopData['seller_id'] as String,
-                title: '❌ Order Cancelled by Customer',
-                body: 'The customer cancelled their order. No further action needed.',
-                data: {'order_id': order.id, 'role': 'seller'},
-              );
-            }
-          });
-        }
+        for (final o in ordersToCancel) {
+          // Notify seller
+          if (o.shopId != null) {
+            _supabase
+                .from('shops')
+                .select('seller_id')
+                .eq('id', o.shopId!)
+                .maybeSingle()
+                .then((shopData) {
+              if (shopData != null && shopData['seller_id'] != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: shopData['seller_id'] as String,
+                  title: '❌ Order Cancelled by Customer',
+                  body: 'The customer cancelled their order. No further action needed.',
+                  data: {'order_id': o.id, 'role': 'seller'},
+                );
+              }
+            });
+          }
 
-        // Notify assigned rider (if any)
-        if (order.deliveryPartnerId != null) {
-          notifProv.sendBackgroundPush(
-            targetUserId: order.deliveryPartnerId!,
-            title: '❌ Order Cancelled by Customer',
-            body: 'The customer cancelled their order. You are free for new deliveries.',
-            data: {'order_id': order.id, 'role': 'rider'},
-          );
+          // Notify assigned rider (if any)
+          if (o.deliveryPartnerId != null) {
+            notifProv.sendBackgroundPush(
+              targetUserId: o.deliveryPartnerId!,
+              title: '❌ Order Cancelled by Customer',
+              body: 'The customer cancelled their order. You are free for new deliveries.',
+              data: {'order_id': o.id, 'role': 'rider'},
+            );
+          }
         }
       }
 
       if (mounted) {
         setState(() {
-          final idx = _orders.indexWhere((o) => o.id == order.id);
-          if (idx != -1) _orders[idx].status = 'cancelled';
+          for (final o in ordersToCancel) {
+            final idx = _orders.indexWhere((existing) => existing.id == o.id);
+            if (idx != -1) _orders[idx].status = 'cancelled';
+          }
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -524,6 +543,45 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             ),
                       const SizedBox(width: 8),
                     ],
+                    // Report Issue Button (always visible for past or problematic orders)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FaqSupportPage(
+                              initialTabIndex: 0,
+                              openTicketSheet: true,
+                              prefillOrderId: order.id,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.info.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.report_problem_outlined, size: 14, color: AppColors.info),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Report Issue',
+                              style: GoogleFonts.outfit(
+                                color: AppColors.info,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
                       'Details',
                       style: GoogleFonts.outfit(

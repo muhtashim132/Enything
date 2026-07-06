@@ -69,16 +69,16 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
         }
       }
 
-      // Total earnings = sum of rider_earnings on delivered orders
+      // Total earnings = sum of rider_earnings + wait_time_penalty on delivered orders
       final earningsRes = await _db
           .from('orders')
-          .select('rider_earnings, delivery_charges')
+          .select('rider_earnings, delivery_charges, wait_time_penalty')
           .eq('delivery_partner_id', userId)
           .eq('status', 'delivered');
 
       double totalEarned = 0;
       for (final o in earningsRes as List) {
-        totalEarned += (o['rider_earnings'] ?? o['delivery_charges'] ?? 0).toDouble();
+        totalEarned += ((o['rider_earnings'] ?? o['delivery_charges'] ?? 0) as num).toDouble() + ((o['wait_time_penalty'] ?? 0) as num).toDouble();
       }
 
       _availableBalance = totalEarned - totalPaid;
@@ -103,15 +103,12 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
     final userId = context.read<AuthProvider>().currentUserId ?? '';
 
     try {
-      await _db.from('withdrawals').insert({
-        'user_id':             userId,
-        'user_role':           'delivery_partner',
-        'amount':              amount,
-        'upi_id':              _useUpi ? _upiCtrl.text.trim() : null,
-        'bank_account_number': !_useUpi ? _bankAccCtrl.text.trim() : null,
-        'bank_ifsc':           !_useUpi ? _bankIfscCtrl.text.trim() : null,
-        'bank_account_holder': !_useUpi ? _bankHolderCtrl.text.trim() : null,
-        'status':              'pending',
+      await _db.rpc('request_rider_withdrawal', params: {
+        'p_amount': amount,
+        'p_upi_id': _useUpi ? _upiCtrl.text.trim() : null,
+        'p_bank_account_number': !_useUpi ? _bankAccCtrl.text.trim() : null,
+        'p_bank_ifsc': !_useUpi ? _bankIfscCtrl.text.trim() : null,
+        'p_bank_account_holder': !_useUpi ? _bankHolderCtrl.text.trim() : null,
       });
 
       _showSnack('Withdrawal request submitted! Admin will process it within 2 business days.', isError: false);

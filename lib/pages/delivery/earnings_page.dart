@@ -57,8 +57,7 @@ class _EarningsPageState extends State<EarningsPage> {
       final Map<int, double> weekMap = {};
 
       for (final d in deliveries) {
-        final charge =
-            (d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0).toDouble();
+        final charge = ((d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0) as num).toDouble() + ((d['wait_time_penalty'] ?? 0.0) as num).toDouble();
         final createdAt =
             DateTime.tryParse(d['created_at'] ?? '')?.toIST() ?? DateTime(2000);
         total += charge;
@@ -97,8 +96,7 @@ class _EarningsPageState extends State<EarningsPage> {
           _recentDeliveries = deliveries.take(20).map((d) {
             return {
               'id': d['id'],
-              'amount': (d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0)
-                  .toDouble(),
+              'amount': ((d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0) as num).toDouble() + ((d['wait_time_penalty'] ?? 0.0) as num).toDouble(),
               'date': d['created_at'],
             };
           }).toList();

@@ -406,7 +406,8 @@ class CartProvider extends ChangeNotifier {
   double totalDeliveryCharges(double baseDistanceKm) {
     final base = calculateDeliveryCharges(baseDistanceKm);
     final effectiveBase = base >= 0 ? base : 25.0;
-    final totalWithoutGst = effectiveBase + multiShopSurcharge + heavyOrderFee + smallCartFee - calculateDeliveryDiscount(baseDistanceKm);
+    double totalWithoutGst = effectiveBase + multiShopSurcharge + heavyOrderFee + smallCartFee - calculateDeliveryDiscount(baseDistanceKm);
+    if (totalWithoutGst < 0) totalWithoutGst = 0.0;
     return totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
   }
 

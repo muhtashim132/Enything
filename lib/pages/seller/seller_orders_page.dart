@@ -206,11 +206,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   ///       → set seller_accepted + broadcast to riders + notify customer shop accepted
   Future<void> _sellerAccept(OrderModel order) async {
     try {
-      // SE1 FIX: Fetch BOTH partner_accepted AND current status to prevent TOCTOU.
-      // If the order was cancelled/rejected between load and click, abort.
+      // Check if order still awaiting_acceptance before calling RPC (optional fast-fail)
       final latest = await _supabase
           .from('orders')
-          .select('partner_accepted, status')
+          .select('status')
           .eq('id', order.id)
           .maybeSingle();
       if (latest == null || latest['status'] != 'awaiting_acceptance') {
@@ -220,26 +219,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         _loadOrders();
         return;
       }
-      final riderAlreadyAccepted = latest['partner_accepted'] == true;
 
-      final paymentDeadline = riderAlreadyAccepted
-          ? DateTime.now()
-              .toUtc()
-              .add(const Duration(minutes: 10))
-              .toIso8601String()
-          : null;
-
-      // Update DB
-      await _supabase
-          .from('orders')
-          .update({
-            'seller_accepted': true,
-            if (riderAlreadyAccepted) 'status': 'awaiting_payment',
-            if (paymentDeadline != null) 'payment_deadline': paymentDeadline,
-          })
-          .eq('id', order.id)
-          .eq('shop_id', order.shopId ?? '')
-          .eq('status', 'awaiting_acceptance');
+      // Update DB and capture boolean return value to prevent TOCTOU races
+      final result = await _supabase.rpc('accept_order_seller', params: {'p_order_id': order.id});
+      final riderAlreadyAccepted = result == true;
 
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
@@ -293,7 +276,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       _loadOrders();
     } catch (e) {
       debugPrint('Seller accept error: $e');
-      _showSnack('Failed to accept: $e', isError: true);
+      if (e.toString().contains('ORDER_CANCELLED')) {
+        _showSnack('The customer just cancelled this order.', isError: true);
+      } else {
+        _showSnack('Failed to accept: $e', isError: true);
+      }
     }
   }
 
@@ -451,30 +438,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       }
 
       final msg = messageController.text.trim();
-      final updateRes = await _supabase
-          .from('orders')
-          .update({
-            'status': rejectReason == 'prescription'
-                ? 'verification_failed'
-                : 'seller_rejected',
-            'seller_accepted': false,
-            // D1: Always reset rider assignment so the rider isn't tied to a dead order
-            'delivery_partner_id': null,
-            'partner_accepted': false,
-            if (msg.isNotEmpty) 'rejection_message': msg,
-          })
-          .eq('id', order.id)
-          .eq('shop_id', order.shopId ?? '')
-          .inFilter('status', const ['awaiting_acceptance', 'awaiting_payment', 'pending'])
-          .select();
-
-      if ((updateRes as List).isEmpty) {
-        if (mounted) {
-          _showSnack('Cannot decline — order status changed (likely paid).', isError: true);
-        }
-        _loadOrders();
-        return;
-      }
+      await _supabase.rpc('reject_order_seller', params: {
+        'p_order_id': order.id,
+        'p_reject_reason': rejectReason,
+        'p_message': msg.isNotEmpty ? msg : null,
+      });
 
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
@@ -484,6 +452,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               ? '"$msg" — You can retry or choose a different shop.'
               : 'The shop could not accept your order. You can retry or choose a different shop.',
           data: {'order_id': order.id, 'role': 'customer'},
+        );
+      }
+      
+      if (mounted && order.deliveryPartnerId != null) {
+        context.read<NotificationProvider>().sendBackgroundPush(
+          targetUserId: order.deliveryPartnerId!,
+          title: '❌ Order Cancelled by Shop',
+          body: 'The shop declined the order. You are free for new deliveries.',
+          data: {'order_id': order.id, 'role': 'rider'},
         );
       }
 
@@ -563,6 +540,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   Future<void> _updateOrderStatus(OrderModel order, String status) async {
     try {
+      double waitPenalty = 0.0;
       final updateData = <String, dynamic>{'status': status};
       if (status == 'ready_for_pickup') {
         final readyTime = DateTime.now();
@@ -573,16 +551,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               readyTime.difference(order.arrivedAtShopTime!).inMinutes;
           final prepLimit = order.shopPrepTimeSnapshot;
           if (waitMins > prepLimit) {
-            updateData['wait_time_penalty'] = (waitMins - prepLimit) * 2.0;
+            waitPenalty = (waitMins - prepLimit) * 2.0;
           }
         }
       }
 
-      await _supabase
-          .from('orders')
-          .update(updateData)
-          .eq('id', order.id)
-          .eq('shop_id', order.shopId ?? '');
+      await _supabase.rpc('update_order_status', params: {
+        'p_order_id': order.id,
+        'p_new_status': status,
+        'p_ready_time': updateData['order_ready_time'],
+        'p_wait_penalty': waitPenalty,
+      });
 
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
@@ -674,9 +653,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         'rating': rating,
         'review': review.isEmpty ? null : review,
       });
-      await _supabase
-          .from('orders')
-          .update({'has_seller_rated': true}).eq('id', orderId);
+      await _supabase.rpc('set_seller_rated', params: {'p_order_id': orderId});
       _loadOrders();
       _showSnack('⭐ Rider rated successfully!', isError: false);
     } catch (e) {

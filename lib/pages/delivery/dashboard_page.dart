@@ -278,13 +278,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       final activeOrders = _myGroups.expand((g) => g.orders).where((o) => activeStatuses.contains(o.status)).toList();
       
-      for (final order in activeOrders) {
+      final activeOrderIds = activeOrders.map((o) => o.id).toList();
+      if (activeOrderIds.isNotEmpty) {
         try {
-          await _supabase.from('orders').update({
-            'rider_lat': _riderLat,
-            'rider_lng': _riderLng,
-            'rider_location_updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', order.id);
+          await _supabase.rpc('update_rider_order_location', params: {
+            'p_order_ids': activeOrderIds,
+            'p_lat': _riderLat,
+            'p_lng': _riderLng,
+          });
         } catch (e) {
           debugPrint('Location broadcast error: $e');
         }
@@ -554,32 +555,28 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         } catch (_) {}
       }
 
-      // Fetch latest state to prevent race conditions (TOCTOU)
-      final latest = await _supabase.from('orders').select('seller_accepted, status').eq('id', order.id).maybeSingle();
-      final bothAccepted = latest?['seller_accepted'] == true;
+      // Fetch latest state to ensure order is still available (fast-fail)
+      final latest = await _supabase.from('orders').select('status').eq('id', order.id).maybeSingle();
       final currentStatus = latest?['status'] as String?;
 
-      String newStatus = currentStatus ?? 'awaiting_acceptance';
-      String? paymentDeadline;
-
-      if (currentStatus == 'pending' || currentStatus == 'awaiting_acceptance') {
-        newStatus = bothAccepted ? 'awaiting_payment' : 'awaiting_acceptance';
-        if (bothAccepted) {
-          paymentDeadline = DateTime.now().toUtc().add(const Duration(minutes: 10)).toIso8601String();
+      if (currentStatus != 'awaiting_acceptance' && currentStatus != 'pending') {
+        if (mounted) {
+          _showSnack('⚠️ This order is no longer available to accept.', isError: true);
         }
+        return false;
       }
 
-      final updateResult = await _supabase.from('orders').update({
-        'delivery_partner_id': auth.currentUserId,
-        'partner_accepted': true,
-        'status': newStatus,
-        if (paymentDeadline != null) 'payment_deadline': paymentDeadline,
-        if (shopLat != null && shopLat != 0.0) 'shop_lat': shopLat,
-        if (shopLng != null && shopLng != 0.0) 'shop_lng': shopLng,
-        'rider_phone': auth.user?.phone ?? '',
-      }).eq('id', order.id).isFilter('delivery_partner_id', null).select();
+      // Update DB and capture boolean return value to prevent TOCTOU races
+      final result = await _supabase.rpc('accept_order_rider', params: {
+        'p_order_id': order.id,
+        'p_rider_phone': auth.user?.phone ?? '',
+        'p_shop_lat': shopLat ?? 0.0,
+        'p_shop_lng': shopLng ?? 0.0,
+      });
+      final bothAccepted = result == true;
 
-      if ((updateResult as List).isEmpty) {
+      final verify = await _supabase.from('orders').select('delivery_partner_id').eq('id', order.id).maybeSingle();
+      if (verify == null || verify['delivery_partner_id'] != auth.currentUserId) {
         if (mounted) {
           _showSnack('⚠️ This order was already assigned to another rider.', isError: true);
         }
@@ -657,7 +654,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     } on PostgrestException catch (pe) {
       debugPrint('Accept Postgrest error: $pe');
       if (mounted) {
-        _showSnack(pe.message, isError: true);
+        if (pe.message.contains('ORDER_CANCELLED')) {
+          _showSnack('⚠️ The customer just cancelled this order.', isError: true);
+        } else {
+          _showSnack(pe.message, isError: true);
+        }
       }
       return false;
     } catch (e) {
@@ -683,9 +684,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           _showSnack('⚠️ Too far from shop! You are ${(dist).toInt()}m away (max 300m).', isError: true);
           return;
         }
-        await _supabase.from('orders').update({
-          'arrived_at_shop_time': DateTime.now().toIso8601String(),
-        }).eq('id', order.id);
+        await _supabase.rpc('set_arrived_at_shop', params: {'p_order_id': order.id});
       } else if (status == 'reassign' || status == 'reassign_disputed') {
         double penalty = 0.0;
         if (order.arrivedAtShopTime != null) {
@@ -694,12 +693,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           final paidMinutes = math.max(0, math.min(10, waitMinutes - 10));
           penalty = paidMinutes * 1.5;
         }
-        await _supabase.from('orders').update({
-          'delivery_partner_id': null,
-          'partner_accepted': false,
-          'wait_time_penalty': penalty,
-          'wait_time_disputed': status == 'reassign_disputed',
-        }).eq('id', order.id);
+        await _supabase.rpc('reject_order_rider', params: {
+          'p_order_id': order.id,
+          'p_reason': 'rider_dropped',
+          'p_penalty': penalty,
+          'p_disputed': status == 'reassign_disputed',
+        });
 
         // Notify customer and seller that the rider dropped the order
         if (mounted) {
@@ -736,11 +735,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
       } else if (status == 'shop_dispute_cancel') {
         // Rider reported shop lied / items not given. Cancel order, do NOT reassign.
-        await _supabase.from('orders').update({
-          'status': 'cancelled',
-          'cancelled_reason': 'shop_dispute',
-          'wait_time_disputed': true,
-        }).eq('id', order.id);
+        await _supabase.rpc('set_shop_dispute', params: {'p_order_id': order.id, 'p_cancel': true});
 
         if (mounted) {
           final notifProv = context.read<NotificationProvider>();
@@ -779,9 +774,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         return;
       } else if (status == 'delivered') {
 
-        await _supabase.from('orders').update({
-          'status': status,
-        }).eq('id', order.id);
+        await _supabase.rpc('update_order_status', params: {
+          'p_order_id': order.id,
+          'p_new_status': status,
+        });
         
         if (mounted) {
           context.read<NotificationProvider>().sendBackgroundPush(
@@ -814,9 +810,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             }
           }
         }
-        await _supabase
-            .from('orders')
-            .update(updateData).eq('id', order.id);
+        await _supabase.rpc('update_order_status', params: {
+          'p_order_id': order.id,
+          'p_new_status': status,
+          'p_ready_time': updateData['order_ready_time'],
+          'p_wait_penalty': updateData['wait_time_penalty'] ?? 0.0,
+        });
             
         if (mounted) {
           final notifProv = context.read<NotificationProvider>();
@@ -979,9 +978,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         'review': review.isEmpty ? null : review,
       });
       if (markRated) {
-        await _supabase
-            .from('orders')
-            .update({'has_delivery_rated': true}).eq('id', orderId);
+        await _supabase.rpc('set_delivery_rated', params: {'p_order_id': orderId});
       }
     } catch (e) {
       debugPrint('Delivery rating error: $e');

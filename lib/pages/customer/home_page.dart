@@ -15,6 +15,7 @@ import '../../providers/notification_provider.dart';
 
 import '../../providers/recently_viewed_provider.dart';
 import '../../providers/referral_provider.dart';
+
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../models/product_model.dart';
@@ -238,6 +239,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         context.read<FavoritesProvider>().fetchFavorites(auth.currentUserId!);
         context.read<LocationProvider>().loadAddressFromDb(auth.currentUserId!);
         context.read<ReferralProvider>().init(auth.currentUserId!);
+
       }
     });
   }

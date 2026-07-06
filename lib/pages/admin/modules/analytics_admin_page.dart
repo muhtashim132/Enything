@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../theme/admin_theme.dart';
-import '../../../utils/time_utils.dart';
 
 class AnalyticsAdminPage extends StatefulWidget {
   const AnalyticsAdminPage({super.key});
@@ -38,114 +36,41 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
 
   Future<void> _loadAnalytics() async {
     try {
-      // Orders
-      final orders = await _db.from('orders').select(
-          'status, grand_total_collected, total_amount, created_at, shop_id, delivery_partner_id');
+      final res = await _db.rpc('admin_get_analytics_stats');
+      if (res != null) {
+        _totalOrders = res['total_orders'] as int;
+        _deliveredOrders = res['delivered_orders'] as int;
+        _cancelledOrders = res['cancelled_orders'] as int;
+        _avgOrderValue = (res['avg_order_value'] as num).toDouble();
+        
+        final obStatus = res['orders_by_status'] as Map<String, dynamic>;
+        _ordersByStatus = obStatus.map((k, v) => MapEntry(k, v as int));
 
-      _totalOrders = orders.length;
-      _deliveredOrders = orders.where((o) => o['status'] == 'delivered').length;
-      _cancelledOrders = orders.where((o) => o['status'] == 'cancelled').length;
+        final hDist = res['hourly_distribution'] as Map<String, dynamic>;
+        _hourlySpots = List.generate(24, (h) {
+          return FlSpot(h.toDouble(), (hDist[h.toString()] as num?)?.toDouble() ?? 0.0);
+        });
 
-      // Average order value
-      final totals = orders
-          .map((o) =>
-              (o['grand_total_collected'] as num?)?.toDouble() ??
-              (o['total_amount'] as num?)?.toDouble() ??
-              0.0)
-          .toList();
-      _avgOrderValue = totals.isEmpty
-          ? 0
-          : totals.reduce((a, b) => a + b) / totals.length;
-
-      // Orders by status
-      final statusMap = <String, int>{};
-      for (final o in orders) {
-        final s = (o['status'] ?? 'unknown') as String;
-        statusMap[s] = (statusMap[s] ?? 0) + 1;
-      }
-      _ordersByStatus = statusMap;
-
-      // Hourly distribution (last 7 days)
-      final now = DateTime.now();
-      final hourMap = <int, int>{};
-      for (final o in orders) {
-        if (o['created_at'] == null) continue;
-        final d = DateTime.tryParse(o['created_at'].toString())?.toIST();
-        if (d != null && now.difference(d).inDays <= 7) {
-          hourMap[d.hour] = (hourMap[d.hour] ?? 0) + 1;
+        // Peak hour
+        if (hDist.isNotEmpty) {
+          final peak = hDist.entries.reduce((a, b) => (a.value as num) > (b.value as num) ? a : b);
+          final h = int.parse(peak.key);
+          final suffix = h >= 12 ? 'PM' : 'AM';
+          final display = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+          _peakHour = '$display:00 $suffix';
+        } else {
+          _peakHour = '—';
         }
+
+        final tSellers = res['top_sellers'] as List;
+        _topSellers = List<Map<String, dynamic>>.from(tSellers);
+
+        final tRiders = res['top_riders'] as List;
+        _topRiders = List<Map<String, dynamic>>.from(tRiders);
+
+        _churnRisk = _totalOrders > 0 ? (_cancelledOrders / _totalOrders) * 100 : 0;
+        _newUsersToday = res['new_users_today'] as int;
       }
-      _hourlySpots = List.generate(24, (h) {
-        return FlSpot(h.toDouble(), (hourMap[h] ?? 0).toDouble());
-      });
-
-      // Peak hour
-      if (hourMap.isNotEmpty) {
-        final peak = hourMap.entries.reduce((a, b) => a.value > b.value ? a : b);
-        final h = peak.key;
-        final suffix = h >= 12 ? 'PM' : 'AM';
-        final display = h == 0 ? 12 : (h > 12 ? h - 12 : h);
-        _peakHour = '$display:00 $suffix';
-      }
-
-      // Top sellers by order count
-      final sellerCount = <String, int>{};
-      for (final o in orders) {
-        final s = o['shop_id']?.toString();
-        if (s != null) sellerCount[s] = (sellerCount[s] ?? 0) + 1;
-      }
-      final topIds = (sellerCount.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value)))
-          .take(5)
-          .toList();
-
-      if (topIds.isNotEmpty) {
-        final shops = await _db
-            .from('shops')
-            .select('id, name') // FIX: shop_name column does not exist; actual column is 'name'
-            .inFilter('id', topIds.map((e) => e.key).toList());
-        _topSellers = topIds.map((e) {
-          final shop = (shops as List).firstWhere(
-              (s) => s['id'].toString() == e.key,
-              orElse: () => {'name': 'Unknown'});
-          return {'name': shop['name'] ?? 'Unknown', 'orders': e.value};
-        }).toList();
-      }
-
-      // Top riders by order count
-      final riderCount = <String, int>{};
-      for (final o in orders) {
-        final r = o['delivery_partner_id']?.toString();
-        if (r != null) riderCount[r] = (riderCount[r] ?? 0) + 1;
-      }
-      final topRiderIds = (riderCount.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value)))
-          .take(5)
-          .toList();
-
-      if (topRiderIds.isNotEmpty) {
-        final riders = await _db
-            .from('profiles')
-            .select('id, full_name')
-            .inFilter('id', topRiderIds.map((e) => e.key).toList());
-        _topRiders = topRiderIds.map((e) {
-          final rider = (riders as List).firstWhere(
-              (r) => r['id'].toString() == e.key,
-              orElse: () => {'full_name': 'Unknown Rider'});
-          return {'name': rider['full_name'] ?? 'Unknown Rider', 'orders': e.value};
-        }).toList();
-      }
-
-      // Churn risk: cancelled / total (simple heuristic)
-      _churnRisk = _totalOrders > 0 ? (_cancelledOrders / _totalOrders) * 100 : 0;
-
-      // New users today
-      final today = DateFormat('yyyy-MM-dd').format(now.toIST());
-      final todayUsers = await _db
-          .from('profiles')
-          .select('id')
-          .gte('created_at', '${today}T00:00:00');
-      _newUsersToday = (todayUsers as List).length;
     } catch (e) {
       debugPrint('Analytics error: $e');
     }

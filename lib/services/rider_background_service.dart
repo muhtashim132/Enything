@@ -200,17 +200,16 @@ Future<void> _onStart(ServiceInstance service) async {
             .eq('delivery_partner_id', riderId!)
             .inFilter('status', activeStatuses);
 
-        for (final row in (rows as List)) {
-          final orderId = row['id'] as String?;
-          if (orderId == null) continue;
+        final activeOrderIds = (rows as List).map((r) => r['id']).toList();
+        if (activeOrderIds.isNotEmpty) {
           try {
-            await db!.from('orders').update({
-              'rider_lat': lat,
-              'rider_lng': lng,
-              'rider_location_updated_at': DateTime.now().toIso8601String(),
-            }).eq('id', orderId);
+            await db!.rpc('update_rider_order_location', params: {
+              'p_order_ids': activeOrderIds,
+              'p_lat': lat,
+              'p_lng': lng,
+            });
           } catch (e) {
-            print('[RiderBgService] order update error ($orderId): $e');
+            print('[RiderBgService] order update error: $e');
           }
         }
       } catch (e) {

@@ -79,14 +79,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     },
     {
       'status': 'pending',
-      'title': 'Order Placed',
-      'subtitle': 'Waiting for shop & rider to accept',
+      'title': 'Payment Processing',
+      'subtitle': 'Verifying your payment...',
       'icon': Icons.receipt_long,
     },
     {
       'status': 'confirmed',
-      'title': 'Order Confirmed',
-      'subtitle': 'Both shop & rider accepted!',
+      'title': 'Payment Confirmed',
+      'subtitle': 'Payment successful. Shop will begin preparing soon.',
       'icon': Icons.verified_outlined,
     },
     {
@@ -489,17 +489,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (fresh == null || fresh['status'] != expectedStatus) return;
 
     try {
-      var updateQuery = _supabase
-          .from('orders')
-          .update({'status': 'cancelled', 'cancelled_reason': 'timeout'});
-          
-      if (_order!.cartGroupId != null) {
-        updateQuery = updateQuery.eq('cart_group_id', _order!.cartGroupId!);
-      } else {
-        updateQuery = updateQuery.eq('id', widget.orderId);
-      }
+      await _supabase.rpc('cancel_order', params: {'p_order_id': widget.orderId, 'p_reason': 'timeout'});
       
-      final res = await updateQuery.eq('status', expectedStatus).select();
+      var query = _supabase.from('orders').select();
+      if (_order!.cartGroupId != null) {
+        query = query.eq('cart_group_id', _order!.cartGroupId!);
+      } else {
+        query = query.eq('id', widget.orderId);
+      }
+      final res = await query.eq('status', 'cancelled');
       if (mounted && res.isNotEmpty) {
         // Re-fetch all group orders to sync sibling order states
         // (Realtime only fires individual row events — group siblings may lag)
@@ -517,7 +515,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   // ── Retry: create a fresh awaiting_acceptance copy of the current order ───
-  Future<void> _retryOrder() async {
+  Future<void> _retryOrder({bool retryGroup = true}) async {
     if (_order == null || _isRetrying) return;
     setState(() => _isRetrying = true);
     try {
@@ -525,13 +523,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           _serverTime.add(const Duration(minutes: 3));
       final notifProv = context.read<NotificationProvider>();
       String? firstNewOrderId;
-      final shopsToRetry = _groupOrders.isEmpty ? [_order!] : _groupOrders;
+      final shopsToRetry = retryGroup && _groupOrders.isNotEmpty ? _groupOrders : [_order!];
 
       final List<Map<String, dynamic>> allOrders = [];
       final List<Map<String, dynamic>> allItems = [];
       final List<Map<String, dynamic>> notificationData = [];
       final nowUtc = _serverTime.toIso8601String();
       String? couponIdToPass;
+      final newCartGroupId = const Uuid().v4();
 
       for (final order in shopsToRetry) {
         final newOrderId = const Uuid().v4();
@@ -590,10 +589,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'id': newOrderId,
           'created_at': nowUtc,
           'updated_at': nowUtc,
-          'cart_group_id': order.cartGroupId,
+          'cart_group_id': order.cartGroupId != null ? newCartGroupId : null,
           'shop_id': order.shopId,
           'customer_id': order.customerId,
           'status': 'awaiting_acceptance',
+          'seller_accepted': false,
+          'partner_accepted': false,
           'acceptance_deadline': newDeadline.toIso8601String(),
           'total_amount': order.totalAmount,
           'delivery_charges': order.deliveryCharges,
@@ -644,7 +645,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       await _supabase.rpc('place_orders_transaction', params: {
         'p_orders': allOrders,
         'p_items': allItems,
-        if (couponIdToPass != null) 'p_coupon_id': couponIdToPass,
+        'p_coupon_id': couponIdToPass,
       });
 
       // Send notifications AFTER successful atomic transaction
@@ -689,38 +690,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (_order == null || _isRetrying) return;
     setState(() => _isRetrying = true);
     try {
-      final newDeadline =
-          _serverTime.add(const Duration(minutes: 3));
       // BUG-PAY1 FIX (CRITICAL): Must null out delivery_partner_id.
       // Without this the order remains assigned to the old rider and is
       // filtered out by the rider dashboard (.isFilter('delivery_partner_id', null)),
       // making the order permanently invisible to ALL new riders.
       // Also clear rider_phone so the new rider's number is used when they accept.
-      if (_order!.cartGroupId != null) {
-        await _supabase.from('orders').update({
-          'status': 'awaiting_acceptance',
-          'cancelled_reason': null,
-          'seller_accepted': true,
-          'partner_accepted': false,
-          'delivery_partner_id': null,
-          'rider_phone': null,
-          'rider_lat': null,
-          'rider_lng': null,
-          'acceptance_deadline': newDeadline.toIso8601String(),
-        }).eq('cart_group_id', _order!.cartGroupId!);
-      } else {
-        await _supabase.from('orders').update({
-          'status': 'awaiting_acceptance',
-          'cancelled_reason': null,
-          'seller_accepted': true,
-          'partner_accepted': false,
-          'delivery_partner_id': null,
-          'rider_phone': null,
-          'rider_lat': null,
-          'rider_lng': null,
-          'acceptance_deadline': newDeadline.toIso8601String(),
-        }).eq('id', widget.orderId);
-      }
+      await _supabase.rpc('retry_find_rider', params: {'p_order_id': widget.orderId});
 
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
@@ -813,18 +788,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       // preserves seller_rejected / verification_failed rows during bulk updates,
       // so no extra Dart filter is needed here. The neq('status','delivered') guard
       // is kept as a secondary safety net.
-      if (_order?.cartGroupId != null) {
-        await _supabase
-            .from('orders')
-            .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
-            .eq('cart_group_id', _order!.cartGroupId!)
-            .neq('status', 'delivered');
-      } else {
-        await _supabase
-            .from('orders')
-            .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
-            .eq('id', widget.orderId);
-      }
+      await _supabase.rpc('cancel_order', params: {'p_order_id': widget.orderId, 'p_reason': 'customer'});
 
       // Notify seller and rider that the customer cancelled
       if (mounted && _order != null) {
@@ -965,9 +929,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
       if (rateeRole == 'seller') {
         // BUG-19 FIX: Mark has_customer_rated on this specific order.
-        await _supabase
-            .from('orders')
-            .update({'has_customer_rated': true}).eq('id', targetOrderId);
+        await _supabase.rpc('set_customer_rated', params: {'p_order_id': targetOrderId});
         if (targetOrderId == widget.orderId) {
           setState(() => _order = _order?.copyWith(hasCustomerRated: true));
         }
@@ -982,10 +944,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             : _groupOrders.map((o) => o.id).toList();
         if (groupIds.length > 1) {
           try {
-            await _supabase
-                .from('orders')
-                .update({'has_customer_rated': true})
-                .inFilter('id', groupIds);
+            for (final gId in groupIds) {
+              await _supabase.rpc('set_customer_rated', params: {'p_order_id': gId});
+            }
           } catch (e) {
             debugPrint('Mark all orders rated error: $e');
           }
@@ -1366,21 +1327,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       final paymentId = 'pay_mock_${DateTime.now().millisecondsSinceEpoch}';
       final razorpayOrderId = 'order_mock_${DateTime.now().millisecondsSinceEpoch}';
 
-      if (_order?.cartGroupId != null) {
-        await _supabase.from('orders').update({
-          'status': 'confirmed',
-          'payment_status': 'captured',
-          'razorpay_payment_id': paymentId,
-          'razorpay_order_id': razorpayOrderId,
-        }).eq('cart_group_id', _order!.cartGroupId!).eq('status', 'awaiting_payment');
-      } else {
-        await _supabase.from('orders').update({
-          'status': 'confirmed',
-          'payment_status': 'captured',
-          'razorpay_payment_id': paymentId,
-          'razorpay_order_id': razorpayOrderId,
-        }).eq('id', widget.orderId);
-      }
+      await _supabase.rpc('client_confirm_payment', params: {
+        'p_order_id': widget.orderId,
+        'p_cart_group_id': _order?.cartGroupId,
+        'p_razorpay_payment_id': paymentId,
+        'p_razorpay_order_id': razorpayOrderId,
+      });
       _paymentCountdownTimer?.cancel();
     } catch (e) {
       debugPrint('Mock payment error: $e');
@@ -1406,6 +1358,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'razorpay_payment_id': paymentId,
           'razorpay_order_id': razorpayOrderId,
           'razorpay_signature': signature,
+          'order_id': widget.orderId,
+          'cart_group_id': _order?.cartGroupId,
         },
       );
 
@@ -1430,23 +1384,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         return;
       }
 
-      // S2 FIX: Server verified the signature — now update order status.
-      // Client writes status only AFTER server confirms the payment.
-      if (_order?.cartGroupId != null) {
-        await _supabase.from('orders').update({
-          'status': 'confirmed',
-          'payment_status': 'captured',
-          'razorpay_payment_id': paymentId,
-          'razorpay_order_id': razorpayOrderId,
-        }).eq('cart_group_id', _order!.cartGroupId!).eq('status', 'awaiting_payment');
-      } else {
-        await _supabase.from('orders').update({
-          'status': 'confirmed',
-          'payment_status': 'captured',
-          'razorpay_payment_id': paymentId,
-          'razorpay_order_id': razorpayOrderId,
-        }).eq('id', widget.orderId);
-      }
+      // S2 FIX: Server verified the signature AND updated order status via admin RPC.
+      // Client no longer writes status directly. The realtime stream will pick up the change.
 
       _paymentCountdownTimer?.cancel();
       setState(() => _isProcessingPayment = false);
@@ -2232,6 +2171,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 // ── Cancel button (only for awaiting_acceptance / pending) ────
                 if (!isCancelled &&
                     (_aggregateStatus == 'awaiting_acceptance' ||
+                        _aggregateStatus == 'awaiting_payment' ||
                         _aggregateStatus == 'pending')) ...[
                   const SizedBox(height: 12),
                   _isCancelling
@@ -2335,7 +2275,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             color: AppColors.primary,
             isDark: isDark,
             loading: _isRetrying,
-            onTap: _retryOrder,
+            onTap: () => _retryOrder(retryGroup: false),
           ),
           const SizedBox(height: 10),
           _recoveryBtn(
@@ -2387,7 +2327,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             color: AppColors.primary,
             isDark: isDark,
             loading: false,
-            onTap: _retryOrder,
+            onTap: () => _retryOrder(retryGroup: true),
           ),
           const SizedBox(height: 10),
           _recoveryBtn(
@@ -2415,7 +2355,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             color: AppColors.primary,
             isDark: isDark,
             loading: _isRetrying,
-            onTap: _retryOrder,
+            onTap: () => _retryOrder(retryGroup: true),
           ),
           const SizedBox(height: 10),
           _recoveryBtn(
@@ -2443,7 +2383,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             color: AppColors.primary,
             isDark: isDark,
             loading: _isRetrying,
-            onTap: _retryOrder,
+            onTap: () => _retryOrder(retryGroup: true),
           ),
           const SizedBox(height: 10),
           _recoveryBtn(

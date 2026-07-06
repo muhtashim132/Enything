@@ -48,48 +48,28 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
 
   Future<void> _fetch() async {
     try {
+      final res = await _db.rpc('admin_get_finance_stats');
+      if (res != null) {
+        _gmv = (res['gmv'] as num).toDouble();
+        _pureProfit = (res['pure_profit'] as num).toDouble();
+        _sellerPayouts = (res['seller_payouts'] as num).toDouble();
+        _riderEarnings = (res['rider_earnings'] as num).toDouble();
+        _pendingSettlements = res['pending_settlements'] as int;
+      }
+
       final orders = await _db.from('orders').select(
-          'grand_total_collected, seller_payout, rider_earnings, enything_commission, created_at, status, id, refund_id, refund_status, gst_item_total, gst_delivery, gst_platform, payment_status, platform_fee, delivery_charges, gateway_deduction, multi_shop_surcharge, tcs_amount, tds_amount');
-      
+          'id, grand_total_collected, created_at, status, payment_status, refund_id, refund_status')
+          .order('created_at', ascending: false)
+          .limit(100);
+      _transactions = List<Map<String, dynamic>>.from(orders);
+
       try {
-        final wList = await _db.from('withdrawals').select('*, profiles:user_id(full_name)').order('requested_at', ascending: false);
+        final wList = await _db.from('withdrawals').select('*, profiles:user_id(full_name)').order('requested_at', ascending: false).limit(100);
         _withdrawals = List<Map<String, dynamic>>.from(wList);
       } catch (e) {
         debugPrint('Withdrawals error: $e');
         _withdrawals = [];
       }
-      _transactions = List<Map<String, dynamic>>.from(orders)
-        ..sort((a, b) => (b['created_at'] ?? '').compareTo(a['created_at'] ?? ''));
-      // Calculate KPIs: Exclude cancelled orders for GMV/Commission
-      final nonCancelled = orders.where((o) => o['status'] != 'cancelled').toList();
-      _gmv = nonCancelled.fold<double>(
-          0, (s, o) => s + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
-      _pureProfit = nonCancelled.fold<double>(0, (s, o) {
-        final comm = (o['enything_commission'] as num?)?.toDouble() ?? 0;
-        final platFee = (o['platform_fee'] as num?)?.toDouble() ?? 0;
-        final gstPlat = (o['gst_platform'] as num?)?.toDouble() ?? 0;
-        final delCharge = (o['delivery_charges'] as num?)?.toDouble() ?? 0;
-        final multiSurcharge = (o['multi_shop_surcharge'] as num?)?.toDouble() ?? 0;
-        final gstDel = (o['gst_delivery'] as num?)?.toDouble() ?? 0;
-        final riderEarn = (o['rider_earnings'] as num?)?.toDouble() ?? 0;
-        final gatewayDed = (o['gateway_deduction'] as num?)?.toDouble() ?? 0;
-        
-        final profit = comm + (platFee - gstPlat) + (delCharge + multiSurcharge - gstDel - riderEarn) - gatewayDed;
-        return s + profit;
-      });
-
-      // Seller and Rider earnings match their own dashboards (only delivered orders)
-      final delivered = orders.where((o) => o['status'] == 'delivered').toList();
-      _sellerPayouts = delivered.fold<double>(
-          0, (s, o) {
-            final spRaw = (o['seller_payout'] as num?)?.toDouble() ?? 0;
-            final tds = (o['tds_amount'] as num?)?.toDouble() ?? 0;
-            final tcs = (o['tcs_amount'] as num?)?.toDouble() ?? 0;
-            return s + (spRaw - tds - tcs);
-          });
-      _riderEarnings = delivered.fold<double>(
-          0, (s, o) => s + ((o['rider_earnings'] as num?)?.toDouble() ?? 0));
-      _pendingSettlements = orders.where((o) => o['status'] == 'delivered').length;
     } catch (e) {
       debugPrint('Finance load error: $e');
     }
@@ -569,83 +549,35 @@ class _GstStatementTabState extends State<_GstStatementTab> {
   Future<void> _loadGstData() async {
     setState(() => _loading = true);
     try {
-      final start = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
-      final end   = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
+      final res = await _db.rpc('admin_get_gst_statement', params: {
+        'p_month': _selectedMonth.month,
+        'p_year': _selectedMonth.year
+      });
+      if (res != null) {
+        _s9_5Gst = (res['s9_5_gst'] as num).toDouble();
+        _deliveryGst = (res['delivery_gst'] as num).toDouble();
+        _platformGst = (res['platform_gst'] as num).toDouble();
+        _commissionGst = (res['commission_gst'] as num).toDouble();
+        _nonFoodGst = (res['non_food_gst'] as num).toDouble();
+        _tcsCollected = (res['tcs'] as num).toDouble();
+        _tdsCollected = (res['tds'] as num).toDouble();
+        _deliveredOrders = res['delivered_orders'] as int;
 
-      // ── 1. Fetch orders for the selected month ─────────────────────────
-      final rawOrders = await _db
-          .from('orders')
-          .select('id, status, s9_5_gst_amount, non_food_gst_amount, gst_delivery, gst_platform, enything_commission, tcs_amount, tds_amount')
-          .gte('created_at', start.toIso8601String())
-          .lt('created_at', end.toIso8601String());
-
-      final allOrders   = List<Map<String, dynamic>>.from(rawOrders);
-      final delivered   = allOrders.where((o) => o['status'] == 'delivered').toList();
-      final orderIds    = delivered.map((o) => o['id'] as String).toList();
-
-      double s95 = 0, delGst = 0, platGst = 0, comm = 0, nonFood = 0, tcs = 0, tds = 0;
-      for (final o in delivered) {
-        s95     += (o['s9_5_gst_amount']    as num? ?? 0).toDouble();
-        delGst  += (o['gst_delivery']        as num? ?? 0).toDouble();
-        platGst += (o['gst_platform']        as num? ?? 0).toDouble();
-        comm    += (o['enything_commission'] as num? ?? 0).toDouble();
-        nonFood += (o['non_food_gst_amount'] as num? ?? 0).toDouble();
-        tcs     += (o['tcs_amount']          as num? ?? 0).toDouble();
-        tds     += (o['tds_amount']          as num? ?? 0).toDouble();
-      }
-
-      // ── 2. Fetch order_items for delivered orders (chunked) ────────────
-      final Map<String, Map<String, _CategoryGstRow>> slabMap = {};
-
-      if (orderIds.isNotEmpty) {
-        final allItems = <Map<String, dynamic>>[];
-        // Chunk to stay within URL length limits
-        for (int i = 0; i < orderIds.length; i += 100) {
-          final chunk = orderIds.sublist(i, (i + 100).clamp(0, orderIds.length));
-          final items = await _db
-              .from('order_items')
-              .select('product_id, price, quantity')
-              .inFilter('order_id', chunk);
-          allItems.addAll(List<Map<String, dynamic>>.from(items));
-        }
-
-        // ── 3. Fetch products for category lookup ───────────────────────
-        final productIds = allItems
-            .map((i) => i['product_id'] as String?)
-            .whereType<String>()
-            .toSet()
-            .toList();
-
-        final Map<String, String> productCategoryMap = {};
-        if (productIds.isNotEmpty) {
-          for (int i = 0; i < productIds.length; i += 200) {
-            final chunk = productIds.sublist(i, (i + 200).clamp(0, productIds.length));
-            final prods = await _db
-                .from('products')
-                .select('id, category')
-                .inFilter('id', chunk);
-            for (final p in prods) {
-              productCategoryMap[p['id'] as String] =
-                  (p['category'] as String?) ?? 'Other';
-            }
-          }
-        }
-
-        // ── 4. Aggregate by (GST slab, category) ────────────────────────
-        for (final item in allItems) {
-          final productId   = item['product_id'] as String?;
-          final category    = (productId != null ? productCategoryMap[productId] : null) ?? 'Other';
-          final price       = (item['price'] as num).toDouble();
-          final qty         = (item['quantity'] as num).toInt();
-          final lineBase    = price * qty;
-          // Use TaxConfig for GST rate (same logic as checkout — never changes)
-          final gstRate       = TaxConfig.gstRateForCategory(category, itemPrice: price);
-          final lineGst       = lineBase * gstRate;
+        _slabMap.clear();
+        final grouped = res['grouped_items'] as List;
+        for (final item in grouped) {
+          final category = item['category'] as String;
+          final price = (item['price'] as num).toDouble();
+          final qty = item['quantity'] as int;
+          final lineBase = price * qty;
+          
+          final gstRate = TaxConfig.gstRateForCategory(category, itemPrice: price);
+          final lineGst = lineBase * gstRate;
           final isDeemedSupplier = TaxConfig.isEnythingDeemedSupplier(category);
-          final slab          = '${(gstRate * 100).toStringAsFixed(0)}%';
+          final slab = '${(gstRate * 100).toStringAsFixed(0)}%';
 
-          slabMap.putIfAbsent(slab, () => {});
-          slabMap[slab]!.putIfAbsent(
+          _slabMap.putIfAbsent(slab, () => {});
+          _slabMap[slab]!.putIfAbsent(
             category,
             () => _CategoryGstRow(
               category: category,
@@ -653,25 +585,13 @@ class _GstStatementTabState extends State<_GstStatementTab> {
               isDeemedSupplier: isDeemedSupplier,
             ),
           );
-          slabMap[slab]![category]!.taxableAmount += lineBase;
-          slabMap[slab]![category]!.gstAmount     += lineGst;
-          slabMap[slab]![category]!.itemCount     += qty;
+          _slabMap[slab]![category]!.taxableAmount += lineBase;
+          _slabMap[slab]![category]!.gstAmount += lineGst;
+          _slabMap[slab]![category]!.itemCount += qty;
         }
       }
-
       if (mounted) {
         setState(() {
-          _s9_5Gst       = s95;
-          _deliveryGst   = delGst;
-          _platformGst   = platGst;
-          _commissionGst = comm * 0.18;
-          _nonFoodGst    = nonFood;
-          _tcsCollected  = tcs;
-          _tdsCollected  = tds;
-          _deliveredOrders = delivered.length;
-          _slabMap
-            ..clear()
-            ..addAll(slabMap);
           _loading = false;
         });
       }

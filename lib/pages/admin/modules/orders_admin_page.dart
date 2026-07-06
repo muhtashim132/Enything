@@ -508,7 +508,7 @@ class _OrderCardState extends State<_OrderCard> {
   Future<void> _cancelOrder(String orderId) async {
     setState(() => _actioning = true);
     try {
-      await _db.from('orders').update({'status': 'cancelled'}).eq('id', orderId);
+      await _db.rpc('admin_cancel_order', params: {'p_order_id': orderId});
       await widget.onRefresh();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -559,10 +559,7 @@ class _OrderCardState extends State<_OrderCard> {
     
     setState(() => _actioning = true);
     try {
-      await _db.from('orders').update({
-        'status': 'cancelled',
-        'refund_status': 'processing'
-      }).eq('id', orderId);
+      await _db.rpc('admin_issue_refund', params: {'p_order_id': orderId});
       
       await widget.onRefresh();
       

@@ -43,46 +43,23 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
 
   Future<void> _loadData() async {
     try {
-      // Orders count + revenue
-      final ordersRaw = await _db.from('orders').select('grand_total_collected, created_at, status, payment_status');
-      
-      final validOrders = ordersRaw.where((o) {
-        final st = o['status'];
-        final pst = o['payment_status'];
-        if (st == 'awaiting_acceptance' || st == 'awaiting_payment') return false;
-        if ((st == 'cancelled' || st == 'seller_rejected' || st == 'partner_rejected') && pst != 'captured') return false;
-        return true;
-      }).toList();
+      final res = await _db.rpc('admin_get_overview_stats');
+      if (res != null) {
+        _totalOrders = res['total_orders'] as int;
+        _totalRevenue = (res['total_revenue'] as num).toDouble();
+        _totalUsers = res['total_users'] as int;
+        _pendingKyc = res['pending_kyc'] as int;
+        _pendingWithdrawals = res['pending_withdrawals'] as int;
+        
+        // Platform commission (dynamic based on config)
+        _commission = _totalRevenue * (PlatformConfigProvider.instance?.commissionRate ?? 0.05);
 
-      final paidOrders = ordersRaw.where((o) => o['payment_status'] == 'captured').toList();
-
-      _totalOrders = validOrders.length;
-      _totalRevenue = paidOrders.fold<double>(
-          0,
-          (sum, o) =>
-              sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
-
-      // Platform commission (dynamic based on config)
-      _commission = _totalRevenue * (PlatformConfigProvider.instance?.commissionRate ?? 0.05);
-
-      // Users count
-      final users = await _db.from('profiles').select('id');
-      _totalUsers = users.length;
-
-      // Pending KYC — shops awaiting approval
-      final kyc = await _db
-          .from('shops')
-          .select('id')
-          .eq('verification_status', 'pending');
-      _pendingKyc = kyc.length;
-
-      // Pending withdrawals — fallback to 0 if table missing
-      try {
-        final w =
-            await _db.from('withdrawals').select('id').eq('status', 'pending');
-        _pendingWithdrawals = w.length;
-      } catch (_) {
-        _pendingWithdrawals = 0;
+        final spotsRaw = res['revenue_spots'] as List;
+        _revenueSpots = spotsRaw.asMap().entries.map((e) {
+          final i = e.key;
+          final rev = (e.value['revenue'] as num).toDouble();
+          return FlSpot(i.toDouble(), rev);
+        }).toList();
       }
 
       // Recent activity — last 10 orders
@@ -92,26 +69,6 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
           .order('created_at', ascending: false)
           .limit(10);
       _recentActivity = List<Map<String, dynamic>>.from(activity);
-
-      // 7-day revenue chart spots (using paidOrders)
-      final now = DateTime.now();
-      final spots = <FlSpot>[];
-      for (int i = 6; i >= 0; i--) {
-        final day = now.subtract(Duration(days: i));
-        final dayRevenue = paidOrders.where((o) {
-          if (o['created_at'] == null) return false;
-          final d = DateTime.tryParse(o['created_at'].toString())?.toIST();
-          return d != null &&
-              d.year == day.year &&
-              d.month == day.month &&
-              d.day == day.day;
-        }).fold<double>(
-            0,
-            (sum, o) =>
-                sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0));
-        spots.add(FlSpot((6 - i).toDouble(), dayRevenue));
-      }
-      _revenueSpots = spots;
     } catch (e) {
       debugPrint('Overview load error: $e');
     }

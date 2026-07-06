@@ -11,11 +11,13 @@ import '../../utils/time_utils.dart';
 class FaqSupportPage extends StatefulWidget {
   final int initialTabIndex;
   final bool openTicketSheet;
+  final String? prefillOrderId;
 
   const FaqSupportPage({
     super.key,
     this.initialTabIndex = 0,
     this.openTicketSheet = false,
+    this.prefillOrderId,
   });
 
   @override
@@ -166,9 +168,13 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
   }
 
   void _showSubmitTicketSheet() {
-    final subjectCtrl = TextEditingController();
-    final bodyCtrl = TextEditingController();
-    String priority = 'normal';
+    final subjectCtrl = TextEditingController(
+      text: widget.prefillOrderId != null ? 'Issue with Order #${widget.prefillOrderId!.substring(0, 8).toUpperCase()}' : '',
+    );
+    final bodyCtrl = TextEditingController(
+      text: widget.prefillOrderId != null ? 'Order ID: ${widget.prefillOrderId}\n\n' : '',
+    );
+    String priority = widget.prefillOrderId != null ? 'high' : 'normal';
 
     showModalBottomSheet(
       context: context,

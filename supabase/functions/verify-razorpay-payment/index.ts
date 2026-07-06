@@ -5,20 +5,20 @@
 // MUST be called before any order is written to the database.
 //
 // Flow:
-//  1. Receive razorpay_payment_id + razorpay_order_id + razorpay_signature.
+//  1. Receive razorpay_payment_id + razorpay_order_id + razorpay_signature + order_id/cart_group_id.
 //  2. Verify the HMAC-SHA256 signature using RAZORPAY_KEY_SECRET.
-//  3. Capture the payment via Razorpay API (marks it as captured).
-//  4. Return { verified: true } — Flutter then calls its create-order logic.
+//  3. Fetch expected amount from DB (grand_total_collected).
+//  4. Capture the payment via Razorpay API (marks it as captured).
+//  5. Confirm the order via RPC using service_role key to prevent client spoofing.
 //
 // Request body:
 //   {
 //     "razorpay_payment_id": "pay_XXXX",
 //     "razorpay_order_id":   "order_XXXX",
 //     "razorpay_signature":  "<hmac>",
+//     "order_id":            "<uuid>",
+//     "cart_group_id":       "<uuid>"
 //   }
-//
-// Response body (success):  { "verified": true, "payment_id": "pay_XXXX" }
-// Response body (failure):  { "verified": false, "error": "Signature mismatch" }
 // =============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -53,11 +53,18 @@ Deno.serve(async (req) => {
     }
 
     // ── 2. Parse body ─────────────────────────────────────────────────────────
-    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = await req.json();
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature, order_id, cart_group_id } = await req.json();
 
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
       return new Response(
         JSON.stringify({ verified: false, error: "Missing required payment fields." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!order_id && !cart_group_id) {
+      return new Response(
+        JSON.stringify({ verified: false, error: "Missing order or cart group reference." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -73,7 +80,6 @@ Deno.serve(async (req) => {
     }
 
     // ── 4. Verify HMAC-SHA256 Signature ───────────────────────────────────────
-    // Razorpay signs: razorpay_order_id + "|" + razorpay_payment_id
     const message = `${razorpay_order_id}|${razorpay_payment_id}`;
     const expectedSignature = createHmac("sha256", keySecret).update(message).digest("hex");
 
@@ -85,17 +91,55 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── 5. Capture the payment (optional but recommended for manual-capture accounts) ──
+    // ── 5. Setup Admin Client & Validate Amount ───────────────────────────────
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    let dbAmount = 0;
+    if (cart_group_id) {
+      const { data: orders, error } = await supabaseAdmin
+        .from('orders')
+        .select('grand_total_collected, status, customer_id')
+        .eq('cart_group_id', cart_group_id);
+      
+      if (error || !orders || orders.length === 0) throw new Error("Orders not found");
+      if (orders[0].customer_id !== user.id) throw new Error("Unauthorized order access");
+      
+      dbAmount = orders.reduce((sum, o) => sum + (o.grand_total_collected || 0), 0);
+    } else {
+      const { data: order, error } = await supabaseAdmin
+        .from('orders')
+        .select('grand_total_collected, status, customer_id')
+        .eq('id', order_id)
+        .maybeSingle();
+
+      if (error || !order) throw new Error("Order not found");
+      if (order.customer_id !== user.id) throw new Error("Unauthorized order access");
+
+      dbAmount = order.grand_total_collected || 0;
+    }
+
+    const expectedPaise = Math.round(dbAmount * 100);
+
+    // ── 6. Capture the payment ────────────────────────────────────────────────
     const keyId     = Deno.env.get("RAZORPAY_KEY_ID") ?? "";
     const authHeader = "Basic " + btoa(`${keyId}:${keySecret}`);
 
-    // Check payment status first
     const paymentCheckRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
       headers: { "Authorization": authHeader },
     });
     const paymentData = await paymentCheckRes.json();
 
-    // Only capture if in "authorized" state (for manual capture accounts)
+    if (paymentData.amount < expectedPaise - 100) { // allow 1 INR rounding diff just in case
+      console.warn(`Payment amount mismatch. Paid: ${paymentData.amount}, Expected: ${expectedPaise}`);
+      return new Response(
+        JSON.stringify({ verified: false, error: "Payment amount does not match order total." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (paymentData.status === "authorized") {
       await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}/capture`, {
         method: "POST",
@@ -104,8 +148,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── 6. Return success ─────────────────────────────────────────────────────
-    console.log(`Payment ${razorpay_payment_id} verified successfully for user ${user.id}.`);
+    // ── 7. Confirm Order in DB via RPC using Admin ────────────────────────────
+    const { error: rpcError } = await supabaseAdmin.rpc('client_confirm_payment', {
+      p_order_id: order_id || null,
+      p_cart_group_id: cart_group_id || null,
+      p_razorpay_payment_id: razorpay_payment_id,
+      p_razorpay_order_id: razorpay_order_id
+    });
+
+    if (rpcError) {
+      console.error("RPC confirm payment error:", rpcError);
+      throw new Error("Failed to confirm order in database.");
+    }
+
+    console.log(`Payment ${razorpay_payment_id} verified and order confirmed successfully for user ${user.id}.`);
     return new Response(
       JSON.stringify({ verified: true, payment_id: razorpay_payment_id }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
