@@ -308,8 +308,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     
     // Priority 2: awaiting_payment
     // If NO order is awaiting_acceptance, and ANY order is awaiting_payment, then we are ready for payment!
-    // Wait, we need ALL active orders to have moved past awaiting_acceptance. 
-    // If they have, and some are awaiting_payment, we are awaiting_payment.
     if (activeOrders.any((o) => o.status == 'awaiting_payment')) return 'awaiting_payment';
 
     // Priority 3: pending
@@ -324,7 +322,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     // Priority 6: picked_up
     if (activeOrders.any((o) => o.status == 'picked_up')) return 'picked_up';
 
-    // Priority 7: preparing / ready_for_pickup
+    // BUG-3 FIX: ready_for_pickup was collapsed into 'preparing' aggregate even when
+    // ALL active orders had reached ready_for_pickup. Add explicit all-ready check so
+    // the stepper correctly advances to step 5 instead of staying at step 4.
+    // Priority 7a: ALL orders ready for pickup
+    if (activeOrders.every((o) => o.status == 'ready_for_pickup')) return 'ready_for_pickup';
+
+    // Priority 7b: Mix of preparing and ready_for_pickup
     if (activeOrders.any((o) => o.status == 'preparing' || o.status == 'ready_for_pickup')) return 'preparing';
 
     // Priority 8: confirmed
@@ -568,6 +572,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             }
           }
 
+          // BUG-1 FIX: Include variant_name so the place_orders_transaction RPC
+          // validates variant price correctly. Without this, variant products always
+          // trigger "Price spoofing detected" because the RPC falls through to
+          // the base product price instead of the variant price.
           final newItems = oldItems
               .map((item) => {
                     'id': const Uuid().v4(),
@@ -575,6 +583,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     'order_id': newOrderId,
                     'product_id': item['product_id'],
                     'product_name': item['product_name'],
+                    'variant_name': item['variant_name'],   // BUG-1 FIX
                     'quantity': item['quantity'],
                     'price': item['price'],
                     'weight_kg': item['weight_kg'],
@@ -648,29 +657,36 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         'p_coupon_id': couponIdToPass,
       });
 
-      // Send notifications AFTER successful atomic transaction
-      if (mounted) {
-        for (final data in notificationData) {
-          final shopData = await _supabase.from('shops').select('seller_id').eq('id', data['shop_id']!).maybeSingle();
-          if (shopData != null && shopData['seller_id'] != null) {
-            notifProv.sendBackgroundPush(
-              targetUserId: shopData['seller_id'] as String,
-              title: '🔔 New Order! Accept now',
-              body:
-                  'Order ₹${(data['grand_total'] as double).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
-              data: {'order_id': data['order_id'], 'role': 'seller'},
-            );
-          }
-        }
-      }
+      // BUG-6 FIX: Capture notifProv and navigate FIRST, then fire notifications
+      // without relying on BuildContext after the page is disposed.
+      // Notifications are sent using the captured notifProv reference, which is
+      // safe to use from the new page's initState context.
+      // Also fixes "2 min window" → "3 min window" (BUG-7b notification body).
+      final pendingNotifications = List<Map<String, dynamic>>.from(notificationData);
+      final capturedNotifProv = notifProv;
 
       if (mounted && firstNewOrderId != null) {
-        if (!mounted) return;
         Navigator.pushReplacementNamed(
           context,
           AppRoutes.trackOrder,
           arguments: {'orderId': firstNewOrderId},
         );
+      }
+
+      // Fire seller notifications AFTER navigation so context disposal is safe.
+      for (final data in pendingNotifications) {
+        try {
+          final shopData = await _supabase.from('shops').select('seller_id').eq('id', data['shop_id']!).maybeSingle();
+          if (shopData != null && shopData['seller_id'] != null) {
+            capturedNotifProv.sendBackgroundPush(
+              targetUserId: shopData['seller_id'] as String,
+              title: '🔔 New Order! Accept now',
+              body:
+                  'Order ₹${(data['grand_total'] as double).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 3 min window.',
+              data: {'order_id': data['order_id'], 'role': 'seller'},
+            );
+          }
+        } catch (_) {}
       }
     } catch (e) {
       debugPrint('Retry order error: $e');
@@ -1094,9 +1110,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         case 'no_rider':
           return 'Shop was ready but no rider was available. No payment was taken.';
         case 'timeout':
-          return 'No response within 2 minutes. No payment was taken.';
+          // BUG-7 FIX: Acceptance window is 3 minutes, not 2.
+          return 'No response within 3 minutes. No payment was taken.';
         case 'customer':
           return 'You cancelled this order. No payment was taken.';
+        // BUG-4 FIX: shop_dispute gets its own customer-facing message explaining
+        // the refund process. Previously fell through to the generic default.
+        case 'shop_dispute':
+          return 'There was an issue at the shop. Your order has been cancelled. '
+              'If you were charged, a full refund will be processed within 5–7 business days. '
+              'We sincerely apologise for this inconvenience.';
+        case 'admin':
+        case 'admin_refund':
+          return 'This order was cancelled by our support team. If you were charged, a refund is being processed.';
         default:
           return 'Your order has been cancelled. No payment was taken.';
       }
@@ -1260,7 +1286,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
       final fnResponse = await _supabase.functions.invoke(
         'create-razorpay-order',
-        body: {'amount': amountInPaise, 'currency': 'INR', 'receipt': receipt},
+        body: {
+          'order_id': _order!.id,
+          'cart_group_id': _order!.cartGroupId,
+          'currency': 'INR', 
+          'receipt': receipt
+        },
       );
 
       if (fnResponse.status != 200) {

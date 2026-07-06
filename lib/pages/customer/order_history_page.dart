@@ -239,17 +239,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           ? _orders.where((o) => o.cartGroupId == order.cartGroupId).toList() 
           : [order];
 
-      if (isGroup) {
-        await _supabase
-            .from('orders')
-            .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
-            .eq('cart_group_id', order.cartGroupId!);
-      } else {
-        await _supabase
-            .from('orders')
-            .update({'status': 'cancelled', 'cancelled_reason': 'customer'})
-            .eq('id', order.id);
-      }
+      // Secure atomic cancellation via RPC. The RPC automatically handles
+      // cancelling all orders in the cart group if this order belongs to one.
+      await _supabase.rpc('cancel_order', params: {
+        'p_order_id': order.id,
+        'p_reason': 'customer',
+      });
 
       // BUG-4 FIX: Notify seller and rider that the customer cancelled
       if (mounted) {
@@ -466,134 +461,140 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     color: isDark ? Colors.white : AppColors.textPrimary,
                   ),
                 ),
-                Row(
-                  children: [
-                    // Reorder button — for delivered or cancelled orders
-                    if (order.status == 'delivered' ||
-                        order.status == 'cancelled' ||
-                        order.status == 'seller_rejected') ...[
-                      _reorderingIds.contains(order.id)
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: AppColors.primary),
-                            )
-                          : GestureDetector(
-                              onTap: () => _reorder(order),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                      color: AppColors.primary.withValues(alpha: 0.2)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.replay_rounded,
-                                        size: 14, color: AppColors.primary),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Reorder',
-                                      style: GoogleFonts.outfit(
-                                        color: AppColors.primary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      // Reorder button — for delivered or cancelled orders
+                      if (order.status == 'delivered' ||
+                          order.status == 'cancelled' ||
+                          order.status == 'seller_rejected')
+                        _reorderingIds.contains(order.id)
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: AppColors.primary),
+                              )
+                            : GestureDetector(
+                                onTap: () => _reorder(order),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                        color: AppColors.primary.withValues(alpha: 0.2)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.replay_rounded,
+                                          size: 14, color: AppColors.primary),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Reorder',
+                                        style: GoogleFonts.outfit(
+                                          color: AppColors.primary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                      const SizedBox(width: 8),
-                    ],
-                    // Cancel chip — only for pending orders
-                    // BUG-5 FIX: show cancel for awaiting_acceptance too (new order flow)
-                    if (order.status == 'awaiting_acceptance' || order.status == 'pending') ...[
-                      _cancellingIds.contains(order.id)
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: AppColors.danger),
-                            )
-                          : GestureDetector(
-                              onTap: () => _cancelOrder(order, isDark),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.danger.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                      color: AppColors.danger.withValues(alpha: 0.2)),
-                                ),
-                                child: Text(
-                                  'Cancel',
-                                  style: GoogleFonts.outfit(
-                                    color: AppColors.danger,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
+                                    ],
                                   ),
                                 ),
                               ),
-                            ),
-                      const SizedBox(width: 8),
-                    ],
-                    // Report Issue Button (always visible for past or problematic orders)
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => FaqSupportPage(
-                              initialTabIndex: 0,
-                              openTicketSheet: true,
-                              prefillOrderId: order.id,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.info.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.report_problem_outlined, size: 14, color: AppColors.info),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Report Issue',
-                              style: GoogleFonts.outfit(
-                                color: AppColors.info,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                      // Cancel chip — only for pending orders
+                      // BUG-5 FIX: show cancel for awaiting_acceptance too (new order flow)
+                      if (order.status == 'awaiting_acceptance' || order.status == 'pending')
+                        _cancellingIds.contains(order.id)
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: AppColors.danger),
+                              )
+                            : GestureDetector(
+                                onTap: () => _cancelOrder(order, isDark),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.danger.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                        color: AppColors.danger.withValues(alpha: 0.2)),
+                                  ),
+                                  child: Text(
+                                    'Cancel',
+                                    style: GoogleFonts.outfit(
+                                      color: AppColors.danger,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      // Report Issue Button (always visible for past or problematic orders)
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FaqSupportPage(
+                                initialTabIndex: 0,
+                                openTicketSheet: true,
+                                prefillOrderId: order.id,
                               ),
                             ),
-                          ],
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.info.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.report_problem_outlined, size: 14, color: AppColors.info),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Report Issue',
+                                style: GoogleFonts.outfit(
+                                  color: AppColors.info,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Details',
-                      style: GoogleFonts.outfit(
-                        color: AppColors.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Details',
+                            style: GoogleFonts.outfit(
+                              color: AppColors.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_forward_ios_rounded,
+                              size: 12, color: AppColors.primary),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_forward_ios_rounded,
-                        size: 12, color: AppColors.primary),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),

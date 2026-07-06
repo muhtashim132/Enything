@@ -100,7 +100,6 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
     }
 
     setState(() => _submitting = true);
-    final userId = context.read<AuthProvider>().currentUserId ?? '';
 
     try {
       await _db.rpc('request_rider_withdrawal', params: {

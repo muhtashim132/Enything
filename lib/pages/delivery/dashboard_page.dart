@@ -49,6 +49,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   // Location broadcast timer — updates rider_lat/rider_lng every 15s
   Timer? _locationBroadcastTimer;
 
+  // BUG-8 FIX: Configurable radius fetched from platform_config at load time.
+  // The hardcoded 15.0 km ignored admin changes to rider_notification_radius_km.
+  double _maxRadiusKm = 15.0;
+
   // shopId → {lat, lng, name} resolved from joined shop data in available orders
   final Map<String, ({double lat, double lng, String name})> _shopInfoCache = {};
 
@@ -373,12 +377,29 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
       }
 
-      // B5: Only unassigned awaiting_acceptance/pending orders — 'confirmed' means already assigned.
+      // BUG-5 FIX: Only query truly unassigned, rider-acceptable statuses.
+      // 'confirmed'/'preparing'/'ready_for_pickup' with delivery_partner_id IS NULL
+      // are theoretically impossible, but including them caused orphaned orders to
+      // appear in the available list with no way to accept (RPC blocks it).
+      // BUG-8 FIX: Fetch configurable notification radius from platform_config.
+      try {
+        final radiusResp = await _supabase
+            .from('platform_config')
+            .select('value')
+            .eq('key', 'rider_notification_radius_km')
+            .maybeSingle();
+        if (radiusResp != null && radiusResp['value'] != null) {
+          _maxRadiusKm = double.tryParse(radiusResp['value'].toString()) ?? 15.0;
+        }
+      } catch (_) {
+        _maxRadiusKm = 15.0; // safe default
+      }
+
       final available = await _supabase
           .from('orders')
           .select('*, order_items(*), shops!shop_id(id, name, location)')
           .isFilter('delivery_partner_id', null)   // no rider assigned yet
-          .inFilter('status', ['awaiting_acceptance', 'pending', 'awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup']);
+          .inFilter('status', ['awaiting_acceptance', 'pending']);
 
       final myOrders = await _supabase
           .from('orders')
@@ -417,8 +438,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }).toList();
 
       // B1: Geographic distance filter — only show orders where the shop is within
-      // maxDeliveryRadiusKm of the rider's current location.
-      const maxRadiusKm = 15.0; // matches platform_config default
+      // _maxRadiusKm of the rider's current location (fetched from platform_config).
       List<OrderModel> filtered;
       if (_riderLat != null && _riderLng != null) {
         filtered = allAvailable.where((order) {
@@ -433,7 +453,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           final midLatRad = ((_riderLat! + shopInfo.lat) / 2.0) * degToRad;
           final x = dLng * math.cos(midLatRad);
           final distKm = 6371.0 * math.sqrt(dLat * dLat + x * x);
-          return distKm <= maxRadiusKm;
+          return distKm <= _maxRadiusKm;
         }).toList();
       } else {
         // No location yet — show all orders so rider isn't left with empty screen

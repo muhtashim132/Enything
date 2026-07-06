@@ -45,11 +45,50 @@ Deno.serve(async (req) => {
     }
 
     // ── 2. Parse request body ─────────────────────────────────────────────────
-    const { amount, currency = "INR", receipt } = await req.json();
+    const { order_id, cart_group_id, currency = "INR", receipt } = await req.json();
 
-    if (!amount || typeof amount !== "number" || amount < 100) {
+    if (!order_id && !cart_group_id) {
       return new Response(
-        JSON.stringify({ error: "Invalid amount. Must be in paise (minimum 100 = ₹1)." }),
+        JSON.stringify({ error: "Missing order_id or cart_group_id" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── 2.5 Setup Admin Client & Fetch Amount ───────────────────────────────
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    let dbAmount = 0;
+    if (cart_group_id) {
+      const { data: orders, error } = await supabaseAdmin
+        .from('orders')
+        .select('grand_total_collected, customer_id')
+        .eq('cart_group_id', cart_group_id);
+      
+      if (error || !orders || orders.length === 0) throw new Error("Orders not found");
+      if (orders[0].customer_id !== user.id) throw new Error("Unauthorized");
+      
+      dbAmount = orders.reduce((sum, o) => sum + (o.grand_total_collected || 0), 0);
+    } else {
+      const { data: order, error } = await supabaseAdmin
+        .from('orders')
+        .select('grand_total_collected, customer_id')
+        .eq('id', order_id)
+        .maybeSingle();
+
+      if (error || !order) throw new Error("Order not found");
+      if (order.customer_id !== user.id) throw new Error("Unauthorized");
+
+      dbAmount = order.grand_total_collected || 0;
+    }
+
+    const amount = Math.round(dbAmount * 100);
+
+    if (amount < 100) {
+      return new Response(
+        JSON.stringify({ error: "Invalid amount from DB. Minimum 100 paise." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
