@@ -109,11 +109,13 @@ class TaxConfig {
 
   // ── GST on Enything's OWN services ───────────────────────────────────────────
 
-  /// Delivery charge GST rate (SAC 9965/9967): 18%.
-  static const double deliveryGstRate = 0.18;
+  /// Delivery charge GST rate (SAC 9965/9967): 18% default, overridden by platform_config.
+  static double get deliveryGstRate =>
+      PlatformConfigProvider.instance?.deliveryGstRate ?? 0.18;
 
-  /// Platform/handling fee GST rate (SAC 9985): 18%.
-  static const double platformFeeGstRate = 0.18;
+  /// Platform/handling fee GST rate (SAC 9985): 18% default, overridden by platform_config.
+  static double get platformFeeGstRate =>
+      PlatformConfigProvider.instance?.platformFeeGstRate ?? 0.18;
 
   // ── Item-Level GST Rates by Category (ADD-ON MODEL) ───────────────────────
   //   These rates are applied ON TOP of the seller's base price.

@@ -370,6 +370,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   bool get _isCancelled => _aggregateStatus == 'cancelled' || _aggregateStatus == 'seller_rejected';
   bool get _isDelivered => _aggregateStatus == 'delivered';
 
+  bool get _hasPartialRejection {
+    if (_groupOrders.isEmpty) return false;
+    final hasRejected = _groupOrders.any((o) => o.status == 'seller_rejected' || o.status == 'cancelled');
+    final hasActive = _groupOrders.any((o) => o.status != 'seller_rejected' && o.status != 'cancelled');
+    return hasRejected && hasActive;
+  }
+
   double _computeGroupTotalAmount() {
     final active = _groupOrders.isEmpty ? [_order!] : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
     return active.fold(0.0, (sum, o) => sum + o.totalAmount);
@@ -450,7 +457,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             orElse: () => _order!);
         _startPaymentCountdown(awaitingPayOrder);
         
-        if (!_isProcessingPayment && !_razorpayOpened) {
+        if (!_isProcessingPayment && !_razorpayOpened && !_hasPartialRejection) {
           Future.delayed(const Duration(milliseconds: 800), () {
             if (mounted && !_razorpayOpened) _openRazorpay();
           });
@@ -641,7 +648,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'multi_shop_surcharge': order.multiShopSurcharge,
           'small_cart_fee': order.smallCartFee,
           'heavy_order_fee': order.heavyOrderFee,
-          'delivery_discount': order.deliveryDiscount,
           'coupon_id': order.couponId,
           'coupon_discount': order.couponDiscount,
           'gst_item_total': order.gstItemTotal,
@@ -1260,7 +1266,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     try {
       // S1 FIX: Only include orders that are actually awaiting_payment.
-      final activeOrders = _groupOrders.isEmpty
+      List<OrderModel> activeOrders = _groupOrders.isEmpty
           ? [_order!]
           : _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
       if (activeOrders.isEmpty) {
@@ -1276,17 +1282,30 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           if (reallocated == true) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('A shop declined their part of the order. Adjusting your total payment...'),
+                content: Text('Adjusting your total payment...'),
                 backgroundColor: AppColors.primary,
-                duration: Duration(seconds: 5),
+                duration: Duration(seconds: 3),
               ));
             }
             await _fetchOrder();
-            setState(() => _isProcessingPayment = false);
-            return;
+            
+            activeOrders = _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
+            if (activeOrders.isEmpty) {
+              setState(() => _isProcessingPayment = false);
+              return;
+            }
           }
         } catch (e) {
           debugPrint('Fee reallocation RPC error: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Could not adjust payment fees. Please try again.'),
+              backgroundColor: AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
+          setState(() => _isProcessingPayment = false);
+          return;
         }
       }
 
@@ -2105,7 +2124,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   ),
 
                 // ── PAY NOW BUTTON (when both seller & rider accepted) ────────
-                if (_aggregateStatus == 'awaiting_payment') ...[
+                if (_aggregateStatus == 'awaiting_payment' && !_hasPartialRejection) ...[
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -2212,7 +2231,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   ),
                 ],
 
-
+                if (_aggregateStatus == 'awaiting_payment' && _hasPartialRejection) ...[
+                  const SizedBox(height: 16),
+                  _buildPartialRejectionPanel(isDark),
+                ],
 
                 // ── Smart Cancellation Recovery Panel ─────────────────────────
                 if (isCancelled) ...{
@@ -2302,6 +2324,176 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           ),
         ),
       ),
+    );
+  }
+  // ── Partial Rejection Panel ───────────────────────────────────────────
+  Widget _buildPartialRejectionPanel(bool isDark) {
+    final rejectedOrders = _groupOrders.where((o) => o.status == 'seller_rejected' || o.status == 'cancelled').toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2A1A1A) : const Color(0xFFFFF5F5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.danger.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 24),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Partial Order Rejection',
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    )),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('One or more shops could not accept their part of your order. Do you want to proceed with the remaining items or search for the missing ones?',
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: isDark ? Colors.white70 : AppColors.textSecondary,
+              )),
+          const SizedBox(height: 16),
+          
+          _recoveryBtn(
+            label: '✅ Proceed & Pay for Remaining',
+            subtitle: 'Continue without the rejected items',
+            color: const Color(0xFF0F9B58),
+            isDark: isDark,
+            loading: _isProcessingPayment,
+            onTap: () => _openRazorpay(),
+          ),
+          const SizedBox(height: 10),
+          _recoveryBtn(
+            label: '🔍 Find Missing Items',
+            subtitle: 'Search other shops for these products',
+            color: AppColors.primary,
+            isDark: isDark,
+            loading: false,
+            onTap: () => _showMissingItemsSheet(rejectedOrders, isDark),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMissingItemsSheet(List<OrderModel> rejectedOrders, bool isDark) {
+    List<OrderItem> missingItems = [];
+    for (var o in rejectedOrders) {
+      missingItems.addAll(o.items);
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.darkBg : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Missing Items',
+                style: GoogleFonts.outfit(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Select an item to search for it in other shops.',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: missingItems.length,
+                  separatorBuilder: (_, __) => Divider(color: isDark ? Colors.white12 : Colors.grey[200]),
+                  itemBuilder: (context, index) {
+                    final item = missingItems[index];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.fastfood, color: isDark ? Colors.white38 : Colors.grey[400]),
+                      ),
+                      title: Text(
+                        item.productName,
+                        style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Qty: ${item.quantity}',
+                        style: GoogleFonts.outfit(
+                          color: isDark ? Colors.white54 : AppColors.textSecondary,
+                        ),
+                      ),
+                      trailing: ElevatedButton.icon(
+                        onPressed: () {
+                          // Smart truncation: take first 3 words to avoid overly specific queries failing
+                          final words = item.productName.split(' ');
+                          final smartQuery = words.take(3).join(' ');
+                          
+                          Navigator.pushNamedAndRemoveUntil(
+                            context,
+                            AppRoutes.customerHome,
+                            (route) => false,
+                            arguments: {'searchQuery': smartQuery},
+                          );
+                        },
+                        icon: const Icon(Icons.search, size: 16, color: Colors.white),
+                        label: Text('Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

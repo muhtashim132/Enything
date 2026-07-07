@@ -1247,6 +1247,29 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
     super.dispose();
   }
 
+  Future<void> _updateStatus(String status) async {
+    if (status == 'processed' && _txnIdCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please enter a Transaction ID or Receipt', style: AdminStyles.body(color: Colors.white)),
+        backgroundColor: AdminColors.warning,
+      ));
+      return;
+    }
+    setState(() => _processing = true);
+    try {
+      await _db.rpc('admin_process_withdrawal', params: {
+        'p_withdrawal_id': widget.withdrawal['id'],
+        'p_status': status,
+        'p_transaction_id': status == 'processed' ? _txnIdCtrl.text.trim() : null,
+      });
+      widget.onProcessed();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('Error updating withdrawal: $e');
+    }
+    if (mounted) setState(() => _processing = false);
+  }
+
   Future<void> _loadUserDetails() async {
     try {
       final w = widget.withdrawal;
@@ -1301,30 +1324,7 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
     if (mounted) setState(() => _loadingDetails = false);
   }
 
-  Future<void> _updateStatus(String status) async {
-    if (status == 'processed' && _txnIdCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please enter a Transaction ID or Receipt', style: AdminStyles.body(color: Colors.white)),
-        backgroundColor: AdminColors.danger,
-      ));
-      return;
-    }
 
-    setState(() => _processing = true);
-    try {
-      final updateData = <String, dynamic>{'status': status};
-      if (status == 'processed') {
-        updateData['transaction_id'] = _txnIdCtrl.text.trim();
-      }
-
-      await _db.from('withdrawals').update(updateData).eq('id', widget.withdrawal['id']);
-      widget.onProcessed();
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      debugPrint('Error updating withdrawal: $e');
-    }
-    if (mounted) setState(() => _processing = false);
-  }
 
   @override
   Widget build(BuildContext context) {

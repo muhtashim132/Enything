@@ -315,7 +315,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final surcharge = cart.multiShopSurcharge;
       final heavyFee = cart.heavyOrderFee;
       final smallCartFee = cart.smallCartFee;
-      final deliveryDiscount = cart.calculateDeliveryDiscount(maxDistanceKm);
       final effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
       final riderBase = effectiveBase + surcharge + heavyFee;
       final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
@@ -427,6 +426,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             'category': i.product.category,
             'price': i.selectedVariant?.price ?? i.product.price,
             'quantity': i.quantity,
+            'gst_rate_override': i.product.gstRateOverride,
           };
         }).toList();
 
@@ -490,7 +490,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'multi_shop_surcharge': surcharge * proportion,
           'small_cart_fee': smallCartFee * proportion,
           'heavy_order_fee': heavyFee * proportion,
-          'delivery_discount': deliveryDiscount * proportion,
           'platform_fee': shopPlatformFee,
           'address': location.currentAddress,
           'address_label': location.activeLabel.isNotEmpty
@@ -623,7 +622,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
     final surcharge = cart.multiShopSurcharge;
     final heavyFee = cart.heavyOrderFee;
-    final discount = cart.calculateDeliveryDiscount(distanceKm);
     final effectiveBase = baseCharge >= 0 ? baseCharge : 25.0;
     final riderBase = effectiveBase + surcharge + heavyFee;
     final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
@@ -1074,14 +1072,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         'Delivery Fee',
                         '₹${effectiveBase.toStringAsFixed(0)}',
                       ),
-                      if (discount > 0) ...[
-                        const SizedBox(height: 8),
-                        _billRow(
-                          'Delivery Discount',
-                          '-₹${discount.toStringAsFixed(0)}',
-                          valueColor: AppColors.success,
-                        ),
-                      ],
+
                       if (cart.smallCartFee > 0) ...[
                         const SizedBox(height: 8),
                         _billRow(
@@ -1108,7 +1099,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           'Multi-shop fee (${cart.shops.length} shops)',
                           '+₹${surcharge.toStringAsFixed(0)}',
                           valueColor: Colors.orange.shade700,
-                          hint: '₹7/km between shops',
+                          hint: '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10).toInt()}/km between shops',
                         ),
                       ],
                       const SizedBox(height: 8),

@@ -286,10 +286,24 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   LocationProvider? _locationProvider;
 
+  bool _argsProcessed = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _locationProvider ??= context.read<LocationProvider>();
+
+    if (!_argsProcessed) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null && args['searchQuery'] != null) {
+        final query = args['searchQuery'] as String;
+        if (query.isNotEmpty) {
+          _searchController.text = query;
+          _searchShops(query);
+        }
+      }
+      _argsProcessed = true;
+    }
   }
 
   void _startLiveLocationUpdates() {

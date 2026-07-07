@@ -398,7 +398,11 @@ class _SellersTabState extends State<_SellersTab> {
 
   Future<void> _toggle(String id, bool cur) async {
     try {
-      await _db.from('shops').update({'is_active': !cur}).eq('id', id);
+      await _db.rpc('admin_toggle_active', params: {
+        'p_target_id': id,
+        'p_type': 'shop',
+        'p_is_active': !cur
+      });
       _fetch();
     } catch (_) {}
   }
@@ -546,7 +550,11 @@ class _RidersTabState extends State<_RidersTab> {
 
   Future<void> _toggle(String id, bool cur) async {
     try {
-      await _db.from('delivery_partners').update({'is_active': !cur}).eq('id', id);
+      await _db.rpc('admin_toggle_active', params: {
+        'p_target_id': id,
+        'p_type': 'rider',
+        'p_is_active': !cur
+      });
       _fetch();
     } catch (_) {}
   }

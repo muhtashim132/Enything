@@ -108,8 +108,9 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         return;
       }
 
-      final shopData = shopsResp.first;
-      final verificationStatus = shopData['verification_status'];
+      // Check verification status of the first shop (assuming all shops share the same status for the seller)
+      final firstShopData = shopsResp.first;
+      final verificationStatus = firstShopData['verification_status'];
 
       if (verificationStatus == 'pending') {
         if (mounted) {
@@ -126,25 +127,35 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         }
         return;
       }
-      // 'approved' and 'verified' both proceed to the dashboard normally
 
-      final shopId = shopData['id'] as String;
-      _startNotifications(shopId);
+      int totalOrders = 0;
+      int pendingOrders = 0;
+      double todaysEarning = 0.0;
+      int products = 0;
 
-      final rawCat = shopData['category'] ??
-          (shopData['categories'] != null &&
-                  (shopData['categories'] as List).isNotEmpty
-              ? shopData['categories'][0]
-              : 'Other');
+      for (final shopData in shopsResp) {
+        final shopId = shopData['id'] as String;
+        _startNotifications(shopId);
+        _setupRealtimeOrders(shopId);
 
-      // Setup Realtime listener for incoming orders
-      _setupRealtimeOrders(shopId);
-
-      // Call RPC for stats
-      final statsResult = await _supabase.rpc('get_seller_daily_stats', params: {'p_shop_id': shopId});
+        // Call RPC for stats
+        final statsResult = await _supabase.rpc('get_seller_daily_stats', params: {'p_shop_id': shopId});
+        if (statsResult != null) {
+          totalOrders += (statsResult['total_orders'] ?? 0) as int;
+          pendingOrders += (statsResult['pending_orders'] ?? 0) as int;
+          todaysEarning += (statsResult['todays_earning'] as num?)?.toDouble() ?? 0.0;
+          products += (statsResult['products'] ?? 0) as int;
+        }
+      }
 
       if (mounted) {
         setState(() {
+          // Use the first shop's info for the UI badge/emoji
+          final rawCat = firstShopData['category'] ??
+              (firstShopData['categories'] != null &&
+                      (firstShopData['categories'] as List).isNotEmpty
+                  ? firstShopData['categories'][0]
+                  : 'Other');
           _shopBadgeName = rawCat == 'Other' ? 'Store' : rawCat;
           final catInfo = AppCategories.all.firstWhere(
             (c) => c['name'] == rawCat,
@@ -152,19 +163,16 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           );
           _shopEmoji = catInfo['emoji']!;
 
-          if (statsResult != null) {
-            _stats = {
-              'total_orders': statsResult['total_orders'] ?? 0,
-              'pending_orders': statsResult['pending_orders'] ?? 0,
-              'todays_earning': (statsResult['todays_earning'] as num?)?.toDouble() ?? 0.0,
-              'products': statsResult['products'] ?? 0,
-            };
-          }
+          _stats = {
+            'total_orders': totalOrders,
+            'pending_orders': pendingOrders,
+            'todays_earning': todaysEarning,
+            'products': products,
+          };
           
-          _shopIsActive = shopData['is_active'] ?? false;
-          final rawRating = shopData['average_rating'];
-          _shopRating =
-              rawRating != null ? (rawRating as num).toStringAsFixed(1) : '--';
+          _shopIsActive = firstShopData['is_active'] ?? false;
+          final rawRating = firstShopData['average_rating'];
+          _shopRating = rawRating != null ? (rawRating as num).toStringAsFixed(1) : '--';
           _isLoading = false;
         });
         _entryCtrl.forward();

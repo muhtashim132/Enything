@@ -33,14 +33,6 @@ class PaymentConfig {
   /// Small-cart surcharge (GST NOT applicable — it's a deterrent fee).
   static const double smallCartFee = 15.0;
 
-  // ── Delivery Discounts ────────────────────────────────────────────────────
-
-  /// If order ≥ this, delivery discount is applied (within 5 km).
-  static const double discountDeliveryThreshold = 999.0;
-
-  /// Amount to discount from delivery fee for qualifying orders.
-  static const double deliveryDiscountAmount = 15.0;
-
   // ── Weight & Item Limits ──────────────────────────────────────────────────
 
   static const double maxDeliveryRadiusKm = 9.0;

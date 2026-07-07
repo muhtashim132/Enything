@@ -45,8 +45,6 @@ class _KycReviewPageState extends State<KycReviewPage>
   Future<void> _loadSellers() async {
     setState(() { _loadingSellers = true; _sellerError = null; });
     try {
-      // Use the admin RPC which bypasses column-level RLS restrictions.
-      // Direct .select() from 'shops' is blocked for sensitive columns.
       final rows = await _supabase.rpc('admin_get_all_shops');
       final allShops = List<Map<String, dynamic>>.from(rows);
       final pending = allShops
@@ -81,13 +79,16 @@ class _KycReviewPageState extends State<KycReviewPage>
     final shopId = shop['id'] as String;
     final sellerId = shop['seller_id'] as String;
     try {
-      await _supabase.from('shops').update({
-        'verification_status': 'approved',
-      }).eq('id', shopId).select('id');
-      await _supabase.from('profiles').update({
-        'kyc_status': 'approved',
-        'verification_status': 'verified',
-      }).eq('id', sellerId).select('id');
+      await _supabase.rpc('admin_update_kyc', params: {
+        'p_target_id': shopId,
+        'p_type': 'shop',
+        'p_status': 'approved'
+      });
+      await _supabase.rpc('admin_update_kyc', params: {
+        'p_target_id': sellerId,
+        'p_type': 'customer',
+        'p_status': 'verified'
+      });
 
       // Push seller: KYC approved
       if (mounted) {
@@ -111,13 +112,16 @@ class _KycReviewPageState extends State<KycReviewPage>
     final reason = await _showRejectDialog();
     if (reason == null) return;
     try {
-      await _supabase.from('shops').update({
-        'verification_status': 'rejected',
-      }).eq('id', shopId).select('id');
-      await _supabase.from('profiles').update({
-        'kyc_status': 'rejected',
-        'verification_status': 'rejected',
-      }).eq('id', sellerId).select('id');
+      await _supabase.rpc('admin_update_kyc', params: {
+        'p_target_id': shopId,
+        'p_type': 'shop',
+        'p_status': 'rejected'
+      });
+      await _supabase.rpc('admin_update_kyc', params: {
+        'p_target_id': sellerId,
+        'p_type': 'customer',
+        'p_status': 'rejected'
+      });
 
       // Push seller: KYC rejected with reason
       if (mounted) {
@@ -138,14 +142,17 @@ class _KycReviewPageState extends State<KycReviewPage>
   Future<void> _approveRider(Map<String, dynamic> rider) async {
     final riderId = rider['id'] as String;
     try {
-      await _supabase.from('delivery_partners').update({
-        'verification_status': 'approved',
-      }).eq('id', riderId).select('id');
+      await _supabase.rpc('admin_update_kyc', params: {
+        'p_target_id': riderId,
+        'p_type': 'rider',
+        'p_status': 'approved'
+      });
       final userId = rider['user_id'] as String? ?? (rider['profiles'] is Map ? rider['profiles']['id'] as String? : null) ?? riderId;
-      await _supabase.from('profiles').update({
-        'kyc_status': 'approved',
-        'verification_status': 'verified',
-      }).eq('id', userId).select('id');
+      await _supabase.rpc('admin_update_kyc', params: {
+        'p_target_id': userId,
+        'p_type': 'customer',
+        'p_status': 'verified'
+      });
 
       // Push rider: KYC approved
       if (mounted) {
@@ -168,14 +175,17 @@ class _KycReviewPageState extends State<KycReviewPage>
     final reason = await _showRejectDialog();
     if (reason == null) return;
     try {
-      await _supabase.from('delivery_partners').update({
-        'verification_status': 'rejected',
-      }).eq('id', riderId).select('id');
+      await _supabase.rpc('admin_update_kyc', params: {
+        'p_target_id': riderId,
+        'p_type': 'rider',
+        'p_status': 'rejected'
+      });
       final userId = rider['user_id'] as String? ?? (rider['profiles'] is Map ? rider['profiles']['id'] as String? : null) ?? riderId;
-      await _supabase.from('profiles').update({
-        'kyc_status': 'rejected',
-        'verification_status': 'rejected',
-      }).eq('id', userId).select('id');
+      await _supabase.rpc('admin_update_kyc', params: {
+        'p_target_id': userId,
+        'p_type': 'customer',
+        'p_status': 'rejected'
+      });
 
       // Push rider: KYC rejected with reason
       if (mounted) {

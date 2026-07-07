@@ -343,7 +343,6 @@ class CartPage extends StatelessWidget {
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
     final surcharge = cart.multiShopSurcharge;
     final heavyFee = cart.heavyOrderFee;
-    final discount = cart.calculateDeliveryDiscount(distanceKm);
     final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
     final totalDelivery = cart.totalDeliveryCharges(distanceKm);
     final riderBase = effectiveBase + surcharge + heavyFee;
@@ -410,11 +409,7 @@ class CartPage extends StatelessWidget {
               valueColor: baseCharge < 0 ? AppColors.textSecondary : null,
               isDark: isDark,
             ),
-            if (discount > 0) ...[
-              const SizedBox(height: 6),
-              _summaryRow('Delivery Discount', '-₹${discount.toStringAsFixed(0)}',
-                  valueColor: AppColors.success, isDark: isDark),
-            ],
+
             if (cart.smallCartFee > 0) ...[
               const SizedBox(height: 6),
               _summaryRow(
@@ -441,7 +436,7 @@ class CartPage extends StatelessWidget {
                 'Multi-shop fee (${cart.shops.length} shops)',
                 '+₹${surcharge.toStringAsFixed(0)}',
                 valueColor: Colors.orange.shade700,
-                hint: '₹7/km between shops',
+                hint: '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10).toInt()}/km between shops',
                 isDark: isDark,
               ),
             ],

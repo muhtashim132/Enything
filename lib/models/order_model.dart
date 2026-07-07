@@ -47,7 +47,7 @@ class OrderModel {
       cancelledReason; // 'shop_rejected' | 'no_rider' | 'timeout' | 'customer'
   final String? rejectionMessage; // seller's freetext message to customer
   final String? cartGroupId; // groups orders from same checkout (up to 3 shops)
-  final DateTime? acceptanceDeadline; // when the 2-min window expires
+  final DateTime? acceptanceDeadline; // when the 3-min window expires
   final DateTime? paymentDeadline; // when the 10-min payment window expires
 
   // Dual-acceptance flags (stored in DB columns)
@@ -120,8 +120,6 @@ class OrderModel {
   /// Surcharge applied for orders exceeding the maximum base weight limit.
   final double heavyOrderFee;
 
-  /// Promotional delivery discount applied (absorbed by the platform).
-  final double deliveryDiscount;
 
   /// Gross commission Enything charged on base item subtotal (5% standard).
   final double enythingCommission;
@@ -213,7 +211,6 @@ class OrderModel {
     this.shopPrepTimeSnapshot = 30,
     this.smallCartFee = 0.0,
     this.heavyOrderFee = 0.0,
-    this.deliveryDiscount = 0.0,
     this.couponId,
     this.couponDiscount = 0.0,
   });
@@ -291,7 +288,6 @@ class OrderModel {
       shopPrepTimeSnapshot: map['shop_prep_time_snapshot'] ?? 30,
       smallCartFee: (map['small_cart_fee'] ?? 0.0).toDouble(),
       heavyOrderFee: (map['heavy_order_fee'] ?? 0.0).toDouble(),
-      deliveryDiscount: (map['delivery_discount'] ?? 0.0).toDouble(),
       couponId: map['coupon_id'] as String?,
       couponDiscount: (map['coupon_discount'] ?? 0.0).toDouble(),
     );
@@ -311,8 +307,7 @@ class OrderModel {
           multiShopSurcharge +
           platformFee +
           smallCartFee +
-          heavyOrderFee -
-          deliveryDiscount;
+          heavyOrderFee;
 
   /// Total GST across the entire order (items + delivery + platform).
   double get totalGstInOrder => gstItemTotal + gstDelivery + gstPlatform;
@@ -353,7 +348,6 @@ class OrderModel {
     // C1 FIX: These fields were missing from copyWith — they'd silently reset to 0.0 on any copy
     double? smallCartFee,
     double? heavyOrderFee,
-    double? deliveryDiscount,
     String? couponId,
     double? couponDiscount,
   }) {
@@ -418,7 +412,6 @@ class OrderModel {
       // C1 FIX: Preserve the 3 previously-dropped fee fields
       smallCartFee: smallCartFee ?? this.smallCartFee,
       heavyOrderFee: heavyOrderFee ?? this.heavyOrderFee,
-      deliveryDiscount: deliveryDiscount ?? this.deliveryDiscount,
       couponId: couponId ?? this.couponId,
       couponDiscount: couponDiscount ?? this.couponDiscount,
     );

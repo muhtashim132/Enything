@@ -126,8 +126,6 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                       ),
                     ),
                     _buildItem('max_delivery_radius_km', 'Max Delivery Radius', 'Furthest distance allowed', config.maxDeliveryRadiusKm, 'km', config, rbac),
-                    _buildItem('delivery_discount_threshold', 'Discount Threshold', 'Orders above this get discount', config.deliveryDiscountThreshold, '₹', config, rbac),
-                    _buildItem('delivery_discount_amount', 'Discount Amount', 'Flat discount applied to delivery', config.deliveryDiscountAmount, '₹', config, rbac),
                   ],
                 ),
                 _buildSection(

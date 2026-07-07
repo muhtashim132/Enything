@@ -196,16 +196,6 @@ class CartProvider extends ChangeNotifier {
     return subtotal < threshold && subtotal > 0 ? fee : 0.0;
   }
 
-  double calculateDeliveryDiscount(double distanceKm) {
-    final threshold = PlatformConfigProvider.instance?.deliveryDiscountThreshold ?? PaymentConfig.discountDeliveryThreshold;
-    final discount = PlatformConfigProvider.instance?.deliveryDiscountAmount ?? PaymentConfig.deliveryDiscountAmount;
-    
-    if (subtotal >= threshold && distanceKm <= 5.0) {
-      return discount;
-    }
-    return 0.0;
-  }
-
   double get heavyOrderFee {
     final threshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
     final fee = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
@@ -406,7 +396,7 @@ class CartProvider extends ChangeNotifier {
   double totalDeliveryCharges(double baseDistanceKm) {
     final base = calculateDeliveryCharges(baseDistanceKm);
     final effectiveBase = base >= 0 ? base : 25.0;
-    double totalWithoutGst = effectiveBase + multiShopSurcharge + heavyOrderFee + smallCartFee - calculateDeliveryDiscount(baseDistanceKm);
+    double totalWithoutGst = effectiveBase + multiShopSurcharge + heavyOrderFee + smallCartFee;
     if (totalWithoutGst < 0) totalWithoutGst = 0.0;
     return totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
   }

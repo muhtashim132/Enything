@@ -539,27 +539,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   Future<void> _updateOrderStatus(OrderModel order, String status) async {
     try {
-      double waitPenalty = 0.0;
       final updateData = <String, dynamic>{'status': status};
       if (status == 'ready_for_pickup') {
         final readyTime = DateTime.now();
         updateData['order_ready_time'] = readyTime.toIso8601String();
-
-        if (order.arrivedAtShopTime != null) {
-          final waitMins =
-              readyTime.difference(order.arrivedAtShopTime!).inMinutes;
-          final prepLimit = order.shopPrepTimeSnapshot;
-          if (waitMins > prepLimit) {
-            waitPenalty = (waitMins - prepLimit) * 2.0;
-          }
-        }
       }
 
       await _supabase.rpc('update_order_status', params: {
         'p_order_id': order.id,
         'p_new_status': status,
         'p_ready_time': updateData['order_ready_time'],
-        'p_wait_penalty': waitPenalty,
+        'p_wait_penalty': 0.0,
       });
 
       if (mounted) {

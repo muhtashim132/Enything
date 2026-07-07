@@ -72,45 +72,38 @@ class _CaReportPageState extends State<CaReportPage> {
       final start = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
       final end = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
 
-      final orders = await _supabase
+      final response = await _supabase.rpc('get_seller_ca_report', params: {
+        'p_shop_id': shopId,
+        'p_start_date': start.toIso8601String(),
+        'p_end_date': end.toIso8601String(),
+      });
+
+      // Still fetch a limited set of orders for the "View Detailed Transactions" bottom sheet
+      // We limit to 100 to prevent OOM.
+      final ordersListResp = await _supabase
           .from('orders')
-          .select()
+          .select('id, total_amount, non_food_gst_amount, s9_5_gst_amount')
           .eq('shop_id', shopId)
           .eq('status', 'delivered')
           .gte('created_at', start.toIso8601String())
-          .lt('created_at', end.toIso8601String());
-
-      double baseSales = 0, nonFood = 0, s9_5 = 0, delGst = 0, platGst = 0,
-          tcs = 0, comm = 0, payout = 0, grand = 0, gw = 0, tds = 0;
-
-      for (final o in (orders as List)) {
-        baseSales += (o['total_amount'] ?? 0.0).toDouble();
-        nonFood   += (o['non_food_gst_amount'] ?? 0.0).toDouble();
-        s9_5      += (o['s9_5_gst_amount'] ?? 0.0).toDouble();
-        delGst    += (o['gst_delivery'] ?? 0.0).toDouble();
-        platGst   += (o['gst_platform'] ?? 0.0).toDouble();
-        tcs       += (o['tcs_amount'] ?? 0.0).toDouble();
-        comm      += (o['enything_commission'] ?? 0.0).toDouble();
-        payout    += (o['seller_payout'] ?? 0.0).toDouble();
-        grand     += (o['grand_total_collected'] ?? 0.0).toDouble();
-        gw        += (o['gateway_deduction'] ?? 0.0).toDouble();
-        tds       += (o['tds_amount'] ?? 0.0).toDouble();
-      }
+          .lt('created_at', end.toIso8601String())
+          .order('created_at', ascending: false)
+          .limit(100);
 
       setState(() {
-        _totalBaseSales = baseSales;
-        _nonFoodGst     = nonFood;
-        _s9_5Gst        = s9_5;
-        _deliveryGst    = delGst;
-        _platformGst    = platGst;
-        _tcsDeducted    = tcs;
-        _tdsDeducted    = tds;
-        _commission     = comm;
-        _sellerPayout   = payout;
-        _grandCollected = grand;
-        _gatewayFees    = gw;
-        _deliveredOrders = orders.length;
-        _monthlyOrders  = List<Map<String, dynamic>>.from(orders);
+        _totalBaseSales = (response['total_base_sales'] ?? 0).toDouble();
+        _nonFoodGst     = (response['non_food_gst'] ?? 0).toDouble();
+        _s9_5Gst        = (response['s9_5_gst'] ?? 0).toDouble();
+        _deliveryGst    = (response['delivery_gst'] ?? 0).toDouble();
+        _platformGst    = (response['platform_gst'] ?? 0).toDouble();
+        _tcsDeducted    = (response['tcs_deducted'] ?? 0).toDouble();
+        _tdsDeducted    = (response['tds_deducted'] ?? 0).toDouble();
+        _commission     = (response['commission'] ?? 0).toDouble();
+        _sellerPayout   = (response['seller_payout'] ?? 0).toDouble();
+        _grandCollected = (response['grand_collected'] ?? 0).toDouble();
+        _gatewayFees    = (response['gateway_fees'] ?? 0).toDouble();
+        _deliveredOrders = (response['delivered_orders'] ?? 0) as int;
+        _monthlyOrders  = List<Map<String, dynamic>>.from(ordersListResp as List);
         _isLoading      = false;
       });
     } catch (e) {
@@ -398,21 +391,23 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
                   accentColor: const Color(0xFFFF8C42),
                   rows: [
                     _row('Gross Collected from Customers', _grandCollected),
-                    _row('Seller Net Payout (incl. GST)', _sellerPayout,
-                        color: const Color(0xFF51CF66), isBold: true),
                     _row('Enything Commission', _commission),
-                    _row('IT TDS Withheld (§194-O, 0.1%)', _tdsDeducted),
-                    if (_tcsDeducted > 0)
-                      _row('GST TCS Withheld (§52, 1%)', _tcsDeducted),
                     _row('Gateway Fees (Razorpay)', _gatewayFees),
+                    _row('Seller Net Payout (Gross)', _sellerPayout),
+                    _row('(-) IT TDS Withheld (§194-O, 0.1%)', _tdsDeducted),
+                    if (_tcsDeducted > 0)
+                      _row('(-) GST TCS Withheld (§52, 1%)', _tcsDeducted),
+                    _row('Final Bank Deposit', _sellerPayout - _tdsDeducted - _tcsDeducted,
+                        color: const Color(0xFF51CF66), isBold: true),
                   ],
                   copyText: 'Payout Reconciliation — $_monthLabel\n'
                       'Gross Collected    : ₹${_f(_grandCollected)}\n'
-                      'Seller Payout      : ₹${_f(_sellerPayout)}\n'
                       'Enything Commission   : ₹${_f(_commission)}\n'
-                      'IT TDS (§194-O)    : ₹${_f(_tdsDeducted)}\n'
-                      '${_tcsDeducted > 0 ? "GST TCS (§52)      : ₹${_f(_tcsDeducted)}\n" : ""}'
-                      'Gateway Fees       : ₹${_f(_gatewayFees)}',
+                      'Gateway Fees       : ₹${_f(_gatewayFees)}\n'
+                      'Seller Payout (Gross) : ₹${_f(_sellerPayout)}\n'
+                      'IT TDS (§194-O)    : -₹${_f(_tdsDeducted)}\n'
+                      '${_tcsDeducted > 0 ? "GST TCS (§52)      : -₹${_f(_tcsDeducted)}\n" : ""}'
+                      'Final Bank Deposit : ₹${_f(_sellerPayout - _tdsDeducted - _tcsDeducted)}',
                 ),
 
                 // ── Copy Full Report Button ───────────────────────────────

@@ -822,19 +822,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         if (status == 'picked_up' && order.orderReadyTime == null) {
           final readyTime = DateTime.now();
           updateData['order_ready_time'] = readyTime.toIso8601String();
-          if (order.arrivedAtShopTime != null) {
-            final waitMins = readyTime.difference(order.arrivedAtShopTime!).inMinutes;
-            final prepLimit = order.shopPrepTimeSnapshot;
-            if (waitMins > prepLimit) {
-              updateData['wait_time_penalty'] = (waitMins - prepLimit) * 2.0;
-            }
-          }
         }
         await _supabase.rpc('update_order_status', params: {
           'p_order_id': order.id,
           'p_new_status': status,
           'p_ready_time': updateData['order_ready_time'],
-          'p_wait_penalty': updateData['wait_time_penalty'] ?? 0.0,
+          'p_wait_penalty': 0.0,
         });
             
         if (mounted) {
@@ -1005,6 +998,34 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }
   }
 
+  void _confirmDropOrder(OrderModel order) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Drop Order?',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        content: Text(
+            'Are you sure you want to drop this order? This will unassign you from the delivery and return it to the available pool. Please only do this if you have an emergency.',
+            style: GoogleFonts.outfit()),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Go Back')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _updateStatus(order, 'reassign');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Yes, Drop Order'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showDisputeDialog(OrderModel order) {
     showDialog(
       context: context,
@@ -1012,12 +1033,30 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         title: Text('Report Shop Issue',
             style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         content: Text(
-            'If the shop is not giving you the items, lied about readiness, or is being dishonest, '
-            'you can cancel this order. The customer will be notified and a refund will be initiated within 5–7 business days.',
+            'If the shop marked the order as "Ready" but it is not actually ready, you can dispute the wait time. '
+            'Alternatively, if the shop is refusing to hand over the items entirely, you can cancel the order.',
             style: GoogleFonts.outfit()),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Go Back')),
+          if (order.status == 'ready_for_pickup')
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await _supabase.rpc('dispute_wait_time', params: {'p_order_id': order.id});
+                  _showSnack('Wait time disputed. Status reverted to Preparing.', isError: false);
+                  _loadOrders();
+                } catch (e) {
+                  _showSnack('Error disputing wait time: $e', isError: true);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Items Not Ready Yet'),
+            ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -1027,7 +1066,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               backgroundColor: AppColors.danger,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Cancel & Report Shop'),
+            child: const Text('Cancel & Report'),
           ),
         ],
       ),
@@ -2127,14 +2166,38 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           ],
           if (order.status == 'confirmed' || order.status == 'preparing' || order.status == 'ready_for_pickup') ...[
             const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: () => _showDisputeDialog(order),
-              icon: const Icon(Icons.report_problem_outlined, color: AppColors.danger, size: 16),
-              label: Text(
-                  order.status == 'ready_for_pickup'
-                      ? 'Shop Lied — Items Not Received'
-                      : 'Shop Lied / Items Not Given',
-                  style: GoogleFonts.outfit(color: AppColors.danger, fontSize: 12)),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showDisputeDialog(order),
+                    icon: const Icon(Icons.report_problem_outlined, color: AppColors.danger, size: 14),
+                    label: Text(
+                        order.status == 'ready_for_pickup'
+                            ? 'Shop Lied'
+                            : 'Report Issue',
+                        style: GoogleFonts.outfit(color: AppColors.danger, fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.danger),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _confirmDropOrder(order),
+                    icon: const Icon(Icons.cancel_outlined, color: Colors.orange, size: 14),
+                    label: Text('Drop Order', style: GoogleFonts.outfit(color: Colors.orange, fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.orange),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ],

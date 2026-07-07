@@ -18,8 +18,6 @@ class PlatformConfigProvider extends ChangeNotifier {
   double _smallCartThreshold = 99.0;
   double _heavyOrderFee = 20.0;
   double _heavyOrderThresholdKg = 10.0;
-  double _deliveryDiscountThreshold = 999.0;
-  double _deliveryDiscountAmount = 15.0;
   double _maxDeliveryRadiusKm = 15.0;
   double _deliveryRatePerKm = 10.0;
   double _referralBonusAmount = 50.0;
@@ -55,8 +53,6 @@ class PlatformConfigProvider extends ChangeNotifier {
   double get smallCartThreshold => _smallCartThreshold;
   double get heavyOrderFee => _heavyOrderFee;
   double get heavyOrderThresholdKg => _heavyOrderThresholdKg;
-  double get deliveryDiscountThreshold => _deliveryDiscountThreshold;
-  double get deliveryDiscountAmount => _deliveryDiscountAmount;
   double get maxDeliveryRadiusKm => _maxDeliveryRadiusKm;
   double get deliveryRatePerKm => _deliveryRatePerKm;
   double get referralBonusAmount => _referralBonusAmount;
@@ -97,12 +93,6 @@ class PlatformConfigProvider extends ChangeNotifier {
             break;
           case 'heavy_order_threshold_kg':
             _heavyOrderThresholdKg = val;
-            break;
-          case 'delivery_discount_threshold':
-            _deliveryDiscountThreshold = val;
-            break;
-          case 'delivery_discount_amount':
-            _deliveryDiscountAmount = val;
             break;
           case 'max_delivery_radius_km':
             _maxDeliveryRadiusKm = val;
@@ -289,11 +279,6 @@ class PlatformConfigProvider extends ChangeNotifier {
         title = '📢 Delivery Zone Expanded';
         body = 'We now deliver up to ${newVal}km from your location!';
         break;
-      case 'delivery_discount_threshold':
-        audience = 'Customers';
-        title = '🎉 Free Delivery Threshold Updated';
-        body = 'Get delivery discounts on orders above ₹$newVal!';
-        break;
       default:
         return;
       }
@@ -330,8 +315,6 @@ class PlatformConfigProvider extends ChangeNotifier {
       case 'small_cart_threshold': return _smallCartThreshold;
       case 'heavy_order_fee': return _heavyOrderFee;
       case 'heavy_order_threshold_kg': return _heavyOrderThresholdKg;
-      case 'delivery_discount_threshold': return _deliveryDiscountThreshold;
-      case 'delivery_discount_amount': return _deliveryDiscountAmount;
       case 'max_delivery_radius_km': return _maxDeliveryRadiusKm;
       case 'delivery_rate_per_km': return _deliveryRatePerKm;
       case 'referral_bonus_amount': return _referralBonusAmount;
@@ -354,8 +337,6 @@ class PlatformConfigProvider extends ChangeNotifier {
       case 'small_cart_threshold': _smallCartThreshold = val; break;
       case 'heavy_order_fee': _heavyOrderFee = val; break;
       case 'heavy_order_threshold_kg': _heavyOrderThresholdKg = val; break;
-      case 'delivery_discount_threshold': _deliveryDiscountThreshold = val; break;
-      case 'delivery_discount_amount': _deliveryDiscountAmount = val; break;
       case 'max_delivery_radius_km': _maxDeliveryRadiusKm = val; break;
       case 'delivery_rate_per_km': _deliveryRatePerKm = val; break;
       case 'referral_bonus_amount': _referralBonusAmount = val; break;
