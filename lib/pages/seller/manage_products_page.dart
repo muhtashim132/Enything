@@ -38,7 +38,8 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
       final productsResp = await _supabase
           .from('products')
           .select()
-          .eq('shop_id', _shopId!);
+          .eq('shop_id', _shopId!)
+          .eq('is_deleted', false);
 
       setState(() {
         _products = (productsResp as List)
@@ -85,7 +86,7 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
     );
 
     if (confirmed == true) {
-      await _supabase.from('products').delete().eq('id', product.id).eq('shop_id', product.shopId);
+      await _supabase.from('products').update({'is_deleted': true}).eq('id', product.id).eq('shop_id', product.shopId);
       _loadProducts();
     }
   }

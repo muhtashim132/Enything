@@ -417,21 +417,20 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     if (confirmed != true || !mounted) return;
 
     try {
-      // SE2 FIX: Only allow rejection if the order hasn't been paid yet.
-      // Once status reaches 'confirmed' or later, payment is captured —
-      // cancelling here would leave the customer charged with no order.
+      // SE2 FIX: Allow rejection even if paid. The backend will trigger a refund
+      // if the status is confirmed or preparing.
       final latestStatus = await _supabase
           .from('orders')
           .select('status')
           .eq('id', order.id)
           .maybeSingle();
       final currentStatus = latestStatus?['status'] as String?;
-      const rejectableStatuses = ['awaiting_acceptance', 'awaiting_payment', 'pending'];
+      const rejectableStatuses = ['awaiting_acceptance', 'awaiting_payment', 'pending', 'confirmed', 'preparing'];
       if (currentStatus != null &&
           !rejectableStatuses.contains(currentStatus)) {
         if (mounted) {
           _showSnack(
-              'Cannot decline — payment is already confirmed. Contact support.',
+              'Cannot decline at this stage. Contact support.',
               isError: true);
         }
         return;
@@ -1415,41 +1414,75 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     ] else if (tab == 'active' &&
                         order.status == 'confirmed') ...[
                       const Divider(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () =>
-                              _updateOrderStatus(order, 'preparing'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                      Row(children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _sellerReject(order),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.danger,
+                              side: const BorderSide(color: AppColors.danger),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Cancel',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600)),
                           ),
-                          child: Text('Start Preparing',
-                              style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white)),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: () =>
+                                _updateOrderStatus(order, 'preparing'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Start Preparing',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white)),
+                          ),
+                        ),
+                      ]),
                     ] else if (tab == 'active' &&
                         order.status == 'preparing') ...[
                       const Divider(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () =>
-                              _updateOrderStatus(order, 'ready_for_pickup'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.accent,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                      Row(children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _sellerReject(order),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.danger,
+                              side: const BorderSide(color: AppColors.danger),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Cancel',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600)),
                           ),
-                          child: Text('Mark Ready for Pickup',
-                              style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.black)),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: () =>
+                                _updateOrderStatus(order, 'ready_for_pickup'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Mark Ready for Pickup',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black)),
+                          ),
+                        ),
+                      ]),
                     ] else if (tab == 'done' &&
                         order.status == 'delivered' &&
                         order.deliveryPartnerId != null &&

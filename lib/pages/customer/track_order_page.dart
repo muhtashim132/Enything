@@ -429,6 +429,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       _lastAggStatus = aggStatus;
       NotificationService().updateOrderNotificationFromStatus(aggStatus);
 
+      if (aggStatus == 'awaiting_payment' || aggStatus == 'preparing') {
+        _fetchOrder();
+      }
+
+      if (aggStatus == 'delivered' || aggStatus == 'cancelled' || aggStatus == 'seller_rejected') {
+        _riderLocations.clear();
+      }
+
       if (aggStatus == 'awaiting_acceptance') {
         _startAcceptanceCountdown(_order!);
       } else {
@@ -554,7 +562,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           final productIds = oldItems.map((i) => i['product_id']).toList();
           final latestProducts = await _supabase
               .from('products')
-              .select('id, name, is_available, total_quantity')
+              .select('id, name, is_available, total_quantity, price, variants')
               .inFilter('id', productIds);
 
           for (final item in oldItems) {
@@ -569,6 +577,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               throw Exception(
                 'Only ${dbProduct['total_quantity']} units of ${item['product_name']} are available.',
               );
+            }
+            
+            double currentPrice = (dbProduct['price'] as num).toDouble();
+            if (item['variant_name'] != null && dbProduct['variants'] != null) {
+              final variants = dbProduct['variants'] as List<dynamic>;
+              final v = variants.firstWhereOrNull((v) => v['name'] == item['variant_name']);
+              if (v != null && v['price'] != null) {
+                currentPrice = (v['price'] as num).toDouble();
+              }
+            }
+            if (currentPrice != (item['price'] as num).toDouble()) {
+              throw Exception('${item['product_name']} price has changed. Please create a new order from your cart.');
             }
           }
 
@@ -655,6 +675,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         'p_orders': allOrders,
         'p_items': allItems,
         'p_coupon_id': couponIdToPass,
+        'p_idempotency_key': newCartGroupId,
       });
 
       // BUG-6 FIX: Capture notifProv and navigate FIRST, then fire notifications

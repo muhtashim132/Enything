@@ -556,6 +556,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'p_orders': allOrders,
         'p_items': allItems,
         'p_coupon_id': appliedCouponId,
+        'p_idempotency_key': cartGroupId,
       });
 
       // Notify sellers AFTER successful atomic insertion

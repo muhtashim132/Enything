@@ -54,7 +54,7 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
   Future<void> _loadData() async {
     final userId = context.read<AuthProvider>().currentUserId ?? '';
     try {
-      // Load past withdrawals
+      // Load past withdrawals for UI history only
       final histRes = await _db
           .from('withdrawals')
           .select()
@@ -64,39 +64,23 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
           .limit(50);
       _history = List<Map<String, dynamic>>.from(histRes);
 
-      // Calculate total requested so far (processed + pending + approved)
-      double totalPaid = 0;
-      for (final w in _history) {
-        if (w['status'] != 'rejected') {
-          totalPaid += (w['amount'] as num).toDouble();
-        }
+      // Fetch accurate balance securely from server-side RPC
+      // This prevents OOM errors and pagination bugs.
+      final balanceRes = await _db.rpc('get_seller_balance', params: {
+        'p_seller_id': userId,
+      });
+
+      if (balanceRes != null) {
+        _availableBalance = (balanceRes['available_balance'] as num).toDouble();
+      } else {
+        _availableBalance = 0;
       }
-
-      // C4 FIX: _getShopId returns '' on error or when no shop exists.
-      // Querying with empty shopId returns rows for ALL shops. Guard this.
-      final shopId = await _getShopId(userId);
-      if (shopId.isEmpty) {
-        if (mounted) setState(() => _loadingHistory = false);
-        return;
-      }
-
-      // Load seller_payout from delivered orders
-      final earningsRes = await _db
-          .from('orders')
-          .select('seller_payout')
-          .eq('shop_id', shopId)
-          .eq('status', 'delivered');
-
-      double totalEarned = 0;
-      for (final o in earningsRes as List) {
-        totalEarned += (o['seller_payout'] as num? ?? 0).toDouble();
-      }
-
-      _availableBalance = totalEarned - totalPaid;
     } catch (e) {
       debugPrint('SellerWithdrawalsPage._loadData error: $e');
+      if (mounted) {
+        _showSnack('Error loading balance: $e', isError: true);
+      }
     } finally {
-      // M5 FIX: was in try-block only — errors caused infinite spinner
       if (mounted) setState(() => _loadingHistory = false);
     }
   }

@@ -65,7 +65,9 @@ Deno.serve(async (req) => {
       const { data: orders, error } = await supabaseAdmin
         .from('orders')
         .select('grand_total_collected, customer_id')
-        .eq('cart_group_id', cart_group_id);
+        .eq('cart_group_id', cart_group_id)
+        .neq('status', 'cancelled')
+        .neq('status', 'seller_rejected');
       
       if (error || !orders || orders.length === 0) throw new Error("Orders not found");
       if (orders[0].customer_id !== user.id) throw new Error("Unauthorized");
