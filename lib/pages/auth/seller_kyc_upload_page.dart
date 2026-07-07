@@ -138,18 +138,18 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
         'bank_proof': bankProofUrl,
       };
 
-      // Update Shops Table
-      await _db.from('shops').update({
-        'aadhar_number': _aadharCtrl.text.trim(),
-        'pan_number': _panCtrl.text.trim(),
-        'gst_number': _gstCtrl.text.trim(),
-        'trade_license': _tradeLicenseCtrl.text.trim(),
-        'bank_account_holder': _accountHolderCtrl.text.trim(),
-        'bank_account_number': _bankAccountCtrl.text.trim(),
-        'bank_ifsc': _ifscCtrl.text.trim(),
-        'kyc_documents': kycDocs,
-        'verification_status': 'pending',
-      }).eq('seller_id', userId);
+      // Update Shops Table via RPC
+      await _db.rpc('submit_seller_kyc', params: {
+        'p_seller_id': userId,
+        'p_aadhar_number': _aadharCtrl.text.trim(),
+        'p_pan_number': _panCtrl.text.trim(),
+        'p_gst_number': _gstCtrl.text.trim(),
+        'p_trade_license': _tradeLicenseCtrl.text.trim(),
+        'p_bank_account_holder': _accountHolderCtrl.text.trim(),
+        'p_bank_account_number': _bankAccountCtrl.text.trim(),
+        'p_bank_ifsc': _ifscCtrl.text.trim(),
+        'p_kyc_documents': kycDocs,
+      });
 
       if (mounted) {
         final notifProvider = context.read<NotificationProvider>();

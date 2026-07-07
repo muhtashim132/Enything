@@ -128,17 +128,17 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
         if (rcBackUrl != null) 'rc_back': rcBackUrl,
       };
 
-      // Update Delivery Partners Table
-      await _db.from('delivery_partners').update({
-        'aadhar_number': _aadharCtrl.text.trim(),
-        'pan_number': _panCtrl.text.trim(),
-        'driving_license': _dlCtrl.text.trim(),
-        'bank_account_holder': _accountHolderCtrl.text.trim(),
-        'bank_account_number': _bankAccountCtrl.text.trim(),
-        'bank_ifsc': _ifscCtrl.text.trim(),
-        'kyc_documents': kycDocs,
-        'verification_status': 'pending',
-      }).eq('id', userId);
+      // Update Delivery Partners Table via RPC
+      await _db.rpc('submit_delivery_kyc', params: {
+        'p_partner_id': userId,
+        'p_aadhar_number': _aadharCtrl.text.trim(),
+        'p_pan_number': _panCtrl.text.trim(),
+        'p_driving_license': _dlCtrl.text.trim(),
+        'p_bank_account_holder': _accountHolderCtrl.text.trim(),
+        'p_bank_account_number': _bankAccountCtrl.text.trim(),
+        'p_bank_ifsc': _ifscCtrl.text.trim(),
+        'p_kyc_documents': kycDocs,
+      });
 
       if (mounted) {
         final notifProvider = context.read<NotificationProvider>();

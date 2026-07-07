@@ -23,8 +23,10 @@ class PlatformConfigProvider extends ChangeNotifier {
   double _referralBonusAmount = 50.0;
   double _deliveryGstRate = 0.18;
   double _platformFeeGstRate = 0.18;
+  double _waitPenaltyPerMin = 2.0;
 
   final Map<String, double> _categoryCommissionOverrides = {};
+  final Map<String, double> _categoryWaitPenaltyOverrides = {};
   
   // Cache for tax_config table (category -> row data)
   final Map<String, Map<String, dynamic>> _taxConfigCache = {};
@@ -58,6 +60,11 @@ class PlatformConfigProvider extends ChangeNotifier {
   double get referralBonusAmount => _referralBonusAmount;
   double get deliveryGstRate => _deliveryGstRate;
   double get platformFeeGstRate => _platformFeeGstRate;
+  double get waitPenaltyPerMin => _waitPenaltyPerMin;
+
+  double getWaitPenaltyRateForCategory(String category) {
+    return _categoryWaitPenaltyOverrides[category] ?? _waitPenaltyPerMin;
+  }
 
   bool get loading => _loading;
   String? get error => _error;
@@ -100,6 +107,9 @@ class PlatformConfigProvider extends ChangeNotifier {
           case 'delivery_rate_per_km':
             _deliveryRatePerKm = val;
             break;
+          case 'wait_penalty_per_min':
+            _waitPenaltyPerMin = val;
+            break;
           case 'referral_bonus_amount':
             _referralBonusAmount = val;
             break;
@@ -114,6 +124,11 @@ class PlatformConfigProvider extends ChangeNotifier {
         if (key.startsWith('commission_percent_')) {
           final category = key.replaceFirst('commission_percent_', '');
           _categoryCommissionOverrides[category] = val;
+        }
+
+        if (key.startsWith('wait_penalty_per_min_')) {
+          final category = key.replaceFirst('wait_penalty_per_min_', '');
+          _categoryWaitPenaltyOverrides[category] = val;
         }
       }
 
@@ -261,6 +276,13 @@ class PlatformConfigProvider extends ChangeNotifier {
       title = '📢 Commission Rate Updated';
       body = 'Platform commission$catSuffix has changed from $oldVal% to $newVal%. '
              'New orders will use the updated rate.';
+    } else if (key.startsWith('wait_penalty_per_min')) {
+      String catSuffix = '';
+      if (key.startsWith('wait_penalty_per_min_')) {
+        catSuffix = ' for ${key.replaceFirst('wait_penalty_per_min_', '')}';
+      }
+      title = '⏱️ Wait Penalty Updated';
+      body = 'Wait penalty rate$catSuffix has changed from ₹$oldVal/min to ₹$newVal/min.';
     } else {
       switch (key) {
         case 'platform_fee':
@@ -308,8 +330,13 @@ class PlatformConfigProvider extends ChangeNotifier {
       final cat = key.replaceFirst('commission_percent_', '');
       return _categoryCommissionOverrides[cat] ?? _commissionPercent;
     }
+    if (key.startsWith('wait_penalty_per_min_')) {
+      final cat = key.replaceFirst('wait_penalty_per_min_', '');
+      return _categoryWaitPenaltyOverrides[cat] ?? _waitPenaltyPerMin;
+    }
     switch (key) {
       case 'commission_percent': return _commissionPercent;
+      case 'wait_penalty_per_min': return _waitPenaltyPerMin;
       case 'platform_fee': return _platformFee;
       case 'small_cart_fee': return _smallCartFee;
       case 'small_cart_threshold': return _smallCartThreshold;
@@ -328,10 +355,18 @@ class PlatformConfigProvider extends ChangeNotifier {
     if (key.startsWith('commission_percent_')) {
       final cat = key.replaceFirst('commission_percent_', '');
       _categoryCommissionOverrides[cat] = val;
+      notifyListeners();
+      return;
+    }
+    if (key.startsWith('wait_penalty_per_min_')) {
+      final cat = key.replaceFirst('wait_penalty_per_min_', '');
+      _categoryWaitPenaltyOverrides[cat] = val;
+      notifyListeners();
       return;
     }
     switch (key) {
       case 'commission_percent': _commissionPercent = val; break;
+      case 'wait_penalty_per_min': _waitPenaltyPerMin = val; break;
       case 'platform_fee': _platformFee = val; break;
       case 'small_cart_fee': _smallCartFee = val; break;
       case 'small_cart_threshold': _smallCartThreshold = val; break;
@@ -349,6 +384,10 @@ class PlatformConfigProvider extends ChangeNotifier {
     if (key.startsWith('commission_percent_')) {
       final cat = key.replaceFirst('commission_percent_', '');
       _categoryCommissionOverrides.remove(cat);
+    }
+    if (key.startsWith('wait_penalty_per_min_')) {
+      final cat = key.replaceFirst('wait_penalty_per_min_', '');
+      _categoryWaitPenaltyOverrides.remove(cat);
     }
   }
 }

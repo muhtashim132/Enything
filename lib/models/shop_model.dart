@@ -114,7 +114,7 @@ class ShopModel {
               ? map['categories'][0]
               : 'Other'),
       categories: List<String>.from(map['categories'] ?? []),
-      isActive: map['is_active'] ?? true,
+      isActive: (map['is_active'] ?? true) && (map['is_accepting_orders'] ?? true),
       rating: (map['average_rating'] ?? map['rating'] ?? 0.0).toDouble(),
       totalReviews: map['total_reviews'] ?? 0,
       totalOrders: map['total_orders'] ?? 0,

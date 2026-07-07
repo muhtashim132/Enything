@@ -367,11 +367,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (auth.currentUserId != null) {
         final partnerResp = await _supabase
             .from('delivery_partners')
-            .select('is_active, preferred_nav_app, vehicle_type')
+            .select('is_active, is_accepting_orders, preferred_nav_app, vehicle_type')
             .eq('id', auth.currentUserId!)
             .maybeSingle();
         if (partnerResp != null) {
-          if (partnerResp['is_active'] != null) _isOnline = partnerResp['is_active'] as bool;
+          if (partnerResp['is_accepting_orders'] != null) _isOnline = partnerResp['is_accepting_orders'] as bool;
           if (partnerResp['preferred_nav_app'] != null) _navApp = partnerResp['preferred_nav_app'] as String;
           if (partnerResp['vehicle_type'] != null) _vehicleType = partnerResp['vehicle_type'] as String;
         }
@@ -1384,7 +1384,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         try {
                           await _supabase
                               .from('delivery_partners')
-                              .update({'is_active': newVal})
+                              .update({'is_accepting_orders': newVal})
                               .eq('id', auth.currentUserId!);
                         } catch (e) {
                           debugPrint('Error updating duty status: $e');
@@ -1466,7 +1466,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                 try {
                                   await _supabase
                                       .from('delivery_partners')
-                                      .update({'is_active': val})
+                                      .update({'is_accepting_orders': val})
                                       .eq('id', auth.currentUserId!);
                                 } catch (e) {
                                   debugPrint('Error updating duty status: $e');
@@ -2492,7 +2492,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       try {
                         await _supabase
                             .from('delivery_partners')
-                            .update({'is_active': val})
+                            .update({'is_accepting_orders': val})
                             .eq('id', auth.currentUserId!);
                       } catch (e) {
                         debugPrint('Error updating duty status: $e');

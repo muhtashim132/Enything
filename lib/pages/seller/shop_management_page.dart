@@ -59,7 +59,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     try {
       final resp = await _supabase
           .from('shops')
-          .select('id, is_active, banner_url, open_time, close_time, address')
+          .select('id, is_active, is_accepting_orders, banner_url, open_time, close_time, address')
           .eq('seller_id', auth.currentUserId ?? '')
           .maybeSingle();
 
@@ -70,7 +70,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
 
       setState(() {
         _shopId = resp['id'];
-        _isActive = resp['is_active'] ?? false;
+        _isActive = resp['is_accepting_orders'] ?? false;
         _currentAddress = resp['address'];
         _bannerCtrl.text = resp['banner_url'] ?? '';
         _openTimeCtrl.text = resp['open_time'] ?? '09:00';
@@ -88,7 +88,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     try {
       await _supabase
           .from('shops')
-          .update({'is_active': value}).eq('id', _shopId!);
+          .update({'is_accepting_orders': value}).eq('id', _shopId!);
       if (!mounted) return;
       _showSnack(value ? '🟢 Shop is now Open' : '🔴 Shop is now Closed');
     } catch (e) {

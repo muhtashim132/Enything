@@ -129,6 +129,14 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   ],
                 ),
                 _buildSection(
+                  title: 'Wait Time Penalty',
+                  icon: Icons.timer_rounded,
+                  color: AdminColors.danger,
+                  children: [
+                    _buildItem('wait_penalty_per_min', 'Wait Penalty per Minute', 'Deducted from slow shops (₹/min)', config.waitPenaltyPerMin, '₹/min', config, rbac),
+                  ],
+                ),
+                _buildSection(
                   title: 'Heavy Orders',
                   icon: Icons.scale_rounded,
                   color: AdminColors.danger,
@@ -152,6 +160,24 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                     ...AppCategories.names.map((cat) {
                       final val = config.getCommissionPercentForCategory(cat);
                       return _buildItem('commission_percent_$cat', cat, 'Override for $cat', val, '%', config, rbac);
+                    }),
+                  ],
+                ),
+                _buildSection(
+                  title: 'Wait Penalty Overrides',
+                  icon: Icons.timer_off_rounded,
+                  color: AdminColors.warning,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Text(
+                        'Leave empty when editing to fallback to the global Wait Penalty (₹${config.waitPenaltyPerMin}/min).',
+                        style: AdminStyles.caption(color: AdminColors.textPrimary),
+                      ),
+                    ),
+                    ...AppCategories.names.map((cat) {
+                      final val = config.getWaitPenaltyRateForCategory(cat);
+                      return _buildItem('wait_penalty_per_min_$cat', cat, 'Override for $cat', val, '₹/min', config, rbac);
                     }),
                   ],
                 ),
