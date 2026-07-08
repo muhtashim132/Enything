@@ -95,14 +95,19 @@ class AuthProvider extends ChangeNotifier {
           // FIX BUG-12: Wrong route '/roleSelect' doesn't match AppRoutes.roleSelect = '/auth/role'
           navigatorKey.currentState!
               .pushNamedAndRemoveUntil('/auth/role', (route) => false);
-          ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'You have been logged out because your account was accessed from another device.'),
-              backgroundColor: Colors.redAccent,
-              duration: Duration(seconds: 4),
-            ),
-          );
+          
+          final context = navigatorKey.currentContext;
+          if (context != null) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'You have been logged out because your account was accessed from another device.'),
+                backgroundColor: Colors.redAccent,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
         }
       }
     });

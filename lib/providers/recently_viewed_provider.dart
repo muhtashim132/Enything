@@ -70,6 +70,14 @@ class RecentlyViewedProvider extends ChangeNotifier {
           .map((id) => productMap[id])
           .whereType<ProductModel>()
           .toList();
+          
+      // Prune IDs that were not found in the database (deleted or inactive)
+      final validIds = _products.map((p) => p.id).toList();
+      if (validIds.length != _ids.length) {
+        _ids = validIds;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(_key, _ids);
+      }
     } catch (_) {
       // Non-fatal: silently fail; home page will just not show this section
     } finally {

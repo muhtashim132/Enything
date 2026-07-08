@@ -320,17 +320,21 @@ class NotificationProvider extends ChangeNotifier {
           ),
           callback: (payload) {
             final orderId = payload.newRecord['id'] as String?;
-            final amount =
-                (payload.newRecord['total_amount'] ?? 0.0).toDouble();
-            _add(AppNotification(
-              id: '${orderId}_new',
-              title: '🔔 New Order!',
-              body:
-                  'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
-              orderId: orderId,
-            ));
-            // [BELL] Ring alert bell for new pending order
-            if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+            final status = payload.newRecord['status'] as String?;
+            
+            if (status == 'awaiting_acceptance') {
+              final amount =
+                  (payload.newRecord['total_amount'] ?? 0.0).toDouble();
+              _add(AppNotification(
+                id: '${orderId}_new',
+                title: '🔔 New Order!',
+                body:
+                    'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
+                orderId: orderId,
+              ));
+              // [BELL] Ring alert bell for new pending order
+              if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+            }
           },
         )
         .onPostgresChanges(
@@ -345,8 +349,21 @@ class NotificationProvider extends ChangeNotifier {
           callback: (payload) {
             if (payload.newRecord.isEmpty) return;
             final newStatus = payload.newRecord['status'] as String?;
+            final oldStatus = payload.oldRecord['status'] as String?;
             final orderId = payload.newRecord['id'] as String?;
             if (orderId == null || newStatus == null) return;
+
+            // [BELL] Handle status progression (e.g., pending_verification -> awaiting_acceptance)
+            if (newStatus == 'awaiting_acceptance' && oldStatus != 'awaiting_acceptance') {
+              final amount = (payload.newRecord['total_amount'] ?? 0.0).toDouble();
+              _add(AppNotification(
+                id: '${orderId}_new',
+                title: '🔔 New Order!',
+                body: 'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
+                orderId: orderId,
+              ));
+              BellAlertService.instance.addPendingOrder(orderId);
+            }
 
             // [BELL] Remove order from bell when seller accepts or order is resolved.
             // Checked BEFORE the status-dedup guard so seller_accepted change is caught
@@ -355,8 +372,8 @@ class NotificationProvider extends ChangeNotifier {
             final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
             if ((sellerAcceptedNow && !sellerAcceptedBefore) ||
                 const [
-                  'awaiting_payment', 'confirmed', 'cancelled',
-                  'seller_rejected', 'delivered'
+                  'verification_failed', 'payment_failed', 'awaiting_payment', 
+                  'confirmed', 'cancelled', 'seller_rejected', 'delivered'
                 ].contains(newStatus)) {
               BellAlertService.instance.removePendingOrder(orderId);
             }
@@ -411,17 +428,21 @@ class NotificationProvider extends ChangeNotifier {
         ),
         callback: (payload) {
           final orderId = payload.newRecord['id'] as String?;
-          final amount =
-              (payload.newRecord['total_amount'] ?? 0.0).toDouble();
-          _add(AppNotification(
-            id: '${orderId}_new',
-            title: '🔔 New Order!',
-            body:
-                'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
-            orderId: orderId,
-          ));
-          // [BELL] Ring alert bell for new pending order
-          if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+          final status = payload.newRecord['status'] as String?;
+
+          if (status == 'awaiting_acceptance') {
+            final amount =
+                (payload.newRecord['total_amount'] ?? 0.0).toDouble();
+            _add(AppNotification(
+              id: '${orderId}_new',
+              title: '🔔 New Order!',
+              body:
+                  'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
+              orderId: orderId,
+            ));
+            // [BELL] Ring alert bell for new pending order
+            if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+          }
         },
       ).onPostgresChanges(
         event: PostgresChangeEvent.update,
@@ -435,16 +456,29 @@ class NotificationProvider extends ChangeNotifier {
         callback: (payload) {
           if (payload.newRecord.isEmpty) return;
           final newStatus = payload.newRecord['status'] as String?;
+          final oldStatus = payload.oldRecord['status'] as String?;
           final orderId = payload.newRecord['id'] as String?;
           if (orderId == null || newStatus == null) return;
+
+          // [BELL] Handle status progression (e.g., pending_verification -> awaiting_acceptance)
+          if (newStatus == 'awaiting_acceptance' && oldStatus != 'awaiting_acceptance') {
+            final amount = (payload.newRecord['total_amount'] ?? 0.0).toDouble();
+            _add(AppNotification(
+              id: '${orderId}_new',
+              title: '🔔 New Order!',
+              body: 'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
+              orderId: orderId,
+            ));
+            BellAlertService.instance.addPendingOrder(orderId);
+          }
 
           // [BELL] Remove order from bell when seller accepts or order is resolved.
           final sellerAcceptedNow    = payload.newRecord['seller_accepted'] == true;
           final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
           if ((sellerAcceptedNow && !sellerAcceptedBefore) ||
               const [
-                'awaiting_payment', 'confirmed', 'cancelled',
-                'seller_rejected', 'delivered'
+                'verification_failed', 'payment_failed', 'awaiting_payment', 
+                'confirmed', 'cancelled', 'seller_rejected', 'delivered'
               ].contains(newStatus)) {
             BellAlertService.instance.removePendingOrder(orderId);
           }
@@ -499,14 +533,21 @@ class NotificationProvider extends ChangeNotifier {
 
             final orderId = newRecord['id'] as String?;
             final newStatus = newRecord['status'] as String?;
+            final newPartnerId = newRecord['delivery_partner_id'] as String?;
 
             if (orderId == null || newStatus == null) return;
+            
+            // Check if the order was reassigned to someone else
+            if (newPartnerId != null && newPartnerId != partnerId) {
+              BellAlertService.instance.removePendingOrder(orderId);
+              return;
+            }
 
             // [BELL] Ring bell when payment confirmed (rider must go pick up).
-            // Stop when rider picks up, order is cancelled, or delivered.
+            // Stop when rider picks up, order is cancelled, delivered, or any other terminal/waiting state.
             if (newStatus == 'confirmed') {
               BellAlertService.instance.addPendingOrder(orderId);
-            } else if (const ['picked_up', 'cancelled', 'delivered'].contains(newStatus)) {
+            } else if (!const ['confirmed', 'preparing', 'ready_for_pickup'].contains(newStatus)) {
               BellAlertService.instance.removePendingOrder(orderId);
             }
 
@@ -610,11 +651,30 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   /// Called on user logout to fully tear down all subscriptions including FCM.
-  void clearFcmSubs() {
+  Future<void> clearFcmSubs() async {
     _fcmTokenSub?.cancel();
     _fcmTokenSub = null;
     _fcmMessageSub?.cancel();
     _fcmMessageSub = null;
+    
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('fcm_token_$userId');
+      if (token != null) {
+        await _supabase
+            .from('device_tokens')
+            .delete()
+            .eq('token', token)
+            .eq('user_id', userId);
+        await prefs.remove('fcm_token_$userId');
+        debugPrint('Deleted FCM token on logout for user: $userId');
+      }
+    } catch (e) {
+      debugPrint('Error deleting FCM token on logout: $e');
+    }
   }
 
   // ── Manage notifications ──────────────────────────────────────────────────
@@ -861,6 +921,16 @@ class NotificationProvider extends ChangeNotifier {
         return ('❌ Order Cancelled', 'Your order has been cancelled. No payment was taken.');
       case 'seller_rejected':
         return ('😔 Order Rejected', 'The shop could not accept your order. No payment was taken.');
+      case 'verification_failed':
+        return (
+          '🚫 Prescription Rejected',
+          'Your prescription was rejected by the admin. The order has been cancelled.'
+        );
+      case 'payment_failed':
+        return (
+          '❌ Payment Failed',
+          'Your payment could not be processed. Please try again.'
+        );
       default:
         return (null, null);
     }

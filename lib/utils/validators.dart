@@ -1,7 +1,7 @@
 class AppValidators {
   static String? email(String? value) {
     if (value == null || value.isEmpty) return 'Email is required';
-    final regex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final regex = RegExp(r'^[\w-\.\+]+@([\w-]+\.)+[\w-]{2,}$');
     if (!regex.hasMatch(value)) return 'Enter a valid email address';
     return null;
   }
@@ -14,8 +14,17 @@ class AppValidators {
 
   static String? phone(String? value) {
     if (value == null || value.isEmpty) return 'Phone number is required';
-    if (value.length != 10) return 'Enter valid 10-digit number';
-    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(value)) return 'Enter valid Indian mobile number';
+    
+    // Sanitize input: remove spaces, dashes, and +91/91 prefix
+    String sanitized = value.replaceAll(RegExp(r'[\s\-]'), '');
+    if (sanitized.startsWith('+91')) {
+      sanitized = sanitized.substring(3);
+    } else if (sanitized.startsWith('91') && sanitized.length == 12) {
+      sanitized = sanitized.substring(2);
+    }
+
+    if (sanitized.length != 10) return 'Enter valid 10-digit number';
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(sanitized)) return 'Enter valid Indian mobile number';
     return null;
   }
 

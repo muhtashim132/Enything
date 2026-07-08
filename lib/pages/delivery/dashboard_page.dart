@@ -676,6 +676,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (mounted) {
         if (pe.message.contains('ORDER_CANCELLED')) {
           _showSnack('⚠️ The customer just cancelled this order.', isError: true);
+        } else if (pe.message.contains('MAX_ORDERS_REACHED')) {
+          _showSnack('⚠️ You can only accept orders from up to 3 different customers at a time.', isError: true);
         } else {
           _showSnack(pe.message, isError: true);
         }

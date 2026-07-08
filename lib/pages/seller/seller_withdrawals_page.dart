@@ -85,13 +85,6 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
     }
   }
 
-  Future<String> _getShopId(String userId) async {
-    try {
-      final res = await _db.from('shops').select('id').eq('seller_id', userId).maybeSingle();
-      return res?['id'] ?? '';
-    } catch (_) { return ''; }
-  }
-
   Future<void> _submitRequest() async {
     if (!_formKey.currentState!.validate()) return;
 

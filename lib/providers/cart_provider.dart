@@ -103,11 +103,11 @@ class CartProvider extends ChangeNotifier {
     _safeAddPlatformListener();
   }
 
-  void _safeAddPlatformListener() {
+  void _safeAddPlatformListener([int retries = 0]) {
     if (PlatformConfigProvider.instance != null) {
       PlatformConfigProvider.instance!.addListener(notifyListeners);
-    } else {
-      Future.delayed(const Duration(milliseconds: 500), _safeAddPlatformListener);
+    } else if (retries < 10) {
+      Future.delayed(const Duration(milliseconds: 500), () => _safeAddPlatformListener(retries + 1));
     }
   }
 

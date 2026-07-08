@@ -138,6 +138,7 @@ class DeliveryCalculator {
   static String etaLabel(double distanceKm, int prepTimeMinutes) {
     final mins = etaMinutes(distanceKm, prepTimeMinutes);
     if (mins <= 0) return '< 5 mins';
+    if (mins <= 5) return 'Under 5 mins';
     if (mins > 90) return '90+ mins';
     // Show a ±5 min range, same as Zomato
     final lo = (mins ~/ 5) * 5;

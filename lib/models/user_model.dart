@@ -98,13 +98,13 @@ class UserModel {
   };
 
   String get initials {
-    final parts = fullName.trim().split(' ');
+    final trimmed = fullName.trim();
+    if (trimmed.isEmpty) return 'U';
+    final parts = trimmed.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
     if (parts.length >= 2) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    } else if (fullName.isNotEmpty) {
-      return fullName[0].toUpperCase();
     }
-    return 'U';
+    return parts[0][0].toUpperCase();
   }
 
   /// Human-readable label for a given role string

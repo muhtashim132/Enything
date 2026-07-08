@@ -31,7 +31,15 @@ class BellAlertService {
   bool get hasPendingOrders => _pendingOrderIds.isNotEmpty;
   int  get pendingCount     => _pendingOrderIds.length;
 
-  String? get _userId => Supabase.instance.client.auth.currentUser?.id;
+  String? get _userId {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isStarting = false;
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -41,7 +49,14 @@ class BellAlertService {
     if (_pendingOrderIds.contains(orderId)) return;
     _pendingOrderIds.add(orderId);
     debugPrint('[BellAlert] +order: $orderId | pending=${_pendingOrderIds.length}');
-    if (!_isPlaying) await _startBell();
+    if (!_isPlaying && !_isStarting) {
+      _isStarting = true;
+      try {
+        await _startBell();
+      } finally {
+        _isStarting = false;
+      }
+    }
   }
 
   /// Mark an order as resolved. Stops the bell when no pending orders remain.
@@ -98,6 +113,8 @@ class BellAlertService {
   // ── Internal ────────────────────────────────────────────────────────────────
 
   Future<void> _startBell() async {
+    if (_pendingOrderIds.isEmpty) return;
+
     final uid = _userId;
     final loop = uid != null
         ? await BellSettingsService.instance.isLoopBellEnabled(uid)
@@ -106,9 +123,22 @@ class BellAlertService {
         ? await BellSettingsService.instance.getCustomBellPath(uid)
         : null;
 
+    // Check if orders were removed while we were awaiting settings
+    if (_pendingOrderIds.isEmpty) {
+      _isPlaying = false;
+      return;
+    }
+
     // Dispose any previous player cleanly before creating a fresh one
     await _player?.stop();
     _player?.dispose();
+    
+    // Final check before instantiating new player
+    if (_pendingOrderIds.isEmpty) {
+      _isPlaying = false;
+      return;
+    }
+
     _player = AudioPlayer();
 
     try {
@@ -117,8 +147,8 @@ class BellAlertService {
         loop ? ReleaseMode.loop : ReleaseMode.release,
       );
 
-      await _playSource(_player!, customPath);
       _isPlaying = true;
+      await _playSource(_player!, customPath);
       debugPrint('[BellAlert] Bell started (loop=$loop, custom=$customPath)');
 
       // In single-ring mode, clear the playing flag once the sound ends

@@ -7,6 +7,8 @@ import 'dart:convert';
 import '../models/saved_address_model.dart';
 
 class LocationProvider extends ChangeNotifier {
+  SupabaseClient get _supabase => Supabase.instance.client;
+
   LatLng? _currentLocation;
   String _currentAddress = '';
   String _houseNumber = '';
@@ -182,7 +184,7 @@ class LocationProvider extends ChangeNotifier {
   /// Load all saved addresses for a user from the database
   Future<void> loadSavedAddresses(String userId) async {
     try {
-      final db = Supabase.instance.client;
+      final db = _supabase;
       final response = await db
           .from('saved_addresses')
           .select()
@@ -202,7 +204,7 @@ class LocationProvider extends ChangeNotifier {
   /// Add a new saved address
   Future<String?> addSavedAddress(SavedAddress addr) async {
     try {
-      final db = Supabase.instance.client;
+      final db = _supabase;
       // If this is the first address or marked default, clear others' default
       if (addr.isDefault || _savedAddresses.isEmpty) {
         await db.from('saved_addresses')
@@ -224,7 +226,7 @@ class LocationProvider extends ChangeNotifier {
   /// Update an existing saved address
   Future<String?> updateSavedAddress(SavedAddress addr) async {
     try {
-      final db = Supabase.instance.client;
+      final db = _supabase;
       if (addr.isDefault) {
         await db.from('saved_addresses')
             .update({'is_default': false})
@@ -244,7 +246,7 @@ class LocationProvider extends ChangeNotifier {
   /// Delete a saved address
   Future<String?> deleteSavedAddress(String addressId, String userId) async {
     try {
-      final db = Supabase.instance.client;
+      final db = _supabase;
       await db.from('saved_addresses').delete().eq('id', addressId);
       // Clear selection if the deleted address was selected
       if (_selectedAddress?.id == addressId) _selectedAddress = null;
@@ -260,7 +262,7 @@ class LocationProvider extends ChangeNotifier {
   /// Set a specific address as the default
   Future<void> setDefaultAddress(String addressId, String userId) async {
     try {
-      final db = Supabase.instance.client;
+      final db = _supabase;
       await db.from('saved_addresses')
           .update({'is_default': false})
           .eq('user_id', userId);
@@ -298,7 +300,7 @@ class LocationProvider extends ChangeNotifier {
     if (pin != null) _pincode = pin;
     notifyListeners();
     try {
-      final db = Supabase.instance.client;
+      final db = _supabase;
       // H5 FIX: Fetch existing address_home to merge rather than overwrite
       final existing = await db.from('customers').select('address_home').eq('id', userId).maybeSingle();
       Map<String, dynamic> currentAddressHome = {};
@@ -323,7 +325,7 @@ class LocationProvider extends ChangeNotifier {
 
   Future<void> loadAddressFromDb(String userId) async {
     try {
-      final db = Supabase.instance.client;
+      final db = _supabase;
       final response = await db.from('customers').select('address_home, landmark, pincode').eq('id', userId).maybeSingle();
       if (response != null) {
         if (response['address_home'] != null && response['address_home'] is Map) {
@@ -339,8 +341,7 @@ class LocationProvider extends ChangeNotifier {
   }
 
   double distanceTo(LatLng target) {
-
-    if (_currentLocation == null) return 0;
+    if (_currentLocation == null) return -1.0;
     const distance = Distance();
     return distance(_currentLocation!, target) / 1000;
   }
@@ -417,7 +418,7 @@ class LocationProvider extends ChangeNotifier {
   /// [userId] is the authenticated user's UUID.
   Future<void> syncLocationToDatabase(String role, String userId) async {
     if (_currentLocation == null) return;
-    final db = Supabase.instance.client;
+    final db = _supabase;
     final point =
         'POINT(${_currentLocation!.longitude} ${_currentLocation!.latitude})';
     try {

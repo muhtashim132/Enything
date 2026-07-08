@@ -105,8 +105,8 @@ class ShopModel {
       prepTimeMinutes: map['prep_time_minutes'] ?? 30,
       isVegOnly: map['is_veg_only'] ?? false,
       openingHours: map['opening_hours'],
-      openTime: map['open_time']?.toString().substring(0, 5), // e.g., '09:00' from '09:00:00'
-      closeTime: map['close_time']?.toString().substring(0, 5),
+      openTime: map['open_time']?.toString().padLeft(5, '0').substring(0, 5), // e.g., '09:00' from '09:00:00'
+      closeTime: map['close_time']?.toString().padLeft(5, '0').substring(0, 5),
       address: map['address'] ?? '',
       location: LatLng(lat, lng),
       category: map['category'] ??
