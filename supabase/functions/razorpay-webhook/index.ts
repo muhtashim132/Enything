@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
         .from("orders")
         .select("id, status")
         .eq("razorpay_payment_id", paymentId)
+        .limit(1)
         .maybeSingle();
 
       if (existing) {
@@ -73,6 +74,7 @@ Deno.serve(async (req) => {
         .from("orders")
         .select("id, status")
         .eq("razorpay_order_id", orderId)
+        .limit(1)
         .maybeSingle();
 
       if (pendingOrder && pendingOrder.status === "awaiting_payment") {
@@ -99,6 +101,7 @@ Deno.serve(async (req) => {
           .from("orders")
           .select("id, status")
           .eq("razorpay_order_id", orderId)
+          .limit(1)
           .maybeSingle();
 
         if (pendingOrder && pendingOrder.status === "awaiting_payment") {
@@ -119,20 +122,30 @@ Deno.serve(async (req) => {
       const refundId  = refund?.id;
 
       if (paymentId && refundId) {
-        // Only update if not already processed
-        const { data: order } = await supabaseAdmin
+        // Fetch all orders associated with this payment (multi-shop support)
+        const { data: orders } = await supabaseAdmin
           .from("orders")
-          .select("id, refund_id")
-          .eq("razorpay_payment_id", paymentId)
-          .maybeSingle();
+          .select("id, refund_id, refund_status, status")
+          .eq("razorpay_payment_id", paymentId);
 
-        if (order && !order.refund_id) {
-          await supabaseAdmin
-            .from("orders")
-            .update({ refund_id: refundId, refund_status: "processed" })
-            .eq("id", order.id);
+        if (orders && orders.length > 0) {
+          // Update all orders that haven't been marked as refunded yet
+          // 100x FIX: Only target orders that are explicitly marked for refunding or are completely cancelled
+          const terminalStates = ['cancelled', 'seller_rejected', 'payment_failed', 'timeout', 'shop_dispute_cancel', 'verification_failed'];
+          const idsToUpdate = orders
+            .filter((o: any) => !o.refund_id && (o.refund_status === 'processing' || terminalStates.includes(o.status)))
+            .map((o: any) => o.id);
+          
+          if (idsToUpdate.length > 0) {
+            await supabaseAdmin
+              .from("orders")
+              .update({ refund_id: refundId, refund_status: "processed" })
+              .in("id", idsToUpdate);
 
-          console.log(`Refund ${refundId} logged for order ${order.id} via webhook.`);
+            console.log(`Refund ${refundId} logged for ${idsToUpdate.length} orders via webhook.`);
+          } else {
+            console.log(`Refund ${refundId} already logged for all orders associated with payment ${paymentId}.`);
+          }
         }
       }
     }

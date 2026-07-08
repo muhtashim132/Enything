@@ -704,19 +704,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           _showSnack('⚠️ Too far from shop! You are ${(dist).toInt()}m away (max 300m).', isError: true);
           return;
         }
-        await _supabase.rpc('set_arrived_at_shop', params: {'p_order_id': order.id});
+        await _supabase.rpc('set_arrived_at_shop', params: {
+          'p_order_id': order.id,
+          'p_rider_lat': _riderLat,
+          'p_rider_lng': _riderLng,
+        });
       } else if (status == 'reassign' || status == 'reassign_disputed') {
-        double penalty = 0.0;
-        if (order.arrivedAtShopTime != null) {
-          final waitMinutes =
-              DateTime.now().difference(order.arrivedAtShopTime!).inMinutes;
-          final paidMinutes = math.max(0, math.min(10, waitMinutes - 10));
-          penalty = paidMinutes * 1.5;
-        }
+        // Penalty is now strictly calculated on the secure backend. No client payload required.
         await _supabase.rpc('reject_order_rider', params: {
           'p_order_id': order.id,
           'p_reason': 'rider_dropped',
-          'p_penalty': penalty,
           'p_disputed': status == 'reassign_disputed',
         });
 
