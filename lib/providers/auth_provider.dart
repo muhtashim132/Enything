@@ -6,6 +6,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/user_model.dart';
 import '../main.dart';
+import 'package:provider/provider.dart';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
+import 'cart_provider.dart';
+import 'favorites_provider.dart';
+import 'location_provider.dart';
+import 'coupon_provider.dart';
+import 'referral_provider.dart';
+import 'recently_viewed_provider.dart';
 
 class AuthProvider extends ChangeNotifier {
   SupabaseClient get _supabase => Supabase.instance.client;
@@ -501,12 +510,18 @@ class AuthProvider extends ChangeNotifier {
     return '$digits@auth.enything.app';
   }
 
-  String _passwordFromPhone(String phone) {
-    if (phone.contains('9999999996')) {
-      return 'Dummy123';
-    }
+  String _legacyPasswordFromPhone(String phone) {
+    if (phone.contains('9999999996')) return 'Dummy123';
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return 'Enything$digits#Auth2025';
+  }
+
+  String _passwordFromPhone(String phone) {
+    if (phone.contains('9999999996')) return 'Dummy123';
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final bytes = utf8.encode('Enything_${digits}_Secured#2026');
+    final digest = sha256.convert(bytes);
+    return 'EnY\$${digest.toString().substring(0, 16)}';
   }
 
   // S4 FIX: Magic test numbers are ONLY active in debug builds EXCEPT for reviewer numbers.
@@ -615,29 +630,49 @@ class AuthProvider extends ChangeNotifier {
       // 2️⃣ Create / sign-in to Supabase Auth using phone-derived credentials
       final email = _emailFromPhone(phone);
       final password = _passwordFromPhone(phone);
+      final legacyPassword = _legacyPasswordFromPhone(phone);
 
       String? userId;
       try {
-        // Attempt sign-in first (existing user)
+        // Attempt sign-in first (new secure password)
         final signInRes = await _supabase.auth.signInWithPassword(
           email: email,
           password: password,
         );
         userId = signInRes.user?.id;
       } on AuthException {
-        // User doesn't exist yet — create them
         try {
-          final signUpRes = await _supabase.auth.signUp(
+          // Attempt sign-in with legacy password
+          final legacyRes = await _supabase.auth.signInWithPassword(
             email: email,
-            password: password,
-            data: {'phone': phone},
+            password: legacyPassword,
           );
-          userId = signUpRes.user?.id;
-        } on AuthException catch (e) {
-          _error = e.message;
-          _isLoading = false;
-          notifyListeners();
-          return null;
+          userId = legacyRes.user?.id;
+          
+          // Transparently upgrade password
+          if (userId != null) {
+            try {
+              await _supabase.auth.updateUser(UserAttributes(password: password));
+            } catch (e) {
+              debugPrint('Failed to upgrade legacy password: $e');
+              // Proceed anyway, they are logged in!
+            }
+          }
+        } on AuthException {
+          // User doesn't exist yet — create them
+          try {
+            final signUpRes = await _supabase.auth.signUp(
+              email: email,
+              password: password,
+              data: {'phone': phone},
+            );
+            userId = signUpRes.user?.id;
+          } on AuthException catch (e) {
+            _error = e.message;
+            _isLoading = false;
+            notifyListeners();
+            return null;
+          }
         }
       }
 
@@ -1193,6 +1228,29 @@ class AuthProvider extends ChangeNotifier {
     _mockUserId = null;
     _isAdminVerified = false;
     _adminData = null;
+
+    try {
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        context.read<CartProvider>().clear();
+        context.read<FavoritesProvider>().clear();
+        context.read<LocationProvider>().clear();
+        context.read<CouponProvider>().clearCoupon();
+        context.read<ReferralProvider>().reset();
+        context.read<RecentlyViewedProvider>().clear();
+      }
+    } catch (_) {}
+
+    // STRESS-3 FIX: Fallback SharedPreferences wipe in case context was null
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('cart_v2');
+      await prefs.remove('cart_items');
+      await prefs.remove('recently_viewed');
+      await prefs.remove('favorite_shops');
+      await prefs.remove('favorite_products');
+    } catch (_) {}
+
     notifyListeners();
   }
 }

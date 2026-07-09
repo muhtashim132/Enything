@@ -33,7 +33,7 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  bool _isProcessing = false;
+  final ValueNotifier<bool> _isProcessing = ValueNotifier<bool>(false);
   bool _isCreatingOrder =
       false; // O1 FIX: Idempotency lock — prevents duplicate order creation
   final _notesController = TextEditingController();
@@ -111,6 +111,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void dispose() {
     _notesController.dispose();
+    _isProcessing.dispose();
     super.dispose();
   }
 
@@ -183,7 +184,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // ── Step 1: Save order as awaiting_acceptance (NO payment yet) ────────────
   // Payment is triggered ONLY after BOTH seller AND rider accept (within 1 min).
   Future<void> _placeOrder() async {
-    setState(() => _isProcessing = true);
+    _isProcessing.value = true;
     final cart = context.read<CartProvider>();
     final location = context.read<LocationProvider>();
 
@@ -212,7 +213,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           duration: const Duration(seconds: 4),
         ),
       );
-      setState(() => _isProcessing = false);
+      _isProcessing.value = false;
       return;
     }
 
@@ -229,7 +230,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      setState(() => _isProcessing = false);
+      _isProcessing.value = false;
       return;
     }
 
@@ -249,7 +250,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             margin: const EdgeInsets.all(16),
           ),
         );
-        setState(() => _isProcessing = false);
+        _isProcessing.value = false;
       }
     }
   }
@@ -598,8 +599,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
       rethrow;
     } finally {
-      _isCreatingOrder = false; // O1 FIX: always release lock
-      if (mounted) setState(() => _isProcessing = false);
+      _isCreatingOrder = false;
+      if (mounted) _isProcessing.value = false;
     }
   }
 
@@ -1196,30 +1197,35 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ),
                     ],
                   ),
-                  child: ElevatedButton(
-                    onPressed: _isProcessing ? null : _placeOrder,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: _isProcessing
-                        ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2.5),
-                          )
-                        : Text(
-                            'CONFIRM ORDER',
-                            style: GoogleFonts.outfit(
-                                fontSize: 16,
-                                height: 1.2,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700),
-                          ),
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: _isProcessing,
+                    builder: (context, isProcessing, _) {
+                      return ElevatedButton(
+                        onPressed: isProcessing ? null : _placeOrder,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: isProcessing
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2.5),
+                              )
+                            : Text(
+                                'CONFIRM ORDER',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 16,
+                                    height: 1.2,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700),
+                              ),
+                      );
+                    },
                   ),
                 ),
               ],

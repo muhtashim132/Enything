@@ -19,14 +19,16 @@ class CartItem {
   double get totalPrice => (selectedVariant?.price ?? product.price) * quantity;
 
   double get weightKg {
-    final w = product.weightPerUnit ?? 0.5;
-    switch (product.unitType) {
+    final type = product.unitType.toLowerCase();
+    final defaultW = (type == 'kg' || type == 'liter') ? 1.0 : 0.5;
+    final w = product.weightPerUnit ?? defaultW;
+    switch (type) {
       case 'kg': return w * quantity;
       case 'grams': return (w / 1000) * quantity;
       case 'liter': return w * quantity;
       case 'ml': return (w / 1000) * quantity;
       case 'pieces': return w * quantity;
-      default: return 0.5 * quantity;
+      default: return defaultW * quantity;
     }
   }
 }

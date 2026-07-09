@@ -18,6 +18,7 @@
 //   gstRateSnapshot  — Frozen {category: rate} map used at checkout.
 // ============================================================================
 
+import 'dart:math' as math;
 class OrderModel {
   final String id;
   final String customerId;
@@ -301,13 +302,11 @@ class OrderModel {
   /// (where grandTotalCollected == 0) display the correct amount.
   double get grandTotal => grandTotalCollected > 0
       ? grandTotalCollected
-      : totalAmount +
+      : math.max(0.0, totalAmount +
           gstItemTotal +
           deliveryCharges +
-          multiShopSurcharge +
-          platformFee +
-          smallCartFee +
-          heavyOrderFee;
+          platformFee -
+          couponDiscount);
 
   /// Total GST across the entire order (items + delivery + platform).
   double get totalGstInOrder => gstItemTotal + gstDelivery + gstPlatform;

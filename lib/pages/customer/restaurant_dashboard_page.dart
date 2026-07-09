@@ -57,7 +57,7 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
   void _onScroll() {
     final collapsed = _scrollController.offset > 200;
     if (collapsed != _headerCollapsed) {
-      setState(() => _headerCollapsed = collapsed);
+      _headerCollapsed = collapsed;
     }
   }
 
@@ -73,7 +73,8 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
           .from('products')
           .select()
           .eq('shop_id', widget.shopId)
-          .eq('is_available', true);
+          .eq('is_available', true)
+          .limit(100);
 
       if (mounted) {
         setState(() {
@@ -604,12 +605,14 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: product.displayImage.isNotEmpty
-                    ? Image.network(
-                        product.displayImage,
+                    ? CachedNetworkImage(
+                        imageUrl: product.displayImage,
                         width: 100,
                         height: 90,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _foodImgPlaceholder(),
+                        memCacheWidth: 300,
+                        errorWidget: (_, __, ___) => _foodImgPlaceholder(),
+                        placeholder: (_, __) => _foodImgPlaceholder(),
                       )
                     : _foodImgPlaceholder(),
               ),

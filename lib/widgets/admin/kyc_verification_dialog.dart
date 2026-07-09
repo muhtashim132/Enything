@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class KycVerificationDialog extends StatefulWidget {
   final String title;
@@ -320,18 +321,17 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
               tag: url,
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                child: Image.network(
-                  url,
+                child: CachedNetworkImage(
+                  imageUrl: url,
                   height: 100,
                   fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      height: 100,
-                      color: Colors.white.withValues(alpha: 0.02),
-                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                    );
-                  },
+                  memCacheWidth: 400,
+                  placeholder: (context, url) => Container(
+                    height: 100,
+                    color: Colors.white.withValues(alpha: 0.02),
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.white24),
                 ),
               ),
             ),
@@ -376,7 +376,11 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                 maxScale: 4.0,
                 child: Hero(
                   tag: url,
-                  child: Image.network(url, fit: BoxFit.contain),
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.contain,
+                    memCacheWidth: 1200,
+                  ),
                 ),
               ),
               Positioned(

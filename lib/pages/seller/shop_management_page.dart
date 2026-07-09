@@ -5,6 +5,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../utils/responsive_layout.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
@@ -399,7 +400,11 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                                       : _bannerCtrl.text.isNotEmpty
                                           ? ClipRRect(
                                               borderRadius: BorderRadius.circular(15),
-                                              child: Image.network(_bannerCtrl.text, fit: BoxFit.cover),
+                                              child: CachedNetworkImage(
+                                                imageUrl: _bannerCtrl.text, 
+                                                fit: BoxFit.cover,
+                                                memCacheWidth: 600,
+                                              ),
                                             )
                                           : Column(
                                               mainAxisAlignment: MainAxisAlignment.center,

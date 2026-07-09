@@ -258,7 +258,7 @@ class CartProvider extends ChangeNotifier {
       final remaining = 3 - shops.length;
       final msg = remaining > 0
           ? '${shops.length} shop${shops.length > 1 ? 's' : ''} selected, $remaining remaining if needed'
-          : 'Max 3 shops selected';
+          : 'Added successfully. Cart is full (Max 3 shops).';
           
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -333,6 +333,7 @@ class CartProvider extends ChangeNotifier {
   /// Restores the cart from shared_preferences.
   /// Call this once during app startup (e.g., after MultiProvider is set up).
   Future<void> loadCart() async {
+    _saveDebounce?.cancel();
     try {
       final prefs = await SharedPreferences.getInstance();
       String? raw = prefs.getString(_cartKey);
@@ -345,7 +346,7 @@ class CartProvider extends ChangeNotifier {
       if (raw == null || raw.isEmpty) return;
 
       final List<dynamic> list = jsonDecode(raw) as List<dynamic>;
-      _items.clear();
+      final parsedList = <CartItem>[];
       for (final entry in list) {
         final map = entry as Map<String, dynamic>;
         final product = _productFromJson(map['product'] as Map<String, dynamic>);
@@ -354,7 +355,7 @@ class CartProvider extends ChangeNotifier {
         final instructions = map['special_instructions'] as String?;
         final variantMap = map['selected_variant'] as Map<String, dynamic>?;
         
-        _items.add(CartItem(
+        parsedList.add(CartItem(
           product: product,
           shop: shop,
           quantity: qty,
@@ -362,6 +363,8 @@ class CartProvider extends ChangeNotifier {
           selectedVariant: variantMap != null ? ProductVariant.fromMap(variantMap) : null,
         ));
       }
+      _items.clear();
+      _items.addAll(parsedList);
       notifyListeners();
     } catch (e) {
       debugPrint('CartProvider: failed to load cart: $e');

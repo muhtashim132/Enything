@@ -65,6 +65,19 @@ class LocationProvider extends ChangeNotifier {
   bool get permissionGranted => _permissionGranted;
   bool get hasLocation => _currentLocation != null;
 
+  void clear() {
+    _currentLocation = null;
+    _currentAddress = '';
+    _houseNumber = '';
+    _landmark = '';
+    _pincode = '';
+    _savedAddresses.clear();
+    _matchedAddress = null;
+    _selectedAddress = null;
+    _permissionGranted = false;
+    notifyListeners();
+  }
+
   Future<bool> requestLocation() async {
     _isLoading = true;
     notifyListeners();

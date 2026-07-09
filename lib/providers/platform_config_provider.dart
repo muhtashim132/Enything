@@ -70,80 +70,92 @@ class PlatformConfigProvider extends ChangeNotifier {
   String? get error => _error;
 
   // ── Load Settings ────────────────────────────────────────────
-  Future<void> load() async {
-    _loading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final data = await _db.from('platform_config').select('key, value');
-      for (final row in (data as List)) {
-        final key = row['key'] as String;
-        final valRaw = row['value'];
-        final val = double.tryParse(valRaw.toString()) ?? 0.0;
-
-        switch (key) {
-          case 'commission_percent':
-            _commissionPercent = val;
-            break;
-          case 'platform_fee':
-            _platformFee = val;
-            break;
-          case 'small_cart_fee':
-            _smallCartFee = val;
-            break;
-          case 'small_cart_threshold':
-            _smallCartThreshold = val;
-            break;
-          case 'heavy_order_fee':
-            _heavyOrderFee = val;
-            break;
-          case 'heavy_order_threshold_kg':
-            _heavyOrderThresholdKg = val;
-            break;
-          case 'max_delivery_radius_km':
-            _maxDeliveryRadiusKm = val;
-            break;
-          case 'delivery_rate_per_km':
-            _deliveryRatePerKm = val;
-            break;
-          case 'wait_penalty_per_min':
-            _waitPenaltyPerMin = val;
-            break;
-          case 'referral_bonus_amount':
-            _referralBonusAmount = val;
-            break;
-          case 'delivery_gst_rate':
-            _deliveryGstRate = val;
-            break;
-          case 'platform_fee_gst_rate':
-            _platformFeeGstRate = val;
-            break;
-        }
-
-        if (key.startsWith('commission_percent_')) {
-          final category = key.replaceFirst('commission_percent_', '');
-          _categoryCommissionOverrides[category] = val;
-        }
-
-        if (key.startsWith('wait_penalty_per_min_')) {
-          final category = key.replaceFirst('wait_penalty_per_min_', '');
-          _categoryWaitPenaltyOverrides[category] = val;
-        }
-      }
-
-      // ── Load Tax Config ──────────────────────────────────────────
-      final taxData = await _db.from('tax_config').select();
-      _taxConfigCache.clear();
-      for (final row in (taxData as List)) {
-        _taxConfigCache[row['category'] as String] = Map<String, dynamic>.from(row);
-      }
-    } catch (e) {
-      debugPrint('Failed to load platform config: $e');
-      _error = 'Failed to load live config, using defaults.';
-    } finally {
-      _loading = false;
+  Future<void> load({int maxRetries = 3}) async {
+    if (_loading) return; // Prevent concurrent loops
+    int attempts = 0;
+    while (attempts < maxRetries) {
+      _loading = true;
+      _error = null;
       notifyListeners();
+
+      try {
+        final data = await _db.from('platform_config').select('key, value');
+        for (final row in (data as List)) {
+          final key = row['key'] as String;
+          final valRaw = row['value'];
+          final val = double.tryParse(valRaw.toString()) ?? 0.0;
+
+          switch (key) {
+            case 'commission_percent':
+              _commissionPercent = val;
+              break;
+            case 'platform_fee':
+              _platformFee = val;
+              break;
+            case 'small_cart_fee':
+              _smallCartFee = val;
+              break;
+            case 'small_cart_threshold':
+              _smallCartThreshold = val;
+              break;
+            case 'heavy_order_fee':
+              _heavyOrderFee = val;
+              break;
+            case 'heavy_order_threshold_kg':
+              _heavyOrderThresholdKg = val;
+              break;
+            case 'max_delivery_radius_km':
+              _maxDeliveryRadiusKm = val;
+              break;
+            case 'delivery_rate_per_km':
+              _deliveryRatePerKm = val;
+              break;
+            case 'wait_penalty_per_min':
+              _waitPenaltyPerMin = val;
+              break;
+            case 'referral_bonus_amount':
+              _referralBonusAmount = val;
+              break;
+            case 'delivery_gst_rate':
+              _deliveryGstRate = val;
+              break;
+            case 'platform_fee_gst_rate':
+              _platformFeeGstRate = val;
+              break;
+          }
+
+          if (key.startsWith('commission_percent_')) {
+            final category = key.replaceFirst('commission_percent_', '');
+            _categoryCommissionOverrides[category] = val;
+          }
+
+          if (key.startsWith('wait_penalty_per_min_')) {
+            final category = key.replaceFirst('wait_penalty_per_min_', '');
+            _categoryWaitPenaltyOverrides[category] = val;
+          }
+        }
+
+        // ── Load Tax Config ──────────────────────────────────────────
+        final taxData = await _db.from('tax_config').select();
+        _taxConfigCache.clear();
+        for (final row in (taxData as List)) {
+          _taxConfigCache[row['category'] as String] = Map<String, dynamic>.from(row);
+        }
+        
+        _loading = false;
+        notifyListeners();
+        return; // Success
+      } catch (e) {
+        attempts++;
+        debugPrint('Failed to load platform config (Attempt $attempts): $e');
+        if (attempts >= maxRetries) {
+          _error = 'Failed to load live config, using defaults.';
+          _loading = false;
+          notifyListeners();
+        } else {
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
     }
   }
 

@@ -168,7 +168,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   // Banner carousel
   final PageController _bannerController = PageController();
-  int _bannerIndex = 0;
+  final ValueNotifier<int> _bannerIndex = ValueNotifier<int>(0);
   Timer? _bannerTimer;
   Timer? _searchDebounce;
   bool _pendingLocationUpdate = false;
@@ -225,7 +225,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     // Auto-scroll banner every 4 seconds
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || !_bannerController.hasClients) return;
-      final next = (_bannerIndex + 1) % 3;
+      final next = (_bannerIndex.value + 1) % 3;
       _bannerController.animateToPage(
         next,
         duration: const Duration(milliseconds: 450),
@@ -409,7 +409,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       List<dynamic> productsByCat = [];
 
       if (matchedSubcategories.isNotEmpty) {
-        shopsByCat = await _supabase.from('shops').select().inFilter('category', matchedSubcategories);
+        shopsByCat = await _supabase.from('shops').select().inFilter('category', matchedSubcategories).limit(50);
         productsByCat = await _supabase.from('products').select('*, shops(*)').inFilter('category', matchedSubcategories).limit(100);
       }
 
@@ -711,13 +711,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           .from('shops')
           .select()
           .inFilter('category', subcategories)
-          .limit(1000); 
+          .limit(100); 
 
       final productsResponse = await _supabase
           .from('products')
           .select('*, shops(*)')
           .inFilter('category', subcategories)
-          .limit(1000);
+          .limit(100);
 
       if (mounted) {
         List<String>? effectiveCategories;
@@ -1765,7 +1765,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           height: 130, // Reduced from 190
           child: PageView.builder(
             controller: _bannerController,
-            onPageChanged: (i) => setState(() => _bannerIndex = i),
+            onPageChanged: (i) => _bannerIndex.value = i,
             itemCount: slides.length,
             itemBuilder: (_, i) {
               final s = slides[i];
@@ -1875,33 +1875,38 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         ),
         const SizedBox(height: 12),
         // Premium animated pill indicator
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(slides.length, (i) {
-            final active = _bannerIndex == i;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: active ? 22 : 7,
-              height: 7,
-              decoration: BoxDecoration(
-                gradient: active
-                    ? const LinearGradient(
-                        colors: [Color(0xFF1E3FD8), Color(0xFF3D6BFF)])
-                    : null,
-                color: active ? null : AppColors.textLight,
-                borderRadius: BorderRadius.circular(4),
-                boxShadow: active
-                    ? [
-                        BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.5),
-                            blurRadius: 8)
-                      ]
-                    : [],
-              ),
+        ValueListenableBuilder<int>(
+          valueListenable: _bannerIndex,
+          builder: (context, bannerIndex, _) {
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(slides.length, (i) {
+                final active = bannerIndex == i;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: active ? 22 : 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    gradient: active
+                        ? const LinearGradient(
+                            colors: [Color(0xFF1E3FD8), Color(0xFF3D6BFF)])
+                        : null,
+                    color: active ? null : AppColors.textLight,
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: active
+                        ? [
+                            BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.5),
+                                blurRadius: 8)
+                          ]
+                        : [],
+                  ),
+                );
+              }),
             );
-          }),
+          },
         ),
       ],
     );
