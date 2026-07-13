@@ -198,8 +198,15 @@ class CartProvider extends ChangeNotifier {
 
   double get heavyOrderFee {
     final threshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
-    final fee = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
-    return totalWeight > threshold ? fee : 0.0;
+    final feePerKg = PlatformConfigProvider.instance?.heavyOrderFeePerKg ?? PaymentConfig.heavyOrderFee;
+    
+    if (totalWeight > threshold) {
+      // Safely apply penalty only to the weight strictly above the configured threshold
+      final extraWeight = (totalWeight - threshold).ceil();
+      final multiplier = extraWeight > 0 ? extraWeight : 0;
+      return feePerKg * multiplier;
+    }
+    return 0.0;
   }
 
   /// True when items come from more than one shop.

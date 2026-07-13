@@ -56,6 +56,35 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
     }
     setState(() => _loading = true);
     final fullPhone = '$_countryCode$phone';
+
+    // Auto-login for reviewer magic numbers
+    final isReviewer = fullPhone.contains('9999999996') || 
+                       fullPhone.contains('9999999997') || 
+                       fullPhone.contains('9999999998');
+    
+    if (isReviewer) {
+       final auth = context.read<AuthProvider>();
+       final res = await auth.verifyPhoneOtp(fullPhone, "123456", preferredRole: null);
+       if (!mounted) return;
+       setState(() => _loading = false);
+       if (res != null) {
+          String roleToNavigate = 'customer';
+          if (fullPhone.contains('9999999997')) roleToNavigate = 'seller';
+          if (fullPhone.contains('9999999998')) roleToNavigate = 'delivery_partner';
+          
+          if (roleToNavigate == 'seller') {
+             Navigator.pushNamedAndRemoveUntil(context, AppRoutes.sellerDashboard, (_) => false);
+          } else if (roleToNavigate == 'delivery_partner') {
+             Navigator.pushNamedAndRemoveUntil(context, AppRoutes.deliveryDashboard, (_) => false);
+          } else {
+             Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (_) => false);
+          }
+       } else {
+          _showSnack(auth.error ?? 'Login failed', isError: true);
+       }
+       return;
+    }
+
     final err =
         await context.read<AuthProvider>().sendPhoneOtp(fullPhone);
     if (!mounted) return;

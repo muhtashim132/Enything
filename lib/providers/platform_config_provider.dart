@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/tax_config.dart';
@@ -16,7 +18,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   double _platformFee = 15.0;
   double _smallCartFee = 15.0;
   double _smallCartThreshold = 99.0;
-  double _heavyOrderFee = 20.0;
+  double _heavyOrderFeePerKg = 20.0;
   double _heavyOrderThresholdKg = 10.0;
   double _maxDeliveryRadiusKm = 15.0;
   double _deliveryRatePerKm = 10.0;
@@ -31,8 +33,20 @@ class PlatformConfigProvider extends ChangeNotifier {
   // Cache for tax_config table (category -> row data)
   final Map<String, Map<String, dynamic>> _taxConfigCache = {};
 
+  RealtimeChannel? _platformConfigChannel;
+  RealtimeChannel? _taxConfigChannel;
+  Timer? _debounceTimer;
+
   bool _loading = false;
+  bool _isFirstLoad = true;
   String? _error;
+
+  void _debouncedNotifyListeners() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      notifyListeners();
+    });
+  }
 
   // ── Getters ──────────────────────────────────────────────────
   double get commissionPercent => _commissionPercent;
@@ -53,7 +67,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   double get platformFee => _platformFee;
   double get smallCartFee => _smallCartFee;
   double get smallCartThreshold => _smallCartThreshold;
-  double get heavyOrderFee => _heavyOrderFee;
+  double get heavyOrderFeePerKg => _heavyOrderFeePerKg;
   double get heavyOrderThresholdKg => _heavyOrderThresholdKg;
   double get maxDeliveryRadiusKm => _maxDeliveryRadiusKm;
   double get deliveryRatePerKm => _deliveryRatePerKm;
@@ -72,6 +86,10 @@ class PlatformConfigProvider extends ChangeNotifier {
   // ── Load Settings ────────────────────────────────────────────
   Future<void> load({int maxRetries = 3}) async {
     if (_loading) return; // Prevent concurrent loops
+    
+    // Always guarantee subscriptions boot up first so network recovery can be caught!
+    _setupRealtimeSubscriptions();
+
     int attempts = 0;
     while (attempts < maxRetries) {
       _loading = true;
@@ -98,8 +116,8 @@ class PlatformConfigProvider extends ChangeNotifier {
             case 'small_cart_threshold':
               _smallCartThreshold = val;
               break;
-            case 'heavy_order_fee':
-              _heavyOrderFee = val;
+            case 'heavy_order_fee_per_kg':
+              _heavyOrderFeePerKg = val;
               break;
             case 'heavy_order_threshold_kg':
               _heavyOrderThresholdKg = val;
@@ -149,7 +167,7 @@ class PlatformConfigProvider extends ChangeNotifier {
         attempts++;
         debugPrint('Failed to load platform config (Attempt $attempts): $e');
         if (attempts >= maxRetries) {
-          _error = 'Failed to load live config, using defaults.';
+          _error = 'No internet connection. Using offline pricing. Prices will update automatically when connection is restored.';
           _loading = false;
           notifyListeners();
         } else {
@@ -157,6 +175,74 @@ class PlatformConfigProvider extends ChangeNotifier {
         }
       }
     }
+  }
+
+  void _setupRealtimeSubscriptions() {
+    _platformConfigChannel ??= _db
+        .channel('public:platform_config')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'platform_config',
+          callback: (payload) {
+            final newRow = payload.newRecord;
+            if (newRow.isNotEmpty) {
+              final key = newRow['key'] as String;
+              final valRaw = newRow['value'];
+              final val = double.tryParse(valRaw.toString()) ?? 0.0;
+              _setValue(key, val);
+            } else if (payload.oldRecord.isNotEmpty) {
+              final key = payload.oldRecord['key'] as String;
+              _removeValue(key);
+            }
+            _debouncedNotifyListeners();
+          },
+        )
+        .subscribe((status, [error]) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            if (_isFirstLoad) {
+              _isFirstLoad = false;
+              return;
+            }
+            final jitterMs = Random().nextInt(3000);
+            Future.delayed(Duration(milliseconds: jitterMs), () => load()); // Re-sync any gaps missed while offline with jitter
+          }
+        });
+
+    _taxConfigChannel ??= _db
+        .channel('public:tax_config')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'tax_config',
+          callback: (payload) {
+            final newRow = payload.newRecord;
+            if (newRow.isNotEmpty) {
+               _taxConfigCache[newRow['category'] as String] = Map<String, dynamic>.from(newRow);
+            } else if (payload.oldRecord.isNotEmpty) {
+               _taxConfigCache.remove(payload.oldRecord['category'] as String);
+            }
+            _debouncedNotifyListeners();
+          },
+        )
+        .subscribe((status, [error]) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            if (_isFirstLoad) {
+              _isFirstLoad = false;
+              return;
+            }
+            final jitterMs = Random().nextInt(3000);
+            Future.delayed(Duration(milliseconds: jitterMs), () => load()); // Re-sync any gaps missed while offline with jitter
+          }
+        });
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    if (_platformConfigChannel != null) _db.removeChannel(_platformConfigChannel!);
+    if (_taxConfigChannel != null) _db.removeChannel(_taxConfigChannel!);
+    super.dispose();
   }
 
   // ── GST Rate Helper (DB-driven) ──────────────────────────────────────────
@@ -352,7 +438,7 @@ class PlatformConfigProvider extends ChangeNotifier {
       case 'platform_fee': return _platformFee;
       case 'small_cart_fee': return _smallCartFee;
       case 'small_cart_threshold': return _smallCartThreshold;
-      case 'heavy_order_fee': return _heavyOrderFee;
+      case 'heavy_order_fee_per_kg': return _heavyOrderFeePerKg;
       case 'heavy_order_threshold_kg': return _heavyOrderThresholdKg;
       case 'max_delivery_radius_km': return _maxDeliveryRadiusKm;
       case 'delivery_rate_per_km': return _deliveryRatePerKm;
@@ -382,7 +468,7 @@ class PlatformConfigProvider extends ChangeNotifier {
       case 'platform_fee': _platformFee = val; break;
       case 'small_cart_fee': _smallCartFee = val; break;
       case 'small_cart_threshold': _smallCartThreshold = val; break;
-      case 'heavy_order_fee': _heavyOrderFee = val; break;
+      case 'heavy_order_fee_per_kg': _heavyOrderFeePerKg = val; break;
       case 'heavy_order_threshold_kg': _heavyOrderThresholdKg = val; break;
       case 'max_delivery_radius_km': _maxDeliveryRadiusKm = val; break;
       case 'delivery_rate_per_km': _deliveryRatePerKm = val; break;
@@ -396,10 +482,28 @@ class PlatformConfigProvider extends ChangeNotifier {
     if (key.startsWith('commission_percent_')) {
       final cat = key.replaceFirst('commission_percent_', '');
       _categoryCommissionOverrides.remove(cat);
+      return;
     }
     if (key.startsWith('wait_penalty_per_min_')) {
       final cat = key.replaceFirst('wait_penalty_per_min_', '');
       _categoryWaitPenaltyOverrides.remove(cat);
+      return;
+    }
+    
+    // Reset base configurations to default if deleted
+    switch (key) {
+      case 'commission_percent': _commissionPercent = 5.0; break;
+      case 'wait_penalty_per_min': _waitPenaltyPerMin = 2.0; break;
+      case 'platform_fee': _platformFee = 15.0; break;
+      case 'small_cart_fee': _smallCartFee = 15.0; break;
+      case 'small_cart_threshold': _smallCartThreshold = 99.0; break;
+      case 'heavy_order_fee_per_kg': _heavyOrderFeePerKg = 20.0; break;
+      case 'heavy_order_threshold_kg': _heavyOrderThresholdKg = 10.0; break;
+      case 'max_delivery_radius_km': _maxDeliveryRadiusKm = 15.0; break;
+      case 'delivery_rate_per_km': _deliveryRatePerKm = 10.0; break;
+      case 'referral_bonus_amount': _referralBonusAmount = 50.0; break;
+      case 'delivery_gst_rate': _deliveryGstRate = 0.18; break;
+      case 'platform_fee_gst_rate': _platformFeeGstRate = 0.18; break;
     }
   }
 }

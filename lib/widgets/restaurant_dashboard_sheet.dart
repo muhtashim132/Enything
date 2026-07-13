@@ -63,7 +63,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
           .from('products')
           .select()
           .eq('shop_id', widget.shopId)
-          .eq('is_available', true);
+          .eq('is_available', true)
+          .limit(100);
 
       if (mounted) {
         setState(() {

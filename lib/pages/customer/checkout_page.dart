@@ -53,37 +53,87 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     try {
       final productIds = cart.items.map((i) => i.product.id).toList();
+      // Phase 25 Fix: Deep join with shops to verify shop is still active, and fetch variants/price to check spoofing.
       final latestProducts = await Supabase.instance.client
           .from('products')
-          .select('id, name, is_available, total_quantity')
+          .select('id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
           .inFilter('id', productIds);
 
-      final outOfStockItems = <String>[];
+      final issues = <String>[];
 
       for (var cartItem in cart.items) {
         final dbProduct = latestProducts
             .where((p) => p['id'] == cartItem.product.id)
             .firstOrNull;
-        if (dbProduct == null || dbProduct['is_available'] == false) {
-          outOfStockItems.add(cartItem.product.name);
-        } else if (dbProduct['total_quantity'] != null &&
+            
+        if (dbProduct == null) {
+          issues.add("${cartItem.product.name} is no longer available.");
+          continue;
+        }
+        
+        // 1. Ghost Kitchens II (Banned Shop Checkout) Guard
+        if (dbProduct['shops'] != null && dbProduct['shops']['is_active'] == false) {
+          issues.add("${dbProduct['shops']['name']} is currently not accepting orders.");
+          continue;
+        }
+
+        // 2. Availability Guard
+        if (dbProduct['is_available'] == false) {
+          issues.add("${cartItem.product.name} is currently out of stock.");
+          continue;
+        }
+        
+        // 3. Stock Quantity Guard
+        if (dbProduct['total_quantity'] != null &&
             dbProduct['total_quantity'] < cartItem.quantity) {
-          outOfStockItems.add(cartItem.product.name);
+          issues.add("Only ${dbProduct['total_quantity']} units of ${cartItem.product.name} are available.");
+          continue;
+        }
+        
+        // 4. Cart Price Spoofing Guard
+        double freshPrice = (dbProduct['price'] ?? 0.0).toDouble();
+        
+        if (cartItem.selectedVariant != null) {
+          bool variantFound = false;
+          if (dbProduct['variants'] != null) {
+            final variantsList = dbProduct['variants'] as List;
+            for (var v in variantsList) {
+              if (v['name'] == cartItem.selectedVariant!.name) {
+                freshPrice = (v['price'] ?? 0.0).toDouble();
+                if (v['is_available'] == false) {
+                  issues.add("Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is out of stock.");
+                }
+                variantFound = true;
+                break;
+              }
+            }
+          }
+          if (!variantFound) {
+             issues.add("Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is no longer available.");
+             continue;
+          }
+        }
+        
+        double cartPrice = cartItem.selectedVariant?.price ?? cartItem.product.price;
+        if ((freshPrice - cartPrice).abs() > 0.01) {
+           issues.add("Price changed for ${cartItem.product.name} (from ₹${cartPrice.toStringAsFixed(0)} to ₹${freshPrice.toStringAsFixed(0)}).");
         }
       }
 
-      if (outOfStockItems.isNotEmpty && mounted) {
+      if (issues.isNotEmpty && mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text('Items Unavailable',
+            title: Text('Cart Update Required',
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-            content: Text(
-                'Some items in your cart are no longer available in the requested quantity:\n\n${outOfStockItems.join('\n')}\n\nPlease update your cart before checking out.',
-                style: GoogleFonts.outfit()),
+            content: SingleChildScrollView(
+              child: Text(
+                  'Some items in your cart require attention before you can check out:\n\n${issues.join('\n\n')}\n\nPlease update your cart to proceed.',
+                  style: GoogleFonts.outfit()),
+            ),
             actions: [
               ElevatedButton(
                 onPressed: () {
@@ -278,27 +328,63 @@ class _CheckoutPageState extends State<CheckoutPage> {
     try {
       // Stock Validation
       final productIds = cart.items.map((i) => i.product.id).toList();
+      // Phase 25 Fix: Deep join with shops to verify shop is still active, and fetch variants/price to check spoofing.
       final latestProducts = await supabase
           .from('products')
-          .select('id, name, is_available, total_quantity')
+          .select('id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
           .inFilter('id', productIds);
 
       for (var cartItem in cart.items) {
         final dbProduct = latestProducts
             .where((p) => p['id'] == cartItem.product.id)
             .firstOrNull;
+            
         if (dbProduct == null) {
-          throw Exception(
-              "${cartItem.product.name} is no longer available."); // C3 FIX: was \${...}
+          throw Exception("${cartItem.product.name} is no longer available.");
         }
+        
+        // 1. Ghost Kitchens II (Banned Shop Checkout) Guard
+        if (dbProduct['shops'] != null && dbProduct['shops']['is_active'] == false) {
+          throw Exception("${dbProduct['shops']['name']} is currently not accepting orders.");
+        }
+
+        // 2. Availability Guard
         if (dbProduct['is_available'] == false) {
-          throw Exception(
-              "${cartItem.product.name} is currently out of stock."); // C3 FIX: was \${...}
+          throw Exception("${cartItem.product.name} is currently out of stock.");
         }
+        
+        // 3. Stock Quantity Guard
         if (dbProduct['total_quantity'] != null &&
             dbProduct['total_quantity'] < cartItem.quantity) {
-          throw Exception(
-              "Only ${dbProduct['total_quantity']} units of ${cartItem.product.name} are available."); // C3 FIX: was \${...}
+          throw Exception("Only ${dbProduct['total_quantity']} units of ${cartItem.product.name} are available.");
+        }
+        
+        // 4. Cart Price Spoofing Guard
+        double freshPrice = (dbProduct['price'] ?? 0.0).toDouble();
+        
+        if (cartItem.selectedVariant != null) {
+          bool variantFound = false;
+          if (dbProduct['variants'] != null) {
+            final variantsList = dbProduct['variants'] as List;
+            for (var v in variantsList) {
+              if (v['name'] == cartItem.selectedVariant!.name) {
+                freshPrice = (v['price'] ?? 0.0).toDouble();
+                if (v['is_available'] == false) {
+                  throw Exception("Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is out of stock.");
+                }
+                variantFound = true;
+                break;
+              }
+            }
+          }
+          if (!variantFound) {
+             throw Exception("Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is no longer available.");
+          }
+        }
+        
+        double cartPrice = cartItem.selectedVariant?.price ?? cartItem.product.price;
+        if ((freshPrice - cartPrice).abs() > 0.01) {
+           throw Exception("The price of ${cartItem.product.name} has changed from ₹${cartPrice.toStringAsFixed(0)} to ₹${freshPrice.toStringAsFixed(0)}. Please review your cart.");
         }
       }
 
@@ -1285,30 +1371,37 @@ class _CheckoutPageState extends State<CheckoutPage> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: GoogleFonts.outfit(
-                  color:
-                      isBold ? AppColors.textPrimary : AppColors.textSecondary,
-                  fontSize: isBold ? 15 : 13,
-                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
-                )),
-            if (hint != null)
-              Text(hint,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
                   style: GoogleFonts.outfit(
-                    color: AppColors.textSecondary,
-                    fontSize: 10,
+                    color:
+                        isBold ? AppColors.textPrimary : AppColors.textSecondary,
+                    fontSize: isBold ? 15 : 13,
+                    fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
                   )),
-          ],
+              if (hint != null)
+                Text(hint,
+                    style: GoogleFonts.outfit(
+                      color: AppColors.textSecondary,
+                      fontSize: 10,
+                    )),
+            ],
+          ),
         ),
-        Text(value,
-            style: GoogleFonts.outfit(
-              color: valueColor ?? AppColors.textPrimary,
-              fontSize: isBold ? 17 : 13,
-              fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
-            )),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(value,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                color: valueColor ?? AppColors.textPrimary,
+                fontSize: isBold ? 17 : 13,
+                fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+              )),
+        ),
       ],
     );
   }

@@ -91,7 +91,9 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
   @override
   void dispose() {
     _pulseCtrl.dispose();
-    _channel?.unsubscribe();
+    if (_channel != null) {
+      Supabase.instance.client.removeChannel(_channel!);
+    }
     super.dispose();
   }
 

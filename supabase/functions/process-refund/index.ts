@@ -1,12 +1,14 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// @ts-nocheck
+// This file runs on the Deno runtime (Supabase Edge Functions).
+// Triggered by a Database Webhook on the `orders` table (UPDATE events).
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 // Razorpay API Credentials (ensure these are set in Supabase Edge Secrets)
 const razorpayKeyId = Deno.env.get("RAZORPAY_KEY_ID") || "";
 const razorpayKeySecret = Deno.env.get("RAZORPAY_KEY_SECRET") || "";
 const razorpayAuth = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   try {
     const payload = await req.json();
     const { type, old_record, record } = payload;
@@ -16,16 +18,25 @@ serve(async (req) => {
       return new Response("Ignored: Not an update event", { status: 200 });
     }
 
-    const oldStatus = old_record.status;
-    const newStatus = record.status;
+    const oldStatus = old_record?.status;
+    const newStatus = record?.status;
+    const oldRefundStatus = old_record?.refund_status;
+    const newRefundStatus = record?.refund_status;
 
     // Detect if order transitioned into a cancelled/rejected state
     const isRefundableState = 
       newStatus === "verification_failed" || 
       newStatus === "seller_rejected" || 
-      newStatus === "cancelled";
+      newStatus === "cancelled" ||
+      newStatus === "shop_dispute_cancel";
 
-    if (isRefundableState && oldStatus !== newStatus) {
+    const statusChanged = oldStatus !== newStatus;
+    const manualRefundTriggered = oldRefundStatus !== "processing" && newRefundStatus === "processing";
+
+    // 100x FIX: If an Admin explicitly triggers a manual refund, ALWAYS honor it regardless of current order status (e.g. refunding a 'delivered' order).
+    const shouldRefund = (isRefundableState && statusChanged) || manualRefundTriggered;
+
+    if (shouldRefund) {
       console.log(`Order ${record.id} changed to ${newStatus}. Initiating refund check...`);
 
       // 1. Skip if it was Cash on Delivery
@@ -47,8 +58,25 @@ serve(async (req) => {
       }
 
       // 4. Call Razorpay API to issue the refund
-      const amountInPaise = Math.round(record.grand_total_collected * 100);
+      const collectedAmount = record.grand_total_collected != null ? Number(record.grand_total_collected) : 0;
+      const amountInPaise = Math.round(collectedAmount * 100);
+
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
       
+      if (amountInPaise <= 0) {
+        console.log(`Order ${record.id} has 0 collected amount. Marking refund as processed internally.`);
+
+        await supabaseAdmin.from("orders").update({
+          refund_status: "processed",
+          refund_id: "internal_zero_amount"
+        }).eq("id", record.id);
+
+        return new Response("Refund processed internally (zero amount).", { status: 200 });
+      }
+
       const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/refund`, {
         method: "POST",
         headers: {
@@ -68,15 +96,17 @@ serve(async (req) => {
 
       if (!refundResponse.ok) {
         console.error("Razorpay refund failed:", refundData);
-        return new Response(`Razorpay Error: ${refundData.error?.description}`, { status: 500 });
+        
+        // 100x FIX: Prevent webhook 500 error loops by marking as failed in DB
+        await supabaseAdmin.from("orders").update({
+          refund_status: "failed",
+          rejection_message: `Refund Failed: ${refundData.error?.description || "Unknown Error"}`
+        }).eq("id", record.id);
+
+        return new Response(`Razorpay Error: ${refundData.error?.description}`, { status: 200 }); // Return 200 to satisfy webhook
       }
 
       // 5. Update the Database with the Refund ID
-      const supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      );
-
       await supabaseAdmin.from("orders").update({
         refund_id: refundData.id,
         refund_status: "processed"
@@ -90,6 +120,7 @@ serve(async (req) => {
 
   } catch (err: any) {
     console.error("Webhook exception:", err);
-    return new Response(`Internal Server Error: ${err.message}`, { status: 500 });
+    // Still return 200 to prevent Supabase from retrying endlessly
+    return new Response("Internal error (logged)", { status: 200 });
   }
 });

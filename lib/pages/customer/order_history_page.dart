@@ -27,8 +27,15 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   SupabaseClient get _supabase => Supabase.instance.client;
   List<OrderModel> _orders = [];
   bool _isLoading = true;
-  final Set<String> _cancellingIds = {}; // track which orders are being cancelled
-  final Set<String> _reorderingIds = {};  // track reorder in progress
+  final Set<String> _cancellingIds =
+      {}; // track which orders are being cancelled
+  final Set<String> _reorderingIds = {}; // track reorder in progress
+
+  // Pagination fields
+  final ScrollController _scrollController = ScrollController();
+  bool _isLoadingMore = false;
+  bool _hasMoreOrders = true;
+  static const int _pageSize = 15;
 
   // ── Reorder: fetch items from a past order, add valid ones to cart ──────
   Future<void> _reorder(OrderModel order) async {
@@ -43,9 +50,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       if (!mounted) return;
 
       // Fetch current product availability for each item
-      final productIds = (itemsData as List)
-          .map((i) => i['product_id'] as String)
-          .toList();
+      final productIds =
+          (itemsData as List).map((i) => i['product_id'] as String).toList();
 
       if (productIds.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -62,12 +68,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
       if (!mounted) return;
       final cart = context.read<CartProvider>();
-      final products = (productsData as List)
-          .map((p) => ProductModel.fromMap(p))
-          .toList();
+      final products =
+          (productsData as List).map((p) => ProductModel.fromMap(p)).toList();
       // Build shopId → ShopModel lookup from the joined shop data
       final Map<String, ShopModel> shopMap = {};
-      for (final p in productsData as List) {
+      for (final p in productsData) {
         if (p['shops'] != null) {
           final shop = ShopModel.fromMap(p['shops']);
           if (shop.isActive) {
@@ -78,26 +83,37 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
       int added = 0;
       int skipped = 0;
+      String? firstError;
 
       for (final item in itemsData) {
         final productId = item['product_id'] as String;
         final quantity = item['quantity'] as int? ?? 1;
         final variantName = item['variant_name'] as String?;
         final product = products.cast<ProductModel?>().firstWhere(
-          (p) => p?.id == productId,
-          orElse: () => null,
-        );
+              (p) => p?.id == productId,
+              orElse: () => null,
+            );
         if (product != null) {
           final shop = shopMap[product.shopId];
           if (shop != null) {
             ProductVariant? selectedVariant;
             if (variantName != null && product.variants.isNotEmpty) {
               try {
-                selectedVariant = product.variants.firstWhere((v) => v.name == variantName);
+                selectedVariant =
+                    product.variants.firstWhere((v) => v.name == variantName);
               } catch (_) {}
             }
-            cart.addItem(product, shop, quantity: quantity, selectedVariant: selectedVariant);
-            added++;
+            
+            // Phase 18 Fix: Safely capture business logic rejections
+            final err = cart.addItem(product, shop,
+                quantity: quantity, selectedVariant: selectedVariant);
+            
+            if (err == null) {
+              added++;
+            } else {
+              skipped++;
+              firstError ??= err; // Capture the exact reason
+            }
           } else {
             skipped++; // shop data unavailable
           }
@@ -109,7 +125,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       if (!mounted) return;
 
       final msg = skipped > 0
-          ? '$added items added to cart ($skipped no longer available)'
+          ? '$added added, $skipped skipped${firstError != null ? ' ($firstError)' : ''}'
           : '$added items added to cart!';
 
       ScaffoldMessenger.of(context).clearSnackBars();
@@ -117,12 +133,14 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         SnackBar(
           content: Text(
             msg,
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600),
+            style: GoogleFonts.outfit(
+                color: Colors.white, fontWeight: FontWeight.w600),
           ),
           backgroundColor: const Color(0xFF10B981), // Modern green
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 10,
           duration: const Duration(seconds: 3),
           action: SnackBarAction(
@@ -153,6 +171,20 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   void initState() {
     super.initState();
     _fetchOrders();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreOrders();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchOrders() async {
@@ -162,11 +194,16 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           .from('orders')
           .select()
           .eq('customer_id', auth.currentUserId ?? '')
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .range(0, _pageSize - 1);
+
+      if (!mounted) return;
+      final fetchedOrders =
+          (response as List).map((o) => OrderModel.fromMap(o)).toList();
 
       setState(() {
-        _orders =
-            (response as List).map((o) => OrderModel.fromMap(o)).toList();
+        _orders = fetchedOrders;
+        _hasMoreOrders = fetchedOrders.length == _pageSize;
         _isLoading = false;
       });
     } catch (e) {
@@ -180,52 +217,103 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     }
   }
 
+  Future<void> _loadMoreOrders() async {
+    if (_isLoadingMore || !_hasMoreOrders) return;
+    
+    setState(() => _isLoadingMore = true);
+    final auth = context.read<AuthProvider>();
+    
+    try {
+      final response = await _supabase
+          .from('orders')
+          .select()
+          .eq('customer_id', auth.currentUserId ?? '')
+          .order('created_at', ascending: false)
+          .range(_orders.length, _orders.length + _pageSize - 1);
+
+      if (!mounted) return;
+      final fetchedOrders =
+          (response as List).map((o) => OrderModel.fromMap(o)).toList();
+
+      setState(() {
+        _orders.addAll(fetchedOrders);
+        _hasMoreOrders = fetchedOrders.length == _pageSize;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingMore = false);
+    }
+  }
+
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'delivered': return AppColors.success;
-      case 'cancelled': case 'seller_rejected': return AppColors.danger;
-      case 'out_for_delivery': return AppColors.info;
-      default: return AppColors.primary;
+      case 'delivered':
+        return AppColors.success;
+      case 'cancelled':
+      case 'seller_rejected':
+      case 'shop_dispute_cancel':
+        return AppColors.danger;
+      case 'out_for_delivery':
+        return AppColors.info;
+      default:
+        return AppColors.primary;
     }
   }
 
   IconData _getStatusIcon(String status) {
     switch (status) {
-      case 'delivered': return Icons.check_circle_outline;
-      case 'cancelled': case 'seller_rejected': return Icons.cancel_outlined;
-      case 'out_for_delivery': return Icons.delivery_dining;
-      case 'pending': return Icons.access_time;
-      default: return Icons.receipt_long_outlined;
+      case 'delivered':
+        return Icons.check_circle_outline;
+      case 'cancelled':
+      case 'seller_rejected':
+      case 'shop_dispute_cancel':
+        return Icons.cancel_outlined;
+      case 'out_for_delivery':
+        return Icons.delivery_dining;
+      case 'pending':
+        return Icons.access_time;
+      default:
+        return Icons.receipt_long_outlined;
     }
   }
 
   Future<void> _cancelOrder(OrderModel order, bool isDark) async {
-    final isGroup = order.cartGroupId != null && (order.status == 'awaiting_acceptance' || order.status == 'awaiting_payment');
+    final isGroup = order.cartGroupId != null &&
+        (order.status == 'awaiting_acceptance' ||
+            order.status == 'awaiting_payment');
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(isGroup ? 'Cancel Entire Cart?' : 'Cancel Order?',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+            style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : AppColors.textPrimary)),
         content: Text(
-            isGroup 
+            isGroup
                 ? 'This order is part of a combined cart. Cancelling it will cancel ALL items in the cart. Are you sure?'
                 : 'Are you sure you want to cancel this order?',
-            style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white70 : AppColors.textSecondary)),
+            style: GoogleFonts.outfit(
+                fontSize: 14,
+                color: isDark ? Colors.white70 : AppColors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Keep Order', style: GoogleFonts.outfit(color: isDark ? Colors.white70 : AppColors.textSecondary)),
+            child: Text('Keep Order',
+                style: GoogleFonts.outfit(
+                    color: isDark ? Colors.white70 : AppColors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: Text('Yes, Cancel',
-                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+                style: GoogleFonts.outfit(
+                    color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -234,10 +322,26 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _cancellingIds.add(order.id));
+    List<OrderModel> ordersToCancel = [order];
     try {
-      List<OrderModel> ordersToCancel = isGroup 
-          ? _orders.where((o) => o.cartGroupId == order.cartGroupId).toList() 
-          : [order];
+      
+      if (isGroup && order.cartGroupId != null) {
+        // Phase 19 Fix: Unpaginated fetch to guarantee ALL sellers in the group 
+        // receive the cancellation push notification, avoiding Ghost Kitchen Orders
+        final groupResponse = await _supabase
+            .from('orders')
+            .select()
+            .eq('cart_group_id', order.cartGroupId as Object);
+        ordersToCancel = (groupResponse as List).map((o) => OrderModel.fromMap(o)).toList();
+        
+        if (mounted) {
+          setState(() {
+            for (final o in ordersToCancel) {
+              _cancellingIds.add(o.id);
+            }
+          });
+        }
+      }
 
       // Secure atomic cancellation via RPC. The RPC automatically handles
       // cancelling all orders in the cart group if this order belongs to one.
@@ -263,7 +367,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 notifProv.sendBackgroundPush(
                   targetUserId: shopData['seller_id'] as String,
                   title: '❌ Order Cancelled by Customer',
-                  body: 'The customer cancelled their order. No further action needed.',
+                  body:
+                      'The customer cancelled their order. No further action needed.',
                   data: {'order_id': o.id, 'role': 'seller'},
                 );
               }
@@ -275,7 +380,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             notifProv.sendBackgroundPush(
               targetUserId: o.deliveryPartnerId!,
               title: '❌ Order Cancelled by Customer',
-              body: 'The customer cancelled their order. You are free for new deliveries.',
+              body:
+                  'The customer cancelled their order. You are free for new deliveries.',
               data: {'order_id': o.id, 'role': 'rider'},
             );
           }
@@ -294,7 +400,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             content: const Text('Order cancelled.'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
@@ -305,12 +412,19 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             content: const Text('Failed to cancel. Please try again.'),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
     } finally {
-      if (mounted) setState(() => _cancellingIds.remove(order.id));
+      if (mounted) {
+        setState(() {
+          for (final o in ordersToCancel) {
+            _cancellingIds.remove(o.id);
+          }
+        });
+      }
     }
   }
 
@@ -319,23 +433,29 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
+      backgroundColor:
+          isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: Navigator.canPop(context) ? GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            margin: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFF0F0F8),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.arrow_back_ios_new_rounded,
-                size: 16, color: isDark ? Colors.white70 : AppColors.textPrimary),
-          ),
-        ) : null,
+        leading: Navigator.canPop(context)
+            ? GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  margin: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.07)
+                        : const Color(0xFFF0F0F8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 16,
+                      color: isDark ? Colors.white70 : AppColors.textPrimary),
+                ),
+              )
+            : null,
         title: Text(
           'My Orders',
           style: GoogleFonts.outfit(
@@ -349,26 +469,36 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _orders.isEmpty
-              ? _buildEmptyState(isDark)
-              : RefreshIndicator(
-                  onRefresh: _fetchOrders,
-                  color: AppColors.primary,
-                  backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                    itemCount: _orders.length,
-                    itemBuilder: (context, index) {
-                      return _buildOrderCard(_orders[index], isDark);
-                    },
+                ? _buildEmptyState(isDark)
+                : RefreshIndicator(
+                    onRefresh: _fetchOrders,
+                    color: AppColors.primary,
+                    backgroundColor:
+                        isDark ? AppColors.darkSurface : Colors.white,
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                      itemCount: _orders.length + (_hasMoreOrders ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == _orders.length) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Center(
+                                child: CircularProgressIndicator(
+                                    color: AppColors.primary)),
+                          );
+                        }
+                        return _buildOrderCard(_orders[index], isDark);
+                      },
+                    ),
                   ),
-                ),
       ),
     );
   }
 
   Widget _buildOrderCard(OrderModel order, bool isDark) {
     final statusColor = _getStatusColor(order.status);
-    
+
     return GestureDetector(
       onTap: () => Navigator.pushNamed(
         context,
@@ -382,7 +512,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : Colors.white,
           borderRadius: PremiumRadius.largeBorder,
-          border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.07)) : null,
+          border: isDark
+              ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+              : null,
           boxShadow: PremiumShadows.cardLight,
         ),
         child: Column(
@@ -418,7 +550,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                         DateFormat('dd MMM yyyy, hh:mm a')
                             .format(order.createdAt),
                         style: GoogleFonts.outfit(
-                          color: isDark ? Colors.white54 : AppColors.textSecondary,
+                          color:
+                              isDark ? Colors.white54 : AppColors.textSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -427,7 +560,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -446,8 +580,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 14),
               child: Divider(
-                height: 1, 
-                color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade100,
+                height: 1,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.grey.shade100,
               ),
             ),
             Row(
@@ -485,10 +621,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.1),
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                        color: AppColors.primary.withValues(alpha: 0.2)),
+                                        color: AppColors.primary
+                                            .withValues(alpha: 0.2)),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -510,7 +648,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                               ),
                       // Cancel chip — only for pending orders
                       // BUG-5 FIX: show cancel for awaiting_acceptance too (new order flow)
-                      if (order.status == 'awaiting_acceptance' || order.status == 'pending')
+                      if (order.status == 'awaiting_acceptance' ||
+                          order.status == 'pending')
                         _cancellingIds.contains(order.id)
                             ? const SizedBox(
                                 width: 24,
@@ -524,10 +663,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: AppColors.danger.withValues(alpha: 0.1),
+                                    color:
+                                        AppColors.danger.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                        color: AppColors.danger.withValues(alpha: 0.2)),
+                                        color: AppColors.danger
+                                            .withValues(alpha: 0.2)),
                                   ),
                                   child: Text(
                                     'Cancel',
@@ -554,16 +695,19 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                           );
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: AppColors.info.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
+                            border: Border.all(
+                                color: AppColors.info.withValues(alpha: 0.2)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.report_problem_outlined, size: 14, color: AppColors.info),
+                              const Icon(Icons.report_problem_outlined,
+                                  size: 14, color: AppColors.info),
                               const SizedBox(width: 4),
                               Text(
                                 'Report Issue',
@@ -616,7 +760,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               gradient: LinearGradient(
                 colors: [
                   AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.1),
-                  AppColors.primaryLight.withValues(alpha: isDark ? 0.12 : 0.06),
+                  AppColors.primaryLight
+                      .withValues(alpha: isDark ? 0.12 : 0.06),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -625,7 +770,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             ),
             child: Icon(
               Icons.receipt_long_outlined,
-              size: 56, 
+              size: 56,
               color: isDark ? AppColors.primaryLight : AppColors.primary,
             ),
           ),
@@ -648,7 +793,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           ),
           const SizedBox(height: 28),
           GestureDetector(
-            onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.customerHome),
+            onTap: () =>
+                Navigator.pushReplacementNamed(context, AppRoutes.customerHome),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               decoration: BoxDecoration(
@@ -659,7 +805,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
+                  const Icon(Icons.shopping_bag_outlined,
+                      color: Colors.white, size: 18),
                   const SizedBox(width: 8),
                   Text(
                     'Order Now',

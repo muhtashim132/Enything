@@ -186,7 +186,10 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        leading: const SizedBox.shrink(),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: Stack(
         children: [
@@ -388,6 +391,8 @@ class _DarkField extends StatelessWidget {
         TextFormField(
           controller: controller,
           keyboardType: number ? TextInputType.number : TextInputType.text,
+          maxLength: 200,
+          buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
           textCapitalization:
               caps ? TextCapitalization.characters : TextCapitalization.none,
           style: GoogleFonts.outfit(color: Colors.white, fontSize: 15),

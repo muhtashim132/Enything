@@ -375,6 +375,8 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
             controller: controller,
             keyboardType: isNumber ? TextInputType.number : TextInputType.text,
             textCapitalization: isCaps ? TextCapitalization.characters : TextCapitalization.none,
+            maxLength: 200,
+            buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
             style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
             decoration: InputDecoration(
               hintText: hint,

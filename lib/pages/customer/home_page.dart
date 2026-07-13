@@ -64,6 +64,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   bool _searchError = false;
   int _shopsDisplayLimit = 12;
   int _productsDisplayLimit = 10;
+  int _searchShopsDisplayLimit = 12;
+  int _searchProductsDisplayLimit = 10;
   List<ShopModel> _shops = [];
   List<ShopModel> _searchResults = [];
   List<ProductModel> _searchProductResults = [];
@@ -378,6 +380,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       _searchQuery = query;
       _isSearching = true;
       _searchError = false;
+      _searchShopsDisplayLimit = 12;
+      _searchProductsDisplayLimit = 10;
     });
     try {
       final locationProvider = context.read<LocationProvider>();
@@ -402,15 +406,68 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         }
       }
 
-      final shopsByName = await _supabase.from('shops').select().ilike('name', '%$query%').limit(50);
-      final productsByName = await _supabase.from('products').select('*, shops(*)').ilike('name', '%$query%').limit(50);
-      
+      List<dynamic> shopsByName = [];
+      List<dynamic> productsByName = [];
       List<dynamic> shopsByCat = [];
       List<dynamic> productsByCat = [];
 
-      if (matchedSubcategories.isNotEmpty) {
-        shopsByCat = await _supabase.from('shops').select().inFilter('category', matchedSubcategories).limit(50);
-        productsByCat = await _supabase.from('products').select('*, shops(*)').inFilter('category', matchedSubcategories).limit(100);
+      final lat = locationProvider.currentLocation?.latitude;
+      final lng = locationProvider.currentLocation?.longitude;
+
+      if (locationProvider.hasLocation && lat != null && lng != null) {
+        // Phase 24: Mathematically pure ST_DWithin geospatial search via Additive RPC
+        final maxRadius = DeliveryCalculator.maxRadiusKm;
+        
+        shopsByName = await _supabase.rpc('search_shops_geospatial', params: {
+          'p_lat': lat,
+          'p_lng': lng,
+          'p_query': query,
+          'p_categories': effectiveCategories,
+          'p_radius_km': maxRadius,
+          'p_limit': 50
+        });
+        
+        productsByName = await _supabase.rpc('search_products_geospatial', params: {
+          'p_lat': lat,
+          'p_lng': lng,
+          'p_query': query,
+          'p_categories': effectiveCategories,
+          'p_radius_km': maxRadius,
+          'p_limit': 50
+        }).select('*, shops(*)');
+        
+        if (matchedSubcategories.isNotEmpty) {
+          shopsByCat = await _supabase.rpc('search_shops_geospatial', params: {
+            'p_lat': lat,
+            'p_lng': lng,
+            'p_query': null,
+            'p_categories': matchedSubcategories,
+            'p_radius_km': maxRadius,
+            'p_limit': 50
+          });
+          
+          productsByCat = await _supabase.rpc('search_products_geospatial', params: {
+            'p_lat': lat,
+            'p_lng': lng,
+            'p_query': null,
+            'p_categories': matchedSubcategories,
+            'p_radius_km': maxRadius,
+            'p_limit': 100
+          }).select('*, shops(*)');
+        }
+      } else {
+        // Fallback for global searches (no location permission)
+        final shopQ = _supabase.from('shops').select().eq('is_active', true).eq('is_accepting_orders', true);
+        if (effectiveCategories != null) shopQ.inFilter('category', effectiveCategories);
+        shopsByName = await shopQ.ilike('name', '%$query%').limit(50);
+        
+        final prodQ = _supabase.from('products').select('*, shops!inner(*)').eq('is_available', true).eq('shops.is_active', true).eq('shops.is_accepting_orders', true);
+        productsByName = await prodQ.ilike('name', '%$query%').limit(50);
+
+        if (matchedSubcategories.isNotEmpty) {
+          shopsByCat = await _supabase.from('shops').select().eq('is_active', true).eq('is_accepting_orders', true).inFilter('category', matchedSubcategories).limit(50);
+          productsByCat = await _supabase.from('products').select('*, shops!inner(*)').eq('is_available', true).eq('shops.is_active', true).eq('shops.is_accepting_orders', true).inFilter('category', matchedSubcategories).limit(100);
+        }
       }
 
       final allShopsSet = <String, ShopModel>{};
@@ -418,8 +475,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       void addShops(List<dynamic> response, bool requireNameMatch) {
         for (final s in response) {
           final shop = ShopModel.fromMap(s);
-          if (requireNameMatch && !shop.name.toLowerCase().contains(lowerQuery)) continue;
-          if (effectiveCategories != null && !effectiveCategories.contains(shop.category)) continue;
+          if (!locationProvider.hasLocation && requireNameMatch && !shop.name.toLowerCase().contains(lowerQuery)) continue;
+          if (!locationProvider.hasLocation && effectiveCategories != null && !effectiveCategories.contains(shop.category)) continue;
           allShopsSet[shop.id] = shop;
         }
       }
@@ -438,11 +495,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             shop.distanceKm = null;
           }
         }
-        shopResults = allShops
-            .where((s) =>
-                s.distanceKm != null &&
-                DeliveryCalculator.isWithinRange(s.distanceKm!))
-            .toList();
+        // The RPC already enforces delivery range mathematically, so we just populate distanceKm.
+        shopResults = allShops.toList();
       } else {
         shopResults = allShops;
       }
@@ -457,17 +511,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (!product.isAvailable) continue;
           if (addedProductIds.contains(product.id)) continue;
           
-          if (effectiveCategories != null && !effectiveCategories.contains(product.category)) continue;
+          if (!locationProvider.hasLocation && effectiveCategories != null && !effectiveCategories.contains(product.category)) continue;
           if (p['shops'] == null) continue;
           
           final shop = ShopModel.fromMap(p['shops']);
           if (!shop.isActive) continue;
-          if (effectiveCategories != null && !effectiveCategories.contains(shop.category)) continue;
+          if (!locationProvider.hasLocation && effectiveCategories != null && !effectiveCategories.contains(shop.category)) continue;
           
           if (locationProvider.hasLocation) {
-            if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
-            final d = locationProvider.distanceTo(shop.location);
-            if (!DeliveryCalculator.isWithinRange(d)) continue;
+            // Distance is enforced by RPC, just populate it
+            if (shop.location.latitude != 0 && shop.location.longitude != 0) {
+              shop.distanceKm = locationProvider.distanceTo(shop.location);
+            }
           }
           
           prodResults.add(product);
@@ -592,52 +647,70 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     try {
       final locationProvider = context.read<LocationProvider>();
 
-      // Fetch all shops, then filter is_active locally to bypass any RLS column blocks
-      final shopsResponse = await _supabase.from('shops').select().limit(100);
+      // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
+      final shopsResponse = locationProvider.hasLocation
+          ? await _supabase.rpc('get_nearby_shops', params: {
+              'p_lat': locationProvider.currentLocation!.latitude,
+              'p_lng': locationProvider.currentLocation!.longitude,
+              'p_radius_km': 50.0,
+              'p_limit': 500, // Fetch up to 500 nearby shops to prevent category starving
+            })
+          : await _supabase.from('shops').select().limit(100);
 
-      final productsResponse =
-          await _supabase.from('products').select('*, shops(*)').limit(100);
+      List<String>? effectiveCategories;
+      if (_selectedFilterCategories.isNotEmpty) {
+        effectiveCategories = [];
+        for (final cat in _selectedFilterCategories) {
+          effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
+        }
+      }
+
+      final allShops = (shopsResponse as List)
+          .map((s) => ShopModel.fromMap(s))
+          .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories.contains(s.category)))
+          .toList();
+
+      List<ShopModel> nearby;
+      if (locationProvider.hasLocation) {
+        for (final shop in allShops) {
+          if (shop.location.latitude != 0 && shop.location.longitude != 0) {
+            shop.distanceKm = locationProvider.distanceTo(shop.location);
+          } else {
+            shop.distanceKm = null;
+          }
+        }
+        nearby = allShops
+            .where((s) =>
+                s.distanceKm != null &&
+                DeliveryCalculator.isWithinRange(s.distanceKm!))
+            .toList()
+          ..sort((a, b) {
+            // Primary sort: higher rating first
+            final ratingCmp = (b.rating).compareTo(a.rating);
+            if (ratingCmp != 0) return ratingCmp;
+            // Secondary: closer distance first
+            return (a.distanceKm ?? double.infinity)
+                .compareTo(b.distanceKm ?? double.infinity);
+          });
+      } else {
+        // No GPS yet — show all active shops sorted by rating
+        nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
+      }
+
+      // Phase 21 Fix: Prevent Pixel Overloading by using RPC to fetch a diverse per-shop limit
+      final nearbyShopIds = nearby.map((s) => s.id).take(50).toList();
+      
+      final productsResponse = nearbyShopIds.isEmpty 
+          ? [] 
+          : await _supabase
+              .rpc('get_feed_products', params: {
+                'p_shop_ids': nearbyShopIds,
+                'p_limit_per_shop': 5,
+                'p_categories': effectiveCategories,
+              })
+              .select('*, shops(*)');
 
       if (mounted) {
-        List<String>? effectiveCategories;
-        if (_selectedFilterCategories.isNotEmpty) {
-          effectiveCategories = [];
-          for (final cat in _selectedFilterCategories) {
-            effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
-          }
-        }
-
-        final allShops = (shopsResponse as List)
-            .map((s) => ShopModel.fromMap(s))
-            .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories.contains(s.category)))
-            .toList();
-
-        List<ShopModel> nearby;
-        if (locationProvider.hasLocation) {
-          for (final shop in allShops) {
-            if (shop.location.latitude != 0 && shop.location.longitude != 0) {
-              shop.distanceKm = locationProvider.distanceTo(shop.location);
-            } else {
-              shop.distanceKm = null;
-            }
-          }
-          nearby = allShops
-              .where((s) =>
-                  s.distanceKm != null &&
-                  DeliveryCalculator.isWithinRange(s.distanceKm!))
-              .toList()
-            ..sort((a, b) {
-              // Primary sort: higher rating first
-              final ratingCmp = (b.rating).compareTo(a.rating);
-              if (ratingCmp != 0) return ratingCmp;
-              // Secondary: closer distance first
-              return (a.distanceKm ?? double.infinity)
-                  .compareTo(b.distanceKm ?? double.infinity);
-            });
-        } else {
-          // No GPS yet — show all active shops sorted by rating
-          nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
-        }
 
         final prods = <ProductModel>[];
         final prodShops = <String, ShopModel>{};
@@ -706,52 +779,65 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       final locationProvider = context.read<LocationProvider>();
       final subcategories = _tabCategories[tabName] ?? [tabName];
 
-      // Fetch all, filter locally
-      final shopsResponse = await _supabase
-          .from('shops')
-          .select()
-          .inFilter('category', subcategories)
-          .limit(100); 
+      // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
+      final shopsResponse = locationProvider.hasLocation
+          ? await _supabase.rpc('get_nearby_shops', params: {
+              'p_lat': locationProvider.currentLocation!.latitude,
+              'p_lng': locationProvider.currentLocation!.longitude,
+              'p_radius_km': 50.0,
+              'p_limit': 500, // Fetch ample pool, then filter down to subcategories locally
+            })
+          : await _supabase.from('shops').select().limit(100); 
 
-      final productsResponse = await _supabase
-          .from('products')
-          .select('*, shops(*)')
-          .inFilter('category', subcategories)
-          .limit(100);
+      List<String>? effectiveCategories;
+      if (_selectedFilterCategories.isNotEmpty) {
+        effectiveCategories = [];
+        for (final cat in _selectedFilterCategories) {
+          effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
+        }
+      }
+
+      final allShops = (shopsResponse as List)
+          .map((s) => ShopModel.fromMap(s))
+          .where((s) => s.isActive && 
+              subcategories.contains(s.category) && // Ensure we respect tab filters
+              (effectiveCategories == null || effectiveCategories.contains(s.category)))
+          .toList();
+
+      List<ShopModel> nearby;
+      if (locationProvider.hasLocation) {
+        for (final shop in allShops) {
+          if (shop.location.latitude != 0 && shop.location.longitude != 0) {
+            shop.distanceKm = locationProvider.distanceTo(shop.location);
+          } else {
+            shop.distanceKm = null;
+          }
+        }
+        nearby = allShops
+            .where((s) =>
+                s.distanceKm != null &&
+                DeliveryCalculator.isWithinRange(s.distanceKm!))
+            .toList()
+          ..sort((a, b) => (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity));
+      } else {
+        nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
+      }
+
+      // Phase 21 Fix: Prevent Pixel Overloading by using RPC to fetch a diverse per-shop limit
+      final nearbyShopIds = nearby.map((s) => s.id).take(50).toList();
+      
+      final productsResponse = nearbyShopIds.isEmpty 
+          ? [] 
+          : await _supabase
+              .rpc('get_feed_products', params: {
+                'p_shop_ids': nearbyShopIds,
+                'p_limit_per_shop': 5,
+                'p_categories': subcategories,
+              })
+              .select('*, shops(*)');
 
       if (mounted) {
-        List<String>? effectiveCategories;
-        if (_selectedFilterCategories.isNotEmpty) {
-          effectiveCategories = [];
-          for (final cat in _selectedFilterCategories) {
-            effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
-          }
-        }
-
-        final allShops = (shopsResponse as List)
-            .map((s) => ShopModel.fromMap(s))
-            .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories.contains(s.category)))
-            .toList();
-
-        List<ShopModel> nearby;
-        if (locationProvider.hasLocation) {
-          for (final shop in allShops) {
-            if (shop.location.latitude != 0 && shop.location.longitude != 0) {
-              shop.distanceKm = locationProvider.distanceTo(shop.location);
-            } else {
-              shop.distanceKm = null;
-            }
-          }
-          nearby = allShops
-              .where((s) =>
-                  s.distanceKm != null &&
-                  DeliveryCalculator.isWithinRange(s.distanceKm!))
-              .toList()
-            ..sort((a, b) => (a.distanceKm ?? double.infinity)
-                .compareTo(b.distanceKm ?? double.infinity));
-        } else {
-          nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
-        }
 
         final prods = <ProductModel>[];
         final prodShops = <String, ShopModel>{};
@@ -1175,116 +1261,121 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             ),
 
           // ── Main Content ──────────────────────────────────────────
+          // ── Main Content ──────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-            // BUG FIX: no longer gate on location — show shops even without GPS.
-            // If no location, distance filter is skipped and all active shops show.
             sliver: _isLoading
                 ? SliverToBoxAdapter(child: _buildShimmer())
-                : SliverList(
-                    delegate: SliverChildListDelegate([
+                : SliverMainAxisGroup(
+                    slivers: [
                       // ──────────────────────────────────────────────────
                       // SEARCH MODE: clean results-only view
                       // ──────────────────────────────────────────────────
                       if (_searchQuery.isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                        const SliverToBoxAdapter(child: SizedBox(height: 4)),
 
                         // Header
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _isSearching ? 'Searching...' : 'Search results',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                      color: isDark ? Colors.white : AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  if (!_isSearching)
+                        SliverToBoxAdapter(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                     Text(
-                                      '${_searchResults.length + _searchProductResults.length} result${(_searchResults.length + _searchProductResults.length) == 1 ? '' : 's'} for "$_searchQuery"',
-                                      style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary),
+                                      _isSearching ? 'Searching...' : 'Search results',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        color: isDark ? Colors.white : AppColors.textPrimary,
+                                      ),
                                     ),
-                                ],
+                                    if (!_isSearching)
+                                      Text(
+                                        '\${_searchResults.length + _searchProductResults.length} result\${(_searchResults.length + _searchProductResults.length) == 1 ? "" : "s"} for "\$_searchQuery"',
+                                        style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary),
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 16),
+                        const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
                         // Skeleton while loading
                         if (_isSearching)
-                          Column(children: List.generate(3, (_) => _buildSearchSkeleton(isDark)))
+                          SliverToBoxAdapter(child: Column(children: List.generate(3, (_) => _buildSearchSkeleton(isDark))))
 
                         // Error state
                         else if (_searchError)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 60),
-                            child: Center(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 80, height: 80,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.danger.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(24),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 60),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 80, height: 80,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.danger.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                      child: const Center(
+                                        child: Icon(Icons.wifi_off_rounded, size: 36, color: AppColors.danger),
+                                      ),
                                     ),
-                                    child: const Center(
-                                      child: Icon(Icons.wifi_off_rounded, size: 36, color: AppColors.danger),
+                                    const SizedBox(height: 16),
+                                    Text('Search Failed', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                    const SizedBox(height: 8),
+                                    Text('Please check your internet connection', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary)),
+                                    const SizedBox(height: 24),
+                                    ElevatedButton.icon(
+                                      onPressed: () => _searchShops(_searchQuery),
+                                      icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+                                      label: Text('Retry Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text('Search Failed', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
-                                  const SizedBox(height: 8),
-                                  Text('Please check your internet connection', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary)),
-                                  const SizedBox(height: 24),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _searchShops(_searchQuery),
-                                    icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
-                                    label: Text('Retry Search', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
-                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           )
 
                         // Empty state
                         else if (_searchResults.isEmpty && _searchProductResults.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 60),
-                            child: Center(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 80, height: 80,
-                                    decoration: BoxDecoration(
-                                      color: isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(24),
-                                    ),
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.search_off_rounded,
-                                        size: 36,
-                                        color: isDark ? AppColors.primaryLight : AppColors.primary,
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 60),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 80, height: 80,
+                                      decoration: BoxDecoration(
+                                        color: isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.search_off_rounded,
+                                          size: 36,
+                                          color: isDark ? AppColors.primaryLight : AppColors.primary,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text('No results for', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textSecondary)),
-                                  const SizedBox(height: 4),
-                                  Text('"$_searchQuery"', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
-                                  const SizedBox(height: 8),
-                                  Text('Try a different keyword', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textLight)),
-                                ],
+                                    const SizedBox(height: 16),
+                                    Text('No results for', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textSecondary)),
+                                    const SizedBox(height: 4),
+                                    Text('"\$_searchQuery"', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                    const SizedBox(height: 8),
+                                    Text('Try a different keyword', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textLight)),
+                                  ],
+                                ),
                               ),
                             ),
                           )
@@ -1293,57 +1384,123 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         else ...[
                           // Products first (most relevant for the user)
                           if (_searchProductResults.isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Row(
-                                children: [
-                                  Container(width: 4, height: 18, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(2))),
-                                  const SizedBox(width: 8),
-                                  Text('Items & Products', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppColors.textPrimary)),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                                    child: Text('${_searchProductResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                                  ),
-                                ],
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Row(
+                                  children: [
+                                    Container(width: 4, height: 18, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(2))),
+                                    const SizedBox(width: 8),
+                                    Text('Items & Products', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                                      child: Text('\${_searchProductResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            ..._sortedProductResults.map((product) {
-                              final shop = _searchProductShops[product.id];
-                              if (shop == null) return const SizedBox.shrink();
-                              return ProductSearchCard(product: product, shop: shop);
-                            }),
-                            const SizedBox(height: 16),
+                            SliverList.builder(
+                              itemCount: _sortedProductResults.length > _searchProductsDisplayLimit 
+                                  ? _searchProductsDisplayLimit 
+                                  : _sortedProductResults.length,
+                              itemBuilder: (context, index) {
+                                final product = _sortedProductResults[index];
+                                final shop = _searchProductShops[product.id];
+                                if (shop == null) return const SizedBox.shrink();
+                                return ProductSearchCard(product: product, shop: shop);
+                              },
+                            ),
+                            if (_searchProductResults.length > _searchProductsDisplayLimit)
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8, bottom: 8),
+                                  child: Center(
+                                    child: TextButton(
+                                      onPressed: () => setState(() => _searchProductsDisplayLimit += 20),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                        backgroundColor: isDark 
+                                            ? Colors.white.withValues(alpha: 0.05) 
+                                            : AppColors.primary.withValues(alpha: 0.05),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                      ),
+                                      child: Text(
+                                        'Load more items',
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            const SliverToBoxAdapter(child: SizedBox(height: 16)),
                           ],
 
                           // Shops below products
                           if (_searchResults.isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12, top: 4),
-                              child: Row(
-                                children: [
-                                  Container(width: 4, height: 18, decoration: BoxDecoration(color: AppColors.secondary, borderRadius: BorderRadius.circular(2))),
-                                  const SizedBox(width: 8),
-                                  Text('Shops & Restaurants', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppColors.textPrimary)),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                                    child: Text('${_searchResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.secondary)),
-                                  ),
-                                ],
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12, top: 4),
+                                child: Row(
+                                  children: [
+                                    Container(width: 4, height: 18, decoration: BoxDecoration(color: AppColors.secondary, borderRadius: BorderRadius.circular(2))),
+                                    const SizedBox(width: 8),
+                                    Text('Shops & Restaurants', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                                      child: Text('\${_searchResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.secondary)),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            ..._sortedShopResults.map((shop) {
-                              final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: isFood
-                                    ? RestaurantShopCard(shop: shop, onTap: () => showRestaurantDashboardSheet(context, shop.id))
-                                    : ShopCard(shop: shop, onTap: () => showShopDetailSheet(context, shop.id)),
-                              );
-                            }),
+                            SliverList.builder(
+                              itemCount: _sortedShopResults.length > _searchShopsDisplayLimit
+                                  ? _searchShopsDisplayLimit
+                                  : _sortedShopResults.length,
+                              itemBuilder: (context, index) {
+                                final shop = _sortedShopResults[index];
+                                final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: isFood
+                                      ? RestaurantShopCard(shop: shop, onTap: () => showRestaurantDashboardSheet(context, shop.id))
+                                      : ShopCard(shop: shop, onTap: () => showShopDetailSheet(context, shop.id)),
+                                );
+                              },
+                            ),
+                            if (_searchResults.length > _searchShopsDisplayLimit)
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8, bottom: 8),
+                                  child: Center(
+                                    child: TextButton(
+                                      onPressed: () => setState(() => _searchShopsDisplayLimit += 20),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                        backgroundColor: isDark 
+                                            ? Colors.white.withValues(alpha: 0.05) 
+                                            : AppColors.primary.withValues(alpha: 0.05),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                      ),
+                                      child: Text(
+                                        'Load more shops',
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ],
 
@@ -1353,141 +1510,149 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       ] else ...[
                         if (_selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
                           // Featured Banner
-                          _buildFeaturedBanner(),
-                          const SizedBox(height: 24),
+                          SliverToBoxAdapter(child: _buildFeaturedBanner()),
+                          const SliverToBoxAdapter(child: SizedBox(height: 24)),
                         ],
 
                         // ── Recently Viewed ─────────────────────────────
                         if (_selectedTabIndex < 0 && _selectedFilterCategories.isEmpty)
-                          Builder(builder: (ctx) {
-                            final recentProv = ctx.watch<RecentlyViewedProvider>();
-                          if (!recentProv.hasItems) return const SizedBox.shrink();
-                          
-                          // Filter out products whose shop is closed
-                          final availableRecent = recentProv.products.where((p) {
-                            final shop = _productShops[p.id];
-                            return shop != null && shop.isActive;
-                          }).toList();
-                          
-                          if (availableRecent.isEmpty) return const SizedBox.shrink();
+                          SliverToBoxAdapter(
+                            child: Builder(builder: (ctx) {
+                              final recentProv = ctx.watch<RecentlyViewedProvider>();
+                              if (!recentProv.hasItems) return const SizedBox.shrink();
+                              
+                              // Filter out products whose shop is closed
+                              final availableRecent = recentProv.products.where((p) {
+                                final shop = _productShops[p.id];
+                                return shop != null && shop.isActive;
+                              }).toList();
+                              
+                              if (availableRecent.isEmpty) return const SizedBox.shrink();
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildSectionTitle('Recently Viewed', subtitle: 'Continue where you left off'),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                height: 335,
-                                child: ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: availableRecent.length,
-                                  itemBuilder: (_, index) {
-                                    final p = availableRecent[index];
-                                    final shop = _productShops[p.id];
-                                    return SizedBox(
-                                      width: 155,
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(right: 12),
-                                        child: ProductCard(product: p, shop: shop),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-                          );
-                        }),
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildSectionTitle('Recently Viewed', subtitle: 'Continue where you left off'),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    height: 335,
+                                    child: ListView.builder(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: availableRecent.length,
+                                      itemBuilder: (_, index) {
+                                        final p = availableRecent[index];
+                                        final shop = _productShops[p.id];
+                                        return SizedBox(
+                                          width: 155,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(right: 12),
+                                            child: ProductCard(product: p, shop: shop),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                ],
+                              );
+                            }),
+                          ),
 
                         if (_shops.isNotEmpty) ...[
                           // ── Normal category browse ───────────────────
-                          _buildSectionTitle(
-                            _selectedTabIndex < 0
-                                ? 'All stores near you'
-                                : _isFoodTab
-                                    ? 'Restaurants near you'
-                                    : 'Shops near you',
-                            subtitle: '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
-                            count: _shops.length,
-                            onSeeAllTap: _shops.length > _shopsDisplayLimit
-                                ? () => setState(() => _shopsDisplayLimit = _shops.length)
-                                : null,
+                          SliverToBoxAdapter(
+                            child: _buildSectionTitle(
+                              _selectedTabIndex < 0
+                                  ? 'All stores near you'
+                                  : _isFoodTab
+                                      ? 'Restaurants near you'
+                                      : 'Shops near you',
+                              subtitle: '\${_shops.length} within \${DeliveryCalculator.maxRadiusKm.toInt()} km',
+                              count: _shops.length,
+                              onSeeAllTap: _shops.length > _shopsDisplayLimit
+                                  ? () => setState(() => _shopsDisplayLimit = _shops.length)
+                                  : null,
+                            ),
                           ),
-                          const SizedBox(height: 16),
-                          LayoutBuilder(
+                          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                          SliverLayoutBuilder(
                             builder: (context, constraints) {
                               final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 1, tablet: 2, desktop: 3);
-                              const spacing = 16.0;
-                              final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
                               final displayShops = _sortedNormalShops.take(_shopsDisplayLimit).toList();
-                              return Wrap(
-                                spacing: spacing,
-                                runSpacing: 0,
-                                children: displayShops.map((shop) {
+                              return SliverGrid.builder(
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  mainAxisExtent: 280, // Fixed extent for the card
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 16,
+                                ),
+                                itemCount: displayShops.length,
+                                itemBuilder: (context, index) {
+                                  final shop = displayShops[index];
                                   final isFood = AppCategories.groupFor(shop.category) == CategoryGroup.food;
-                                  return SizedBox(
-                                    width: itemWidth,
-                                    child: isFood
-                                        ? RestaurantShopCard(shop: shop, onTap: () => showRestaurantDashboardSheet(context, shop.id))
-                                        : ShopCard(shop: shop, onTap: () => showShopDetailSheet(context, shop.id)),
-                                  );
-                                }).toList(),
+                                  return isFood
+                                      ? RestaurantShopCard(shop: shop, onTap: () => showRestaurantDashboardSheet(context, shop.id))
+                                      : ShopCard(shop: shop, onTap: () => showShopDetailSheet(context, shop.id));
+                                },
                               );
                             },
                           ),
                           if (_shops.length > _shopsDisplayLimit)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: Center(
-                                child: TextButton(
-                                  onPressed: () => setState(() => _shopsDisplayLimit += 20),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                    backgroundColor: Theme.of(context).brightness == Brightness.dark 
-                                        ? Colors.white.withValues(alpha: 0.05) 
-                                        : AppColors.primary.withValues(alpha: 0.05),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  ),
-                                  child: Text(
-                                    'Load more shops',
-                                    style: GoogleFonts.outfit(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.primary,
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Center(
+                                  child: TextButton(
+                                    onPressed: () => setState(() => _shopsDisplayLimit += 20),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                      backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                                          ? Colors.white.withValues(alpha: 0.05) 
+                                          : AppColors.primary.withValues(alpha: 0.05),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    ),
+                                    child: Text(
+                                      'Load more shops',
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                         ] else if (!_isLoading && _selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
-                          locationProvider.hasLocation
-                              ? _buildNoShopsNearby()
-                              : _buildLocationRequired(),
+                          SliverToBoxAdapter(
+                            child: locationProvider.hasLocation
+                                ? _buildNoShopsNearby()
+                                : _buildLocationRequired(),
+                          ),
                         ],
 
                         // Products Section
                         if (_products.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          _buildSectionTitle(
-                            'Popular in your area',
-                            onSeeAllTap: _products.length > _productsDisplayLimit
-                                ? () => setState(() => _productsDisplayLimit = _products.length)
-                                : null,
+                          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                          SliverToBoxAdapter(
+                            child: _buildSectionTitle(
+                              'Popular in your area',
+                              onSeeAllTap: _products.length > _productsDisplayLimit
+                                  ? () => setState(() => _productsDisplayLimit = _products.length)
+                                  : null,
+                            ),
                           ),
-                          const SizedBox(height: 16),
-                          LayoutBuilder(
+                          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                          SliverLayoutBuilder(
                             builder: (context, constraints) {
                               final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5);
                               const crossAxisSpacing = 16.0;
-                              final availableWidth = constraints.maxWidth;
+                              final availableWidth = constraints.crossAxisExtent;
                               final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount - 1))) / crossAxisCount;
                               final itemHeight = itemWidth + 178;
                               final childAspectRatio = itemWidth / itemHeight;
                               final displayProducts = _sortedNormalProducts.take(_productsDisplayLimit).toList();
 
-                              return GridView.builder(
-                                padding: EdgeInsets.zero,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
+                              return SliverGrid.builder(
                                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: crossAxisCount,
                                   childAspectRatio: childAspectRatio,
@@ -1504,63 +1669,67 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             },
                           ),
                           if (_products.length > _productsDisplayLimit)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: Center(
-                                child: TextButton(
-                                  onPressed: () => setState(() => _productsDisplayLimit += 20),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                    backgroundColor: Theme.of(context).brightness == Brightness.dark 
-                                        ? Colors.white.withValues(alpha: 0.05) 
-                                        : AppColors.primary.withValues(alpha: 0.05),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  ),
-                                  child: Text(
-                                    'Load more products',
-                                    style: GoogleFonts.outfit(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.primary,
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Center(
+                                  child: TextButton(
+                                    onPressed: () => setState(() => _productsDisplayLimit += 20),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                      backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                                          ? Colors.white.withValues(alpha: 0.05) 
+                                          : AppColors.primary.withValues(alpha: 0.05),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    ),
+                                    child: Text(
+                                      'Load more products',
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                         ] else if (_shops.isEmpty && (_selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty) && !_isLoading) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 60),
-                            child: Center(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 80, height: 80,
-                                    decoration: BoxDecoration(
-                                      color: isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(24),
-                                    ),
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.inventory_2_outlined,
-                                        size: 36,
-                                        color: isDark ? AppColors.primaryLight : AppColors.primary,
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 60),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 80, height: 80,
+                                      decoration: BoxDecoration(
+                                        color: isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.inventory_2_outlined,
+                                          size: 36,
+                                          color: isDark ? AppColors.primaryLight : AppColors.primary,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text('No items found', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
-                                  const SizedBox(height: 8),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                                    child: Text('We could not find any products in this category at the moment.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary, height: 1.4)),
-                                  ),
-                                ],
+                                    const SizedBox(height: 16),
+                                    Text('No items found', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                    const SizedBox(height: 8),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                                      child: Text('We could not find any products in this category at the moment.', textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary, height: 1.4)),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ],
-                        const SizedBox(height: 120),
+                        const SliverToBoxAdapter(child: SizedBox(height: 120)),
                       ],
-                    ]),
+                    ],
                   ),
           ),
         ],
@@ -1857,7 +2026,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     color: Colors.white,
                                     height: 1.15,
                                     letterSpacing: -0.3)),
-                            const SizedBox(height: 4),
+                            const SliverToBoxAdapter(child: SizedBox(height: 4)),
                             Text(s['sub'] as String,
                                 style: GoogleFonts.outfit(
                                     fontSize: 10, // Reduced from 11
@@ -2069,7 +2238,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         child: Column(
           children: [
             const Text('🏪', style: TextStyle(fontSize: 64)),
-            const SizedBox(height: 16),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
             Text(
               'No shops nearby',
               style:
@@ -2264,7 +2433,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
                   Flexible(
                     child: SingleChildScrollView(
                       child: Column(
@@ -2310,12 +2479,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       );
                     }).toList(),
                   ),
-                          const SizedBox(height: 16),
+                          const SliverToBoxAdapter(child: SizedBox(height: 16)),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
                   SizedBox(
                     width: double.infinity,
                     height: 52,

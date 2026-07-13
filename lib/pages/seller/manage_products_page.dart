@@ -39,7 +39,8 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
           .from('products')
           .select()
           .eq('shop_id', _shopId!)
-          .eq('is_deleted', false);
+          .eq('is_deleted', false)
+          .limit(500);
 
       setState(() {
         _products = (productsResp as List)

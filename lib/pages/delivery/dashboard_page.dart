@@ -41,6 +41,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   double _totalKmsDriven = 0.0;
   bool _isLoading = false;
   bool _isOrdersLoadInProgress = false; // C2: debounce guard
+  bool _needsReload = false;
   // Bug #19: rider's current GPS position for geographic filtering
   double? _riderLat;
   double? _riderLng;
@@ -70,6 +71,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   // FCM foreground message subscription — triggers _loadOrders() on push
   StreamSubscription? _fcmForegroundSub;
   RealtimeChannel? _realtimeChannel;
+  Timer? _debounceTimer;
+
+  void _debouncedLoadOrders() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _loadOrders();
+    });
+  }
 
   @override
   void initState() {
@@ -101,13 +110,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       // Reload available orders when a push arrives while the dashboard is open
       _fcmForegroundSub = FirebaseMessaging.onMessage.listen((_) {
-        if (mounted) _loadOrders();
+        if (mounted) _debouncedLoadOrders();
       });
     });
   }
 
   void _setupRealtimeChannel(String userId) {
-      _realtimeChannel?.unsubscribe();
+      if (_realtimeChannel != null) {
+        _supabase.removeChannel(_realtimeChannel!);
+      }
       _realtimeChannel = _supabase
           .channel('delivery-orders-$userId')
           .onPostgresChanges(
@@ -116,11 +127,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             table: 'orders',
             filter: PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
-              column: 'delivery_partner_id',
-              value: 'null', // Supabase realtime IS NULL filter syntax
+              column: 'status',
+              value: 'awaiting_acceptance',
             ),
             callback: (_) {
-              if (mounted) _loadOrders();
+              if (mounted) _debouncedLoadOrders();
             },
           )
           .onPostgresChanges(
@@ -133,8 +144,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 final orderId = payload.newRecord['id'] as String?;
                 if (orderId != null) {
                   final wasAvailable = _availableGroups.expand((g) => g.orders).any((o) => o.id == orderId);
-                  if (wasAvailable) {
-                    _loadOrders();
+                  
+                  // Phase 13 Fix: Trigger reload if order was just accepted by shop
+                  final status = payload.newRecord['status'] as String?;
+                  final dpId = payload.newRecord['delivery_partner_id'];
+                  final isNowAvailable = status == 'awaiting_acceptance' && dpId == null;
+
+                  if (wasAvailable || isNowAvailable) {
+                    _debouncedLoadOrders();
                   }
                 }
               }
@@ -151,11 +168,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             ),
             callback: (payload) {
               if (mounted) {
-                // A1: oldRecord and newRecord are non-nullable in Supabase SDK v2
                 final oldRec = payload.oldRecord;
                 final newRec = payload.newRecord;
                 if (oldRec['status'] != newRec['status']) {
                   final newStatus = newRec['status'];
+                  if (newStatus == 'seller_accepted' || newStatus == 'confirmed') {
+                    _debouncedLoadOrders();
+                  } else if (newStatus == 'cancelled' || newStatus == 'delivered') {
+                    _debouncedLoadOrders();
+                  }
+                  
                   if (newStatus == 'confirmed') {
                     _showSnack('💳 Payment Confirmed! Head to the shop.', isError: false);
                   } else if (newStatus == 'preparing') {
@@ -183,8 +205,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _locationBroadcastTimer?.cancel();
+    _debounceTimer?.cancel();
     _fcmForegroundSub?.cancel();
-    _realtimeChannel?.unsubscribe();
+    if (_realtimeChannel != null) {
+      _supabase.removeChannel(_realtimeChannel!);
+    }
     // D2+APP5 FIX: Stop background GPS service when the delivery page is
     // disposed (e.g., user switches role or logs out). Without this, the
     // foreground notification "Enything is tracking your location" stays
@@ -351,16 +376,26 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   Future<void> _loadOrders() async {
-    // C2: Debounce guard — prevent concurrent load calls
-    if (_isOrdersLoadInProgress) return;
+    // C2: Debounce guard — prevent concurrent load calls but queue the event
+    if (_isOrdersLoadInProgress) {
+      _needsReload = true;
+      // Phase 8: Prevent pull-to-refresh instant snap
+      while (_isOrdersLoadInProgress) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return;
+    }
     _isOrdersLoadInProgress = true;
-    setState(() => _isLoading = true);
+    _needsReload = false;
+    if (mounted) setState(() => _isLoading = true);
     final auth = context.read<AuthProvider>();
     try {
+      if (!mounted) return;
       // C3: Location is handled by _startLocationBroadcast timer (every 15s).
       // Only fetch location if we don't have it yet (first load).
       if (_riderLat == null || _riderLng == null) {
         final hasLocation = await _fetchRiderLocation();
+        if (!mounted) return;
         setState(() => _locationUnavailable = !hasLocation);
       }
 
@@ -411,6 +446,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .neq('status', 'partner_rejected');
           // awaiting_acceptance is INCLUDED: rider accepted first, waiting for seller
 
+      if (!mounted) return;
+
       // Populate _shopInfoCache from the joined shop data
       _shopInfoCache.clear();
       for (final o in (available as List)) {
@@ -428,6 +465,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           } catch (_) {}
         }
       }
+
+      if (!mounted) return;
 
       final allAvailable = (available).map((o) {
         final model = OrderModel.fromMap(o);
@@ -461,9 +500,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
 
       if (filtered.isEmpty) {
-        try {
-          await _supabase.from('app_logs').insert({'message': 'Rider load: allAvailable is empty. Query returned ${available.length} rows.'});
-        } catch (_) {}
+        _supabase.from('app_logs').insert({'message': 'Rider load: allAvailable is empty. Query returned ${available.length} rows.'}).catchError((_) => null);
       }
 
       double tempTodayEarnings = 0.0;
@@ -502,21 +539,23 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         } catch (_) {}
       }
 
-      setState(() {
-        _availableGroups = _groupOrders(filtered);
-        
-        final myRawOrders = (myOrders as List).map((o) {
-          final model = OrderModel.fromMap(o);
-          model.items = (o['order_items'] as List? ?? []).map((i) => OrderItem.fromMap(i)).toList();
-          return model;
-        }).toList();
-        _myGroups = _groupOrders(myRawOrders);
+      if (mounted) {
+        setState(() {
+          _availableGroups = _groupOrders(filtered);
+          
+          final myRawOrders = (myOrders as List).map((o) {
+            final model = OrderModel.fromMap(o);
+            model.items = (o['order_items'] as List? ?? []).map((i) => OrderItem.fromMap(i)).toList();
+            return model;
+          }).toList();
+          _myGroups = _groupOrders(myRawOrders);
 
-        _todayEarnings = tempTodayEarnings;
-        _totalKmsDriven = tempTotalKmsDriven;
-        
-        _isLoading = false;
-      });
+          _todayEarnings = tempTodayEarnings;
+          _totalKmsDriven = tempTotalKmsDriven;
+          
+          _isLoading = false;
+        });
+      }
 
       // Auto-start broadcast if rider is online
       if (_isOnline && _locationBroadcastTimer == null) {
@@ -524,15 +563,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
     } catch (e, stacktrace) {
       debugPrint('Error loading rider orders: $e');
-      try {
-        await _supabase.from('app_logs').insert({'message': 'Rider order load error: $e\n$stacktrace'});
-      } catch (_) {}
+      _supabase.from('app_logs').insert({'message': 'Rider order load error: $e\n$stacktrace'}).catchError((_) => null);
       if (mounted) {
         setState(() => _isLoading = false);
       }
     } finally {
       // C2: Always release the debounce guard
       _isOrdersLoadInProgress = false;
+      if (_needsReload && mounted) {
+        _debouncedLoadOrders();
+      }
     }
   }
 
@@ -796,6 +836,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         await _supabase.rpc('update_order_status', params: {
           'p_order_id': order.id,
           'p_new_status': status,
+          'p_ready_time': null,
+          'p_wait_penalty': 0.0,
+          'p_rider_lat': _riderLat,
+          'p_rider_lng': _riderLng,
+          'p_delivery_otp': null,
         });
         
         if (mounted) {
@@ -827,6 +872,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           'p_new_status': status,
           'p_ready_time': updateData['order_ready_time'],
           'p_wait_penalty': 0.0,
+          'p_rider_lat': _riderLat,
+          'p_rider_lng': _riderLng,
+          'p_delivery_otp': null,
         });
             
         if (mounted) {

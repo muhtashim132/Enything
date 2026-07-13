@@ -5,6 +5,7 @@ import '../../../../providers/platform_config_provider.dart';
 import '../../../../providers/rbac_provider.dart';
 import '../../../../theme/admin_theme.dart';
 import '../../../../config/app_categories.dart';
+import '../../../../config/tax_config.dart';
 
 class CommissionFeesPage extends StatefulWidget {
   const CommissionFeesPage({super.key});
@@ -33,7 +34,8 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
     setState(() => _editingKey = key);
   }
 
-  Future<void> _saveEdit(String key, PlatformConfigProvider config, RbacProvider rbac) async {
+  Future<void> _saveEdit(
+      String key, PlatformConfigProvider config, RbacProvider rbac) async {
     final text = _ctrls[key]?.text.trim() ?? '';
     if (text.isEmpty || double.tryParse(text) == null) {
       setState(() => _editingKey = null);
@@ -50,13 +52,15 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
     if (mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Saved successfully!', style: AdminStyles.body(size: 13)),
+          content:
+              Text('Saved successfully!', style: AdminStyles.body(size: 13)),
           backgroundColor: AdminColors.success,
           behavior: SnackBarBehavior.floating,
         ));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to save setting.', style: AdminStyles.body(size: 13)),
+          content: Text('Failed to save setting.',
+              style: AdminStyles.body(size: 13)),
           backgroundColor: AdminColors.danger,
           behavior: SnackBarBehavior.floating,
         ));
@@ -82,7 +86,8 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
         ),
       ),
       body: config.loading
-          ? const Center(child: CircularProgressIndicator(color: AdminColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AdminColors.primary))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -91,8 +96,22 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   icon: Icons.percent_rounded,
                   color: AdminColors.primary,
                   children: [
-                    _buildItem('commission_percent', 'Platform Commission', 'Percentage charged on base item price', config.commissionPercent, '%', config, rbac),
-                    _buildItem('platform_fee', 'Handling Fee', 'Flat fee added to customer total', config.platformFee, '₹', config, rbac),
+                    _buildItem(
+                        'commission_percent',
+                        'Platform Commission',
+                        'Percentage charged on base item price',
+                        config.commissionPercent,
+                        '%',
+                        config,
+                        rbac),
+                    _buildItem(
+                        'platform_fee',
+                        'Handling Fee',
+                        'Flat fee added to customer total',
+                        config.platformFee,
+                        '₹',
+                        config,
+                        rbac),
                   ],
                 ),
                 _buildSection(
@@ -100,8 +119,22 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   icon: Icons.shopping_basket_rounded,
                   color: AdminColors.warning,
                   children: [
-                    _buildItem('small_cart_threshold', 'Small Cart Threshold', 'Orders below this attract the fee', config.smallCartThreshold, '₹', config, rbac),
-                    _buildItem('small_cart_fee', 'Small Cart Fee', 'Flat penalty fee applied', config.smallCartFee, '₹', config, rbac),
+                    _buildItem(
+                        'small_cart_threshold',
+                        'Small Cart Threshold',
+                        'Orders below this attract the fee',
+                        config.smallCartThreshold,
+                        '₹',
+                        config,
+                        rbac),
+                    _buildItem(
+                        'small_cart_fee',
+                        'Small Cart Fee',
+                        'Flat penalty fee applied',
+                        config.smallCartFee,
+                        '₹',
+                        config,
+                        rbac),
                   ],
                 ),
                 _buildSection(
@@ -109,7 +142,14 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   icon: Icons.two_wheeler_rounded,
                   color: AdminColors.info,
                   children: [
-                    _buildItem('delivery_rate_per_km', 'Delivery Rate', 'Charge per km (₹/km)', config.deliveryRatePerKm, '₹/km', config, rbac),
+                    _buildItem(
+                        'delivery_rate_per_km',
+                        'Delivery Rate',
+                        'Charge per km (₹/km)',
+                        config.deliveryRatePerKm,
+                        '₹/km',
+                        config,
+                        rbac),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Container(
@@ -121,11 +161,19 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                         ),
                         child: Text(
                           'Preview at ₹${config.deliveryRatePerKm.toInt()}/km: 1km=₹${(1 * config.deliveryRatePerKm).toInt()} · 5km=₹${(5 * config.deliveryRatePerKm).toInt()} · 10km=₹${(10 * config.deliveryRatePerKm).toInt()} · 15km=₹${(15 * config.deliveryRatePerKm).toInt()}',
-                          style: AdminStyles.caption(color: AdminColors.textPrimary),
+                          style: AdminStyles.caption(
+                              color: AdminColors.textPrimary),
                         ),
                       ),
                     ),
-                    _buildItem('max_delivery_radius_km', 'Max Delivery Radius', 'Furthest distance allowed', config.maxDeliveryRadiusKm, 'km', config, rbac),
+                    _buildItem(
+                        'max_delivery_radius_km',
+                        'Max Delivery Radius',
+                        'Furthest distance allowed',
+                        config.maxDeliveryRadiusKm,
+                        'km',
+                        config,
+                        rbac),
                   ],
                 ),
                 _buildSection(
@@ -133,7 +181,14 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   icon: Icons.timer_rounded,
                   color: AdminColors.danger,
                   children: [
-                    _buildItem('wait_penalty_per_min', 'Wait Penalty per Minute', 'Deducted from slow shops (₹/min)', config.waitPenaltyPerMin, '₹/min', config, rbac),
+                    _buildItem(
+                        'wait_penalty_per_min',
+                        'Wait Penalty per Minute',
+                        'Deducted from slow shops (₹/min)',
+                        config.waitPenaltyPerMin,
+                        '₹/min',
+                        config,
+                        rbac),
                   ],
                 ),
                 _buildSection(
@@ -141,8 +196,22 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   icon: Icons.scale_rounded,
                   color: AdminColors.danger,
                   children: [
-                    _buildItem('heavy_order_threshold_kg', 'Heavy Weight Threshold', 'Orders above this get penalty', config.heavyOrderThresholdKg, 'kg', config, rbac),
-                    _buildItem('heavy_order_fee', 'Heavy Order Fee', 'Flat penalty for heavy orders', config.heavyOrderFee, '₹', config, rbac),
+                    _buildItem(
+                        'heavy_order_threshold_kg',
+                        'Heavy Weight Threshold',
+                        'Orders above this get penalty',
+                        config.heavyOrderThresholdKg,
+                        'kg',
+                        config,
+                        rbac),
+                    _buildItem(
+                        'heavy_order_fee_per_kg',
+                        'Heavy Order Fee (Per KG)',
+                        'Penalty for every kg over threshold',
+                        config.heavyOrderFeePerKg,
+                        '₹',
+                        config,
+                        rbac),
                   ],
                 ),
                 _buildSection(
@@ -154,13 +223,32 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Text(
                         'Leave empty when editing to fallback to the global Platform Commission (${config.commissionPercent}%).',
-                        style: AdminStyles.caption(color: AdminColors.textPrimary),
+                        style:
+                            AdminStyles.caption(color: AdminColors.textPrimary),
                       ),
                     ),
                     ...AppCategories.names.map((cat) {
                       final val = config.getCommissionPercentForCategory(cat);
-                      return _buildItem('commission_percent_$cat', cat, 'Override for $cat', val, '%', config, rbac);
+                      final gw =
+                          TaxConfig.effectiveGatewayDeductionPercent * 100;
+                      final tds = TaxConfig.itTdsRate * 100;
+                      final tcs = TaxConfig.tcsRateForCategory(cat) * 100;
+                      final total = val + gw + tds + tcs;
+
+                      final subtitle =
+                          'Total Deductible: ${total.toStringAsFixed(2)}% (Comm: $val%, GW (Online): ${gw.toStringAsFixed(2)}%*, TDS: $tds%, TCS: $tcs%)';
+
+                      return _buildItem('commission_percent_$cat', cat,
+                          subtitle, val, '%', config, rbac);
                     }),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Text(
+                        '* Gateway fee (2.36%) applies to the seller\'s gross payout (including GST). The effective percentage deducted from the base price will be slightly higher for items in the 18% GST slab. COD orders carry 0% gateway deduction.',
+                        style:
+                            AdminStyles.caption(color: AdminColors.textMuted),
+                      ),
+                    ),
                   ],
                 ),
                 _buildSection(
@@ -172,12 +260,14 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Text(
                         'Leave empty when editing to fallback to the global Wait Penalty (₹${config.waitPenaltyPerMin}/min).',
-                        style: AdminStyles.caption(color: AdminColors.textPrimary),
+                        style:
+                            AdminStyles.caption(color: AdminColors.textPrimary),
                       ),
                     ),
                     ...AppCategories.names.map((cat) {
                       final val = config.getWaitPenaltyRateForCategory(cat);
-                      return _buildItem('wait_penalty_per_min_$cat', cat, 'Override for $cat', val, '₹/min', config, rbac);
+                      return _buildItem('wait_penalty_per_min_$cat', cat,
+                          'Override for $cat', val, '₹/min', config, rbac);
                     }),
                   ],
                 ),
@@ -226,7 +316,8 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
     );
   }
 
-  Widget _buildItem(String key, String title, String subtitle, double value, String unit, PlatformConfigProvider config, RbacProvider rbac) {
+  Widget _buildItem(String key, String title, String subtitle, double value,
+      String unit, PlatformConfigProvider config, RbacProvider rbac) {
     final isEditing = _editingKey == key;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -239,7 +330,8 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
               children: [
                 Text(title, style: AdminStyles.body(size: 14)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: AdminStyles.caption(color: AdminColors.textMuted)),
+                Text(subtitle,
+                    style: AdminStyles.caption(color: AdminColors.textMuted)),
               ],
             ),
           ),
@@ -251,22 +343,27 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   Expanded(
                     child: TextField(
                       controller: _ctrls[key],
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       style: AdminStyles.body(),
                       decoration: InputDecoration(
                         suffixText: unit,
                         suffixStyle: AdminStyles.caption(),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
                         isDense: true,
                         filled: true,
                         fillColor: AdminColors.surface,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none),
                       ),
                       onSubmitted: (_) => _saveEdit(key, config, rbac),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.check_circle_rounded, color: AdminColors.success, size: 24),
+                    icon: const Icon(Icons.check_circle_rounded,
+                        color: AdminColors.success, size: 24),
                     onPressed: () => _saveEdit(key, config, rbac),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -275,27 +372,37 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
               ),
             )
           else
-            GestureDetector(
-              onTap: rbac.isSuperAdmin ? () => _startEdit(key, value) : null,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AdminColors.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AdminColors.cardBorder),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      unit == '₹' ? '₹$value' : (unit == '%' ? '$value%' : '$value $unit'),
-                      style: AdminStyles.title(size: 14, color: AdminColors.primary),
-                    ),
-                    if (rbac.isSuperAdmin) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.edit_rounded, color: AdminColors.textMuted, size: 14),
-                    ]
-                  ],
+            Flexible(
+              child: GestureDetector(
+                onTap: rbac.isSuperAdmin ? () => _startEdit(key, value) : null,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AdminColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AdminColors.cardBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          unit == '₹'
+                              ? '₹$value'
+                              : (unit == '%' ? '$value%' : '$value $unit'),
+                          style: AdminStyles.title(
+                              size: 14, color: AdminColors.primary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (rbac.isSuperAdmin) ...[
+                        const SizedBox(width: 8),
+                        const Icon(Icons.edit_rounded,
+                            color: AdminColors.textMuted, size: 14),
+                      ]
+                    ],
+                  ),
                 ),
               ),
             ),

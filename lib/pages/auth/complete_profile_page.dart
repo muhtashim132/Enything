@@ -509,7 +509,6 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
 
   // ── Step 0: Role Selection ────────────────────────────────────────────────
   Widget _buildRoleSelect() {
-    final config = context.watch<PlatformConfigProvider>();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(
@@ -557,7 +556,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
             icon: '🏪',
             title: 'Seller',
             subtitle:
-                'List your products — ${config.unifiedCommissionPercent.toStringAsFixed(0)}% commission on sales',
+                'List your products and expand your customer base',
             selected: _role == _Role.seller,
             onTap: () => setState(() => _role = _Role.seller),
           ),

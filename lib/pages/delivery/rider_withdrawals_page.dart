@@ -215,6 +215,8 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                           if (_useUpi)
                             TextFormField(
                               controller: _upiCtrl,
+                              maxLength: 100,
+                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                               style: const TextStyle(color: Colors.white),
                               decoration: _inputDec('UPI ID (e.g. name@upi)', Icons.account_balance_wallet_rounded),
                               validator: (v) => (v == null || v.isEmpty) ? 'Enter UPI ID' : null,
@@ -222,6 +224,8 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                           else ...[
                             TextFormField(
                               controller: _bankHolderCtrl,
+                              maxLength: 100,
+                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                               style: const TextStyle(color: Colors.white),
                               decoration: _inputDec('Account Holder Name', Icons.person_rounded),
                               validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
@@ -229,6 +233,8 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _bankAccCtrl,
+                              maxLength: 50,
+                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                               style: const TextStyle(color: Colors.white),
                               decoration: _inputDec('Account Number', Icons.account_balance_rounded),
                               validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
@@ -236,6 +242,8 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _bankIfscCtrl,
+                              maxLength: 20,
+                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                               style: const TextStyle(color: Colors.white),
                               decoration: _inputDec('IFSC Code', Icons.tag_rounded),
                               validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,

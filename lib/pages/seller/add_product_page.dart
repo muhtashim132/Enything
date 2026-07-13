@@ -966,6 +966,7 @@ class _AddProductPageState extends State<AddProductPage> {
                   children: [
                     TextFormField(
                       controller: _nameController,
+                      maxLength: 150,
                       validator: (v) =>
                           AppValidators.required(v, field: 'Product name'),
                       decoration: const InputDecoration(
@@ -1029,6 +1030,7 @@ class _AddProductPageState extends State<AddProductPage> {
                     TextFormField(
                       controller: _descriptionController,
                       maxLines: 3,
+                      maxLength: 1000,
                       decoration: const InputDecoration(
                         labelText: 'Description (Optional)',
                         hintText: 'Describe your product...',

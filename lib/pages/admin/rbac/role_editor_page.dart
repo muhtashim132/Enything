@@ -161,6 +161,8 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
               TextFormField(
                 controller: _nameCtrl,
                 enabled: canEdit,
+                maxLength: 50,
+                buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                 style: GoogleFonts.outfit(color: Colors.white),
                 decoration: _inputDec('e.g. Content Moderator'),
                 validator: (v) => (v == null || v.isEmpty) ? 'Name is required' : null,
@@ -172,6 +174,8 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                 controller: _descCtrl,
                 enabled: canEdit,
                 maxLines: 2,
+                maxLength: 250,
+                buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                 style: GoogleFonts.outfit(color: Colors.white),
                 decoration: _inputDec('What can this role do?'),
               ),

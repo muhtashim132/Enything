@@ -1,9 +1,5 @@
-// Supabase Edge Function: verify-otp
-// Verifies the OTP submitted by the user against the stored hash.
-// Called from the Flutter app before signing into Supabase.
-
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// @ts-nocheck
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +17,7 @@ async function hashOtp(otp: string, phone: string): Promise<string> {
     .join("");
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }

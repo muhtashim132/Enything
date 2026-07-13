@@ -41,6 +41,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   final List<RealtimeChannel> _realtimeChannels = [];
   // FCM foreground message subscription
   StreamSubscription? _fcmSub;
+  Timer? _debounceTimer;
+  bool _isOrdersLoadInProgress = false;
+  bool _needsReload = false;
+
+  void _debouncedLoadOrders() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _loadOrders();
+    });
+  }
 
   @override
   void initState() {
@@ -55,9 +65,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     for (final channel in _realtimeChannels) {
-      channel.unsubscribe();
+      Supabase.instance.client.removeChannel(channel);
     }
     _fcmSub?.cancel();
+    _debounceTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -106,7 +117,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   column: 'shop_id',
                   value: shopId,
                 ),
-                callback: (_) => _loadOrders(),
+                callback: (_) => _debouncedLoadOrders(),
               )
               .onPostgresChanges(
                 event: PostgresChangeEvent.update,
@@ -117,7 +128,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   column: 'shop_id',
                   value: shopId,
                 ),
-                callback: (_) => _loadOrders(),
+                callback: (_) => _debouncedLoadOrders(),
               )
               .subscribe();
           _realtimeChannels.add(channel);
@@ -128,12 +139,22 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
       // Also reload when any FCM push arrives in foreground
       _fcmSub = FirebaseMessaging.onMessage.listen((_) {
-        if (mounted) _loadOrders();
+        if (mounted) _debouncedLoadOrders();
       });
     });
   }
 
   Future<void> _loadOrders() async {
+    if (_isOrdersLoadInProgress) {
+      _needsReload = true;
+      // Phase 8: Prevent pull-to-refresh instant snap
+      while (_isOrdersLoadInProgress) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return;
+    }
+    _isOrdersLoadInProgress = true;
+    _needsReload = false;
     try {
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
@@ -146,12 +167,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       // FIX: Assign to typed list once — avoid multiple 'as List' casts
       final shopsList = shopsRaw as List;
       if (shopsList.isEmpty) {
-        try {
-          await _supabase.from('app_logs').insert({
-            'message':
-                'Seller order load: shopsList is empty for user ${auth.currentUserId}'
-          });
-        } catch (_) {}
+        _supabase.from('app_logs').insert({
+          'message': 'Seller order load: shopsList is empty for user ${auth.currentUserId}'
+        }).catchError((_) => null);
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -187,14 +205,18 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       }
     } catch (e, stacktrace) {
       debugPrint('Seller _loadOrders error: $e');
-      try {
-        await _supabase
-            .from('app_logs')
-            .insert({'message': 'Seller order load error: $e\n$stacktrace'});
-      } catch (_) {}
+      _supabase
+          .from('app_logs')
+          .insert({'message': 'Seller order load error: $e\n$stacktrace'})
+          .catchError((_) => null);
       if (mounted) {
         _showSnack('Failed to load orders. Pull down to refresh.', isError: true);
         setState(() => _isLoading = false);
+      }
+    } finally {
+      _isOrdersLoadInProgress = false;
+      if (_needsReload && mounted) {
+        _debouncedLoadOrders();
       }
     }
   }
@@ -550,6 +572,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         'p_new_status': status,
         'p_ready_time': updateData['order_ready_time'],
         'p_wait_penalty': 0.0,
+        'p_rider_lat': null,
+        'p_rider_lng': null,
+        'p_delivery_otp': null,
       });
 
       if (mounted) {

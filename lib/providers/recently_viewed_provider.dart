@@ -58,7 +58,8 @@ class RecentlyViewedProvider extends ChangeNotifier {
           .from('products')
           .select()
           .inFilter('id', _ids)
-          .eq('is_available', true);
+          .eq('is_available', true)
+          .limit(50);
 
       final fetched = (data as List)
           .map((p) => ProductModel.fromMap(p))

@@ -293,6 +293,8 @@ void _showAddressDetailSheet(
                       const SizedBox(height: 12),
                       TextField(
                         controller: customLabelCtrl,
+                        maxLength: 50,
+                        buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                         decoration: InputDecoration(
                           labelText: 'Custom label name',
                           hintText: 'e.g. Gym, College, Friend\'s place',
@@ -306,6 +308,8 @@ void _showAddressDetailSheet(
                     // ── Flat / House number ─────────────────────────────
                     TextField(
                       controller: flatCtrl,
+                      maxLength: 100,
+                      buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                       decoration: InputDecoration(
                         labelText: 'House No. / Building Name *',
                         hintText: 'e.g. A-404, Green Valley Apartments',
@@ -318,6 +322,8 @@ void _showAddressDetailSheet(
                     // ── Landmark ────────────────────────────────────────
                     TextField(
                       controller: landmarkCtrl,
+                      maxLength: 150,
+                      buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                       decoration: InputDecoration(
                         labelText: 'Landmark *',
                         hintText: 'e.g. Near City Mall, Opp. Police Station',
@@ -331,6 +337,8 @@ void _showAddressDetailSheet(
                     TextField(
                       controller: pincodeCtrl,
                       keyboardType: TextInputType.number,
+                      maxLength: 10,
+                      buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                       decoration: InputDecoration(
                         labelText: 'Pincode',
                         hintText: 'e.g. 400001',

@@ -15,7 +15,7 @@ class AuditRepository {
   }) async {
     var query = _db
         .from('audit_logs')
-        .select('*, admin_users(full_name, email)');
+        .select();
 
     if (actorId != null) query = query.eq('actor_id', actorId);
     if (action != null && action.isNotEmpty) query = query.ilike('action', '%$action%');
@@ -26,9 +26,29 @@ class AuditRepository {
     final data = await query
         .order('created_at', ascending: false)
         .range(offset, offset + limit - 1);
-    return (data as List)
-        .map((l) => AuditLogModel.fromMap(l as Map<String, dynamic>))
-        .toList();
+        
+    final List<Map<String, dynamic>> rawLogs = (data as List).cast<Map<String, dynamic>>();
+    
+    // Phase 15.1 Fix: Decoupled admin_users fetch to prevent PostgREST FK crashes
+    final actorIds = rawLogs.map((l) => l['actor_id']).whereType<String>().toSet().toList();
+    Map<String, dynamic> adminMap = {};
+    if (actorIds.isNotEmpty) {
+      try {
+        final admins = await _db.from('admin_users').select('id, full_name, email').inFilter('id', actorIds);
+        adminMap = { for (var a in (admins as List).cast<Map<String, dynamic>>()) a['id'] as String: a };
+      } catch (e) {
+        // Safe fallback if admin_users fails
+      }
+    }
+
+    return rawLogs.map((l) {
+      final log = Map<String, dynamic>.from(l);
+      final aId = log['actor_id'] as String?;
+      if (aId != null && adminMap.containsKey(aId)) {
+        log['admin_users'] = adminMap[aId];
+      }
+      return AuditLogModel.fromMap(log);
+    }).toList();
   }
 
   Future<void> log({
@@ -39,15 +59,14 @@ class AuditRepository {
     String? entityId,
     Map<String, dynamic>? metadata,
   }) async {
-    try {
-      await _db.from('audit_logs').insert({
-        'actor_id': actorId,
-        'actor_role': actorRole,
-        'action': action,
-        'entity_type': entityType,
-        'entity_id': entityId,
-        'metadata': metadata ?? {},
-      });
-    } catch (_) {}
+    // Phase 15.2 Fix: Fire-and-forget telemetry to prevent Double Timeout Locks
+    _db.from('audit_logs').insert({
+      'actor_id': actorId,
+      'actor_role': actorRole,
+      'action': action,
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'metadata': metadata ?? {},
+    }).catchError((_) => null);
   }
 }

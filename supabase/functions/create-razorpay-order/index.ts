@@ -12,7 +12,7 @@
 // Response body:
 //   { "id": "order_XXXXXX", "amount": 24900, "currency": "INR" }
 // =============================================================================
-
+// @ts-nocheck
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {

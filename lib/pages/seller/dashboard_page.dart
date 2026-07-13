@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,6 +40,17 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   late AnimationController _bgCtrl;
   late AnimationController _entryCtrl;
   late Animation<double> _bgAnim;
+  Timer? _debounceTimer;
+  bool _isStatsLoadInProgress = false;
+  bool _needsReload = false;
+  
+  void _debouncedLoadStats() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _loadStats();
+    });
+  }
+
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
   DateTime? _lastBackPressTime;
@@ -60,21 +72,27 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     _loadStats();
   }
 
-  RealtimeChannel? _realtimeChannel;
+  final Map<String, RealtimeChannel> _realtimeChannels = {};
 
   @override
   void dispose() {
     _bgCtrl.dispose();
     _entryCtrl.dispose();
-    _realtimeChannel?.unsubscribe();
+    _debounceTimer?.cancel();
+    for (final channel in _realtimeChannels.values) {
+      Supabase.instance.client.removeChannel(channel);
+    }
+    _realtimeChannels.clear();
     super.dispose();
   }
 
   void _setupRealtimeOrders(String shopId) {
-    if (_realtimeChannel != null) return;
+    final channelName = 'seller-orders-$shopId';
+    // Phase 9: Scale to multiple shops without duplicating subscriptions
+    if (_realtimeChannels.containsKey(channelName)) return;
     
-    _realtimeChannel = _supabase
-        .channel('seller-orders-$shopId')
+    final channel = _supabase
+        .channel(channelName)
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -86,16 +104,28 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           ),
           callback: (payload) {
             if (mounted) {
-              _loadStats();
+              _debouncedLoadStats();
             }
           },
         )
         .subscribe();
+    _realtimeChannels[channelName] = channel;
   }
 
   Future<void> _loadStats() async {
+    if (_isStatsLoadInProgress) {
+      _needsReload = true;
+      // Phase 8: Prevent pull-to-refresh instant snap
+      while (_isStatsLoadInProgress) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return;
+    }
+    _isStatsLoadInProgress = true;
+    _needsReload = false;
     final auth = context.read<AuthProvider>();
     try {
+      if (!mounted) return;
       final shopsResp = await _supabase
           .from('shops')
           .select(
@@ -137,6 +167,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         final shopId = shopData['id'] as String;
         _startNotifications(shopId);
         _setupRealtimeOrders(shopId);
+
+        if (!mounted) return;
 
         // Call RPC for stats
         final statsResult = await _supabase.rpc('get_seller_daily_stats', params: {'p_shop_id': shopId});
@@ -188,6 +220,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         );
         setState(() => _isLoading = false);
         _entryCtrl.forward();
+      }
+    } finally {
+      _isStatsLoadInProgress = false;
+      if (_needsReload && mounted) {
+        _debouncedLoadStats();
       }
     }
   }

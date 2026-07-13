@@ -70,8 +70,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final config = context.watch<PlatformConfigProvider>();
-
     return Scaffold(
       body: AnimatedBuilder(
         animation: _bgCtrl,
@@ -260,7 +258,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                           icon: '🏪',
                           title: 'Seller',
                           subtitle:
-                              'List your products & grow\nyour business — ${config.unifiedCommissionPercent.toStringAsFixed(0)}% commission',
+                              'List your products & grow\nyour business locally',
                           accentColor: const Color(0xFFF4C542),
                           badge: 'Sell Now',
                           selected: _selectedRole == 'seller',

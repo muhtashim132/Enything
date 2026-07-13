@@ -60,7 +60,8 @@ class _ShopDetailSheetState extends State<ShopDetailSheet> {
           .from('products')
           .select()
           .eq('shop_id', widget.shopId)
-          .eq('is_available', true);
+          .eq('is_available', true)
+          .limit(100);
 
       if (mounted) {
         setState(() {
@@ -90,8 +91,7 @@ class _ShopDetailSheetState extends State<ShopDetailSheet> {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF7F8FC),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: _isLoading
               ? SheetSkeletonLoader(isDark: isDark)
@@ -128,10 +128,67 @@ class _SheetContent extends StatefulWidget {
 
 class _SheetContentState extends State<_SheetContent> {
   String _selectedCategory = 'All';
+  String _selectedTab = 'Menu'; // 'Menu' or 'Reviews'
+  List<Map<String, dynamic>>? _reviews;
+  bool _isLoadingReviews = false;
 
   ShopModel get shop => widget.shop;
   List<ProductModel> get allProducts => widget.products;
   bool get isDark => widget.isDark;
+
+  Future<void> _fetchReviews() async {
+    if (_reviews != null || _isLoadingReviews) return;
+    setState(() => _isLoadingReviews = true);
+    try {
+      final ratingsData = await Supabase.instance.client
+          .from('ratings')
+          .select('rating, review, created_at, rater_id')
+          .eq('shop_id', shop.id)
+          .eq('ratee_role', 'seller')
+          .not('review', 'is', null)
+          .order('created_at', ascending: false)
+          .limit(20);
+
+      final raterIds = (ratingsData as List)
+          .map((r) => r['rater_id'] as String?)
+          .where((id) => id != null)
+          .toSet()
+          .toList();
+
+      Map<String, Map<String, dynamic>> profilesMap = {};
+      if (raterIds.isNotEmpty) {
+        final profilesData = await Supabase.instance.client
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .inFilter('id', raterIds);
+
+        for (final p in profilesData as List) {
+          profilesMap[p['id']] = {
+            'full_name': p['full_name'],
+            'avatar_url': p['avatar_url'],
+          };
+        }
+      }
+
+      final enrichedReviews = (ratingsData).map((r) {
+        final raterId = r['rater_id'] as String?;
+        final profile = raterId != null ? profilesMap[raterId] : null;
+        return {
+          ...r,
+          'profiles': profile ?? {'full_name': 'Customer'},
+        };
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _reviews = List<Map<String, dynamic>>.from(enrichedReviews);
+          _isLoadingReviews = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingReviews = false);
+    }
+  }
 
   // Deduplicated ordered category list from products
   List<String> get _categories {
@@ -219,7 +276,8 @@ class _SheetContentState extends State<_SheetContent> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                margin:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
                   color: isFav
@@ -331,10 +389,7 @@ class _SheetContentState extends State<_SheetContent> {
                       icon: Icons.star_rounded,
                       iconColor: const Color(0xFF48BB78),
                       gradColors: isDark
-                          ? [
-                              const Color(0xFF1A2A1A),
-                              const Color(0xFF162416)
-                            ]
+                          ? [const Color(0xFF1A2A1A), const Color(0xFF162416)]
                           : [const Color(0xFFF0FFF4), Colors.white],
                       isDark: isDark,
                     ),
@@ -346,10 +401,7 @@ class _SheetContentState extends State<_SheetContent> {
                       icon: Icons.timer_rounded,
                       iconColor: const Color(0xFF4299E1),
                       gradColors: isDark
-                          ? [
-                              const Color(0xFF1A1E2A),
-                              const Color(0xFF141824)
-                            ]
+                          ? [const Color(0xFF1A1E2A), const Color(0xFF141824)]
                           : [const Color(0xFFEBF8FF), Colors.white],
                       isDark: isDark,
                     ),
@@ -361,10 +413,7 @@ class _SheetContentState extends State<_SheetContent> {
                       icon: Icons.receipt_long_rounded,
                       iconColor: const Color(0xFFED8936),
                       gradColors: isDark
-                          ? [
-                              const Color(0xFF2A1E10),
-                              const Color(0xFF241810)
-                            ]
+                          ? [const Color(0xFF2A1E10), const Color(0xFF241810)]
                           : [const Color(0xFFFFFAF0), Colors.white],
                       isDark: isDark,
                     ),
@@ -461,9 +510,11 @@ class _SheetContentState extends State<_SheetContent> {
                         _modernBadge('Pure Veg', Icons.eco,
                             Colors.green.shade600, isDark),
                       if (shop.cuisineType != null)
-                        _modernBadge(shop.cuisineType!,
+                        _modernBadge(
+                            shop.cuisineType!,
                             Icons.restaurant_menu_rounded,
-                            AppColors.foodRed, isDark),
+                            AppColors.foodRed,
+                            isDark),
                     ],
                   ),
                 ],
@@ -480,173 +531,401 @@ class _SheetContentState extends State<_SheetContent> {
           ),
         ),
 
-        // ── Category filter chips ──────────────────────────────────────────
-        if (cats.length > 1)
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 48,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                itemCount: cats.length,
-                itemBuilder: (_, i) {
-                  final cat = cats[i];
-                  final isSelected = _selectedCategory == cat;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedCategory = cat),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primary
-                            : isDark
-                                ? Colors.white.withValues(alpha: 0.07)
-                                : const Color(0xFFF0F4FF),
-                        borderRadius: BorderRadius.circular(20),
-                        border: isSelected
-                            ? null
-                            : Border.all(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.12)
-                                    : Colors.grey.shade200),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                    color: AppColors.primary.withValues(alpha: 0.35),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3))
-                              ]
-                            : [],
-                      ),
-                      child: Text(
-                        cat,
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                          color: isSelected
-                              ? Colors.white
-                              : isDark
-                                  ? Colors.white60
-                                  : const Color(0xFF4A5568),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-
-        // Products header
+        // ── Tabs (Menu / Reviews) ──────────────────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                Text(
-                  _selectedCategory == 'All' ? 'Products' : _selectedCategory,
-                  style: GoogleFonts.outfit(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.white : const Color(0xFF1A1A2E),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.primary.withValues(alpha: 0.12),
-                        AppColors.primary.withValues(alpha: 0.08),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.2)),
-                  ),
-                  child: Text(
-                    '${filteredProducts.length} items',
-                    style: GoogleFonts.outfit(
-                        color: AppColors.primary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ),
+                _buildTab('Menu', isDark),
+                const SizedBox(width: 12),
+                _buildTab('Reviews', isDark),
               ],
             ),
           ),
         ),
 
-        // Products grid
-        if (filteredProducts.isEmpty)
-          SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(40),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : const Color(0xFFF0F0F8),
-                        shape: BoxShape.circle,
+        if (_selectedTab == 'Menu') ...[
+          // ── Category filter chips ──────────────────────────────────────────
+          if (cats.length > 1)
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 48,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: cats.length,
+                  itemBuilder: (_, i) {
+                    final cat = cats[i];
+                    final isSelected = _selectedCategory == cat;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedCategory = cat),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primary
+                              : isDark
+                                  ? Colors.white.withValues(alpha: 0.07)
+                                  : const Color(0xFFF0F4FF),
+                          borderRadius: BorderRadius.circular(20),
+                          border: isSelected
+                              ? null
+                              : Border.all(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.12)
+                                      : Colors.grey.shade200),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.35),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3))
+                                ]
+                              : [],
+                        ),
+                        child: Text(
+                          cat,
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight:
+                                isSelected ? FontWeight.w800 : FontWeight.w600,
+                            color: isSelected
+                                ? Colors.white
+                                : isDark
+                                    ? Colors.white60
+                                    : const Color(0xFF4A5568),
+                          ),
+                        ),
                       ),
-                      child: const Center(
-                        child: Text('🛍️', style: TextStyle(fontSize: 36)),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'No products in this category',
-                      style: GoogleFonts.outfit(
-                          color: AppColors.textSecondary, fontSize: 15),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
             ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-            sliver: SliverLayoutBuilder(
-              builder: (context, constraints) {
-                const crossAxisCount = 2;
-                const crossAxisSpacing = 14.0;
-                final availableWidth = constraints.crossAxisExtent;
-                final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount - 1))) / crossAxisCount;
-                final itemHeight = itemWidth + 178;
-                final childAspectRatio = itemWidth / itemHeight;
 
-                return SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    childAspectRatio: childAspectRatio,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: crossAxisSpacing,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) => ProductCard(
-                      product: filteredProducts[index],
-                      shop: shop,
+          // Products header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Row(
+                children: [
+                  Text(
+                    _selectedCategory == 'All' ? 'Products' : _selectedCategory,
+                    style: GoogleFonts.outfit(
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                      letterSpacing: -0.3,
                     ),
-                    childCount: filteredProducts.length,
                   ),
-                );
-              },
+                  const SizedBox(width: 10),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.12),
+                          AppColors.primary.withValues(alpha: 0.08),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Text(
+                      '${filteredProducts.length} items',
+                      style: GoogleFonts.outfit(
+                          color: AppColors.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+
+          // Products grid
+          if (filteredProducts.isEmpty)
+            SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(40),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : const Color(0xFFF0F0F8),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Text('🛍️', style: TextStyle(fontSize: 36)),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'No products in this category',
+                        style: GoogleFonts.outfit(
+                            color: AppColors.textSecondary, fontSize: 15),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              sliver: SliverLayoutBuilder(
+                builder: (context, constraints) {
+                  const crossAxisCount = 2;
+                  const crossAxisSpacing = 14.0;
+                  final availableWidth = constraints.crossAxisExtent;
+                  final itemWidth = (availableWidth -
+                          (crossAxisSpacing * (crossAxisCount - 1))) /
+                      crossAxisCount;
+                  final itemHeight = itemWidth + 178;
+                  final childAspectRatio = itemWidth / itemHeight;
+
+                  return SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      childAspectRatio: childAspectRatio,
+                      mainAxisSpacing: 14,
+                      crossAxisSpacing: crossAxisSpacing,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => ProductCard(
+                        product: filteredProducts[index],
+                        shop: shop,
+                      ),
+                      childCount: filteredProducts.length,
+                    ),
+                  );
+                },
+              ),
+            ),
+        ] else ...[
+          // ── Reviews Section ──────────────────────────────────────────────
+          if (_isLoadingReviews)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            )
+          else if (_reviews == null || _reviews!.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(40),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.star_border_rounded,
+                          size: 48, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No reviews yet',
+                        style: GoogleFonts.outfit(
+                          color: AppColors.textSecondary,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final rev = _reviews![index];
+                  final profile =
+                      rev['profiles'] as Map<String, dynamic>? ?? {};
+                  final raterName = profile['full_name'] ?? 'Customer';
+                  final raterAvatar = profile['avatar_url'];
+                  final rating = (rev['rating'] ?? 0).toInt();
+                  final reviewText = rev['review'] ?? '';
+                  final dateStr = rev['created_at'] ?? '';
+                  final date = DateTime.tryParse(dateStr);
+                  final formattedDate = date != null
+                      ? '${date.day}/${date.month}/${date.year}'
+                      : '';
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: isDark
+                            ? Border.all(
+                                color: Colors.white.withValues(alpha: 0.08))
+                            : Border.all(color: Colors.grey.shade100),
+                        boxShadow: isDark
+                            ? []
+                            : [
+                                BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.03),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4)),
+                              ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor:
+                                    AppColors.primary.withValues(alpha: 0.1),
+                                backgroundImage: raterAvatar != null
+                                    ? CachedNetworkImageProvider(raterAvatar)
+                                    : null,
+                                child: raterAvatar == null
+                                    ? Text(
+                                        raterName.substring(0, 1).toUpperCase(),
+                                        style: GoogleFonts.outfit(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.bold),
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      raterName,
+                                      style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black87),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      formattedDate,
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 11,
+                                          color: isDark
+                                              ? Colors.white54
+                                              : AppColors.textLight),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  const Icon(Icons.star_rounded,
+                                      color: Colors.amber, size: 18),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    rating.toString(),
+                                    style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            reviewText,
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              height: 1.4,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                childCount: _reviews!.length,
+              ),
+            ),
+        ],
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
+    );
+  }
+
+  Widget _buildTab(String title, bool isDark) {
+    final isSelected = _selectedTab == title;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() => _selectedTab = title);
+          if (title == 'Reviews') {
+            _fetchReviews();
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.primary
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.white),
+            borderRadius: BorderRadius.circular(16),
+            border: isSelected
+                ? null
+                : Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.grey.shade200,
+                  ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    )
+                  ]
+                : [],
+          ),
+          child: Center(
+            child: Text(
+              title,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : AppColors.textSecondary),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -705,26 +984,22 @@ class _SheetContentState extends State<_SheetContent> {
                     style: GoogleFonts.outfit(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
-                        color: isDark
-                            ? Colors.white
-                            : const Color(0xFF1A1A2E))),
+                        color:
+                            isDark ? Colors.white : const Color(0xFF1A1A2E))),
               ],
             ),
             const SizedBox(height: 3),
             Text(sub,
                 style: GoogleFonts.outfit(
                     fontSize: 11,
-                    color: isDark
-                        ? Colors.white54
-                        : AppColors.textSecondary)),
+                    color: isDark ? Colors.white54 : AppColors.textSecondary)),
           ],
         ),
       ),
     );
   }
 
-  Widget _modernBadge(
-      String label, IconData icon, Color color, bool isDark) {
+  Widget _modernBadge(String label, IconData icon, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -747,4 +1022,3 @@ class _SheetContentState extends State<_SheetContent> {
     );
   }
 }
-

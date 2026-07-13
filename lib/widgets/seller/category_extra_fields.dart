@@ -385,6 +385,8 @@ class _DarkField extends StatelessWidget {
           ),
           child: TextField(
             controller: controller,
+            maxLength: 500,
+            buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
             keyboardType: number ? TextInputType.number : TextInputType.text,
             textCapitalization:
                 caps ? TextCapitalization.characters : TextCapitalization.words,

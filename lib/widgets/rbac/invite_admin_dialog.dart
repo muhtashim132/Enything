@@ -128,6 +128,8 @@ class _InviteAdminDialogState extends State<InviteAdminDialog> {
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
+                  maxLength: 100,
+                  buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
                   style: GoogleFonts.outfit(color: Colors.white),
                   decoration: _inputDecoration(
                       'e.g. john@company.com', Icons.email_outlined),

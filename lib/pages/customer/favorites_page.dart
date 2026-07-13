@@ -56,7 +56,8 @@ class _FavoritesPageState extends State<FavoritesPage>
         final productRes = await _supabase
             .from('products')
             .select()
-            .filter('id', 'in', '($productIds)');
+            .filter('id', 'in', '($productIds)')
+            .limit(100);
         _favoriteProducts =
             (productRes as List).map((p) => ProductModel.fromMap(p)).toList();
       } else {
@@ -68,7 +69,8 @@ class _FavoritesPageState extends State<FavoritesPage>
         final shopRes = await _supabase
             .from('shops')
             .select()
-            .filter('id', 'in', '($shopIds)');
+            .filter('id', 'in', '($shopIds)')
+            .limit(100);
         _favoriteShops =
             (shopRes as List).map((s) => ShopModel.fromMap(s)).toList();
       } else {

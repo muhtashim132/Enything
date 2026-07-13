@@ -45,6 +45,14 @@ class NotificationProvider extends ChangeNotifier {
   
   StreamSubscription<String>? _fcmTokenSub;
   StreamSubscription<RemoteMessage>? _fcmMessageSub;
+  Timer? _debounceTimer;
+
+  void _debouncedNotifyListeners() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      notifyListeners();
+    });
+  }
 
   final Map<String, String> _lastProcessedStatus = {};
 
@@ -630,10 +638,14 @@ class NotificationProvider extends ChangeNotifier {
     _loadFromDb();
   }
 
+
+
   // ── Stop listening ────────────────────────────────────────────────────────
 
   void stopListening() {
-    _channel?.unsubscribe();
+    if (_channel != null) {
+      _supabase.removeChannel(_channel!);
+    }
     _channel = null;
 
     // [BELL] Stop and clear all pending order bells on role switch / logout
@@ -726,7 +738,7 @@ class NotificationProvider extends ChangeNotifier {
       }),
     );
 
-    notifyListeners();
+    _debouncedNotifyListeners();
     _persistToDb(notification); // persist to DB (fire and forget)
   }
 
@@ -1044,6 +1056,7 @@ class NotificationProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     stopListening();
     super.dispose();
   }

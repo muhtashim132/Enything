@@ -1,7 +1,7 @@
 // supabase/functions/_shared/rbac.ts
 // Deploy: supabase functions deploy rbac-helpers
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// @ts-nocheck
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
