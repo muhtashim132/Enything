@@ -62,6 +62,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
           .from('shops')
           .select('id, is_active, is_accepting_orders, banner_url, open_time, close_time, address')
           .eq('seller_id', auth.currentUserId ?? '')
+          .limit(1)
           .maybeSingle();
 
       if (resp == null) {

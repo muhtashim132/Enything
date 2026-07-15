@@ -42,7 +42,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
   RealtimeChannel? _channel;
-  final Map<String, LatLng> _riderLocations = {};
+  final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier = ValueNotifier({});
   bool _razorpayOpened = false;
 
   // Payment (Razorpay) — triggered when both seller & rider accept
@@ -154,6 +154,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _acceptanceCountdownTimer?.cancel();
     _pollingTimer?.cancel();
     if (_channel != null) _supabase.removeChannel(_channel!);
+    _riderLocationsNotifier.dispose();
     super.dispose();
   }
 
@@ -210,15 +211,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           _order = order;
           _groupOrders = group;
           _isLoading = false;
-          _riderLocations.clear();
+          final newLocs = <String, LatLng>{};
           for (final o in group) {
             if (o.deliveryPartnerId != null &&
                 o.riderLat != null &&
                 o.riderLng != null) {
-              _riderLocations[o.deliveryPartnerId!] =
-                  LatLng(o.riderLat!, o.riderLng!);
+              newLocs[o.deliveryPartnerId!] = LatLng(o.riderLat!, o.riderLng!);
             }
           }
+          _riderLocationsNotifier.value = newLocs;
         });
 
         _subscribeToOrder();
@@ -273,34 +274,76 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             if (mounted && payload.newRecord.isNotEmpty) {
               final updatedOrder = OrderModel.fromMap(payload.newRecord);
 
-              setState(() {
-                // Update in group list
-                final idx =
-                    _groupOrders.indexWhere((o) => o.id == updatedOrder.id);
+              // STRESS-TEST FIX (Pixel Overloading): Delta comparison to prevent full widget tree rebuilds for GPS updates
+              final oldOrder = _groupOrders.firstWhereOrNull((o) => o.id == updatedOrder.id);
+              bool needsSetState = true;
+              
+              if (oldOrder != null) {
+                // If only location or timestamp changed, these fields will remain identical
+                if (oldOrder.status == updatedOrder.status &&
+                    oldOrder.paymentMethod == updatedOrder.paymentMethod &&
+                    oldOrder.sellerAccepted == updatedOrder.sellerAccepted &&
+                    oldOrder.partnerAccepted == updatedOrder.partnerAccepted &&
+                    oldOrder.deliveryPartnerId == updatedOrder.deliveryPartnerId &&
+                    oldOrder.cancelledReason == updatedOrder.cancelledReason &&
+                    oldOrder.riderPhone == updatedOrder.riderPhone &&
+                    oldOrder.rejectionMessage == updatedOrder.rejectionMessage &&
+                    oldOrder.hasCustomerRated == updatedOrder.hasCustomerRated &&
+                    oldOrder.hasSellerRated == updatedOrder.hasSellerRated &&
+                    oldOrder.hasDeliveryRated == updatedOrder.hasDeliveryRated) {
+                  needsSetState = false;
+                }
+              }
+
+              void updateLocalModels() {
+                final idx = _groupOrders.indexWhere((o) => o.id == updatedOrder.id);
                 if (idx != -1) {
-                  updatedOrder.items =
-                      _groupOrders[idx].items; // preserve items
+                  updatedOrder.items = _groupOrders[idx].items;
                   _groupOrders[idx] = updatedOrder;
                 }
-
-                // If it's the primary order, update _order
                 if (updatedOrder.id == widget.orderId) {
                   _order = updatedOrder;
                 }
+              }
 
-                if (updatedOrder.deliveryPartnerId != null &&
-                    updatedOrder.riderLat != null &&
-                    updatedOrder.riderLng != null) {
-                  _riderLocations[updatedOrder.deliveryPartnerId!] =
-                      LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
-                }
-                if (updatedOrder.status == 'delivered' &&
-                    updatedOrder.deliveryPartnerId != null) {
-                  _riderLocations.remove(updatedOrder.deliveryPartnerId);
-                }
-              });
+              if (needsSetState) {
+                setState(updateLocalModels);
+                _handleAggregateStatusChange();
+              } else {
+                updateLocalModels();
+              }
 
-              _handleAggregateStatusChange();
+              // Update rider locations independently of setState, with Idempotency check
+              if (updatedOrder.deliveryPartnerId != null &&
+                  updatedOrder.riderLat != null &&
+                  updatedOrder.riderLng != null) {
+                final oldLoc = _riderLocationsNotifier.value[updatedOrder.deliveryPartnerId!];
+                final newLoc = LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
+                
+                if (oldLoc == null || oldLoc.latitude != newLoc.latitude || oldLoc.longitude != newLoc.longitude) {
+                  final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                  currentLocs[updatedOrder.deliveryPartnerId!] = newLoc;
+                  _riderLocationsNotifier.value = currentLocs;
+                }
+              }
+              // Handle Reassignment (Ghost Rider) logic
+              if (oldOrder?.deliveryPartnerId != null &&
+                  oldOrder!.deliveryPartnerId != updatedOrder.deliveryPartnerId) {
+                if (_riderLocationsNotifier.value.containsKey(oldOrder.deliveryPartnerId!)) {
+                  final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                  currentLocs.remove(oldOrder.deliveryPartnerId);
+                  _riderLocationsNotifier.value = currentLocs;
+                }
+              }
+
+              if (['delivered', 'cancelled', 'rejected'].contains(updatedOrder.status) &&
+                  updatedOrder.deliveryPartnerId != null) {
+                if (_riderLocationsNotifier.value.containsKey(updatedOrder.deliveryPartnerId!)) {
+                  final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                  currentLocs.remove(updatedOrder.deliveryPartnerId);
+                  _riderLocationsNotifier.value = currentLocs;
+                }
+              }
             }
           },
         )
@@ -470,7 +513,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         0.0,
         (sum, o) =>
             sum +
-            (o.grandTotalCollected > 0 ? o.grandTotalCollected : o.grandTotal));
+            o.grandTotal);
   }
 
   bool get _allSellersAccepted {
@@ -508,7 +551,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       if (aggStatus == 'delivered' ||
           aggStatus == 'cancelled' ||
           aggStatus == 'seller_rejected') {
-        _riderLocations.clear();
+        _riderLocationsNotifier.value = {};
       }
 
       if (aggStatus == 'awaiting_acceptance') {
@@ -572,32 +615,32 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (_order == null) return;
     if (_aggregateStatus != expectedStatus) return;
 
-    final fresh = await _supabase
-        .from('orders')
-        .select('status')
-        .eq('id', widget.orderId)
-        .maybeSingle();
-    if (fresh == null || fresh['status'] != expectedStatus) return;
-
     try {
-      await _supabase.rpc('cancel_order',
-          params: {'p_order_id': widget.orderId, 'p_reason': 'timeout'});
+      final targetOrders = _groupOrders.isEmpty ? [_order!] : _groupOrders;
+      bool anyCancelled = false;
 
-      var query = _supabase.from('orders').select();
-      if (_order!.cartGroupId != null) {
-        query = query.eq('cart_group_id', _order!.cartGroupId!);
-      } else {
-        query = query.eq('id', widget.orderId);
+      for (final order in targetOrders) {
+        // Fetch fresh status for each individual sibling order
+        final fresh = await _supabase
+            .from('orders')
+            .select('status')
+            .eq('id', order.id)
+            .maybeSingle();
+            
+        if (fresh != null && fresh['status'] == expectedStatus) {
+          await _supabase.rpc('cancel_order',
+              params: {'p_order_id': order.id, 'p_reason': 'timeout'});
+          anyCancelled = true;
+        }
       }
-      final res = await query.eq('status', 'cancelled');
-      if (mounted && res.isNotEmpty) {
+
+      if (anyCancelled && mounted) {
         // Re-fetch all group orders to sync sibling order states
         // (Realtime only fires individual row events — group siblings may lag)
         await _fetchOrder();
-        if (mounted) {
+        if (mounted && targetOrders.length == 1) {
           setState(() {
-            _order = _order!
-                .copyWith(status: 'cancelled', cancelledReason: 'timeout');
+            _order = _order!.copyWith(status: 'cancelled', cancelledReason: 'timeout');
           });
         }
       }
@@ -738,7 +781,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'non_food_gst_amount': order.nonFoodGstAmount,
           'tcs_amount': order.tcsAmount,
           'tds_amount': order.tdsAmount,
-          'grand_total_collected': order.grandTotalCollected,
+          'grand_total_collected': order.grandTotalCollected >= 0 ? order.grandTotalCollected : null,
           'gst_rate_snapshot': order.gstRateSnapshot,
           'estimated_distance_km': order.estimatedDistanceKm,
           'shop_prep_time_snapshot': order.shopPrepTimeSnapshot,
@@ -1187,9 +1230,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   /// Returns the best available map centre for this order.
   /// Priority: rider live position → customer delivery address → Delhi fallback.
-  LatLng _mapCenter() {
-    if (_riderLocations.isNotEmpty && _order?.status == 'out_for_delivery') {
-      return _riderLocations.values.first;
+  LatLng _mapCenter(Map<String, LatLng> riderLocs) {
+    if (riderLocs.isNotEmpty && _order?.status == 'out_for_delivery') {
+      return riderLocs.values.first;
     }
     if (_order?.deliveryLat != null && _order?.deliveryLng != null) {
       return LatLng(_order!.deliveryLat!, _order!.deliveryLng!);
@@ -1198,7 +1241,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   /// Builds the map markers including all shops, customer, and live rider.
-  List<Marker> _buildMapMarkers() {
+  List<Marker> _buildMapMarkers(Map<String, LatLng> riderLocs) {
     final markers = <Marker>[];
 
     // Customer delivery address pin (always shown)
@@ -1248,8 +1291,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'picked_up',
           'out_for_delivery'
         ].contains(_order!.status);
-    if (_riderLocations.isNotEmpty && showRider) {
-      for (final riderLoc in _riderLocations.values) {
+    if (riderLocs.isNotEmpty && showRider) {
+      for (final riderLoc in riderLocs.values) {
         markers.add(Marker(
           point: riderLoc,
           width: 52,
@@ -1467,8 +1510,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
       double totalAmount = 0.0;
       for (var o in activeOrders) {
-        totalAmount +=
-            (o.grandTotalCollected > 0 ? o.grandTotalCollected : o.grandTotal);
+        totalAmount += o.grandTotal;
       }
       final amountInPaise = (totalAmount * 100).round();
 
@@ -2648,6 +2690,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.white : AppColors.textPrimary,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
                         'Qty: ${item.quantity}',
@@ -3020,79 +3064,84 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Widget _buildEtaStrip() {
     if (_order == null) return const SizedBox.shrink();
 
-    double distanceKm =
-        _order!.estimatedDistanceKm > 0 ? _order!.estimatedDistanceKm : 3.0;
-    int prepMins =
-        _order!.shopPrepTimeSnapshot > 0 ? _order!.shopPrepTimeSnapshot : 30;
+    return ValueListenableBuilder<Map<String, LatLng>>(
+      valueListenable: _riderLocationsNotifier,
+      builder: (context, riderLocs, child) {
+        double distanceKm =
+            _order!.estimatedDistanceKm > 0 ? _order!.estimatedDistanceKm : 3.0;
+        int prepMins =
+            _order!.shopPrepTimeSnapshot > 0 ? _order!.shopPrepTimeSnapshot : 30;
 
-    // During out_for_delivery: use live rider→customer distance for remaining time
-    if (_aggregateStatus == 'out_for_delivery' &&
-        _riderLocations.isNotEmpty &&
-        _order!.deliveryLat != null &&
-        _order!.deliveryLng != null) {
-      double maxDist = 0.0;
-      final custPt = LatLng(_order!.deliveryLat!, _order!.deliveryLng!);
-      for (final riderLoc in _riderLocations.values) {
-        final d = DeliveryCalculator.haversineKm(riderLoc, custPt);
-        if (d > maxDist) maxDist = d;
-      }
-      distanceKm = maxDist;
-      prepMins = 0; // prep is done — only travel remains
-    } else if (_aggregateStatus == 'picked_up' ||
-        _aggregateStatus == 'out_for_delivery') {
-      // Prep is already done; only travel time remains
-      prepMins = 0;
-    } else if (_aggregateStatus == 'preparing') {
-      // Rider will take time to arrive at shop + travel — use full ETA
-    }
+        // During out_for_delivery: use live rider→customer distance for remaining time
+        if (_aggregateStatus == 'out_for_delivery' &&
+            riderLocs.isNotEmpty &&
+            _order!.deliveryLat != null &&
+            _order!.deliveryLng != null) {
+          double maxDist = 0.0;
+          final custPt = LatLng(_order!.deliveryLat!, _order!.deliveryLng!);
+          for (final riderLoc in riderLocs.values) {
+            final d = DeliveryCalculator.haversineKm(riderLoc, custPt);
+            if (d > maxDist) maxDist = d;
+          }
+          distanceKm = maxDist;
+          prepMins = 0; // prep is done — only travel remains
+        } else if (_aggregateStatus == 'picked_up' ||
+            _aggregateStatus == 'out_for_delivery') {
+          // Prep is already done; only travel time remains
+          prepMins = 0;
+        } else if (_aggregateStatus == 'preparing') {
+          // Rider will take time to arrive at shop + travel — use full ETA
+        }
 
-    final etaStr = DeliveryCalculator.etaLabel(distanceKm, prepMins);
-    final arrivalStr = DeliveryCalculator.etaArrivalTime(distanceKm, prepMins);
+        final etaStr = DeliveryCalculator.etaLabel(distanceKm, prepMins);
+        final arrivalStr = DeliveryCalculator.etaArrivalTime(distanceKm, prepMins);
 
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.30)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.access_time_rounded, color: Colors.white, size: 16),
-          const SizedBox(width: 6),
-          Text(
-            etaStr,
-            style: GoogleFonts.outfit(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
+        return Container(
+          margin: const EdgeInsets.only(top: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(50),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.30)),
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            width: 4,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.5),
-              shape: BoxShape.circle,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.access_time_rounded, color: Colors.white, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                etaStr,
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const Icon(Icons.location_on_rounded,
+                  color: Colors.white70, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                'by $arrivalStr',
+                style: GoogleFonts.outfit(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-          const Icon(Icons.location_on_rounded,
-              color: Colors.white70, size: 14),
-          const SizedBox(width: 4),
-          Text(
-            'by $arrivalStr',
-            style: GoogleFonts.outfit(
-              color: Colors.white.withValues(alpha: 0.9),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -3211,14 +3260,20 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: GoogleFonts.outfit(
-              color: isBold
-                  ? (isDark ? Colors.white : AppColors.textPrimary)
-                  : (isDark ? Colors.white54 : AppColors.textSecondary),
-              fontSize: isBold ? 15 : 13,
-              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-            )),
+        Expanded(
+          child: Text(label,
+              style: GoogleFonts.outfit(
+                color: isBold
+                    ? (isDark ? Colors.white : AppColors.textPrimary)
+                    : (isDark ? Colors.white54 : AppColors.textSecondary),
+                fontSize: isBold ? 15 : 13,
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
         Text(value,
             style: GoogleFonts.outfit(
               fontWeight: isBold ? FontWeight.w900 : FontWeight.w600,
@@ -3277,12 +3332,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             // Underlying map thumbnail
             ClipRRect(
               borderRadius: BorderRadius.circular(24),
-              child: EnythingMap(
-                center: _mapCenter(),
-                zoom: _order?.status == 'awaiting_acceptance' ? 15.5 : 16.5,
-                interactive:
-                    false, // non-interactive; tap handled by GestureDetector
-                markers: _buildMapMarkers(),
+              child: ValueListenableBuilder<Map<String, LatLng>>(
+                valueListenable: _riderLocationsNotifier,
+                builder: (context, riderLocs, child) {
+                  return EnythingMap(
+                    center: _mapCenter(riderLocs),
+                    zoom: _order?.status == 'awaiting_acceptance' ? 15.5 : 16.5,
+                    interactive: false,
+                    markers: _buildMapMarkers(riderLocs),
+                  );
+                },
               ),
             ),
 
@@ -3346,47 +3405,54 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               ),
 
             // Live rider badge (top-right) when rider is active
-            if (_riderLocations.isNotEmpty &&
-                [
-                  'confirmed',
-                  'preparing',
-                  'ready_for_pickup',
-                  'picked_up',
-                  'out_for_delivery'
-                ].contains(_order!.status))
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppColors.success,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.success.withValues(alpha: 0.4),
-                        blurRadius: 8,
+            Positioned(
+              top: 12,
+              right: 12,
+              child: ValueListenableBuilder<Map<String, LatLng>>(
+                valueListenable: _riderLocationsNotifier,
+                builder: (context, riderLocs, child) {
+                  if (riderLocs.isNotEmpty &&
+                      [
+                        'confirmed',
+                        'preparing',
+                        'ready_for_pickup',
+                        'picked_up',
+                        'out_for_delivery'
+                      ].contains(_order!.status)) {
+                    return Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.success.withValues(alpha: 0.4),
+                            blurRadius: 8,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.circle, color: Colors.white, size: 6),
-                      const SizedBox(width: 5),
-                      Text(
-                        'Rider Live',
-                        style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.circle, color: Colors.white, size: 6),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Rider Live',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
               ),
+            ),
           ],
         ),
       ),

@@ -32,6 +32,8 @@ function b64url(data: Uint8Array): string {
 let cachedAccessToken: string | null = null;
 let tokenExpirationTime: number = 0;
 
+let tokenRefreshPromise: Promise<string> | null = null;
+
 /**
  * Exchange a Firebase Service Account for a short-lived OAuth2 access token
  * that authorises calls to the FCM HTTP v1 API.
@@ -44,47 +46,69 @@ async function getFcmAccessToken(sa: Record<string, string>, forceRefresh = fals
     return cachedAccessToken;
   }
 
-  const enc = new TextEncoder();
-
-  const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
-  const payload = b64url(enc.encode(JSON.stringify({
-    iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-  })));
-
-  const signingInput = `${header}.${payload}`;
-
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    pemToArrayBuffer(sa.private_key),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-
-  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(signingInput));
-  const jwt = `${signingInput}.${b64url(new Uint8Array(sig))}`;
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
-
-  const json = await res.json();
-  if (!json.access_token) {
-    throw new Error(`OAuth2 token exchange failed: ${JSON.stringify(json)}`);
+  // STRESS-TEST FIX: Mutex Promise-Lock to prevent Google OAuth 429 Rate Limiting
+  if (tokenRefreshPromise) {
+    return tokenRefreshPromise;
   }
 
-  cachedAccessToken = json.access_token;
-  tokenExpirationTime = now + 3500; // Cache for slightly less than 1 hour
-  return cachedAccessToken as string;
+  tokenRefreshPromise = (async () => {
+    try {
+      const enc = new TextEncoder();
+
+      const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+      const payload = b64url(enc.encode(JSON.stringify({
+        iss: sa.client_email,
+        scope: 'https://www.googleapis.com/auth/firebase.messaging',
+        aud: 'https://oauth2.googleapis.com/token',
+        iat: now,
+        exp: now + 3600,
+      })));
+
+      const signingInput = `${header}.${payload}`;
+
+      const key = await crypto.subtle.importKey(
+        'pkcs8',
+        pemToArrayBuffer(sa.private_key),
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+        false,
+        ['sign'],
+      );
+
+      const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(signingInput));
+      const jwt = `${signingInput}.${b64url(new Uint8Array(sig))}`;
+
+      const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          assertion: jwt,
+        }),
+      });
+
+      const json = await res.json();
+      if (!json.access_token) {
+        throw new Error(`OAuth2 token exchange failed: ${JSON.stringify(json)}`);
+      }
+
+      cachedAccessToken = json.access_token;
+      tokenExpirationTime = now + 3500; // Cache for slightly less than 1 hour
+      return cachedAccessToken as string;
+    } finally {
+      tokenRefreshPromise = null;
+    }
+  })();
+
+  return tokenRefreshPromise;
+}
+
+// ── Chunk helper ───────────────────────────────────────────────────────────
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
 }
 
 // ── Edge Function entry point ──────────────────────────────────────────────
@@ -152,7 +176,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: rows, error: dbErr } = await supabase
       .from('device_tokens')
-      .select('token')
+      .select('token, role')
       .eq('user_id', user_id);
 
     if (dbErr) throw dbErr;
@@ -172,78 +196,104 @@ Deno.serve(async (req: Request) => {
     let sent = 0;
     const errors: string[] = [];
 
-    for (const { token } of rows) {
-      try {
-        const message = {
-          message: {
-            token,
-            // CRITICAL FOR SAMSUNG/ANDROID 12: Including 'notification' forces Google
-            // Play Services to draw it on the system tray regardless of app state.
-            notification: { title, body },
-            data: {
-              title,
-              body,
-              ...(data ?? {}),
-            },
-            android: {
-              priority: 'high',
-              notification: {
-                channel_id: 'enything_push_channel',
-                icon: 'ic_notification',
-                default_sound: true,
-                default_vibrate_timings: true,
-                notification_priority: 'PRIORITY_MAX',
-                visibility: 'PUBLIC',
+    // STRESS-TEST FIX: Chunking & Promise.all to prevent Edge Function timeout cascade
+    const tokenChunks = chunkArray(rows, 50);
+    for (const batch of tokenChunks) {
+      await Promise.all(batch.map(async ({ token, role }) => {
+        try {
+          // Additive check: Use custom bell channel for sellers and riders receiving new orders or payment confirmations
+          const isUrgentOrderAlert = (role === 'seller' || role === 'delivery') && 
+                                     (String(title).toLowerCase().includes('new order') || 
+                                      String(title).toLowerCase().includes('payment done'));
+                                      
+          const channelId = isUrgentOrderAlert ? 'order_alert_loop_channel' : 'enything_push_channel';
+          const soundFile = isUrgentOrderAlert ? 'enything_bell' : undefined;
+          const apnsSound = isUrgentOrderAlert ? 'enything_bell.wav' : 'default'; // STRESS-TEST FIX: iOS Custom Bell Parity
+
+          const message = {
+            message: {
+              token,
+              // CRITICAL FOR SAMSUNG/ANDROID 12: Including 'notification' forces Google
+              // Play Services to draw it on the system tray regardless of app state.
+              notification: { title, body },
+              data: {
+                title,
+                body,
+                ...(data ?? {}),
               },
-            },
-            apns: {
-              payload: {
-                aps: {
-                  sound: 'default',
-                  badge: 1,
+              android: {
+                priority: 'high',
+                notification: {
+                  channel_id: channelId,
+                  icon: 'ic_notification',
+                  default_sound: !isUrgentOrderAlert,
+                  ...(soundFile ? { sound: soundFile } : {}),
+                  default_vibrate_timings: true,
+                  notification_priority: 'PRIORITY_MAX',
+                  visibility: 'PUBLIC',
+                },
+              },
+              apns: {
+                payload: {
+                  aps: {
+                    sound: apnsSound,
+                    badge: 1,
+                  },
                 },
               },
             },
-          },
-        };
+          };
 
-        let fcmRes = await fetch(fcmUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(message),
-        });
+          // STRESS-TEST FIX: AbortController to prevent TCP deadlocks
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        // EF2 FIX: On 401 (stale token), force-refresh once and retry.
-        if (fcmRes.status === 401) {
-          console.warn('FCM returned 401 — refreshing access token and retrying...');
-          cachedAccessToken = null; // Invalidate cache
-          accessToken = await getFcmAccessToken(sa, true);
-          fcmRes = await fetch(fcmUrl, {
+          let fcmRes = await fetch(fcmUrl, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(message),
+            signal: controller.signal,
           });
-        }
+          clearTimeout(timeoutId);
 
-        if (fcmRes.ok) {
-          sent++;
-        } else {
-          const errText = await fcmRes.text();
-          errors.push(`token[...${token.slice(-6)}]: ${errText}`);
-          // Remove expired / unregistered tokens automatically
-          if (fcmRes.status === 404 || fcmRes.status === 410) {
-            await supabase.from('device_tokens').delete().eq('token', token);
+          // EF2 FIX: On 401 (stale token), force-refresh once and retry.
+          if (fcmRes.status === 401) {
+            console.warn('FCM returned 401 — refreshing access token and retrying...');
+            cachedAccessToken = null; // Invalidate cache
+            accessToken = await getFcmAccessToken(sa, true);
+            
+            const controllerRetry = new AbortController();
+            const timeoutIdRetry = setTimeout(() => controllerRetry.abort(), 15000);
+
+            fcmRes = await fetch(fcmUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(message),
+              signal: controllerRetry.signal,
+            });
+            clearTimeout(timeoutIdRetry);
           }
+
+          if (fcmRes.ok) {
+            sent++;
+          } else {
+            const errText = await fcmRes.text();
+            errors.push(`token[...${token.slice(-6)}]: ${errText}`);
+            // Remove expired / unregistered tokens automatically
+            if (fcmRes.status === 404 || fcmRes.status === 410) {
+              await supabase.from('device_tokens').delete().eq('token', token);
+            }
+          }
+        } catch (e) {
+          errors.push(String(e));
         }
-      } catch (e) {
-        errors.push(String(e));
-      }
+      }));
     }
 
     return new Response(

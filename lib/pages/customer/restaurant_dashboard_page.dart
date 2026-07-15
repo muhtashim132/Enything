@@ -74,7 +74,7 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
           .select()
           .eq('shop_id', widget.shopId)
           .eq('is_available', true)
-          .limit(100);
+          .limit(2000);
 
       if (mounted) {
         setState(() {

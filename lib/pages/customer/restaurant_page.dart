@@ -44,7 +44,7 @@ class _RestaurantPageState extends State<RestaurantPage> {
           .select()
           .eq('shop_id', widget.shopId)
           .eq('is_available', true)
-          .limit(100);
+          .limit(2000);
 
       setState(() {
         _shop = ShopModel.fromMap(shopData);

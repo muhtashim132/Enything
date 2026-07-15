@@ -321,6 +321,13 @@ class PlatformConfigProvider extends ChangeNotifier {
 
       // Optimistic update
       final doubleVal = double.tryParse(value) ?? 0.0;
+      
+      // Phase 12 Fix: Prevent negative values or absurdly large values
+      if (doubleVal < 0 || doubleVal > 1000000) {
+        debugPrint('Invalid boundary for $key: $value');
+        return false;
+      }
+      
       final oldVal = _getValue(key);
       _setValue(key, doubleVal);
       notifyListeners();

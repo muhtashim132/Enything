@@ -33,10 +33,12 @@ class AppNotification {
 /// Usage:
 ///   - Call [listenAsCustomer], [listenAsSeller], or [listenAsDelivery]
 ///     once after login to subscribe.
-///   - Call [stopListening] on logout / role change.
-///   - Call [markAllRead] / [markRead] to manage unread state.
 class NotificationProvider extends ChangeNotifier {
-  SupabaseClient get _supabase => Supabase.instance.client;
+  final SupabaseClient? mockClient;
+
+  NotificationProvider({this.mockClient});
+
+  SupabaseClient get _supabase => mockClient ?? Supabase.instance.client;
 
   final List<AppNotification> _notifications = [];
   RealtimeChannel? _channel;
@@ -56,10 +58,26 @@ class NotificationProvider extends ChangeNotifier {
 
   final Map<String, String> _lastProcessedStatus = {};
 
-  List<AppNotification> get notifications =>
-      List.unmodifiable(_notifications.reversed.toList());
+  // STRESS-TEST FIX: Cache properties to prevent O(N) allocation on every frame/getter access
+  List<AppNotification>? _cachedNotifications;
+  int? _cachedUnreadCount;
 
-  int get unreadCount => _notifications.where((n) => !n.isRead).length;
+  @override
+  void notifyListeners() {
+    _cachedNotifications = null;
+    _cachedUnreadCount = null;
+    super.notifyListeners();
+  }
+
+  List<AppNotification> get notifications {
+    _cachedNotifications ??= List.unmodifiable(_notifications.reversed.toList());
+    return _cachedNotifications!;
+  }
+
+  int get unreadCount {
+    _cachedUnreadCount ??= _notifications.where((n) => !n.isRead).length;
+    return _cachedUnreadCount!;
+  }
 
   // ── FCM Push Notification Registration ───────────────────────────────────
 
@@ -724,9 +742,32 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   void _add(AppNotification notification) {
-    // Deduplicate by id
-    if (_notifications.any((n) => n.id == notification.id)) return;
+    // STRESS-TEST FIX: Bounded Scan (O(1) instead of O(N)) to prevent Pixel Overloading / UI Jank
+    final recentItems = _notifications.length > 20 
+        ? _notifications.sublist(_notifications.length - 20) 
+        : _notifications;
+
+    // Deduplicate by id using bounded scan
+    if (recentItems.any((n) => n.id == notification.id)) return;
+
+    // Additive deduplication for FCM vs Realtime (bounded)
+    if (notification.orderId != null) {
+      final isDuplicate = recentItems.any((n) => 
+          n.orderId == notification.orderId && 
+          n.title == notification.title && 
+          DateTime.now().difference(n.createdAt).inSeconds < 5);
+      if (isDuplicate) {
+        debugPrint('Skipping duplicate notification for order ${notification.orderId}');
+        return;
+      }
+    }
+
     _notifications.add(notification);
+    
+    // STRESS-TEST FIX: Cap memory usage to prevent OOM crashes if app is left open for days
+    if (_notifications.length > 500) {
+      _notifications.removeRange(0, _notifications.length - 500);
+    }
     
     // Buzz notification in the foreground!
     NotificationService().showNotification(

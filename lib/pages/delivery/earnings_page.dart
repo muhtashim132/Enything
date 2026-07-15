@@ -44,35 +44,35 @@ class _EarningsPageState extends State<EarningsPage> {
       final nowIst = nowUtc.add(const Duration(hours: 5, minutes: 30));
       final todayStartIst = DateTime(nowIst.year, nowIst.month, nowIst.day);
 
-      final allDeliveries = await _supabase
+      // A1: Use the highly optimized get_rider_stats RPC to prevent Payload DDOS
+      final stats = await _supabase.rpc('get_rider_stats', params: {'p_rider_id': auth.currentUserId ?? ''});
+      
+      double today = 0, total = 0;
+      int deliveriesCount = 0;
+      List<double> weeklyMap = List.filled(7, 0.0);
+      
+      if (stats != null) {
+        today = (stats['today_earnings'] as num?)?.toDouble() ?? 0.0;
+        total = (stats['total_earnings'] as num?)?.toDouble() ?? 0.0;
+        deliveriesCount = (stats['total_deliveries'] as num?)?.toInt() ?? 0;
+        
+        final rawWeekly = stats['weekly_earnings'] as List<dynamic>?;
+        if (rawWeekly != null && rawWeekly.length == 7) {
+          weeklyMap = rawWeekly.map((e) => (e as num).toDouble()).toList();
+        }
+      }
+
+      // Fetch only the 20 most recent deliveries for the list view to prevent N+1 pixel overloading
+      final recentDeliveriesRaw = await _supabase
           .from('orders')
           .select()
           .eq('delivery_partner_id', auth.currentUserId ?? '')
           .eq('status', 'delivered')
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(20);
 
-      final deliveries = allDeliveries as List;
-      double today = 0, total = 0;
-      // 7-day buckets: index 0 = 6 days ago … index 6 = today
-      final Map<int, double> weekMap = {};
+      final deliveries = recentDeliveriesRaw as List;
 
-      for (final d in deliveries) {
-        final charge = ((d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0) as num).toDouble() + ((d['wait_time_penalty'] ?? 0.0) as num).toDouble();
-        final createdAt =
-            DateTime.tryParse(d['created_at'] ?? '')?.toIST() ?? DateTime(2000);
-        total += charge;
-        // Compare IST delivery time against IST midnight
-        if (!createdAt.isBefore(todayStartIst)) today += charge;
-        // Weekly breakdown: use IST-based daysAgo
-        final daysAgo = nowIst
-            .difference(
-              DateTime(createdAt.year, createdAt.month, createdAt.day),
-            )
-            .inDays;
-        if (daysAgo >= 0 && daysAgo < 7) {
-          weekMap[6 - daysAgo] = (weekMap[6 - daysAgo] ?? 0) + charge;
-        }
-      }
 
       double avgRating = 0.0;
       try {
@@ -90,8 +90,8 @@ class _EarningsPageState extends State<EarningsPage> {
         setState(() {
           _todayEarnings = today;
           _totalEarnings = total;
-          _totalDeliveries = deliveries.length;
-          _weeklyEarnings = List.generate(7, (i) => weekMap[i] ?? 0.0);
+          _totalDeliveries = deliveriesCount;
+          _weeklyEarnings = weeklyMap;
           _averageRating = avgRating;
           _recentDeliveries = deliveries.take(20).map((d) {
             return {

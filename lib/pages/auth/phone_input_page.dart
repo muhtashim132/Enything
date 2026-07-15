@@ -58,9 +58,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
     final fullPhone = '$_countryCode$phone';
 
     // Auto-login for reviewer magic numbers
-    final isReviewer = fullPhone.contains('9999999996') || 
-                       fullPhone.contains('9999999997') || 
-                       fullPhone.contains('9999999998');
+    final isReviewer = fullPhone.endsWith('9999999996') || 
+                       fullPhone.endsWith('9999999997') || 
+                       fullPhone.endsWith('9999999998');
     
     if (isReviewer) {
        final auth = context.read<AuthProvider>();

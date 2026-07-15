@@ -26,6 +26,7 @@ class BellAlertService {
 
   final _pendingOrderIds = <String>{};
   AudioPlayer? _player;
+  AudioPlayer? _previewPlayer;
   bool _isPlaying = false;
 
   bool get hasPendingOrders => _pendingOrderIds.isNotEmpty;
@@ -43,12 +44,19 @@ class BellAlertService {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  /// Track a new pending order and start the alert bell (if not already ringing).
-  /// Safe to call multiple times with the same orderId — deduplicates internally.
   Future<void> addPendingOrder(String orderId) async {
     if (_pendingOrderIds.contains(orderId)) return;
     _pendingOrderIds.add(orderId);
-    debugPrint('[BellAlert] +order: $orderId | pending=${_pendingOrderIds.length}');
+    
+    // STRESS-TEST FIX: Prevent synchronous FFI bottleneck on the main thread during high burst loads.
+    if (kDebugMode) {
+      if (_pendingOrderIds.length <= 10) {
+        debugPrint('[BellAlert] +order: $orderId | pending=${_pendingOrderIds.length}');
+      } else if (_pendingOrderIds.length % 50 == 0) {
+        debugPrint('[BellAlert] +batch orders... pending=${_pendingOrderIds.length}');
+      }
+    }
+
     if (!_isPlaying && !_isStarting) {
       _isStarting = true;
       try {
@@ -91,22 +99,35 @@ class BellAlertService {
   }
 
   /// Play the current bell sound once for in-settings preview.
-  /// Uses a temporary AudioPlayer that auto-disposes after 10 s.
+  /// Uses a Singleton AudioPlayer to prevent audio overlap and memory leaks.
   Future<void> previewBell() async {
     final uid = _userId;
     final customPath = uid != null
         ? await BellSettingsService.instance.getCustomBellPath(uid)
         : null;
 
-    final preview = AudioPlayer();
+    final oldPreview = _previewPlayer;
+    _previewPlayer = null;
     try {
-      await preview.setReleaseMode(ReleaseMode.release);
-      await _playSource(preview, customPath);
+      await oldPreview?.stop();
+    } catch (_) {}
+    oldPreview?.dispose();
+
+    _previewPlayer = AudioPlayer();
+    try {
+      await _previewPlayer!.setReleaseMode(ReleaseMode.release);
+      await _playSource(_previewPlayer!, customPath);
       // Auto-dispose after 10 s (covers most bell sounds)
-      Timer(const Duration(seconds: 10), preview.dispose);
+      Timer(const Duration(seconds: 10), () {
+        if (_previewPlayer != null) {
+          _previewPlayer!.dispose();
+          _previewPlayer = null;
+        }
+      });
     } catch (e) {
       debugPrint('[BellAlert] previewBell error: $e');
-      preview.dispose();
+      _previewPlayer?.dispose();
+      _previewPlayer = null;
     }
   }
 
@@ -129,9 +150,13 @@ class BellAlertService {
       return;
     }
 
-    // Dispose any previous player cleanly before creating a fresh one
-    await _player?.stop();
-    _player?.dispose();
+    // STRESS-TEST FIX: Prevent async race condition by isolating the old player reference.
+    final oldPlayer = _player;
+    _player = null;
+    try {
+      await oldPlayer?.stop();
+    } catch (_) {}
+    oldPlayer?.dispose();
     
     // Final check before instantiating new player
     if (_pendingOrderIds.isEmpty) {
@@ -151,13 +176,12 @@ class BellAlertService {
       await _playSource(_player!, customPath);
       debugPrint('[BellAlert] Bell started (loop=$loop, custom=$customPath)');
 
-      // In single-ring mode, clear the playing flag once the sound ends
-      if (!loop) {
-        _player!.onPlayerComplete.listen((_) {
-          _isPlaying = false;
-          debugPrint('[BellAlert] Single ring completed.');
-        });
-      }
+      // Universally bind the completion listener to prevent the Silent Bell Deadlock
+      // If loop is true, this won't fire until manually stopped or toggled to single-ring mid-flight.
+      _player!.onPlayerComplete.listen((_) {
+        _isPlaying = false;
+        debugPrint('[BellAlert] Audio completed. Ready for next order.');
+      });
     } catch (e) {
       debugPrint('[BellAlert] _startBell error: $e');
       _isPlaying = false;
@@ -188,11 +212,17 @@ class BellAlertService {
 
   Future<void> stopBell() async {
     _isPlaying = false;
-    try {
-      await _player?.stop();
-    } catch (_) {}
-    _player?.dispose();
+    // STRESS-TEST FIX: Prevent stopBell from accidentally killing a newly started _player during event-loop yields.
+    final currentPlayer = _player;
     _player = null;
+    
+    if (currentPlayer != null) {
+      try {
+        await currentPlayer.stop();
+      } catch (_) {}
+      currentPlayer.dispose();
+    }
+    
     debugPrint('[BellAlert] Bell stopped.');
   }
 }

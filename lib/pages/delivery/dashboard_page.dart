@@ -112,6 +112,19 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _fcmForegroundSub = FirebaseMessaging.onMessage.listen((_) {
         if (mounted) _debouncedLoadOrders();
       });
+      
+      _startPollingTimer();
+    });
+  }
+
+  void _startPollingTimer() {
+    _pollingTimer?.cancel();
+    // 30-second staggered polling replaces the global Realtime firehose to safely
+    // clean up stale (claimed/cancelled) orders from the UI.
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && _isOnline && !_isOrdersLoadInProgress) {
+         _debouncedLoadOrders();
+      }
     });
   }
 
@@ -119,44 +132,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (_realtimeChannel != null) {
         _supabase.removeChannel(_realtimeChannel!);
       }
+      // A1 FIX: Realtime Global Firehose & DB DDOS Vulnerability
+      // We removed the global `insert` and unfiltered `update` listeners.
+      // Previously, every order placed globally triggered EVERY rider globally to 
+      // simultaneously execute `get_nearby_unassigned_orders`, causing massive DDOS spikes.
+      // Now, new orders are efficiently pushed via geographically-filtered FCM notifications
+      // (which trigger `_debouncedLoadOrders` via `_fcmForegroundSub`), and stale orders 
+      // are cleaned up by the lightweight 30-second polling timer.
+      // We ONLY keep the strict Realtime listener for the rider's OWN actively assigned orders.
       _realtimeChannel = _supabase
           .channel('delivery-orders-$userId')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: 'orders',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'status',
-              value: 'awaiting_acceptance',
-            ),
-            callback: (_) {
-              if (mounted) _debouncedLoadOrders();
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'orders',
-            callback: (payload) {
-              if (mounted) {
-                // A1: newRecord is non-nullable in Supabase SDK v2
-                final orderId = payload.newRecord['id'] as String?;
-                if (orderId != null) {
-                  final wasAvailable = _availableGroups.expand((g) => g.orders).any((o) => o.id == orderId);
-                  
-                  // Phase 13 Fix: Trigger reload if order was just accepted by shop
-                  final status = payload.newRecord['status'] as String?;
-                  final dpId = payload.newRecord['delivery_partner_id'];
-                  final isNowAvailable = status == 'awaiting_acceptance' && dpId == null;
-
-                  if (wasAvailable || isNowAvailable) {
-                    _debouncedLoadOrders();
-                  }
-                }
-              }
-            },
-          )
           .onPostgresChanges(
             event: PostgresChangeEvent.update,
             schema: 'public',
@@ -201,9 +186,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           });
   }
 
+  Timer? _pollingTimer;
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pollingTimer?.cancel();
     _locationBroadcastTimer?.cancel();
     _debounceTimer?.cancel();
     _fcmForegroundSub?.cancel();
@@ -248,6 +236,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     // (which has no access to the main isolate's in-memory dotenv state).
     final url = dotenv.env['SUPABASE_URL'] ?? '';
     final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+    final session = _supabase.auth.currentSession;
+    final accessToken = session?.accessToken ?? '';
+    final refreshToken = session?.refreshToken ?? '';
+
     if (url.isEmpty || anonKey.isEmpty) {
       debugPrint('[Dashboard] Cannot start background service: missing Supabase env vars');
       return;
@@ -256,6 +248,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       riderId: riderId,
       supabaseUrl: url,
       anonKey: anonKey,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
     );
   }
 
@@ -430,11 +424,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         _maxRadiusKm = 15.0; // safe default
       }
 
+      // 100x ARCHITECTURE FIX: Offload geographic search to PostGIS RPC
+      // Prevents "Pixel Overloading" OOM crashes and "Geographic Starvation"
       final available = await _supabase
-          .from('orders')
-          .select('*, order_items(*), shops!shop_id(id, name, location)')
-          .isFilter('delivery_partner_id', null)   // no rider assigned yet
-          .inFilter('status', ['awaiting_acceptance', 'pending']);
+          .rpc('get_nearby_unassigned_orders', params: {
+            'p_rider_lat': _riderLat,
+            'p_rider_lng': _riderLng,
+            'p_radius_km': _maxRadiusKm,
+          })
+          .select('*, order_items(*), shops!shop_id(id, name, location)');
 
       final myOrders = await _supabase
           .from('orders')
@@ -468,36 +466,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       if (!mounted) return;
 
-      final allAvailable = (available).map((o) {
+      // The RPC already filters geographically and prevents Data Overload!
+      final filtered = (available as List).map((o) {
         final model = OrderModel.fromMap(o);
         model.items = (o['order_items'] as List? ?? [])
             .map((i) => OrderItem.fromMap(i))
             .toList();
         return model;
       }).toList();
-
-      // B1: Geographic distance filter — only show orders where the shop is within
-      // _maxRadiusKm of the rider's current location (fetched from platform_config).
-      List<OrderModel> filtered;
-      if (_riderLat != null && _riderLng != null) {
-        filtered = allAvailable.where((order) {
-          if (order.shopId == null) return true; // include if no shop data
-          final shopInfo = _shopInfoCache[order.shopId];
-          if (shopInfo == null) return true; // include if shop location unknown
-          // C4 FIX: Equirectangular approximation — accurate for <50km, accounts for
-          // latitude-based longitude compression (the missing cos term in old formula).
-          const double degToRad = 3.14159265358979 / 180.0;
-          final dLat = (shopInfo.lat - _riderLat!) * degToRad;
-          final dLng = (shopInfo.lng - _riderLng!) * degToRad;
-          final midLatRad = ((_riderLat! + shopInfo.lat) / 2.0) * degToRad;
-          final x = dLng * math.cos(midLatRad);
-          final distKm = 6371.0 * math.sqrt(dLat * dLat + x * x);
-          return distKm <= _maxRadiusKm;
-        }).toList();
-      } else {
-        // No location yet — show all orders so rider isn't left with empty screen
-        filtered = allAvailable;
-      }
 
       if (filtered.isEmpty) {
         _supabase.from('app_logs').insert({'message': 'Rider load: allAvailable is empty. Query returned ${available.length} rows.'}).catchError((_) => null);
@@ -507,36 +483,17 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       double tempTotalKmsDriven = 0.0;
       final today = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
       
-      // Fetch delivered orders separately to compute earnings (they are excluded from myOrders)
+      // Fetch delivered orders separately to compute earnings (using safe RPC to prevent payload DDOS)
       if (auth.currentUserId != null) {
         try {
-          final deliveredResp = await _supabase
-              .from('orders')
-              .select('id, cart_group_id, rider_earnings, wait_time_penalty, estimated_distance_km, created_at')
-              .eq('delivery_partner_id', auth.currentUserId!)
-              .eq('status', 'delivered');
-              
-          final Map<String, double> groupMaxDistances = {};
-          
-          for (var row in deliveredResp as List) {
-            final groupId = row['cart_group_id'] as String? ?? row['id'].toString();
-            final dist = (row['estimated_distance_km'] ?? 0.0).toDouble();
-            
-            if (!groupMaxDistances.containsKey(groupId) || dist > groupMaxDistances[groupId]!) {
-              groupMaxDistances[groupId] = dist;
-            }
-
-            final created = DateTime.tryParse(row['created_at'] ?? '')?.toIST();
-            if (created != null &&
-                created.year == today.year &&
-                created.month == today.month &&
-                created.day == today.day) {
-              tempTodayEarnings += (row['rider_earnings'] ?? 0.0).toDouble() + (row['wait_time_penalty'] ?? 0.0).toDouble();
-            }
+          final stats = await _supabase.rpc('get_rider_stats', params: {'p_rider_id': auth.currentUserId!});
+          if (stats != null) {
+            tempTodayEarnings = (stats['today_earnings'] as num?)?.toDouble() ?? 0.0;
+            tempTotalKmsDriven = (stats['total_kms'] as num?)?.toDouble() ?? 0.0;
           }
-          
-          tempTotalKmsDriven = groupMaxDistances.values.fold(0.0, (sum, dist) => sum + dist);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('Error loading rider stats from RPC: $e');
+        }
       }
 
       if (mounted) {
@@ -577,12 +534,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   Future<void> _acceptOrderGroup(OrderGroup group) async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
     // A2: Track failures and surface them to the rider
     int failedCount = 0;
     for (int i = 0; i < group.orders.length; i++) {
       final success = await _acceptOrder(group.orders[i], skipReload: true, notifyCustomer: i == 0);
-      if (!success) failedCount++;
+      if (!success) {
+        failedCount += (group.orders.length - i);
+        break; // Prevent cascading errors/dialogs for the rest of the group
+      }
     }
     if (failedCount > 0 && mounted) {
       _showSnack(
@@ -717,19 +678,35 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         if (pe.message.contains('ORDER_CANCELLED')) {
           _showSnack('⚠️ The customer just cancelled this order.', isError: true);
         } else if (pe.message.contains('MAX_ORDERS_REACHED')) {
-          _showSnack('⚠️ You can only accept orders from up to 3 different customers at a time.', isError: true);
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF1E1E2C),
+              title: const Text('Maximum Orders Reached', style: TextStyle(color: Colors.white)),
+              content: const SingleChildScrollView(
+                child: Text('You can only accept a maximum of 3 active cart groups simultaneously to ensure timely delivery.', style: TextStyle(color: Colors.white70)),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK', style: TextStyle(color: Color(0xFFF4C542))),
+                )
+              ],
+            )
+          );
         } else {
           _showSnack(pe.message, isError: true);
         }
       }
       return false;
     } catch (e) {
+      _showSnack('Accept error: $e', isError: true);
       debugPrint('Accept error: $e');
       return false;
     }
   }
 
-  Future<void> _updateStatus(OrderModel order, String status, {bool skipReload = false, bool skipRating = false}) async {
+  Future<void> _updateStatus(OrderModel order, String status, {bool skipReload = false, bool skipRating = false, bool notifyCustomer = true}) async {
     try {
       if (status == 'arrived') {
         if (order.shopLat == null || order.shopLng == null || order.shopLat == 0.0 || order.shopLng == 0.0) {
@@ -843,7 +820,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           'p_delivery_otp': null,
         });
         
-        if (mounted) {
+        if (mounted && notifyCustomer) {
           context.read<NotificationProvider>().sendBackgroundPush(
             targetUserId: order.customerId,
             title: '🎉 Order Delivered!',
@@ -852,8 +829,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           );
         }
 
-        _stopLocationBroadcast();
-        RiderBackgroundService.instance.stopService(); // Also kill background GPS
+        // 100x ARCHITECTURE FIX: Geographic Starvation (Zombie Rider)
+        // Never stop the background or foreground GPS broadcast if the rider is STILL ONLINE.
+        // If they are online, they MUST send GPS to receive new orders. The broadcast timer
+        // automatically scales down to a 30s idle heartbeat when _myGroups becomes empty.
+        final remainingActiveOrders = _myGroups.expand((g) => g.orders).where((o) => o.id != order.id && o.status != 'delivered' && o.status != 'cancelled').length;
+        if (remainingActiveOrders == 0 && !_isOnline) {
+          _stopLocationBroadcast();
+          RiderBackgroundService.instance.stopService();
+        }
         if (!skipReload) _loadOrders();
         // Show rating prompt after delivering
         if (mounted && !order.hasDeliveryRated && !skipRating) {
@@ -862,22 +846,17 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
         return;
       } else {
-        final updateData = <String, dynamic>{'status': status};
-        if (status == 'picked_up' && order.orderReadyTime == null) {
-          final readyTime = DateTime.now();
-          updateData['order_ready_time'] = readyTime.toIso8601String();
-        }
         await _supabase.rpc('update_order_status', params: {
           'p_order_id': order.id,
           'p_new_status': status,
-          'p_ready_time': updateData['order_ready_time'],
+          'p_ready_time': null, // Omit frontend override so backend computes wait penalty using actual arrived time
           'p_wait_penalty': 0.0,
           'p_rider_lat': _riderLat,
           'p_rider_lng': _riderLng,
           'p_delivery_otp': null,
         });
             
-        if (mounted) {
+        if (mounted && notifyCustomer) {
           final notifProv = context.read<NotificationProvider>();
           if (status == 'picked_up') {
             notifProv.sendBackgroundPush(
@@ -901,7 +880,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         _startLocationBroadcast();
       }
       if (!skipReload) _loadOrders();
+    } on PostgrestException catch (pe) {
+      _showSnack(pe.message, isError: true);
     } catch (e) {
+      _showSnack('Update error: $e', isError: true);
       debugPrint('Status update error: $e');
     }
   }
@@ -1905,7 +1887,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         const SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () => _acceptOrderGroup(group),
+                            onPressed: _isLoading ? null : () => _acceptOrderGroup(group),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.success,
                               foregroundColor: Colors.white,
@@ -2074,9 +2056,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          for (var o in group.orders) {
-                            await _updateStatus(o, 'out_for_delivery');
+                          for (int i = 0; i < group.orders.length; i++) {
+                            await _updateStatus(group.orders[i], 'out_for_delivery', skipReload: true, notifyCustomer: i == 0);
                           }
+                          _loadOrders();
                         },
                         icon: const Icon(Icons.rocket_launch, size: 18),
                         label: Text('Mark All Out for Delivery', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
@@ -2088,8 +2071,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          for (var o in group.orders) {
-                            await _updateStatus(o, 'delivered', skipReload: true, skipRating: true);
+                          for (int i = 0; i < group.orders.length; i++) {
+                            await _updateStatus(group.orders[i], 'delivered', skipReload: true, skipRating: true, notifyCustomer: i == 0);
                           }
                           _loadOrders();
                           if (mounted) {

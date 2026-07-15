@@ -21,7 +21,7 @@ import '../../utils/responsive_layout.dart';
 import '../../services/image_compression_service.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../providers/coupon_provider.dart';
-
+import 'dart:math' as math;
 
 import '../../widgets/coupon_input_widget.dart';
 
@@ -61,6 +61,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final issues = <String>[];
 
+      // Aggregated Inventory Guard to prevent Quantity Accumulation Bypass
+      final Map<String, int> productQtyMap = {};
+      for (var item in cart.items) {
+         productQtyMap[item.product.id] = (productQtyMap[item.product.id] ?? 0) + item.quantity;
+      }
+
       for (var cartItem in cart.items) {
         final dbProduct = latestProducts
             .where((p) => p['id'] == cartItem.product.id)
@@ -84,9 +90,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
         
         // 3. Stock Quantity Guard
+        final totalRequestedQty = productQtyMap[cartItem.product.id] ?? cartItem.quantity;
         if (dbProduct['total_quantity'] != null &&
-            dbProduct['total_quantity'] < cartItem.quantity) {
-          issues.add("Only ${dbProduct['total_quantity']} units of ${cartItem.product.name} are available.");
+            dbProduct['total_quantity'] < totalRequestedQty) {
+          issues.add("Only ${dbProduct['total_quantity']} total units of ${cartItem.product.name} are available, but you have $totalRequestedQty in your cart.");
           continue;
         }
         
@@ -238,6 +245,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.read<CartProvider>();
     final location = context.read<LocationProvider>();
 
+    if (cart.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Your cart is empty!'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      _isProcessing.value = false;
+      return;
+    }
+
     // Prescription guard
     if (cart.requiresPrescription && _prescriptions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -318,14 +339,40 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
     // Capture coupon ID & discount before any await to avoid BuildContext-across-async-gaps warning
-    final appliedCouponId = context.read<CouponProvider>().appliedCoupon?.id;
-    final appliedCouponDiscount = context.read<CouponProvider>().discountAmount;
+    final couponProv = context.read<CouponProvider>();
+    
+    // O1 FIX: Coupon State Desync Guard
+    // If the cart was modified after the coupon was applied (e.g., items removed),
+    // the static discount amount in CouponProvider becomes stale. We must dynamically
+    // re-validate it here before creating the order to prevent backend SQL rejection
+    // (Coupon discount spoofing) or unexpected UI softlocks.
+    if (couponProv.hasCoupon && couponProv.appliedCoupon != null) {
+      final code = couponProv.appliedCoupon!.code;
+      final stillValid = await couponProv.validateAndApply(
+         code: code,
+         cartTotal: cart.subtotal,
+      );
+      if (!stillValid) {
+         throw Exception("Your cart total has changed and the coupon '$code' is no longer valid or its discount amount has been adjusted. Please review your cart and try again.");
+      }
+    }
+    
+    // Capture coupon ID & discount after re-validation
+    final appliedCouponId = couponProv.appliedCoupon?.id;
+    final appliedCouponDiscount = couponProv.discountAmount;
 
     final supabase = Supabase.instance.client;
 
     List<String> uploadedPaths = [];
 
     try {
+      // 0. Self-Dealing Guard (Anti-Sybil / Fraud Prevention)
+      for (final shop in cart.shops) {
+        if (shop.sellerId == auth.currentUserId) {
+          throw Exception("Self-Dealing Blocked: You cannot place orders on your own shop (${shop.name}).");
+        }
+      }
+
       // Stock Validation
       final productIds = cart.items.map((i) => i.product.id).toList();
       // Phase 25 Fix: Deep join with shops to verify shop is still active, and fetch variants/price to check spoofing.
@@ -333,6 +380,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .from('products')
           .select('id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
           .inFilter('id', productIds);
+
+      // Aggregated Inventory Guard to prevent Quantity Accumulation Bypass
+      final Map<String, int> productQtyMap = {};
+      for (var item in cart.items) {
+         productQtyMap[item.product.id] = (productQtyMap[item.product.id] ?? 0) + item.quantity;
+      }
 
       for (var cartItem in cart.items) {
         final dbProduct = latestProducts
@@ -354,9 +407,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
         
         // 3. Stock Quantity Guard
+        final totalRequestedQty = productQtyMap[cartItem.product.id] ?? cartItem.quantity;
         if (dbProduct['total_quantity'] != null &&
-            dbProduct['total_quantity'] < cartItem.quantity) {
-          throw Exception("Only ${dbProduct['total_quantity']} units of ${cartItem.product.name} are available.");
+            dbProduct['total_quantity'] < totalRequestedQty) {
+          throw Exception("Only ${dbProduct['total_quantity']} total units of ${cartItem.product.name} are available, but you have $totalRequestedQty in your cart.");
         }
         
         // 4. Cart Price Spoofing Guard
@@ -489,6 +543,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
         return envPhones.any((p) => phone.endsWith(p.trim()));
       }
 
+      // 100x ARCHITECTURE FIX: Economic Splitting Flaw
+      // Calculate total geographic distance to all shops. We MUST split the delivery fee
+      // and rider earnings by distance, NOT by the food's subtotal. Otherwise, a rider can
+      // drop a distant shop with cheap items, and the replacement rider gets paid pennies
+      // for a long drive, while the first rider pockets the entire fee for a short drive.
+      double totalCartDistanceKm = 0.0;
+      for (final shop in cart.shops) {
+        totalCartDistanceKm += location.currentLocation != null
+            ? location.distanceTo(shop.location)
+            : 3.0;
+      }
+      if (totalCartDistanceKm == 0.0) totalCartDistanceKm = 1.0;
+
       for (final shop in cart.shops) {
         final shopItems =
             cart.items.where((i) => i.shop.id == shop.id).toList();
@@ -504,8 +571,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ? (shopBaseSubtotal / cart.subtotal)
             : (1.0 / numShops);
 
-        final shopDelivery = totalDelivery * proportion;
-        final shopRiderEarnings = riderEarnings * proportion;
+        final distanceProportion = totalCartDistanceKm > 0
+            ? (shopDistanceKm / totalCartDistanceKm)
+            : (1.0 / numShops);
+
+        // Splitting by distance prevents the "Ghost Rider Scam"
+        final shopDelivery = totalDelivery * distanceProportion;
+        final shopRiderEarnings = riderEarnings * distanceProportion;
+        
+        // Platform fee is still split by food value
         final shopPlatformFee = cart.platformFee * proportion;
 
         final shopTaxBreakdownItems = shopItems.map((i) {
@@ -603,13 +677,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'tcs_amount': shopTcs,
           'tds_amount': shopTds,
           'grand_total_collected':
-              shopGrandTotal - (appliedCouponDiscount * proportion),
+              math.max(0.0, shopGrandTotal - (appliedCouponDiscount * proportion)),
           'gst_rate_snapshot': rateSnapshot,
           'prescription_urls': uploadedPrescriptionUrls,
           'estimated_distance_km': shopDistanceKm,
           'shop_prep_time_snapshot': shop.prepTimeMinutes,
           'coupon_id': appliedCouponId,
-          'coupon_discount': appliedCouponDiscount * proportion,
+          'coupon_discount': math.min(shopGrandTotal, appliedCouponDiscount * proportion),
         });
 
         final itemsToInsert = shopItems.map((item) {
@@ -653,7 +727,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               targetUserId: data['shop'].sellerId,
               title: '🔔 New Order! Accept now',
               body:
-                  'Order ₹${(data['grandTotal'] as double).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 2 min window.',
+                  'Order ₹${(data['grandTotal'] as double).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 3 min window.',
               data: {'order_id': data['orderId'], 'role': 'seller'},
             );
           }

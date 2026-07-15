@@ -10,6 +10,7 @@ import '../config/payment_config.dart';
 import '../config/tax_config.dart';
 import '../providers/platform_config_provider.dart';
 import '../utils/delivery_calculator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ---------------------------------------------------------------------------
 // Serialization helpers (Bug #20)
@@ -101,6 +102,7 @@ class CartProvider extends ChangeNotifier {
 
   CartProvider() {
     _safeAddPlatformListener();
+    _listenToAuthState();
   }
 
   void _safeAddPlatformListener([int retries = 0]) {
@@ -109,6 +111,14 @@ class CartProvider extends ChangeNotifier {
     } else if (retries < 10) {
       Future.delayed(const Duration(milliseconds: 500), () => _safeAddPlatformListener(retries + 1));
     }
+  }
+
+  void _listenToAuthState() {
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.signedOut) {
+        clear();
+      }
+    });
   }
 
   @override

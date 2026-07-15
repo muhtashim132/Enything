@@ -477,6 +477,27 @@ class CartPage extends StatelessWidget {
               onTap: canCheckout
                   ? () {
                       final auth = context.read<AuthProvider>();
+                      final uniqueShops = cart.items.map((i) => i.shop.id).toSet();
+                      if (uniqueShops.length > 1) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: const Color(0xFF1E1E2C),
+                            title: const Text('Multiple Shops Detected', style: TextStyle(color: Colors.white)),
+                            content: const SingleChildScrollView(
+                              child: Text('To ensure fast and reliable delivery, you can only order from one shop at a time. Please remove items from other shops to proceed.', style: TextStyle(color: Colors.white70)),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('OK', style: TextStyle(color: Color(0xFFF4C542))),
+                              )
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+
                       if (auth.currentUserId == null) {
                         Navigator.pushNamed(context, AppRoutes.login);
                         ScaffoldMessenger.of(context).showSnackBar(

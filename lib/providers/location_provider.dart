@@ -86,7 +86,7 @@ class LocationProvider extends ChangeNotifier {
       final user = _supabase.auth.currentUser;
       final phone = user?.phone ?? '';
       final email = user?.email ?? '';
-      if (phone.contains('9999999996') || phone.contains('9999999997') || phone.contains('9999999998') ||
+      if (phone.endsWith('9999999996') || phone.endsWith('9999999997') || phone.endsWith('9999999998') ||
           email.contains('9999999996') || email.contains('9999999997') || email.contains('9999999998')) {
           _currentLocation = const LatLng(34.4225, 74.6366);
           _currentAddress = 'bandipora, jammu and kashmir';

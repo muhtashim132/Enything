@@ -31,6 +31,7 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
           .from('shops')
           .select('id')
           .eq('seller_id', auth.currentUserId ?? '')
+          .limit(1)
           .single();
 
       _shopId = shopResp['id'];

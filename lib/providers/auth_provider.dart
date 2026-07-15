@@ -149,6 +149,7 @@ class AuthProvider extends ChangeNotifier {
           .from('shops')
           .select('seller_id')
           .eq('seller_id', userId)
+          .limit(1)
           .maybeSingle();
       if (seller != null) roles.add('seller');
     } catch (e) {
@@ -405,6 +406,7 @@ class AuthProvider extends ChangeNotifier {
             .from('shops')
             .select('verification_status')
             .eq('seller_id', userId)
+            .limit(1)
             .maybeSingle();
         sellerVerificationStatus =
             sellerData?['verification_status'] ?? 'unverified';
@@ -431,9 +433,13 @@ class AuthProvider extends ChangeNotifier {
         'phone':
             (_supabase.auth.currentUser?.email?.contains('9999999996') == true)
                 ? '+919999999996'
-                : (_supabase.auth.currentUser?.phone?.isNotEmpty == true)
-                    ? _supabase.auth.currentUser!.phone!
-                    : (data['phone'] ?? ''),
+                : (_supabase.auth.currentUser?.email?.contains('9999999997') == true)
+                    ? '+919999999997'
+                    : (_supabase.auth.currentUser?.email?.contains('9999999998') == true)
+                        ? '+919999999998'
+                        : (_supabase.auth.currentUser?.phone?.isNotEmpty == true)
+                            ? _supabase.auth.currentUser!.phone!
+                            : (data['phone'] ?? ''),
         'activeRoles': allRoles,
         'activeSessionRole': sessionRole,
         'verification_status': verificationStatus,
@@ -473,6 +479,7 @@ class AuthProvider extends ChangeNotifier {
             .from('shops')
             .select('verification_status')
             .eq('seller_id', _user!.id)
+            .limit(1)
             .maybeSingle();
         verificationStatus = sellerData?['verification_status'] ?? 'unverified';
       } else if (role == 'delivery_partner') {
@@ -503,21 +510,21 @@ class AuthProvider extends ChangeNotifier {
   /// Derives a stable email+password pair from a phone number so we can
   /// create a real Supabase Auth session after OTP verification.
   String _emailFromPhone(String phone) {
-    if (phone.contains('9999999996')) {
-      return 'mock919999999996@enything.com';
-    }
+    if (phone.endsWith('9999999996')) return 'mock919999999996@enything.com';
+    if (phone.endsWith('9999999997')) return 'mock919999999997@enything.com';
+    if (phone.endsWith('9999999998')) return 'mock919999999998@enything.com';
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return '$digits@auth.enything.app';
   }
 
   String _legacyPasswordFromPhone(String phone) {
-    if (phone.contains('9999999996')) return 'Dummy123';
+    if (phone.endsWith('9999999996') || phone.endsWith('9999999997') || phone.endsWith('9999999998')) return 'Dummy123';
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return 'Enything$digits#Auth2025';
   }
 
   String _passwordFromPhone(String phone) {
-    if (phone.contains('9999999996')) return 'Dummy123';
+    if (phone.endsWith('9999999996') || phone.endsWith('9999999997') || phone.endsWith('9999999998')) return 'Dummy123';
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     final bytes = utf8.encode('Enything_${digits}_Secured#2026');
     final digest = sha256.convert(bytes);
@@ -526,17 +533,17 @@ class AuthProvider extends ChangeNotifier {
 
   // S4 FIX: Magic test numbers are ONLY active in debug builds EXCEPT for reviewer numbers.
   bool _isMagicNumber(String phone) {
-    if (phone.contains('9999999996') ||
-        phone.contains('9999999997') ||
-        phone.contains('9999999998')) {
+    if (phone.endsWith('9999999996') ||
+        phone.endsWith('9999999997') ||
+        phone.endsWith('9999999998')) {
       return true;
     }
     if (!kDebugMode) return false;
-    return phone.contains('9999999991') ||
-        phone.contains('9999999992') ||
-        phone.contains('9999999993') ||
-        phone.contains('9999999994') ||
-        phone.contains('9999999995');
+    return phone.endsWith('9999999991') ||
+        phone.endsWith('9999999992') ||
+        phone.endsWith('9999999993') ||
+        phone.endsWith('9999999994') ||
+        phone.endsWith('9999999995');
   }
 
   /// Step 1: Send OTP via the `send-otp` Supabase Edge Function (Fast2SMS).
@@ -684,12 +691,12 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // For Razorpay reviewer, auto-insert profile + role specific row + address
-      if (phone.contains('9999999996') ||
-          phone.contains('9999999997') ||
-          phone.contains('9999999998')) {
+      if (phone.endsWith('9999999996') ||
+          phone.endsWith('9999999997') ||
+          phone.endsWith('9999999998')) {
         String mockRole = 'customer';
-        if (phone.contains('9999999997')) mockRole = 'seller';
-        if (phone.contains('9999999998')) mockRole = 'delivery_partner';
+        if (phone.endsWith('9999999997')) mockRole = 'seller';
+        if (phone.endsWith('9999999998')) mockRole = 'delivery_partner';
 
         final assignedRole = preferredRole ?? mockRole;
         const hardcodedLocation = 'POINT(74.6366 34.4225)';
@@ -987,18 +994,23 @@ class AuthProvider extends ChangeNotifier {
             .from('shops')
             .select('id')
             .eq('seller_id', userId)
+            .limit(1)
             .maybeSingle();
         if (existing == null) {
-          await _supabase.from('shops').insert({
+          final res = await _supabase.from('shops').insert({
             'seller_id': userId,
             'is_active': false, // shops are inactive pending KYC
             if (additionalData != null) ...additionalData,
-          });
+          }).select('id').single();
+          if (additionalData != null) {
+            additionalData['shop_id'] = res['id'];
+          }
         } else if (additionalData != null) {
+          additionalData['shop_id'] = existing['id'];
           await _supabase
               .from('shops')
               .update(additionalData)
-              .eq('seller_id', userId);
+              .eq('id', existing['id']);
         }
       } else if (role == 'delivery_partner') {
         final existing = await _supabase

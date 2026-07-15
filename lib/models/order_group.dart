@@ -6,7 +6,7 @@ class OrderGroup {
 
   OrderGroup(this.groupId, this.orders);
 
-  double get totalGrand => orders.fold(0.0, (sum, o) => sum + o.grandTotalCollected);
+  double get totalGrand => orders.fold(0.0, (sum, o) => sum + o.grandTotal);
   double get totalEarnings => orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
   
   /// Full delivery address shown to the rider.

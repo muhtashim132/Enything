@@ -153,7 +153,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           verificationStatus == 'unverified') {
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(
-              context, AppRoutes.sellerKycUpload, (_) => false);
+              context, AppRoutes.sellerKycUpload, 
+              (_) => false,
+              arguments: {'shop_id': firstShopData['id']},
+          );
         }
         return;
       }
@@ -162,10 +165,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
       int pendingOrders = 0;
       double todaysEarning = 0.0;
       int products = 0;
+      List<String> activeShopIds = [];
 
       for (final shopData in shopsResp) {
         final shopId = shopData['id'] as String;
-        _startNotifications(shopId);
+        activeShopIds.add(shopId);
         _setupRealtimeOrders(shopId);
 
         if (!mounted) return;
@@ -178,6 +182,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           todaysEarning += (statsResult['todays_earning'] as num?)?.toDouble() ?? 0.0;
           products += (statsResult['products'] ?? 0) as int;
         }
+      }
+      
+      if (activeShopIds.isNotEmpty) {
+        _startMultiShopNotifications(activeShopIds);
       }
 
       if (mounted) {
@@ -229,13 +237,13 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     }
   }
 
-  void _startNotifications(String shopId) {
+  void _startMultiShopNotifications(List<String> shopIds) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final auth = context.read<AuthProvider>();
         final userId = auth.currentUserId;
         final notifProvider = context.read<NotificationProvider>();
-        notifProvider.listenAsSeller(shopId);
+        notifProvider.listenAsSellerMultiShop(shopIds);
         if (userId != null) notifProvider.registerFcmToken(userId, 'seller');
       }
     });

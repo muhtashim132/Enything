@@ -138,9 +138,13 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
         'bank_proof': bankProofUrl,
       };
 
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final shopId = args?['shop_id'] as String?;
+      if (shopId == null) throw Exception('Shop ID not provided. Please restart the app.');
+
       // Update Shops Table via RPC
-      await _db.rpc('submit_seller_kyc', params: {
-        'p_seller_id': userId,
+      await _db.rpc('submit_seller_kyc_v2', params: {
+        'p_shop_id': shopId,
         'p_aadhar_number': _aadharCtrl.text.trim(),
         'p_pan_number': _panCtrl.text.trim(),
         'p_gst_number': _gstCtrl.text.trim(),
@@ -194,6 +198,7 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
       body: Stack(
         children: [
           SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

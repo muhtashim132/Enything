@@ -90,11 +90,12 @@ class RiderBackgroundService {
   }
 
   /// Start the background service (call when rider goes online with active order).
-  /// Passes [riderId] and [supabaseUrl] + [anonKey] so the isolate can init Supabase.
   Future<void> startService({
     required String riderId,
     required String supabaseUrl,
     required String anonKey,
+    required String accessToken,
+    required String refreshToken,
   }) async {
     final service = FlutterBackgroundService();
     final isRunning = await service.isRunning();
@@ -112,6 +113,8 @@ class RiderBackgroundService {
       'rider_id': riderId,
       'supabase_url': supabaseUrl,
       'anon_key': anonKey,
+      'access_token': accessToken,
+      'refresh_token': refreshToken,
     });
   }
 
@@ -240,6 +243,8 @@ Future<void> _onStart(ServiceInstance service) async {
     riderId = data['rider_id'] as String?;
     final supabaseUrl = data['supabase_url'] as String?;
     final receivedKey = data['anon_key'] as String?;
+    final accessToken = data['access_token'] as String?;
+    final refreshToken = data['refresh_token'] as String?;
 
     if (supabaseUrl == null || receivedKey == null) {
       print('[RiderBgService] Missing Supabase credentials — cannot start');
@@ -250,14 +255,19 @@ Future<void> _onStart(ServiceInstance service) async {
     try {
       await Supabase.initialize(url: supabaseUrl, publishableKey: receivedKey);
       db = Supabase.instance.client;
-      print('[RiderBgService] Supabase initialized for rider: $riderId');
     } catch (e) {
       // Already initialized — grab the existing client
+      db = Supabase.instance.client;
+    }
+
+    // Recover session in a separate, isolated block
+    if (refreshToken != null && refreshToken.isNotEmpty) {
       try {
-        db = Supabase.instance.client;
-      } catch (_) {
-        print('[RiderBgService] Supabase init failed: $e');
-        return;
+        await db!.auth.setSession(refreshToken.toString());
+        print('[RiderBgService] Session recovered for rider: $riderId');
+      } catch (authError) {
+        print('[RiderBgService] Session recovery failed: $authError');
+        // Do not crash the isolate; allow fallback behavior
       }
     }
 

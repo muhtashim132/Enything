@@ -103,7 +103,8 @@ class CategoryExtraFieldsState extends State<CategoryExtraFields>
         return {
           'fssai_number': _fssaiCtrl.text.trim(),
           'food_type': _foodType,
-          'avg_prep_time_mins': int.tryParse(_prepTimeCtrl.text.trim()) ?? 30,
+          'is_veg_only': _foodType == 'Pure Veg',
+          'prep_time_minutes': int.tryParse(_prepTimeCtrl.text.trim()) ?? 30,
           'packaging_charge':
               double.tryParse(_packagingChargeCtrl.text.trim()) ?? 0,
         };

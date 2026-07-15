@@ -167,6 +167,7 @@ class NotificationService {
       playSound: true,
       sound: RawResourceAndroidNotificationSound('enything_bell'),
       enableVibration: true,
+      fullScreenIntent: true,
       icon: 'ic_notification',
     );
     const platformDetails = NotificationDetails(android: androidDetails);

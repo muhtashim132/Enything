@@ -80,6 +80,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
 
   Future<void> _verify() async {
     if (_otp.length < 6) return;
+    if (_loading) return;
     setState(() => _loading = true);
     FocusScope.of(context).unfocus();
 
@@ -97,8 +98,16 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       final allRoles = auth.user?.activeRoles ?? [];
 
       // ── Razorpay test account: always go straight to dashboard ──
-      if (_phone.contains('9999999996')) {
+      if (_phone.endsWith('9999999996')) {
         _goToWelcomeThenDashboard(_requestedRole ?? 'customer');
+        return;
+      }
+      if (_phone.endsWith('9999999997')) {
+        _goToWelcomeThenDashboard(_requestedRole ?? 'seller');
+        return;
+      }
+      if (_phone.endsWith('9999999998')) {
+        _goToWelcomeThenDashboard(_requestedRole ?? 'delivery_partner');
         return;
       }
 

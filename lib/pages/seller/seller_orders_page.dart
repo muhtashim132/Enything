@@ -614,7 +614,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
       _loadOrders();
       _showSnack('Status → ${status.replaceAll('_', ' ')}', isError: false);
+    } on PostgrestException catch (pe) {
+      _showSnack(pe.message, isError: true);
     } catch (e) {
+      _showSnack('Update error: $e', isError: true);
       debugPrint('Update error: $e');
     }
   }

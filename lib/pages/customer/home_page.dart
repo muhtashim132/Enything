@@ -62,8 +62,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   bool _isLoading = true;
   bool _isSearching = false;
   bool _searchError = false;
-  int _shopsDisplayLimit = 12;
-  int _productsDisplayLimit = 10;
+  int _shopsDisplayLimit = 3;
+  int _productsDisplayLimit = 6;
   int _searchShopsDisplayLimit = 12;
   int _searchProductsDisplayLimit = 10;
   List<ShopModel> _shops = [];
@@ -167,6 +167,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   }
   // Track if the very first load has completed (shimmer only on first load)
   bool _hasLoadedOnce = false;
+  // Phase 25 Fix: Atomic State Tracking to prevent Tab Desync and Overload
+  int _fetchId = 0;
+  bool _isFetching = false;
 
   // Banner carousel
   final PageController _bannerController = PageController();
@@ -318,15 +321,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   void _onLocationChanged() {
     if (!mounted || _searchQuery.isNotEmpty) return;
     
-    if (_isLoading) {
+    if (_isFetching) { // Guard against actual network activity, not UI shimmer
       _pendingLocationUpdate = true;
       return;
     }
     
     _locationDebounceTimer?.cancel();
     _locationDebounceTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted || _isLoading) {
-        if (_isLoading) _pendingLocationUpdate = true;
+      if (!mounted || _isFetching) {
+        if (_isFetching) _pendingLocationUpdate = true;
         return;
       }
       if (_selectedTabIndex < 0) {
@@ -566,7 +569,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     final locationProvider = context.read<LocationProvider>();
     final authProvider = context.read<AuthProvider>();
 
-    final isMagic = authProvider.user?.phone.contains('9999999996') == true;
+    final isMagic = authProvider.user?.phone.endsWith('9999999996') == true ||
+        authProvider.user?.phone.endsWith('9999999997') == true ||
+        authProvider.user?.phone.endsWith('9999999998') == true;
 
     if (isMagic) {
       locationProvider.setManualLocation(
@@ -639,6 +644,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   /// Fetch ALL active shops & products, sorted by rating then total_orders.
   /// Used on initial load when no category tab is selected.
   Future<void> _loadAllData() async {
+    final currentFetchId = ++_fetchId;
+    _isFetching = true;
+    
     // Only show the shimmer on the very first load. On subsequent loads
     // (e.g., GPS update or category deselect) keep old data visible.
     if (!_hasLoadedOnce) {
@@ -735,26 +743,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         }
         prods.sort((a, b) => b.rating.compareTo(a.rating));
 
+        if (_fetchId != currentFetchId) return; // Prevent async tab desync
+
         // Atomic update: swap data and clear loading in a single setState
         setState(() {
-          _shopsDisplayLimit = 12;
-          _productsDisplayLimit = 10;
+          _shopsDisplayLimit = 3;
+          _productsDisplayLimit = 6;
           _shops = nearby;
           _products = prods;
           _productShops = prodShops;
           _isLoading = false;
           _hasLoadedOnce = true;
         });
-        
-        if (_pendingLocationUpdate) {
-          _pendingLocationUpdate = false;
-          _onLocationChanged();
-        }
       }
     } catch (e, st) {
       // Log full error so we can debug exactly what Supabase query failed
       debugPrint('_loadAllData ERROR: $e\n$st');
-      if (mounted) {
+      if (mounted && _fetchId == currentFetchId) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -764,10 +769,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           ),
         );
       }
+    } finally {
+      if (_fetchId == currentFetchId) {
+        _isFetching = false;
+        if (_pendingLocationUpdate && mounted) {
+          _pendingLocationUpdate = false;
+          _onLocationChanged();
+        }
+      }
     }
   }
 
   Future<void> _loadData(String tabName) async {
+    final currentFetchId = ++_fetchId;
+    _isFetching = true;
+
     // Do NOT set _isLoading = true here on category switch — this causes the
     // existing content to disappear (the "flash"). Keep old data visible
     // and only swap data once the new fetch is complete.
@@ -862,26 +878,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         }
         prods.sort((a, b) => b.rating.compareTo(a.rating));
         
+        if (_fetchId != currentFetchId) return; // Prevent async tab desync
+
         // Atomic update: swap data in a single setState so there is no
         // intermediate blank-screen state
         setState(() {
-          _shopsDisplayLimit = 12;
-          _productsDisplayLimit = 10;
+          _shopsDisplayLimit = 3;
+          _productsDisplayLimit = 6;
           _shops = nearby;
           _products = prods;
           _productShops = prodShops;
           _isLoading = false;
           _hasLoadedOnce = true;
         });
-        
-        if (_pendingLocationUpdate) {
-          _pendingLocationUpdate = false;
-          _onLocationChanged();
-        }
       }
     } catch (e, st) {
       debugPrint('_loadData ERROR: $e\n$st');
-      if (mounted) {
+      if (mounted && _fetchId == currentFetchId) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -890,6 +903,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             duration: const Duration(seconds: 10),
           ),
         );
+      }
+    } finally {
+      if (_fetchId == currentFetchId) {
+        _isFetching = false;
+        if (_pendingLocationUpdate && mounted) {
+          _pendingLocationUpdate = false;
+          _onLocationChanged();
+        }
       }
     }
   }
@@ -1532,7 +1553,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildSectionTitle('Recently Viewed', subtitle: 'Continue where you left off'),
+                                  _buildSectionTitle(
+                                    'Recently Viewed', 
+                                    subtitle: 'Continue where you left off',
+                                    isLoading: recentProv.isLoading,
+                                    onSeeAllTap: (recentProv.products.length < recentProv.totalIdsCount) 
+                                        ? () => recentProv.loadAll()
+                                        : null,
+                                  ),
                                   const SizedBox(height: 12),
                                   SizedBox(
                                     height: 335,
@@ -1597,31 +1625,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               );
                             },
                           ),
-                          if (_shops.length > _shopsDisplayLimit)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 16),
-                                child: Center(
-                                  child: TextButton(
-                                    onPressed: () => setState(() => _shopsDisplayLimit += 20),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                      backgroundColor: Theme.of(context).brightness == Brightness.dark 
-                                          ? Colors.white.withValues(alpha: 0.05) 
-                                          : AppColors.primary.withValues(alpha: 0.05),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                    ),
-                                    child: Text(
-                                      'Load more shops',
-                                      style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
                         ] else if (!_isLoading && _selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
                           SliverToBoxAdapter(
                             child: locationProvider.hasLocation
@@ -1668,31 +1671,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               );
                             },
                           ),
-                          if (_products.length > _productsDisplayLimit)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 16),
-                                child: Center(
-                                  child: TextButton(
-                                    onPressed: () => setState(() => _productsDisplayLimit += 20),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                      backgroundColor: Theme.of(context).brightness == Brightness.dark 
-                                          ? Colors.white.withValues(alpha: 0.05) 
-                                          : AppColors.primary.withValues(alpha: 0.05),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                    ),
-                                    child: Text(
-                                      'Load more products',
-                                      style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
                         ] else if (_shops.isEmpty && (_selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty) && !_isLoading) ...[
                           SliverToBoxAdapter(
                             child: Padding(
@@ -2086,6 +2064,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     String? subtitle,
     int? count,
     bool isHighlighted = false,
+    bool isLoading = false,
     VoidCallback? onSeeAllTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -2194,37 +2173,45 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             ],
           ),
         ),
-        if (onSeeAllTap != null)
+        if (onSeeAllTap != null || isLoading)
           GestureDetector(
-            onTap: onSeeAllTap,
+            onTap: isLoading ? null : onSeeAllTap,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.07)
                     : AppColors.primary.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'See all',
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white70 : AppColors.primary,
+              child: isLoading
+                  ? SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: isDark ? Colors.white70 : AppColors.primary,
+                      ),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'See all',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white70 : AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 14,
+                          color: isDark ? Colors.white70 : AppColors.primary,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 3),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 14,
-                    color: isDark ? Colors.white70 : AppColors.primary,
-                  ),
-                ],
-              ),
             ),
           ),
       ],

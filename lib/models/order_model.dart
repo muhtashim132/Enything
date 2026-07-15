@@ -279,7 +279,9 @@ class OrderModel {
       enythingCommission: (map['enything_commission'] ?? 0.0).toDouble(),
       sellerPayout: (map['seller_payout'] ?? 0.0).toDouble(),
       gatewayDeduction: (map['gateway_deduction'] ?? 0.0).toDouble(),
-      grandTotalCollected: (map['grand_total_collected'] ?? 0.0).toDouble(),
+      grandTotalCollected: map['grand_total_collected'] != null
+          ? (map['grand_total_collected'] as num).toDouble()
+          : -1.0,
       gstRateSnapshot:
           (map['gst_rate_snapshot'] as Map<String, dynamic>?) ?? {},
       prescriptionUrls: map['prescription_urls'] != null
@@ -300,13 +302,18 @@ class OrderModel {
   /// Grand total as displayed to customer at checkout.
   /// O6 FIX: Fallback now includes ALL fee components so legacy orders
   /// (where grandTotalCollected == 0) display the correct amount.
-  double get grandTotal => grandTotalCollected > 0
+  double get grandTotal => grandTotalCollected >= 0
       ? grandTotalCollected
-      : math.max(0.0, totalAmount +
-          gstItemTotal +
-          deliveryCharges +
-          platformFee -
-          couponDiscount);
+      : math.max(
+          0.0,
+          totalAmount +
+              gstItemTotal +
+              deliveryCharges +
+              platformFee +
+              smallCartFee +
+              heavyOrderFee +
+              multiShopSurcharge -
+              couponDiscount);
 
   /// Total GST across the entire order (items + delivery + platform).
   double get totalGstInOrder => gstItemTotal + gstDelivery + gstPlatform;

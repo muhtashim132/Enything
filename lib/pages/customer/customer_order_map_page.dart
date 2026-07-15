@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -50,9 +51,13 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   double? _deliveryKm;
 
   // Live rider position (updated via Realtime)
-  final Map<String, LatLng> _riderLocations = {};
-  final Map<String, DateTime> _riderUpdatedAts = {};
+  final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier = ValueNotifier({});
+  final ValueNotifier<Map<String, DateTime>> _riderUpdatedAtsNotifier = ValueNotifier({});
   RealtimeChannel? _channel;
+  bool _isIntentionalDisconnect = false;
+  Timer? _updateTimer;
+  final ValueNotifier<int> _timeTicker = ValueNotifier(0);
+  final Map<String, String> _orderToRiderMap = {};
 
   // Pulse animation for the rider dot
   late AnimationController _pulseCtrl;
@@ -63,18 +68,28 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Seed rider position from current order snapshot
+    _updateTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _timeTicker.value++;
+    });
+
     final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
         ? widget.groupOrders!
         : [widget.order];
+    final initialLocs = <String, LatLng>{};
+    final initialAts = <String, DateTime>{};
     for (final o in shops) {
-      if (o.deliveryPartnerId != null && o.riderLat != null && o.riderLng != null) {
-        _riderLocations[o.deliveryPartnerId!] = LatLng(o.riderLat!, o.riderLng!);
-        if (o.riderLocationUpdatedAt != null) {
-          _riderUpdatedAts[o.deliveryPartnerId!] = o.riderLocationUpdatedAt!;
+      if (o.deliveryPartnerId != null) {
+        _orderToRiderMap[o.id] = o.deliveryPartnerId!;
+        if (o.riderLat != null && o.riderLng != null) {
+          initialLocs[o.deliveryPartnerId!] = LatLng(o.riderLat!, o.riderLng!);
+          if (o.riderLocationUpdatedAt != null) {
+            initialAts[o.deliveryPartnerId!] = o.riderLocationUpdatedAt!;
+          }
         }
       }
     }
+    _riderLocationsNotifier.value = initialLocs;
+    _riderUpdatedAtsNotifier.value = initialAts;
 
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -92,7 +107,12 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pulseCtrl.dispose();
-    if (_channel != null) _supabase.removeChannel(_channel!);
+    _updateTimer?.cancel();
+    _timeTicker.dispose();
+    if (_channel != null) {
+      _isIntentionalDisconnect = true;
+      _supabase.removeChannel(_channel!);
+    }
     super.dispose();
   }
 
@@ -109,9 +129,11 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
   void _subscribeToRider() {
     if (_channel != null) {
+      _isIntentionalDisconnect = true;
       _supabase.removeChannel(_channel!);
       _channel = null;
     }
+    _isIntentionalDisconnect = false;
 
     final cartGroupId = widget.order.cartGroupId;
     final channelName = cartGroupId != null ? 'customer-map-group-$cartGroupId' : 'customer-map-${widget.order.id}';
@@ -130,21 +152,92 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           callback: (payload) {
             if (!mounted || payload.newRecord.isEmpty) return;
             final r = payload.newRecord;
+
+            final newStatus = r['status'] as String?;
+            final pid = r['delivery_partner_id'] as String?;
+            final orderId = r['id'] as String;
+
+            if (newStatus == 'delivered' || newStatus == 'cancelled' || newStatus == 'rejected') {
+              if (pid != null) {
+                if (_riderLocationsNotifier.value.containsKey(pid)) {
+                  final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                  currentLocs.remove(pid);
+                  _riderLocationsNotifier.value = currentLocs;
+                }
+                if (_riderUpdatedAtsNotifier.value.containsKey(pid)) {
+                  final currentAts = Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
+                  currentAts.remove(pid);
+                  _riderUpdatedAtsNotifier.value = currentAts;
+                }
+              }
+              
+              // If this is a single order tracking map, pop it so user sees the rating modal!
+              if (widget.groupOrders == null || widget.groupOrders!.isEmpty) {
+                if (mounted && Navigator.canPop(context)) {
+                  Navigator.of(context).pop();
+                }
+              }
+              return; // Stop processing lat/lng for completed order
+            }
+
+            // Ghost Rider Cleanup: Handle Reassignments and Unassignments
+            final oldPid = _orderToRiderMap[orderId];
+            if (oldPid != null && oldPid != pid) {
+              if (_riderLocationsNotifier.value.containsKey(oldPid)) {
+                final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                currentLocs.remove(oldPid);
+                _riderLocationsNotifier.value = currentLocs;
+              }
+              if (_riderUpdatedAtsNotifier.value.containsKey(oldPid)) {
+                final currentAts = Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
+                currentAts.remove(oldPid);
+                _riderUpdatedAtsNotifier.value = currentAts;
+              }
+            }
+
+            if (pid != null) {
+              _orderToRiderMap[orderId] = pid;
+            } else {
+              _orderToRiderMap.remove(orderId);
+            }
+
             final lat = (r['rider_lat'] as num?)?.toDouble();
             final lng = (r['rider_lng'] as num?)?.toDouble();
-            final pid = r['delivery_partner_id'] as String?;
+            
             if (lat != null && lng != null && pid != null) {
-              setState(() {
-                _riderLocations[pid] = LatLng(lat, lng);
-                final updated = r['rider_location_updated_at'] != null
-                    ? DateTime.tryParse(r['rider_location_updated_at'])
-                    : null;
-                if (updated != null) _riderUpdatedAts[pid] = updated;
-              });
+              final oldLoc = _riderLocationsNotifier.value[pid];
+              final newLoc = LatLng(lat, lng);
+              bool locChanged = oldLoc == null || oldLoc.latitude != newLoc.latitude || oldLoc.longitude != newLoc.longitude;
+
+              if (locChanged) {
+                final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                currentLocs[pid] = newLoc;
+                _riderLocationsNotifier.value = currentLocs;
+              }
+
+              final updatedStr = r['rider_location_updated_at'] as String?;
+              if (updatedStr != null) {
+                final updated = DateTime.tryParse(updatedStr);
+                if (updated != null) {
+                  final oldAt = _riderUpdatedAtsNotifier.value[pid];
+                  if (oldAt == null || oldAt.isBefore(updated)) {
+                    final currentAts = Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
+                    currentAts[pid] = updated;
+                    _riderUpdatedAtsNotifier.value = currentAts;
+                  }
+                }
+              }
             }
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+          if ((status == RealtimeSubscribeStatus.closed || status == RealtimeSubscribeStatus.channelError) && !_isIntentionalDisconnect) {
+            debugPrint('Realtime channel disconnected. Reconnecting in 5s...');
+            Future.delayed(const Duration(seconds: 5), () {
+              if (mounted) _subscribeToRider();
+            });
+          }
+        });
   }
 
   // ── ORS Route Fetching ───────────────────────────────────────────────────
@@ -249,7 +342,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final pts = <LatLng>[
       if (widget.order.deliveryLat != null && widget.order.deliveryLng != null && widget.order.deliveryLat != 0.0)
         LatLng(widget.order.deliveryLat!, widget.order.deliveryLng!),
-      for (final loc in _riderLocations.values)
+      for (final loc in _riderLocationsNotifier.value.values)
         if (loc.latitude != 0.0) loc,
     ];
     
@@ -458,7 +551,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final order = widget.order;
     final isOutForDelivery = order.status == 'out_for_delivery';
-    final showRiderLocation = ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(order.status) && _riderLocations.isNotEmpty;
+    final isRiderActiveStatus = ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(order.status);
 
     final custLat = order.deliveryLat;
     final custLng = order.deliveryLng;
@@ -500,15 +593,6 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           child: _mapMarker(
               _kCustomerMarkerColor, Icons.home_rounded, 'You'),
         ),
-      // Live rider marker (when rider is assigned and position is known)
-      if (showRiderLocation)
-        for (final loc in _riderLocations.values)
-          Marker(
-            point: applyJitter(loc.latitude, loc.longitude),
-            width: 80,
-            height: 72,
-            child: _riderMarker(),
-          ),
     ];
 
     // Map initial centre — prefer customer address
@@ -555,6 +639,26 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                   ),
 
                 MarkerLayer(markers: markers),
+                
+                // STRESS-TEST FIX: Live Rider layer completely isolated from setState
+                if (isRiderActiveStatus)
+                  ValueListenableBuilder<Map<String, LatLng>>(
+                    valueListenable: _riderLocationsNotifier,
+                    builder: (context, riderLocs, child) {
+                      if (riderLocs.isEmpty) return const SizedBox.shrink();
+                      return MarkerLayer(
+                        markers: [
+                          for (final loc in riderLocs.values)
+                            Marker(
+                              point: applyJitter(loc.latitude, loc.longitude),
+                              width: 80,
+                              height: 72,
+                              child: _riderMarker(),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
               ],
             ),
 
@@ -764,36 +868,57 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            if (showRiderLocation) ...[
-                              const SizedBox(width: 16),
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: const BoxDecoration(
-                                  color: _kRiderMarkerColor,
-                                  shape: BoxShape.circle,
-                                ),
+                            if (isRiderActiveStatus)
+                              ValueListenableBuilder<Map<String, LatLng>>(
+                                valueListenable: _riderLocationsNotifier,
+                                builder: (context, riderLocs, child) {
+                                  if (riderLocs.isEmpty) return const SizedBox.shrink();
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const SizedBox(width: 16),
+                                      Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: const BoxDecoration(
+                                          color: _kRiderMarkerColor,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Live rider',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12,
+                                          color: _kRiderMarkerColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      ValueListenableBuilder<Map<String, DateTime>>(
+                                        valueListenable: _riderUpdatedAtsNotifier,
+                                        builder: (context, riderUpdatedAts, child) {
+                                          if (riderUpdatedAts.isEmpty) return const SizedBox.shrink();
+                                          return Padding(
+                                            padding: const EdgeInsets.only(left: 12),
+                                            child: ValueListenableBuilder<int>(
+                                              valueListenable: _timeTicker,
+                                              builder: (context, _, child) {
+                                                return Text(
+                                                  'Updated ${_secondsAgo(riderUpdatedAts.values.reduce((a, b) => a.isAfter(b) ? a : b))}s ago',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 10,
+                                                    color: Colors.grey,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Live rider',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  color: _kRiderMarkerColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (_riderUpdatedAts.isNotEmpty) ...[
-                                const Spacer(),
-                                Text(
-                                  'Updated ${_secondsAgo(_riderUpdatedAts.values.reduce((a, b) => a.isAfter(b) ? a : b))}s ago',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 10,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ],
                           ],
                         ),
                         const SizedBox(height: 14),

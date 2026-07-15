@@ -231,7 +231,7 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                       final val = config.getCommissionPercentForCategory(cat);
                       final gw =
                           TaxConfig.effectiveGatewayDeductionPercent * 100;
-                      final tds = TaxConfig.itTdsRate * 100;
+                      const tds = TaxConfig.itTdsRate * 100;
                       final tcs = TaxConfig.tcsRateForCategory(cat) * 100;
                       final total = val + gw + tds + tcs;
 

@@ -7,7 +7,6 @@ import '../../providers/location_provider.dart';
 import '../../providers/referral_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
-import '../../providers/platform_config_provider.dart';
 import '../../widgets/seller/category_extra_fields.dart';
 import '../../utils/responsive_layout.dart';
 import '../../widgets/map_pin_picker_page.dart';
@@ -83,7 +82,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     String? roleArg = args?['role'] as String?;
 
     final prefs = await SharedPreferences.getInstance();
-    
+
     // If not in args, try from cache (e.g. app crashed and restarted here)
     if (roleArg == null) {
       roleArg = prefs.getString('cached_signup_role');
@@ -207,7 +206,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     // Grab location if available (from tapping 📍 or auto-fetching)
     final locProv = context.read<LocationProvider>();
     String? locationPoint;
-    
+
     if (locProv.currentLocation == null) {
       // Graceful fallback: attempt to automatically fetch location
       final success = await locProv.requestLocation();
@@ -226,7 +225,9 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     }
 
     final pincode = _pincodeCtrl.text.trim();
-    if (pincode.isEmpty || pincode.length != 6 || int.tryParse(pincode) == null) {
+    if (pincode.isEmpty ||
+        pincode.length != 6 ||
+        int.tryParse(pincode) == null) {
       _showSnack('Please enter a valid 6-digit Pincode', isError: true);
       setState(() => _loading = false);
       return;
@@ -262,7 +263,20 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           return;
         }
         final categoryExtra = _extraFieldsKey.currentState?.collectData() ?? {};
-        // Note: Aadhaar, PAN, Bank Details, and GST are moved to SellerKycUploadPage
+        // Safe encapsulation for unknown KYC fields into metadata to prevent PGRST116.
+        // Base columns required by ShopModel stay at the root.
+        final baseCols = ['fssai_number', 'prep_time_minutes', 'is_veg_only'];
+        final metadataObj = <String, dynamic>{};
+        final rootExtra = <String, dynamic>{};
+        
+        for (final entry in categoryExtra.entries) {
+          if (baseCols.contains(entry.key)) {
+            rootExtra[entry.key] = entry.value;
+          } else {
+            metadataObj[entry.key] = entry.value;
+          }
+        }
+
         roleName = 'seller';
         extra = {
           'name': _shopNameCtrl.text.trim().isEmpty
@@ -276,11 +290,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           'is_active': false,
           'verification_status': 'unverified',
           'location': locationPoint,
-          // Merge the group-specific fields directly into the shops row.
-          // Supabase ignores keys that don't exist as columns, so unknown
-          // fields will be silently dropped unless you add a `metadata` JSONB
-          // column — both approaches work.
-          ...categoryExtra,
+          'metadata': metadataObj,
+          ...rootExtra,
         };
         break;
       case _Role.delivery:
@@ -328,9 +339,9 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       final uid = context.read<AuthProvider>().user?.id;
       if (uid != null) {
         await context.read<ReferralProvider>().applyReferralCode(
-          referralCode: _referralCtrl.text.trim(),
-          newUserId: uid,
-        );
+              referralCode: _referralCtrl.text.trim(),
+              newUserId: uid,
+            );
       }
     }
 
@@ -344,7 +355,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         // Clear the cached role upon successful submission
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('cached_signup_role');
-        
+
         if (!mounted) return;
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.customerHome, (_) => false);
@@ -555,8 +566,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
           _RoleCard(
             icon: '🏪',
             title: 'Seller',
-            subtitle:
-                'List your products and expand your customer base',
+            subtitle: 'List your products and expand your customer base',
             selected: _role == _Role.seller,
             onTap: () => setState(() => _role = _Role.seller),
           ),
