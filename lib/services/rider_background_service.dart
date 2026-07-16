@@ -145,9 +145,12 @@ Future<void> _onStart(ServiceInstance service) async {
   SupabaseClient? db;
   Timer? gpsTimer;
 
+  bool isPushingLocation = false;
+
   // ── Helper: fetch GPS and push to Supabase ─────────────────────────────
   Future<void> pushLocation() async {
-    if (riderId == null || db == null) return;
+    if (riderId == null || db == null || isPushingLocation) return;
+    isPushingLocation = true;
 
     try {
       // Check location service & permission (non-interactive in background)
@@ -207,6 +210,8 @@ Future<void> _onStart(ServiceInstance service) async {
       print('[RiderBgService] ✅ Location pushed: $lat, $lng');
     } catch (e) {
       print('[RiderBgService] pushLocation error: $e');
+    } finally {
+      isPushingLocation = false;
     }
   }
 

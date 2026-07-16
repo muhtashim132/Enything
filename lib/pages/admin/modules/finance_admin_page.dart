@@ -294,6 +294,8 @@ class _WithdrawalsTab extends StatelessWidget {
 
   const _WithdrawalsTab({required this.withdrawals, required this.loading, required this.onRefresh});
 
+  static bool _isSheetOpen = false;
+
   @override
   Widget build(BuildContext context) {
     if (loading) return _loadingSkeleton();
@@ -326,6 +328,8 @@ class _WithdrawalsTab extends StatelessWidget {
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
             onTap: () {
+              if (_isSheetOpen) return;
+              _isSheetOpen = true;
               showModalBottomSheet(
                 context: context,
                 backgroundColor: Colors.transparent,
@@ -334,7 +338,7 @@ class _WithdrawalsTab extends StatelessWidget {
                   withdrawal: w,
                   onProcessed: onRefresh,
                 ),
-              );
+              ).then((_) => _isSheetOpen = false);
             },
             child: Container(
               padding: const EdgeInsets.all(14),

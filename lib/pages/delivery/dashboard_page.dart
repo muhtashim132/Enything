@@ -43,6 +43,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   bool _isLoading = false;
   bool _isOrdersLoadInProgress = false; // C2: debounce guard
   bool _needsReload = false;
+  bool _isMapOpening = false;
+  bool _isSheetOpen = false;
   // Bug #19: rider's current GPS position for geographic filtering
   double? _riderLat;
   double? _riderLng;
@@ -941,11 +943,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           }
         },
       ),
-    );
+    ).then((_) => _isSheetOpen = false);
   }
 
   void _showGroupDeliveryRatingFlow(OrderGroup group) {
-    if (!mounted || group.orders.isEmpty) return;
+    if (!mounted || group.orders.isEmpty || _isSheetOpen) return;
+    _isSheetOpen = true;
     
     int currentShopIndex = 0;
     
@@ -979,6 +982,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             ),
           );
         }
+      } else {
+        _isSheetOpen = false;
       }
     }
 
@@ -1124,6 +1129,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   // ── Route Map Launcher ─────────────────────────────────────────────────────
 
   void _openRouteMapForGroup(OrderGroup group, {bool isViewOnly = false}) {
+    if (_isMapOpening) return;
+    _isMapOpening = true;
     // Resolve shop coords: prefer joined cache, fall back to snapshot on order
     final shops = group.orders.map((order) {
       final shopInfo = _shopInfoCache[order.shopId];
@@ -1135,11 +1142,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
     if (shops.any((s) => s.lat == 0.0 || s.lng == 0.0)) {
       _showSnack('Map not available — shop location missing for one or more shops', isError: true);
+      _isMapOpening = false;
       return;
     }
     final primaryOrder = group.orders.first;
     if (primaryOrder.deliveryLat == null || primaryOrder.deliveryLng == null) {
       _showSnack('Map not available — customer location missing', isError: true);
+      _isMapOpening = false;
       return;
     }
 
@@ -1158,7 +1167,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           },
         ),
       ),
-    );
+    ).then((_) => _isMapOpening = false);
   }
 
   @override
@@ -2503,6 +2512,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   void _showWorkManagementSheet() {
+    if (!mounted || _isSheetOpen) return;
+    _isSheetOpen = true;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2636,6 +2647,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   void _showVehicleChangeSheet() {
+    if (!mounted || _isSheetOpen) return;
+    _isSheetOpen = true;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),

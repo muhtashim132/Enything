@@ -75,20 +75,29 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
     });
   }
 
+  bool _isCartInteracting = false;
+
   void _handleTap(List<ShopModel> shops) {
-    if (shops.isEmpty) return;
+    if (_isCartInteracting || shops.isEmpty) return;
+    _isCartInteracting = true;
 
     final contextForNav = navigatorKey.currentState?.context;
-    if (contextForNav == null) return;
+    if (contextForNav == null) {
+      _isCartInteracting = false;
+      return;
+    }
 
     if (shops.length == 1) {
       // Instant navigation for 1 shop
       navigatorKey.currentState?.pushNamed(
         AppRoutes.restaurant,
         arguments: {'shopId': shops.first.id},
-      );
+      ).then((_) {
+        _isCartInteracting = false;
+      });
     } else {
       // Show Bottom Sheet for multiple shops
+      bool isNavigating = false;
       showModalBottomSheet(
         context: contextForNav,
         shape: const RoundedRectangleBorder(
@@ -129,11 +138,13 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
                         subtitle: Text(shop.category),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
+                          if (isNavigating) return;
+                          isNavigating = true;
                           Navigator.pop(ctx);
                           navigatorKey.currentState?.pushNamed(
                             AppRoutes.restaurant,
                             arguments: {'shopId': shop.id},
-                          );
+                          ).then((_) => isNavigating = false);
                         },
                       )),
                 ],
@@ -141,7 +152,9 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
             ),
           );
         },
-      );
+      ).then((_) {
+        _isCartInteracting = false;
+      });
     }
   }
 

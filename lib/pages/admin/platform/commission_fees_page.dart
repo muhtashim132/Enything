@@ -17,6 +17,7 @@ class CommissionFeesPage extends StatefulWidget {
 class _CommissionFeesPageState extends State<CommissionFeesPage> {
   final Map<String, TextEditingController> _ctrls = {};
   String? _editingKey;
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -36,12 +37,16 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
 
   Future<void> _saveEdit(
       String key, PlatformConfigProvider config, RbacProvider rbac) async {
+    if (_isSaving) return;
+    
     final text = _ctrls[key]?.text.trim() ?? '';
     if (text.isEmpty || double.tryParse(text) == null) {
       setState(() => _editingKey = null);
       return;
     }
 
+    setState(() => _isSaving = true);
+    
     final success = await config.updateSetting(
       key: key,
       value: text,
@@ -65,7 +70,10 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
           behavior: SnackBarBehavior.floating,
         ));
       }
-      setState(() => _editingKey = null);
+      setState(() {
+        _editingKey = null;
+        _isSaving = false;
+      });
     }
   }
 

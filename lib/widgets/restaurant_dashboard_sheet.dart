@@ -13,7 +13,11 @@ import '../config/routes.dart';
 import 'common/sheet_skeleton_loader.dart';
 import 'product_detail_sheet.dart';
 
+bool _isRestaurantSheetOpen = false;
+
 void showRestaurantDashboardSheet(BuildContext context, String shopId) {
+  if (_isRestaurantSheetOpen) return;
+  _isRestaurantSheetOpen = true;
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -25,7 +29,9 @@ void showRestaurantDashboardSheet(BuildContext context, String shopId) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (_) => RestaurantDashboardSheet(shopId: shopId),
-  );
+  ).then((_) {
+    _isRestaurantSheetOpen = false;
+  });
 }
 
 class RestaurantDashboardSheet extends StatefulWidget {

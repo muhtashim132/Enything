@@ -49,6 +49,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
   }
 
   Future<void> _sendOtp() async {
+    if (_loading) return;
     final phone = _phoneCtrl.text.trim();
     if (phone.length < 10) {
       _showSnack('Enter a valid 10-digit number', isError: true);
@@ -642,7 +643,10 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
         ),
       );
 
+  bool _isCountrySheetOpen = false;
   void _showCountryCodes() {
+    if (_isCountrySheetOpen) return;
+    _isCountrySheetOpen = true;
     final codes = [
       ['🇮🇳', '+91', 'India'],
       ['🇺🇸', '+1', 'USA'],

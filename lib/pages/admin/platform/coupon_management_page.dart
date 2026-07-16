@@ -17,6 +17,7 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
   SupabaseClient get _db => Supabase.instance.client;
   List<Map<String, dynamic>> _coupons = [];
   bool _loading = true;
+  bool _isSheetOpen = false;
 
   @override
   void initState() {
@@ -96,6 +97,8 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
   }
 
   void _showCreateBottomSheet() {
+    if (_isSheetOpen) return;
+    _isSheetOpen = true;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -104,7 +107,7 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
         onCreated: _fetchCoupons,
         adminId: context.read<RbacProvider>().currentAdmin?.id ?? '',
       ),
-    );
+    ).then((_) => _isSheetOpen = false);
   }
 
   @override

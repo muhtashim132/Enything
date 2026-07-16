@@ -148,6 +148,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
   /// Opens the map pin picker and fills [targetCtrl] with the picked address.
   /// Also calls [locProv.setManualLocation] so _submit() can read the coordinates.
   Future<void> _pickLocationOnMap(TextEditingController targetCtrl) async {
+    if (_fetchingLocation) return;
     setState(() => _fetchingLocation = true);
     try {
       final locProv = context.read<LocationProvider>();

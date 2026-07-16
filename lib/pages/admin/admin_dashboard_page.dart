@@ -30,6 +30,7 @@ class AdminDashboardPage extends StatefulWidget {
 class _AdminDashboardPageState extends State<AdminDashboardPage>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
+  bool _isSheetOpen = false;
   final Set<int> _visitedIndices = {0};
   int _openTicketsCount = 0;
   late AnimationController _bgCtrl;
@@ -125,6 +126,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
   /// Shows a bottom sheet letting the admin pick a non-admin role to switch to.
   void _showRoleSwitcher(List<String> otherRoles) {
+    if (_isSheetOpen) return;
+    _isSheetOpen = true;
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF0D1440),
@@ -178,7 +181,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           ],
         ),
       ),
-    );
+    ).then((_) => _isSheetOpen = false);
   }
 
   List<_NavDef> _buildNavItems(RbacProvider rbac) => [

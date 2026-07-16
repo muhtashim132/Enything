@@ -179,7 +179,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // No Razorpay callbacks here — payment is triggered from TrackOrderPage
   // after both seller & rider accept the order.
 
+  bool _isPickerOpen = false;
   Future<void> _pickPrescription() async {
+    if (_isPickerOpen) return;
+    _isPickerOpen = true;
     final picker = ImagePicker();
 
     final source = await showModalBottomSheet<ImageSource>(
@@ -219,10 +222,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
     );
 
-    if (source == null) return;
+    if (source == null) {
+      _isPickerOpen = false;
+      return;
+    }
 
     if (source == ImageSource.camera) {
       final picked = await picker.pickImage(source: source, imageQuality: 70);
+      _isPickerOpen = false;
       if (picked != null) {
         setState(() {
           _prescriptions.add(picked);
@@ -230,6 +237,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
     } else {
       final picked = await picker.pickMultiImage(imageQuality: 70);
+      _isPickerOpen = false;
       if (picked.isNotEmpty) {
         setState(() {
           _prescriptions.addAll(picked);

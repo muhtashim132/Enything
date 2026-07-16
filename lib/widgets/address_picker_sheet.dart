@@ -5,12 +5,18 @@ import '../providers/auth_provider.dart';
 import '../providers/location_provider.dart';
 import '../pages/settings/profile_settings_dialogs.dart';
 
+bool _isAddressPickerOpen = false;
+
 /// Swiggy/Zomato-style address picker bottom sheet.
 /// Shows saved addresses, current GPS option, and lets users add new addresses.
 void showAddressPickerSheet(BuildContext context) {
+  if (_isAddressPickerOpen) return;
+  
   final auth = context.read<AuthProvider>();
   final userId = auth.currentUserId;
   if (userId == null) return;
+
+  _isAddressPickerOpen = true;
 
   showModalBottomSheet(
     context: context,
@@ -23,7 +29,9 @@ void showAddressPickerSheet(BuildContext context) {
       // closes — fixes the silent bug where Step 2 was skipped.
       rootContext: context,
     ),
-  );
+  ).then((_) {
+    _isAddressPickerOpen = false;
+  });
 }
 
 class _AddressPickerContent extends StatefulWidget {

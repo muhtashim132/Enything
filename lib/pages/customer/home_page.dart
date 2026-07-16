@@ -249,6 +249,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     });
   }
 
+  bool _isActiveOrderNavigating = false;
+  bool _isSettingsNavigating = false;
   Future<void> _checkActiveOrders() async {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final auth = context.read<AuthProvider>();
@@ -265,7 +267,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             
         if (activeOrder != null && mounted) {
            if (activeOrder['status'] == 'awaiting_payment') {
-             Navigator.pushNamed(context, AppRoutes.trackOrder, arguments: {'orderId': activeOrder['id']});
+             if (_isActiveOrderNavigating) return;
+             _isActiveOrderNavigating = true;
+             Navigator.pushNamed(context, AppRoutes.trackOrder, arguments: {'orderId': activeOrder['id']}).then((_) => _isActiveOrderNavigating = false);
            } else {
              ScaffoldMessenger.of(context).showSnackBar(
                SnackBar(
@@ -274,7 +278,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                    label: 'Track',
                    textColor: Colors.white,
                    onPressed: () {
-                     Navigator.pushNamed(context, AppRoutes.trackOrder, arguments: {'orderId': activeOrder['id']});
+                     if (_isActiveOrderNavigating) return;
+                     _isActiveOrderNavigating = true;
+                     Navigator.pushNamed(context, AppRoutes.trackOrder, arguments: {'orderId': activeOrder['id']}).then((_) => _isActiveOrderNavigating = false);
                    },
                  ),
                  backgroundColor: AppColors.primary,
@@ -717,7 +723,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         final prods = <ProductModel>[];
         final prodShops = <String, ShopModel>{};
 
-        for (final p in productsResponse as List) {
+        for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
           if (!product.isAvailable) continue;
           if (effectiveCategories != null && !effectiveCategories.contains(product.category)) continue;
@@ -858,7 +864,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         final prods = <ProductModel>[];
         final prodShops = <String, ShopModel>{};
 
-        for (final p in productsResponse as List) {
+        for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
           if (!product.isAvailable) continue;
           if (effectiveCategories != null && !effectiveCategories.contains(product.category)) continue;
@@ -1052,8 +1058,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         _buildCircleAction(
                           icon: Icons.person_outline,
                           isDark: isDark,
-                          onTap: () =>
-                              Navigator.pushNamed(context, AppRoutes.settings),
+                          onTap: () {
+                            if (_isSettingsNavigating) return;
+                            _isSettingsNavigating = true;
+                            Navigator.pushNamed(context, AppRoutes.settings).then((_) => _isSettingsNavigating = false);
+                          },
                         ),
                       ],
                     ),
@@ -2390,7 +2399,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     );
   }
 
+  bool _isFilterSheetOpen = false;
   void _showFilterSheet(BuildContext context, bool isDark) {
+    if (_isFilterSheetOpen) return;
+    _isFilterSheetOpen = true;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2398,6 +2410,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            bool isApplying = false;
             final catNames = AppCategories.names;
             return Container(
               padding: const EdgeInsets.all(24),
@@ -2420,7 +2433,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       ),
                     ],
                   ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                  const SizedBox(height: 16),
                   Flexible(
                     child: SingleChildScrollView(
                       child: Column(
@@ -2466,17 +2479,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       );
                     }).toList(),
                   ),
-                          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                          const SizedBox(height: 16),
                         ],
                       ),
                     ),
                   ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
                       onPressed: () {
+                        if (isApplying) return;
+                        isApplying = true;
                         Navigator.pop(context);
                         setState(() {});
                         if (_searchQuery.isNotEmpty) {
@@ -2502,7 +2517,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           }
         );
       },
-    );
+    ).then((_) {
+      _isFilterSheetOpen = false;
+    });
   }
 
   Widget _buildSortChip(String label, _SortMode mode, StateSetter setSheetState, bool isDark) {

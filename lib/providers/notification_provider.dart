@@ -789,7 +789,7 @@ class NotificationProvider extends ChangeNotifier {
     );
 
     _debouncedNotifyListeners();
-    _persistToDb(notification); // persist to DB (fire and forget)
+    _debouncedPersistToDb(notification); // Batch persist to DB
   }
 
   // ── DB Persistence Helpers ────────────────────────────────────────────────
@@ -826,21 +826,47 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  /// Persists a single notification to DB using upsert (safe on duplicates).
-  Future<void> _persistToDb(AppNotification notif) async {
+  final List<AppNotification> _pendingDbPersist = [];
+  Timer? _dbPersistTimer;
+
+  void _debouncedPersistToDb(AppNotification notif) {
+    _pendingDbPersist.add(notif);
+    _dbPersistTimer?.cancel();
+    _dbPersistTimer = Timer(const Duration(milliseconds: 1000), () {
+      _flushPendingDbPersist();
+    });
+  }
+
+  /// Batches pending notifications and persists them to DB using a single upsert.
+  Future<void> _flushPendingDbPersist() async {
+    if (_pendingDbPersist.isEmpty) return;
     final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
-    try {
-      await _supabase.from('notifications').upsert({
+    if (userId == null) {
+      _pendingDbPersist.clear();
+      return;
+    }
+
+    // Deduplicate within the batch (latest wins)
+    final Map<String, Map<String, dynamic>> deduped = {};
+    for (var n in _pendingDbPersist) {
+      deduped[n.id] = {
         'user_id': userId,
-        'notif_key': notif.id,
-        'title': notif.title,
-        'body': notif.body,
-        if (notif.orderId != null) 'order_id': notif.orderId,
-        'is_read': notif.isRead,
-      }, onConflict: 'user_id,notif_key');
+        'notif_key': n.id,
+        'title': n.title,
+        'body': n.body,
+        if (n.orderId != null) 'order_id': n.orderId,
+        'is_read': n.isRead,
+      };
+    }
+    _pendingDbPersist.clear();
+
+    try {
+      await _supabase.from('notifications').upsert(
+        deduped.values.toList(),
+        onConflict: 'user_id,notif_key',
+      );
     } catch (e) {
-      debugPrint('Failed to persist notification to DB: $e');
+      debugPrint('Failed to batch persist notifications to DB: $e');
     }
   }
 

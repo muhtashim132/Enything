@@ -98,36 +98,44 @@ class BellAlertService {
     }
   }
 
+  bool _isPreviewing = false;
+
   /// Play the current bell sound once for in-settings preview.
   /// Uses a Singleton AudioPlayer to prevent audio overlap and memory leaks.
   Future<void> previewBell() async {
-    final uid = _userId;
-    final customPath = uid != null
-        ? await BellSettingsService.instance.getCustomBellPath(uid)
-        : null;
-
-    final oldPreview = _previewPlayer;
-    _previewPlayer = null;
+    if (_isPreviewing) return;
+    _isPreviewing = true;
     try {
-      await oldPreview?.stop();
-    } catch (_) {}
-    oldPreview?.dispose();
+      final uid = _userId;
+      final customPath = uid != null
+          ? await BellSettingsService.instance.getCustomBellPath(uid)
+          : null;
 
-    _previewPlayer = AudioPlayer();
-    try {
-      await _previewPlayer!.setReleaseMode(ReleaseMode.release);
-      await _playSource(_previewPlayer!, customPath);
-      // Auto-dispose after 10 s (covers most bell sounds)
-      Timer(const Duration(seconds: 10), () {
-        if (_previewPlayer != null) {
-          _previewPlayer!.dispose();
-          _previewPlayer = null;
-        }
-      });
-    } catch (e) {
-      debugPrint('[BellAlert] previewBell error: $e');
-      _previewPlayer?.dispose();
+      final oldPreview = _previewPlayer;
       _previewPlayer = null;
+      try {
+        await oldPreview?.stop();
+      } catch (_) {}
+      oldPreview?.dispose();
+
+      _previewPlayer = AudioPlayer();
+      try {
+        await _previewPlayer!.setReleaseMode(ReleaseMode.release);
+        await _playSource(_previewPlayer!, customPath);
+        // Auto-dispose after 10 s (covers most bell sounds)
+        Timer(const Duration(seconds: 10), () {
+          if (_previewPlayer != null) {
+            _previewPlayer!.dispose();
+            _previewPlayer = null;
+          }
+        });
+      } catch (e) {
+        debugPrint('[BellAlert] previewBell error: $e');
+        _previewPlayer?.dispose();
+        _previewPlayer = null;
+      }
+    } finally {
+      _isPreviewing = false;
     }
   }
 

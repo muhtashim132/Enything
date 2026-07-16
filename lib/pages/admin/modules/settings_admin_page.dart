@@ -226,14 +226,17 @@ class _SettingsTile extends StatelessWidget {
 // ── Notification Bottom Sheet ─────────────────────────────────────
 class _NotificationSheet extends StatefulWidget {
   const _NotificationSheet();
+  static bool _isSheetOpen = false;
 
   static void show(BuildContext context) {
+    if (_isSheetOpen) return;
+    _isSheetOpen = true;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const _NotificationSheet(),
-    );
+    ).then((_) => _isSheetOpen = false);
   }
 
   @override

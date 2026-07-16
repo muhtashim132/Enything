@@ -48,6 +48,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   RealtimeChannel? _channel;
   final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier = ValueNotifier({});
   bool _razorpayOpened = false;
+  bool _isMapOpening = false;
 
   // Payment (Razorpay) — triggered when both seller & rider accept
   late Razorpay _razorpay;
@@ -368,13 +369,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (activeOrders.isEmpty) return 'cancelled';
 
     // Priority 1: awaiting_acceptance
-    if (activeOrders.any((o) => o.status == 'awaiting_acceptance'))
+    if (activeOrders.any((o) => o.status == 'awaiting_acceptance')) {
       return 'awaiting_acceptance';
+    }
 
     // Priority 2: awaiting_payment
     // If NO order is awaiting_acceptance, and ANY order is awaiting_payment, then we are ready for payment!
-    if (activeOrders.any((o) => o.status == 'awaiting_payment'))
+    if (activeOrders.any((o) => o.status == 'awaiting_payment')) {
       return 'awaiting_payment';
+    }
 
     // Priority 3: pending
     if (activeOrders.any((o) => o.status == 'pending')) return 'pending';
@@ -384,8 +387,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     // Priority 5: out_for_delivery
     if (activeOrders.every(
-        (o) => o.status == 'out_for_delivery' || o.status == 'delivered'))
+        (o) => o.status == 'out_for_delivery' || o.status == 'delivered')) {
       return 'out_for_delivery';
+    }
 
     // Priority 6: picked_up
     if (activeOrders.any((o) => o.status == 'picked_up')) return 'picked_up';
@@ -394,13 +398,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     // ALL active orders had reached ready_for_pickup. Add explicit all-ready check so
     // the stepper correctly advances to step 5 instead of staying at step 4.
     // Priority 7a: ALL orders ready for pickup
-    if (activeOrders.every((o) => o.status == 'ready_for_pickup'))
+    if (activeOrders.every((o) => o.status == 'ready_for_pickup')) {
       return 'ready_for_pickup';
+    }
 
     // Priority 7b: Mix of preparing and ready_for_pickup
     if (activeOrders
-        .any((o) => o.status == 'preparing' || o.status == 'ready_for_pickup'))
+        .any((o) => o.status == 'preparing' || o.status == 'ready_for_pickup')) {
       return 'preparing';
+    }
 
     // Priority 8: confirmed
     if (activeOrders.any((o) => o.status == 'confirmed')) return 'confirmed';
@@ -978,6 +984,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   /// Shows a confirmation dialog then cancels the order in Supabase.
 
   Future<void> _cancelOrder() async {
+    if (_isCancelling) return;
+    _isCancelling = true;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1010,7 +1018,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted) {
+      _isCancelling = false;
+      return;
+    }
 
     // BUG-7 FIX: Block cancellation after payment has been confirmed.
     // Once status passes awaiting_payment, the customer has paid — no cancellation allowed.
@@ -1109,9 +1120,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
   }
 
+  bool _isRatingFlowOpen = false;
   /// Step 1: Rate the Shop. Step 2 (if partner assigned): Rate the Rider.
   void _showRatingFlow() {
-    if (!mounted || _order == null) return;
+    if (!mounted || _order == null || _isRatingFlowOpen) return;
+    _isRatingFlowOpen = true;
 
     int currentShopIndex = 0;
     final shopsToRate = _groupOrders.isEmpty ? [_order!] : _groupOrders;
@@ -1263,6 +1276,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     orderIdToUpdate: widget.orderId,
                   );
                 }
+                if (mounted) Navigator.pop(context);
               },
             ),
           );
@@ -1304,7 +1318,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   /// Returns the best available map centre for this order.
   /// Priority: rider live position → customer delivery address → Delhi fallback.
   LatLng _mapCenter(Map<String, LatLng> riderLocs) {
-    if (riderLocs.isNotEmpty && _order?.status == 'out_for_delivery') {
+    if (riderLocs.isNotEmpty && _aggregateStatus == 'out_for_delivery') {
       return riderLocs.values.first;
     }
     if (_order?.deliveryLat != null && _order?.deliveryLng != null) {
@@ -1363,7 +1377,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'ready_for_pickup',
           'picked_up',
           'out_for_delivery'
-        ].contains(_order!.status);
+        ].contains(_aggregateStatus);
     if (riderLocs.isNotEmpty && showRider) {
       for (final riderLoc in riderLocs.values) {
         markers.add(Marker(
@@ -1413,7 +1427,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     }
     if (isDelivered) return 'Enjoy your order! Thank you 🎉';
-    switch (_order?.status) {
+    switch (_aggregateStatus) {
       case 'awaiting_acceptance':
         if (_acceptanceSecondsLeft <= 0) {
           return 'Time limit reached. Cancelling...';
@@ -1527,8 +1541,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           .select('status')
           .eq('id', widget.orderId)
           .maybeSingle();
-      if (freshStatus != null && freshStatus['status'] == 'awaiting_payment')
+      if (freshStatus != null && freshStatus['status'] == 'awaiting_payment') {
         canPay = true;
+      }
     }
 
     if (!canPay) {
@@ -2738,12 +2753,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     );
   }
 
+  bool _isMissingItemsSheetOpen = false;
   void _showMissingItemsSheet(List<OrderModel> rejectedOrders, bool isDark) {
-    List<OrderItem> missingItems = [];
-    for (var o in rejectedOrders) {
+    if (_isMissingItemsSheetOpen) return;
+    final missingItems = <OrderItem>[];
+    for (final o in rejectedOrders) {
       missingItems.addAll(o.items);
     }
 
+    _isMissingItemsSheetOpen = true;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2848,13 +2866,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           ),
         );
       },
-    );
+    ).then((_) {
+      _isMissingItemsSheetOpen = false;
+    });
   }
 
   // ── Smart Cancellation Recovery Panel ───────────────────────────────────
   Widget _buildCancellationRecoveryPanel(bool isDark) {
-    final reason = _order?.cancelledReason ??
-        (_order?.status == 'seller_rejected' ? 'shop_rejected' : 'customer');
+    final rejectedOrder = _groupOrders.firstWhereOrNull((o) => o.status == 'seller_rejected') ??
+        _groupOrders.firstWhereOrNull((o) => o.status == 'partner_rejected') ??
+        _groupOrders.firstWhereOrNull((o) => o.status == 'cancelled') ??
+        _order;
+    final reason = rejectedOrder?.cancelledReason ??
+        (rejectedOrder?.status == 'seller_rejected' ? 'shop_rejected' : 'customer');
 
     String title;
     String body;
@@ -2863,8 +2887,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     switch (reason) {
       case 'shop_rejected':
         title = '💬 What would you like to do?';
-        body = _order?.rejectionMessage?.isNotEmpty == true
-            ? 'The shop sent a message: "${_order!.rejectionMessage}"'
+        body = rejectedOrder?.rejectionMessage?.isNotEmpty == true
+            ? 'The shop sent a message: "${rejectedOrder!.rejectionMessage}"'
             : 'The shop was unable to accept your order.';
         actions = [
           _recoveryBtn(
@@ -3188,6 +3212,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         int prepMins =
             _order!.shopPrepTimeSnapshot > 0 ? _order!.shopPrepTimeSnapshot : 30;
 
+        if (_groupOrders.length > 1) {
+          final activeGroup = _groupOrders.where((o) => o.status != 'seller_rejected' && o.status != 'cancelled').toList();
+          if (activeGroup.isNotEmpty) {
+            double maxDist = 0.0;
+            int maxPrep = 0;
+            for (final o in activeGroup) {
+              double currentDist = o.estimatedDistanceKm > 0 ? o.estimatedDistanceKm : 3.0;
+              int currentPrep = o.shopPrepTimeSnapshot > 0 ? o.shopPrepTimeSnapshot : 30;
+              if (currentDist > maxDist) maxDist = currentDist;
+              if (currentPrep > maxPrep) maxPrep = currentPrep;
+            }
+            if (maxDist > 0) distanceKm = maxDist;
+            if (maxPrep > 0) prepMins = maxPrep;
+          }
+        }
+
         // During out_for_delivery: use live rider→customer distance for remaining time
         if (_aggregateStatus == 'out_for_delivery' &&
             riderLocs.isNotEmpty &&
@@ -3411,16 +3451,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         _order!.deliveryLat != null &&
         _order!.deliveryLng != null;
 
-    final isCancelled = _order!.status == 'cancelled' ||
-        _order!.status == 'seller_rejected' ||
-        _order!.status == 'partner_rejected';
+    final isCancelled = _aggregateStatus == 'cancelled' ||
+        _aggregateStatus == 'seller_rejected' ||
+        _aggregateStatus == 'partner_rejected';
 
     // Show full-screen button only for active/trackable statuses
     final canShowMap = hasCoords && !isCancelled;
 
     return GestureDetector(
       onTap: canShowMap
-          ? () => Navigator.push(
+          ? () {
+              if (_isMapOpening) return;
+              _isMapOpening = true;
+              Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => CustomerOrderMapPage(
@@ -3428,7 +3471,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     groupOrders: _groupOrders,
                   ),
                 ),
-              )
+              ).then((_) => _isMapOpening = false);
+            }
           : null,
       child: Container(
         height: 240,
@@ -3453,7 +3497,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 builder: (context, riderLocs, child) {
                   return EnythingMap(
                     center: _mapCenter(riderLocs),
-                    zoom: _order?.status == 'awaiting_acceptance' ? 15.5 : 16.5,
+                    zoom: _aggregateStatus == 'awaiting_acceptance' ? 15.5 : 16.5,
                     interactive: false,
                     markers: _buildMapMarkers(riderLocs),
                   );
@@ -3534,7 +3578,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         'ready_for_pickup',
                         'picked_up',
                         'out_for_delivery'
-                      ].contains(_order!.status)) {
+                      ].contains(_aggregateStatus)) {
                     return Container(
                       padding:
                           const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -3592,7 +3636,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
   }
 
+  bool _isShopSelectionSheetOpen = false;
   void _showShopSelectionBottomSheet(BuildContext context, bool isDark) {
+    if (_isShopSelectionSheetOpen) return;
+    _isShopSelectionSheetOpen = true;
     showModalBottomSheet(
       context: context,
       backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,

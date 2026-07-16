@@ -548,6 +548,7 @@ class AuthProvider extends ChangeNotifier {
 
   /// Step 1: Send OTP via the `send-otp` Supabase Edge Function (Fast2SMS).
   Future<String?> sendPhoneOtp(String phone) async {
+    if (_isLoading) return null;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -610,6 +611,7 @@ class AuthProvider extends ChangeNotifier {
   ///   null       — error (check [error])
   Future<String?> verifyPhoneOtp(String phone, String otp,
       {String? preferredRole}) async {
+    if (_isLoading) return null;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -1178,6 +1180,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    if (_isManualSignOut) return;
     _isManualSignOut = true;
 
     // Auto-deactivate shop/rider status before signing out so they don't

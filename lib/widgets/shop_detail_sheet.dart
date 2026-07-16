@@ -13,7 +13,11 @@ import 'common/enything_map.dart';
 import '../utils/share_utils.dart';
 import 'common/sheet_skeleton_loader.dart';
 
+bool _isShopSheetOpen = false;
+
 void showShopDetailSheet(BuildContext context, String shopId) {
+  if (_isShopSheetOpen) return;
+  _isShopSheetOpen = true;
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -25,7 +29,9 @@ void showShopDetailSheet(BuildContext context, String shopId) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (_) => ShopDetailSheet(shopId: shopId),
-  );
+  ).then((_) {
+    _isShopSheetOpen = false;
+  });
 }
 
 class ShopDetailSheet extends StatefulWidget {

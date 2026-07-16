@@ -24,8 +24,12 @@ import 'common/premium_product_image.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // Public helper — call this instead of Navigator.pushNamed for productDetails
 // ─────────────────────────────────────────────────────────────────────────────
+bool _isProductSheetOpen = false;
+
 void showProductDetailSheet(BuildContext context, String productId,
     {bool highlightVariants = false}) {
+  if (_isProductSheetOpen) return;
+  _isProductSheetOpen = true;
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -38,7 +42,9 @@ void showProductDetailSheet(BuildContext context, String productId,
     ),
     builder: (_) => ProductDetailSheet(
         productId: productId, highlightVariants: highlightVariants),
-  );
+  ).then((_) {
+    _isProductSheetOpen = false;
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

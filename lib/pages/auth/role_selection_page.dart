@@ -1,9 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import '../../config/routes.dart';
-import '../../providers/platform_config_provider.dart';
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({super.key});
@@ -58,13 +56,17 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
     super.dispose();
   }
 
+  bool _isNavigating = false;
   void _proceed() {
-    if (_selectedRole == null) return;
+    if (_selectedRole == null || _isNavigating) return;
+    _isNavigating = true;
     Navigator.pushNamed(
       context,
       AppRoutes.phoneAuth,
       arguments: {'role': _selectedRole},
-    );
+    ).then((_) {
+      _isNavigating = false;
+    });
   }
 
   @override
@@ -113,231 +115,248 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                   builder: (_, __) => LayoutBuilder(
                     builder: (context, constraints) {
                       final bool isSmallScreen = constraints.maxHeight < 700;
-                      
+
                       Widget content = Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          if (isSmallScreen) const SizedBox(height: 32) else const Spacer(flex: 3),
+                          if (isSmallScreen)
+                            const SizedBox(height: 32)
+                          else
+                            const Spacer(flex: 3),
 
-                        // Logo
-                        FadeTransition(
-                          opacity: _titleFade,
-                          child: Transform.translate(
-                            offset: Offset(0, _titleSlide.value),
-                            child: Column(
-                              children: [
-                                // Enything logo mark
-                                Container(
-                                  width: 72,
-                                  height: 72,
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [
-                                        Color(0xFF1A2A6C),
-                                        Color(0xFF0D1B4A)
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                        color: const Color(0xFF5B8BFF)
-                                            .withValues(alpha: 0.40),
-                                        width: 1.5),
-                                    boxShadow: [
-                                      BoxShadow(
+                          // Logo
+                          FadeTransition(
+                            opacity: _titleFade,
+                            child: Transform.translate(
+                              offset: Offset(0, _titleSlide.value),
+                              child: Column(
+                                children: [
+                                  // Enything logo mark
+                                  Container(
+                                    width: 72,
+                                    height: 72,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFF1A2A6C),
+                                          Color(0xFF0D1B4A)
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
                                           color: const Color(0xFF5B8BFF)
-                                              .withValues(alpha: 0.30),
-                                          blurRadius: 22,
-                                          spreadRadius: 2),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(18),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: Image.asset(
-                                        'logo/Enything_modern.png',
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (_, __, ___) =>
-                                            const Center(
-                                              child: Text('E',
-                                                  style: TextStyle(
-                                                      fontSize: 30,
-                                                      color: Color(0xFF5B8BFF),
-                                                      fontWeight: FontWeight.w900)),
-                                            ),
+                                              .withValues(alpha: 0.40),
+                                          width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color: const Color(0xFF5B8BFF)
+                                                .withValues(alpha: 0.30),
+                                            blurRadius: 22,
+                                            spreadRadius: 2),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(8),
+                                        child: Image.asset(
+                                          'logo/Enything_modern.png',
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, __, ___) =>
+                                              const Center(
+                                            child: Text('E',
+                                                style: TextStyle(
+                                                    fontSize: 30,
+                                                    color: Color(0xFF5B8BFF),
+                                                    fontWeight:
+                                                        FontWeight.w900)),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(height: 20),
-                                ShaderMask(
-                                  shaderCallback: (b) => const LinearGradient(
-                                    colors: [
-                                      Color(0xFF8BAAFF),
-                                      Color(0xFF5B8BFF),
-                                      Color(0xFF4C6EF5)
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ).createShader(b),
-                                  child: Text('ENYTHING',
-                                      style: GoogleFonts.outfit(
-                                        color: Colors.white,
-                                        fontSize: 42,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 8,
-                                      )),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Join as who you are',
-                                  style: GoogleFonts.outfit(
-                                    color: Colors.white.withValues(alpha: 0.50),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                    letterSpacing: 0.4,
+                                  const SizedBox(height: 20),
+                                  ShaderMask(
+                                    shaderCallback: (b) => const LinearGradient(
+                                      colors: [
+                                        Color(0xFF8BAAFF),
+                                        Color(0xFF5B8BFF),
+                                        Color(0xFF4C6EF5)
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ).createShader(b),
+                                    child: Text('ENYTHING',
+                                        style: GoogleFonts.outfit(
+                                          color: Colors.white,
+                                          fontSize: 42,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 8,
+                                        )),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                          if (isSmallScreen) const SizedBox(height: 40) else const Spacer(flex: 4),
-
-                        // Heading
-                        FadeTransition(
-                          opacity: _titleFade,
-                          child: Transform.translate(
-                            offset: Offset(0, _titleSlide.value),
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Choose your role',
-                                  style: GoogleFonts.outfit(
-                                    color: Colors.white,
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'One account — multiple roles. Pick one to start.',
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.outfit(
-                                    color: Colors.white.withValues(alpha: 0.50),
-                                    fontSize: 13,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                          if (isSmallScreen) const SizedBox(height: 32) else const Spacer(flex: 3),
-
-                        // Role cards
-                        _AnimatedRoleCard(
-                          anim: _card1Anim,
-                          icon: '🛍️',
-                          title: 'Customer',
-                          subtitle:
-                              'Shop from local stores & get\nfast doorstep delivery',
-                          accentColor: const Color(0xFF4C6EF5),
-                          badge: 'Shop Now',
-                          selected: _selectedRole == 'customer',
-                          onTap: () =>
-                              setState(() => _selectedRole = 'customer'),
-                        ),
-                        const SizedBox(height: 16),
-                        _AnimatedRoleCard(
-                          anim: _card2Anim,
-                          icon: '🏪',
-                          title: 'Seller',
-                          subtitle:
-                              'List your products & grow\nyour business locally',
-                          accentColor: const Color(0xFFF4C542),
-                          badge: 'Sell Now',
-                          selected: _selectedRole == 'seller',
-                          onTap: () => setState(() => _selectedRole = 'seller'),
-                        ),
-                        const SizedBox(height: 16),
-                        _AnimatedRoleCard(
-                          anim: _card3Anim,
-                          icon: '🏍️',
-                          title: 'Delivery Partner',
-                          subtitle:
-                              'Earn by delivering orders\nin your neighbourhood',
-                          accentColor: const Color(0xFF51CF66),
-                          badge: 'Earn Now',
-                          selected: _selectedRole == 'delivery_partner',
-                          onTap: () => setState(
-                              () => _selectedRole = 'delivery_partner'),
-                        ),
-
-
-
-                          if (isSmallScreen) const SizedBox(height: 40) else const Spacer(flex: 4),
-
-                        // CTA
-                        GestureDetector(
-                          onTap: _selectedRole != null ? _proceed : null,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            width: double.infinity,
-                            height: 58,
-                            decoration: BoxDecoration(
-                              gradient: _selectedRole != null
-                                  ? const LinearGradient(colors: [
-                                      Color(0xFFFFD700),
-                                      Color(0xFFF4A800)
-                                    ])
-                                  : null,
-                              color: _selectedRole == null
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : null,
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: _selectedRole != null
-                                  ? [
-                                      BoxShadow(
-                                          color: const Color(0xFFF4C542)
-                                              .withValues(alpha: 0.40),
-                                          blurRadius: 20,
-                                          offset: const Offset(0, 8))
-                                    ]
-                                  : [],
-                            ),
-                            child: Center(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
+                                  const SizedBox(height: 8),
                                   Text(
-                                    _selectedRole != null
-                                        ? 'Continue as ${_roleName(_selectedRole!)}'
-                                        : 'Select a role to continue',
+                                    'Join as who you are',
                                     style: GoogleFonts.outfit(
-                                      color: _selectedRole != null
-                                          ? Colors.black
-                                          : Colors.white38,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w800,
+                                      color:
+                                          Colors.white.withValues(alpha: 0.50),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: 0.4,
                                     ),
                                   ),
-                                  if (_selectedRole != null) ...[
-                                    const SizedBox(width: 10),
-                                    const Icon(Icons.arrow_forward_rounded,
-                                        color: Colors.black, size: 20),
-                                  ],
                                 ],
                               ),
                             ),
                           ),
-                        ),
 
-                          if (isSmallScreen) const SizedBox(height: 32) else const Spacer(flex: 3),
+                          if (isSmallScreen)
+                            const SizedBox(height: 40)
+                          else
+                            const Spacer(flex: 4),
+
+                          // Heading
+                          FadeTransition(
+                            opacity: _titleFade,
+                            child: Transform.translate(
+                              offset: Offset(0, _titleSlide.value),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    'Choose your role',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'One account — multiple roles. Pick one to start.',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.outfit(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.50),
+                                      fontSize: 13,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          if (isSmallScreen)
+                            const SizedBox(height: 32)
+                          else
+                            const Spacer(flex: 3),
+
+                          // Role cards
+                          _AnimatedRoleCard(
+                            anim: _card1Anim,
+                            icon: '🛍️',
+                            title: 'Customer',
+                            subtitle:
+                                'Shop from local stores & get\nfast doorstep delivery',
+                            accentColor: const Color(0xFF4C6EF5),
+                            badge: 'Shop Now',
+                            selected: _selectedRole == 'customer',
+                            onTap: () =>
+                                setState(() => _selectedRole = 'customer'),
+                          ),
+                          const SizedBox(height: 16),
+                          _AnimatedRoleCard(
+                            anim: _card2Anim,
+                            icon: '🏪',
+                            title: 'Seller',
+                            subtitle:
+                                'List your products & grow\nyour business locally',
+                            accentColor: const Color(0xFFF4C542),
+                            badge: 'Sell Now',
+                            selected: _selectedRole == 'seller',
+                            onTap: () =>
+                                setState(() => _selectedRole = 'seller'),
+                          ),
+                          const SizedBox(height: 16),
+                          _AnimatedRoleCard(
+                            anim: _card3Anim,
+                            icon: '🏍️',
+                            title: 'Delivery Partner',
+                            subtitle:
+                                'Earn by delivering orders\nin your neighbourhood',
+                            accentColor: const Color(0xFF51CF66),
+                            badge: 'Earn Now',
+                            selected: _selectedRole == 'delivery_partner',
+                            onTap: () => setState(
+                                () => _selectedRole = 'delivery_partner'),
+                          ),
+
+                          if (isSmallScreen)
+                            const SizedBox(height: 40)
+                          else
+                            const Spacer(flex: 4),
+
+                          // CTA
+                          GestureDetector(
+                            onTap: _selectedRole != null ? _proceed : null,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              width: double.infinity,
+                              height: 58,
+                              decoration: BoxDecoration(
+                                gradient: _selectedRole != null
+                                    ? const LinearGradient(colors: [
+                                        Color(0xFFFFD700),
+                                        Color(0xFFF4A800)
+                                      ])
+                                    : null,
+                                color: _selectedRole == null
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : null,
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: _selectedRole != null
+                                    ? [
+                                        BoxShadow(
+                                            color: const Color(0xFFF4C542)
+                                                .withValues(alpha: 0.40),
+                                            blurRadius: 20,
+                                            offset: const Offset(0, 8))
+                                      ]
+                                    : [],
+                              ),
+                              child: Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _selectedRole != null
+                                          ? 'Continue as ${_roleName(_selectedRole!)}'
+                                          : 'Select a role to continue',
+                                      style: GoogleFonts.outfit(
+                                        color: _selectedRole != null
+                                            ? Colors.black
+                                            : Colors.white38,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    if (_selectedRole != null) ...[
+                                      const SizedBox(width: 10),
+                                      const Icon(Icons.arrow_forward_rounded,
+                                          color: Colors.black, size: 20),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          if (isSmallScreen)
+                            const SizedBox(height: 32)
+                          else
+                            const Spacer(flex: 3),
                         ],
                       );
 
@@ -387,7 +406,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
+            gradient:
+                RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
           ),
         ),
       );
@@ -431,7 +451,8 @@ class _AnimatedRoleCard extends StatelessWidget {
                 : Colors.white.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: selected ? accentColor : Colors.white.withValues(alpha: 0.10),
+              color:
+                  selected ? accentColor : Colors.white.withValues(alpha: 0.10),
               width: selected ? 2.0 : 1.0,
             ),
             boxShadow: selected
@@ -527,8 +548,9 @@ class _AnimatedRoleCard extends StatelessWidget {
                   color: selected ? accentColor : Colors.transparent,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color:
-                        selected ? accentColor : Colors.white.withValues(alpha: 0.20),
+                    color: selected
+                        ? accentColor
+                        : Colors.white.withValues(alpha: 0.20),
                     width: 2,
                   ),
                 ),
@@ -548,7 +570,6 @@ class _AnimatedRoleCard extends StatelessWidget {
     );
   }
 }
-
 
 // ── Subtle star field ─────────────────────────────────────────────────────────
 class _StarPainter extends CustomPainter {
