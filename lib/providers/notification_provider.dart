@@ -49,6 +49,10 @@ class NotificationProvider extends ChangeNotifier {
   StreamSubscription<RemoteMessage>? _fcmMessageSub;
   Timer? _debounceTimer;
 
+  // Stream for broadcasting cancelled/rejected orders to trigger auto-readd to cart
+  final StreamController<String> _orderCancelledStreamController = StreamController<String>.broadcast();
+  Stream<String> get onOrderCancelledStream => _orderCancelledStreamController.stream;
+
   void _debouncedNotifyListeners() {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 300), () {
@@ -296,6 +300,11 @@ class NotificationProvider extends ChangeNotifier {
                 body: body!,
                 orderId: orderId,
               ));
+
+              // If the order was cancelled or rejected, broadcast it to trigger auto-readd to cart
+              if (newStatus == 'cancelled' || newStatus == 'seller_rejected') {
+                _orderCancelledStreamController.add(orderId);
+              }
             }
           },
         )
@@ -1098,6 +1107,7 @@ class NotificationProvider extends ChangeNotifier {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _orderCancelledStreamController.close();
     stopListening();
     super.dispose();
   }

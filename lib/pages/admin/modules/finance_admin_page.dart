@@ -1276,47 +1276,29 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
       final userId = w['user_id'];
       final role = w['user_role'];
 
-      // 1. Total withdrawn (processed + pending + approved, excluding rejected)
-      final histRes = await _db
-          .from('withdrawals')
-          .select('amount, status')
-          .eq('user_id', userId)
-          .eq('user_role', role);
-      
-      double totalPaid = 0;
-      for (final h in histRes) {
-        if (h['status'] != 'rejected') {
-          totalPaid += (h['amount'] as num).toDouble();
-        }
-      }
-      _totalWithdrawn = totalPaid;
-
-      // 2. Total earned
-      double totalEarned = 0;
+      // Securely fetch exact calculated balances via DB RPCs to prevent OOM
       if (role == 'seller') {
         final shopRes = await _db.from('shops').select('id').eq('seller_id', userId).maybeSingle();
         if (shopRes != null) {
-          final earningsRes = await _db
-              .from('orders')
-              .select('seller_payout')
-              .eq('shop_id', shopRes['id'])
-              .eq('status', 'delivered');
-          for (final o in earningsRes as List) {
-            totalEarned += (o['seller_payout'] as num? ?? 0).toDouble();
+          final balanceRes = await _db.rpc('get_seller_balance', params: {
+            'p_shop_id': shopRes['id'],
+          });
+          if (balanceRes != null) {
+            _totalEarned = (balanceRes['total_earned'] as num).toDouble();
+            _totalWithdrawn = (balanceRes['total_paid'] as num).toDouble();
+            _availableBalance = (balanceRes['available_balance'] as num).toDouble();
           }
         }
       } else if (role == 'delivery_partner') {
-        final earningsRes = await _db
-            .from('orders')
-            .select('rider_earnings, delivery_charges')
-            .eq('delivery_partner_id', userId)
-            .eq('status', 'delivered');
-        for (final o in earningsRes as List) {
-          totalEarned += (o['rider_earnings'] ?? o['delivery_charges'] ?? 0).toDouble();
+        final balanceRes = await _db.rpc('get_rider_balance', params: {
+          'p_rider_id': userId,
+        });
+        if (balanceRes != null) {
+          _totalEarned = (balanceRes['total_earned'] as num).toDouble();
+          _totalWithdrawn = (balanceRes['total_paid'] as num).toDouble();
+          _availableBalance = (balanceRes['available_balance'] as num).toDouble();
         }
       }
-      _totalEarned = totalEarned;
-      _availableBalance = totalEarned - totalPaid;
 
     } catch (e) {
       debugPrint('Error loading user details: $e');

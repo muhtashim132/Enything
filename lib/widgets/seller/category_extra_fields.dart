@@ -476,9 +476,13 @@ class _DropdownField<T> extends StatelessWidget {
                               Icon(icon, color: Colors.white38, size: 18),
                               const SizedBox(width: 10),
                             ],
-                            Text(itemLabel(item),
-                                style: GoogleFonts.outfit(
-                                    color: Colors.white, fontSize: 14)),
+                            Expanded(
+                              child: Text(
+                                itemLabel(item),
+                                style: GoogleFonts.outfit(color: Colors.white, fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ))

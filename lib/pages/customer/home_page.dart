@@ -459,18 +459,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           }).select('*, shops(*)');
         }
       } else {
-        // Fallback for global searches (no location permission)
-        final shopQ = _supabase.from('shops').select().eq('is_active', true).eq('is_accepting_orders', true);
-        if (effectiveCategories != null) shopQ.inFilter('category', effectiveCategories);
-        shopsByName = await shopQ.ilike('name', '%$query%').limit(50);
-        
-        final prodQ = _supabase.from('products').select('*, shops!inner(*)').eq('is_available', true).eq('shops.is_active', true).eq('shops.is_accepting_orders', true);
-        productsByName = await prodQ.ilike('name', '%$query%').limit(50);
-
-        if (matchedSubcategories.isNotEmpty) {
-          shopsByCat = await _supabase.from('shops').select().eq('is_active', true).eq('is_accepting_orders', true).inFilter('category', matchedSubcategories).limit(50);
-          productsByCat = await _supabase.from('products').select('*, shops!inner(*)').eq('is_available', true).eq('shops.is_active', true).eq('shops.is_accepting_orders', true).inFilter('category', matchedSubcategories).limit(100);
-        }
+        // Fallback removed to prevent out-of-bounds checkouts
+        shopsByName = [];
+        productsByName = [];
+        shopsByCat = [];
+        productsByCat = [];
       }
 
       final allShopsSet = <String, ShopModel>{};
@@ -655,16 +648,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     try {
       final locationProvider = context.read<LocationProvider>();
 
-      // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
-      final shopsResponse = locationProvider.hasLocation
-          ? await _supabase.rpc('get_nearby_shops', params: {
-              'p_lat': locationProvider.currentLocation!.latitude,
-              'p_lng': locationProvider.currentLocation!.longitude,
-              'p_radius_km': 50.0,
-              'p_limit': 500, // Fetch up to 500 nearby shops to prevent category starving
-            })
-          : await _supabase.from('shops').select().limit(100);
-
       List<String>? effectiveCategories;
       if (_selectedFilterCategories.isNotEmpty) {
         effectiveCategories = [];
@@ -673,9 +656,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         }
       }
 
+      // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
+      final shopsResponse = locationProvider.hasLocation
+          ? await _supabase.rpc('get_nearby_shops', params: {
+              'p_lat': locationProvider.currentLocation!.latitude,
+              'p_lng': locationProvider.currentLocation!.longitude,
+              'p_radius_km': DeliveryCalculator.maxRadiusKm,
+              'p_limit': 500, // Fetch up to 500 nearby shops to prevent category starving
+              'p_categories': effectiveCategories,
+            })
+          : [];
+
       final allShops = (shopsResponse as List)
           .map((s) => ShopModel.fromMap(s))
-          .where((s) => s.isActive && (effectiveCategories == null || effectiveCategories.contains(s.category)))
+          .where((s) => s.isActive)
           .toList();
 
       List<ShopModel> nearby;
@@ -795,16 +789,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       final locationProvider = context.read<LocationProvider>();
       final subcategories = _tabCategories[tabName] ?? [tabName];
 
-      // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
-      final shopsResponse = locationProvider.hasLocation
-          ? await _supabase.rpc('get_nearby_shops', params: {
-              'p_lat': locationProvider.currentLocation!.latitude,
-              'p_lng': locationProvider.currentLocation!.longitude,
-              'p_radius_km': 50.0,
-              'p_limit': 500, // Fetch ample pool, then filter down to subcategories locally
-            })
-          : await _supabase.from('shops').select().limit(100); 
-
       List<String>? effectiveCategories;
       if (_selectedFilterCategories.isNotEmpty) {
         effectiveCategories = [];
@@ -813,11 +797,27 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         }
       }
 
+      List<String> finalCategories = [];
+      if (effectiveCategories != null) {
+        finalCategories = subcategories.where((c) => effectiveCategories!.contains(c)).toList();
+      } else {
+        finalCategories = subcategories;
+      }
+
+      // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
+      final shopsResponse = (locationProvider.hasLocation && finalCategories.isNotEmpty)
+          ? await _supabase.rpc('get_nearby_shops', params: {
+              'p_lat': locationProvider.currentLocation!.latitude,
+              'p_lng': locationProvider.currentLocation!.longitude,
+              'p_radius_km': DeliveryCalculator.maxRadiusKm,
+              'p_limit': 500, // Fetch ample pool, then filter down to subcategories locally
+              'p_categories': finalCategories,
+            })
+          : []; 
+
       final allShops = (shopsResponse as List)
           .map((s) => ShopModel.fromMap(s))
-          .where((s) => s.isActive && 
-              subcategories.contains(s.category) && // Ensure we respect tab filters
-              (effectiveCategories == null || effectiveCategories.contains(s.category)))
+          .where((s) => s.isActive)
           .toList();
 
       List<ShopModel> nearby;

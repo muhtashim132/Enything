@@ -53,9 +53,8 @@ class RiderBackgroundService {
     const androidInit = AndroidInitializationSettings('ic_notification');
     await notif.initialize(const InitializationSettings(android: androidInit));
 
-    final androidPlugin =
-        notif.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = notif.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
         _kFgChannelId,
@@ -72,12 +71,13 @@ class RiderBackgroundService {
       // ── Android ────────────────────────────────────────────────────────────
       androidConfiguration: AndroidConfiguration(
         onStart: _onStart,
-        autoStart: false,           // We start it explicitly when rider goes online
-        isForegroundMode: true,     // Required to survive screen lock
+        autoStart: false, // We start it explicitly when rider goes online
+        isForegroundMode: true, // Required to survive screen lock
         foregroundServiceTypes: const [AndroidForegroundType.location],
         notificationChannelId: _kFgChannelId,
         initialNotificationTitle: '🛵 Enything Delivery Active',
-        initialNotificationContent: 'Location tracking is on for your active delivery',
+        initialNotificationContent:
+            'Location tracking is on for your active delivery',
         foregroundServiceNotificationId: _kFgNotificationId,
       ),
       // ── iOS ────────────────────────────────────────────────────────────────
@@ -94,8 +94,7 @@ class RiderBackgroundService {
     required String riderId,
     required String supabaseUrl,
     required String anonKey,
-    required String accessToken,
-    required String refreshToken,
+    required String trackingSecret,
   }) async {
     final service = FlutterBackgroundService();
     final isRunning = await service.isRunning();
@@ -113,8 +112,7 @@ class RiderBackgroundService {
       'rider_id': riderId,
       'supabase_url': supabaseUrl,
       'anon_key': anonKey,
-      'access_token': accessToken,
-      'refresh_token': refreshToken,
+      'tracking_secret': trackingSecret,
     });
   }
 
@@ -143,6 +141,7 @@ Future<void> _onStart(ServiceInstance service) async {
 
   // State tracked inside the background isolate
   String? riderId;
+  String? trackingSecret;
   SupabaseClient? db;
   Timer? gpsTimer;
 
@@ -177,47 +176,22 @@ Future<void> _onStart(ServiceInstance service) async {
       final lat = pos.latitude;
       final lng = pos.longitude;
 
-      // 1️⃣ Update delivery_partners row (PostGIS point + lat/lng columns)
+      // 1️⃣ Update delivery_partners row and cascade to orders (Stateless RPC)
       try {
-        await db!.rpc('update_rider_location', params: {
+        await db!.rpc('update_rider_location_bg', params: {
+          'p_rider_id': riderId,
           'p_lat': lat,
           'p_lng': lng,
+          'p_secret': trackingSecret,
         });
       } catch (e) {
-        print('[RiderBgService] update_rider_location RPC error: $e');
+        print('[RiderBgService] update_rider_location_bg RPC error: $e');
       }
 
-      // 2️⃣ Update rider_lat/lng on all active orders assigned to this rider
-      const activeStatuses = [
-        'confirmed',
-        'preparing',
-        'ready_for_pickup',
-        'picked_up',
-        'out_for_delivery',
-      ];
-
-      try {
-        final rows = await db!
-            .from('orders')
-            .select('id')
-            .eq('delivery_partner_id', riderId!)
-            .inFilter('status', activeStatuses);
-
-        final activeOrderIds = (rows as List).map((r) => r['id']).toList();
-        if (activeOrderIds.isNotEmpty) {
-          try {
-            await db!.rpc('update_rider_order_location', params: {
-              'p_order_ids': activeOrderIds,
-              'p_lat': lat,
-              'p_lng': lng,
-            });
-          } catch (e) {
-            print('[RiderBgService] order update error: $e');
-          }
-        }
-      } catch (e) {
-        print('[RiderBgService] order query error: $e');
-      }
+      // 2️⃣ [STRESS-TEST FIX] The 'update_rider_location_bg' RPC now atomically cascades
+      //    these coordinates to ALL active orders assigned to the rider directly in PostgreSQL.
+      //    We deleted the redundant .select() loop and update_rider_order_location RPC call
+      //    to eliminate 2,000 writes and 1,000 queries per minute per 1k riders.
 
       // Update the foreground notification content with last-updated time
       if (service is AndroidServiceInstance) {
@@ -243,33 +217,16 @@ Future<void> _onStart(ServiceInstance service) async {
     riderId = data['rider_id'] as String?;
     final supabaseUrl = data['supabase_url'] as String?;
     final receivedKey = data['anon_key'] as String?;
-    final accessToken = data['access_token'] as String?;
-    final refreshToken = data['refresh_token'] as String?;
+    trackingSecret = data['tracking_secret'] as String?;
 
-    if (supabaseUrl == null || receivedKey == null) {
-      print('[RiderBgService] Missing Supabase credentials — cannot start');
+    if (supabaseUrl == null || receivedKey == null || trackingSecret == null) {
+      print('[RiderBgService] Missing Supabase credentials or tracking secret');
       return;
     }
 
-    // Initialize Supabase in this isolate (safe to call multiple times)
-    try {
-      await Supabase.initialize(url: supabaseUrl, publishableKey: receivedKey);
-      db = Supabase.instance.client;
-    } catch (e) {
-      // Already initialized — grab the existing client
-      db = Supabase.instance.client;
-    }
-
-    // Recover session in a separate, isolated block
-    if (refreshToken != null && refreshToken.isNotEmpty) {
-      try {
-        await db!.auth.setSession(refreshToken.toString());
-        print('[RiderBgService] Session recovered for rider: $riderId');
-      } catch (authError) {
-        print('[RiderBgService] Session recovery failed: $authError');
-        // Do not crash the isolate; allow fallback behavior
-      }
-    }
+    // 100x ARCHITECTURE FIX: Stateless BG Isolate
+    // Eliminates race conditions with main isolate's token refresh
+    db = SupabaseClient(supabaseUrl, receivedKey);
 
     // Start the periodic GPS timer
     gpsTimer?.cancel();
@@ -292,8 +249,12 @@ Future<void> _onStart(ServiceInstance service) async {
 
   // Keep the isolate alive on Android as a foreground service
   if (service is AndroidServiceInstance) {
-    service.on('setAsForeground').listen((_) => service.setAsForegroundService());
-    service.on('setAsBackground').listen((_) => service.setAsBackgroundService());
+    service
+        .on('setAsForeground')
+        .listen((_) => service.setAsForegroundService());
+    service
+        .on('setAsBackground')
+        .listen((_) => service.setAsBackgroundService());
     await service.setAsForegroundService();
   }
 }
@@ -308,4 +269,3 @@ Future<bool> _onIosBackground(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
   return true; // Keep alive
 }
-

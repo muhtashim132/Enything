@@ -95,10 +95,17 @@ ShopModel _shopFromJson(Map<String, dynamic> m) {
   );
 }
 
+class RestoreResult {
+  final int added;
+  final String? error;
+  const RestoreResult(this.added, [this.error]);
+}
+
 class CartProvider extends ChangeNotifier {
   static const String _cartKey = 'enything_cart_v2'; // Bumped for variant support
   static const String _legacyCartKey = 'enything_cart_v1';
   final List<CartItem> _items = [];
+  final Set<String> _inFlightRestores = {};
 
   CartProvider() {
     _safeAddPlatformListener();
@@ -124,7 +131,6 @@ class CartProvider extends ChangeNotifier {
   @override
   void dispose() {
     PlatformConfigProvider.instance?.removeListener(notifyListeners);
-    _saveDebounce?.cancel();
     super.dispose();
   }
 
@@ -223,7 +229,7 @@ class CartProvider extends ChangeNotifier {
   bool get isMultiShopOrder => shops.length > 1;
 
   String? addItem(ProductModel product, ShopModel shop,
-      {int quantity = 1, ProductVariant? selectedVariant}) {
+      {int quantity = 1, ProductVariant? selectedVariant, bool suppressSave = false}) {
     if (totalItemCount + quantity > PaymentConfig.maxItemsPerOrder) {
       return 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
     }
@@ -253,8 +259,10 @@ class CartProvider extends ChangeNotifier {
       _items[existingIdx].quantity += quantity;
     }
 
-    _saveCart(); // Bug #20
-    notifyListeners();
+    if (!suppressSave) {
+      _saveCart(); // Bug #20
+      notifyListeners();
+    }
     return null;
   }
 
@@ -325,32 +333,46 @@ class CartProvider extends ChangeNotifier {
   // Bug #20: Persistence — save & load cart via shared_preferences
   // ---------------------------------------------------------------------------
 
-  Timer? _saveDebounce;
+  bool _isSaving = false;
+  bool _needsSave = false;
 
-  /// Serialises the current cart to shared_preferences with debounce.
+  /// Serialises the current cart to shared_preferences with an async lock queue.
   Future<void> _saveCart() async {
-    _saveDebounce?.cancel();
-    _saveDebounce = Timer(const Duration(milliseconds: 300), () async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final encoded = jsonEncode(_items.map((item) => {
+    if (_isSaving) {
+      _needsSave = true;
+      return;
+    }
+    
+    _isSaving = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      do {
+        _needsSave = false;
+        
+        // Take a synchronous snapshot of the exact memory state at this microsecond
+        // to guarantee the async JSON encoder serializes the correct data
+        final snapshot = List<CartItem>.from(_items);
+        
+        final encoded = jsonEncode(snapshot.map((item) => {
           'product': _productToJson(item.product),
           'shop': _shopToJson(item.shop),
           'quantity': item.quantity,
           'special_instructions': item.specialInstructions,
           'selected_variant': item.selectedVariant?.toMap(),
         }).toList());
+        
         await prefs.setString(_cartKey, encoded);
-      } catch (e) {
-        debugPrint('CartProvider: failed to save cart: $e');
-      }
-    });
+      } while (_needsSave);
+    } catch (e) {
+      debugPrint('CartProvider: failed to save cart: $e');
+    } finally {
+      _isSaving = false;
+    }
   }
 
   /// Restores the cart from shared_preferences.
   /// Call this once during app startup (e.g., after MultiProvider is set up).
   Future<void> loadCart() async {
-    _saveDebounce?.cancel();
     try {
       final prefs = await SharedPreferences.getInstance();
       String? raw = prefs.getString(_cartKey);
@@ -428,6 +450,147 @@ class CartProvider extends ChangeNotifier {
           .fold(0, (sum, item) => sum + item.quantity);
     } catch (_) {
       return 0;
+    }
+  }
+
+
+  /// Restores items from a cancelled or rejected order back into the cart via RPC.
+  /// Idempotent. Tracks processed orders in SharedPreferences. Returns RestoreResult.
+  Future<RestoreResult> restoreOrderToCart(String orderId) async {
+    if (_inFlightRestores.contains(orderId)) return const RestoreResult(0);
+    _inFlightRestores.add(orderId);
+
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return const RestoreResult(0);
+
+      final prefsKey = 'readded_order_ids_$userId';
+      final prefs = await SharedPreferences.getInstance();
+      List<String> processedList = List<String>.from(prefs.getStringList(prefsKey) ?? []);
+      
+      if (processedList.contains(orderId)) {
+        return const RestoreResult(0); // Already processed
+      }
+
+      final response = await supabase.rpc('get_order_reorder_data_v3', params: {'p_order_id': orderId}).timeout(const Duration(seconds: 8));
+
+      // Level 12: Authentication Boundary Check
+      // Prevent Cross-Account Ghost Injections if the user logs out during the async network transit.
+      if (supabase.auth.currentUser?.id != userId) {
+        debugPrint('CartProvider: Aborting restoreOrderToCart due to logout or account switch.');
+        return const RestoreResult(0);
+      }
+
+      if (response == null || response is! List || response.isEmpty) {
+        // Mark as processed even if empty or corrupted to prevent infinite retries
+        List<String> currentList = List<String>.from(prefs.getStringList(prefsKey) ?? []);
+        currentList.remove(orderId);
+        currentList.add(orderId);
+        if (currentList.length > 100) currentList = currentList.sublist(currentList.length - 100);
+        await prefs.setStringList(prefsKey, currentList);
+        return const RestoreResult(0, 'All products in this order are no longer available or data is invalid.');
+      }
+
+      // Fetch original order count to detect if any products are out of stock / missing
+      int originalCount = 0;
+      bool countVerificationFailed = false;
+      try {
+        final countResponse = await supabase
+            .rpc('get_order_item_count_v1', params: {'p_order_id': orderId})
+            .timeout(const Duration(seconds: 4));
+        originalCount = (countResponse as num).toInt();
+      } catch (e) {
+        debugPrint('CartProvider: Failed to fetch original order items count: $e');
+        countVerificationFailed = true;
+      }
+
+      int added = 0;
+      int deletedVariantCount = 0;
+      String? lastError;
+      for (final itemData in response) {
+        try {
+          final product = ProductModel.fromMap(itemData['product']);
+          final shop = ShopModel.fromMap(itemData['shop']);
+          final int quantity = (itemData['quantity'] as num?)?.toInt() ?? 1;
+          final String? variantName = itemData['variant_name'];
+
+          ProductVariant? selectedVariant;
+          if (variantName != null && product.variants.isNotEmpty) {
+            try {
+              selectedVariant = product.variants.firstWhere((v) => v.name == variantName);
+            } catch (_) {}
+          }
+
+          if (variantName != null && selectedVariant == null) {
+            // The shop deleted this variant after the order was placed!
+            // Skip adding this item to prevent corrupting the cart state.
+            debugPrint('CartProvider: Skipping item because variant $variantName is no longer available.');
+            deletedVariantCount++;
+            continue;
+          }
+
+          final err = addItem(product, shop, quantity: quantity, selectedVariant: selectedVariant, suppressSave: true);
+          if (err == null) {
+            added++;
+          } else {
+            lastError = err;
+          }
+        } catch (e) {
+          debugPrint('CartProvider: Failed to parse reorder item: $e');
+          lastError = 'Failed to parse some product details. Please add manually.';
+        }
+      }
+
+      final outOfStockCount = (originalCount > 0) ? (originalCount - response.length) + deletedVariantCount : 0;
+      if (outOfStockCount > 0) {
+        if (lastError == null) {
+          lastError = '$outOfStockCount product(s) are out of stock or unavailable.';
+        } else {
+          lastError = '$lastError Plus, $outOfStockCount product(s) are out of stock.';
+        }
+      } else if (countVerificationFailed && added > 0) {
+        if (lastError == null) {
+          lastError = 'Poor network prevented checking for out-of-stock products.';
+        } else {
+          lastError = '$lastError Also, network prevented out-of-stock check.';
+        }
+      }
+
+      if (added > 0) {
+        _saveCart();
+        notifyListeners();
+      }
+
+      // Mark as processed (re-read to prevent async write-overwrite race condition)
+      List<String> finalProcessedList = List<String>.from(prefs.getStringList(prefsKey) ?? []);
+      finalProcessedList.remove(orderId);
+      finalProcessedList.add(orderId);
+      if (finalProcessedList.length > 100) finalProcessedList = finalProcessedList.sublist(finalProcessedList.length - 100);
+      await prefs.setStringList(prefsKey, finalProcessedList);
+
+      return RestoreResult(added, lastError);
+    } catch (e) {
+      debugPrint('CartProvider: restoreOrderToCart failed: $e');
+      final errStr = e.toString().toLowerCase();
+      // Poison Pill Catcher: If error is not a transient network issue, mark as processed to prevent infinite looping
+      if (!errStr.contains('timeout') && !errStr.contains('socketexception') && !errStr.contains('clientexception')) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final userId = Supabase.instance.client.auth.currentUser?.id;
+          if (userId != null) {
+            final prefsKey = 'readded_order_ids_$userId';
+            List<String> currentList = List<String>.from(prefs.getStringList(prefsKey) ?? []);
+            currentList.remove(orderId);
+            currentList.add(orderId);
+            if (currentList.length > 100) currentList = currentList.sublist(currentList.length - 100);
+            await prefs.setStringList(prefsKey, currentList);
+          }
+        } catch (_) {}
+      }
+      return const RestoreResult(0, 'Network timeout or error. Could not restore order.');
+    } finally {
+      _inFlightRestores.remove(orderId);
     }
   }
 }

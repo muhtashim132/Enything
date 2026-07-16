@@ -26,7 +26,11 @@ import 'dart:math' as math;
 import '../../widgets/coupon_input_widget.dart';
 
 class CheckoutPage extends StatefulWidget {
-  const CheckoutPage({super.key});
+  final String? existingCartGroupId;
+  final String? orderIdToCancelOnSuccess;
+  final int activeOrdersCount;
+
+  const CheckoutPage({super.key, this.existingCartGroupId, this.orderIdToCancelOnSuccess, this.activeOrdersCount = 0});
 
   @override
   State<CheckoutPage> createState() => _CheckoutPageState();
@@ -453,19 +457,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (baseDelivery < 0) {
         throw Exception('Your delivery address is outside our delivery zone.');
       }
-      final surcharge = cart.multiShopSurcharge;
-      final heavyFee = cart.heavyOrderFee;
-      final smallCartFee = cart.smallCartFee;
-      final effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
+      
+      // 100x ARCHITECTURE STRESS-TEST FIX: Free Replacement Delivery
+      final isFreeReplacement = widget.activeOrdersCount > 0;
+      
+      final surcharge = isFreeReplacement ? 0.0 : cart.multiShopSurcharge;
+      final heavyFee = isFreeReplacement ? 0.0 : cart.heavyOrderFee;
+      final smallCartFee = isFreeReplacement ? 0.0 : cart.smallCartFee;
+      final effectiveBase = isFreeReplacement ? 0.0 : (baseDelivery >= 0 ? baseDelivery : 25.0);
       final riderBase = effectiveBase + surcharge + heavyFee;
       final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
-      double totalDelivery = cart.totalDeliveryCharges(maxDistanceKm);
+      double totalDelivery = isFreeReplacement ? 0.0 : cart.totalDeliveryCharges(maxDistanceKm);
 
       // Payment method is always 'upi' now (COD removed)
       const paymentMethod = 'upi';
 
-      final cartGroupId = const Uuid().v4();
+      final cartGroupId = widget.existingCartGroupId ?? const Uuid().v4();
       final numShops = cart.shops.length;
 
       // Acceptance deadline: 3 minutes from now (enforces 3-minute cancellation rule)
@@ -715,8 +723,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       await supabase.rpc('place_orders_transaction', params: {
         'p_orders': allOrders,
         'p_items': allItems,
+        'p_cart_group_id': cartGroupId,
         'p_coupon_id': appliedCouponId,
         'p_idempotency_key': cartGroupId,
+        if (widget.orderIdToCancelOnSuccess != null)
+          'p_order_id_to_cancel': widget.orderIdToCancelOnSuccess,
       });
 
       // Notify sellers AFTER successful atomic insertion
@@ -733,7 +744,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           }
         }
       }
+      
+      // 100x Edge Case: Cancel old order logic has been moved INTO place_orders_transaction above for 100% atomicity.
 
+      // Cleanup
       cart.clear();
       if (!mounted) return;
       context.read<CouponProvider>().clearCoupon();
@@ -781,15 +795,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
-    final surcharge = cart.multiShopSurcharge;
-    final heavyFee = cart.heavyOrderFee;
-    final effectiveBase = baseCharge >= 0 ? baseCharge : 25.0;
+    
+    final isFreeReplacement = widget.activeOrdersCount > 0;
+    
+    final surcharge = isFreeReplacement ? 0.0 : cart.multiShopSurcharge;
+    final heavyFee = isFreeReplacement ? 0.0 : cart.heavyOrderFee;
+    final smallCartFee = isFreeReplacement ? 0.0 : cart.smallCartFee;
+    final effectiveBase = isFreeReplacement ? 0.0 : (baseCharge >= 0 ? baseCharge : 25.0);
     final riderBase = effectiveBase + surcharge + heavyFee;
     final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
     // BUG-H3 FIX: Compute the breakdown ONCE so UI display and DB insertion
     // use the exact same figures.
-    double totalDelivery = cart.totalDeliveryCharges(distanceKm);
+    double totalDelivery = isFreeReplacement ? 0.0 : cart.totalDeliveryCharges(distanceKm);
 
     // ── ADD-ON GST model: GST is a real charge on top of base prices ─────────
     final gstBreakdown = OrderTaxBreakdown.calculate(
@@ -1230,15 +1248,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       const SizedBox(height: 8),
                       // Delivery row
                       _billRow(
-                        'Delivery Fee',
-                        '₹${effectiveBase.toStringAsFixed(0)}',
+                        isFreeReplacement ? 'Delivery (Replacement)' : 'Delivery Fee',
+                        isFreeReplacement ? 'Free' : '₹${effectiveBase.toStringAsFixed(0)}',
                       ),
 
-                      if (cart.smallCartFee > 0) ...[
+                      if (smallCartFee > 0) ...[
                         const SizedBox(height: 8),
                         _billRow(
                           'Small Cart Fee',
-                          '+₹${cart.smallCartFee.toStringAsFixed(0)}',
+                          '+₹${smallCartFee.toStringAsFixed(0)}',
                           hint:
                               'For orders under ₹${PlatformConfigProvider.instance?.smallCartThreshold.toInt() ?? PaymentConfig.smallCartThreshold.toInt()}',
                           valueColor: Colors.orange.shade700,
@@ -1450,6 +1468,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
                     color:
                         isBold ? AppColors.textPrimary : AppColors.textSecondary,

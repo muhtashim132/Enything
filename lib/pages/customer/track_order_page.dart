@@ -15,6 +15,10 @@ import '../../pages/customer/customer_order_map_page.dart';
 import '../../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/cart_provider.dart';
+import '../../models/product_model.dart';
+import '../../models/shop_model.dart';
+import 'checkout_page.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
@@ -50,6 +54,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   bool _isProcessingPayment = false;
   Timer? _paymentCountdownTimer;
   int _paymentSecondsLeft = 600; // 10 minutes
+
+  // Decision countdown (5 minutes) for partial rejections
+  Timer? _decisionCountdownTimer;
+  int _decisionSecondsLeft = 300;
+  bool _partnersNotifiedOfHolding = false;
 
   // Acceptance countdown (3 minutes)
   Timer? _acceptanceCountdownTimer;
@@ -578,9 +587,67 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         _paymentCountdownTimer?.cancel();
       }
 
+      if (_hasPartialRejection && _aggregateStatus == 'awaiting_payment') {
+        _startDecisionCountdown();
+        if (!_partnersNotifiedOfHolding) {
+          _notifyPartnersOfHolding();
+          _partnersNotifiedOfHolding = true;
+        }
+      } else {
+        _decisionCountdownTimer?.cancel();
+        _partnersNotifiedOfHolding = false;
+      }
+
       if (aggStatus == 'delivered' && !_order!.hasCustomerRated) {
         Future.delayed(const Duration(milliseconds: 600), _showRatingFlow);
       }
+    }
+  }
+
+  void _startDecisionCountdown() {
+    _decisionCountdownTimer?.cancel();
+    _decisionCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() {
+        if (_decisionSecondsLeft > 0) {
+          _decisionSecondsLeft--;
+        } else {
+          t.cancel();
+          _autoCancelOnTimeout('awaiting_payment');
+        }
+      });
+    });
+  }
+
+  Future<void> _notifyPartnersOfHolding() async {
+    try {
+      final notifProv = context.read<NotificationProvider>();
+      final activeOrders = _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
+      for (final order in activeOrders) {
+        // Notify shop
+        if (order.shopId != null) {
+          await notifProv.sendBackgroundPush(
+            targetUserId: order.shopId!,
+            title: '⏳ Order on Hold',
+            body: 'A shop in the group declined. Waiting 5m for customer decision.',
+            data: {'route': '/seller/orders', 'orderId': order.id},
+          );
+        }
+        // Notify rider
+        if (order.deliveryPartnerId != null) {
+          await notifProv.sendBackgroundPush(
+            targetUserId: order.deliveryPartnerId!,
+            title: '⏳ Order on Hold',
+            body: 'A shop in the group declined. Waiting 5m for customer decision.',
+            data: {'route': '/delivery/orders', 'orderId': order.id},
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error notifying holding: $e');
     }
   }
 
@@ -601,6 +668,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         return;
       }
       setState(() {
+        if (_hasPartialRejection) return; // FREEZE TIMER
         if (_acceptanceSecondsLeft > 0) {
           _acceptanceSecondsLeft--;
         } else {
@@ -619,20 +687,25 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       final targetOrders = _groupOrders.isEmpty ? [_order!] : _groupOrders;
       bool anyCancelled = false;
 
-      for (final order in targetOrders) {
-        // Fetch fresh status for each individual sibling order
-        final fresh = await _supabase
-            .from('orders')
-            .select('status')
-            .eq('id', order.id)
-            .maybeSingle();
-            
-        if (fresh != null && fresh['status'] == expectedStatus) {
-          await _supabase.rpc('cancel_order',
-              params: {'p_order_id': order.id, 'p_reason': 'timeout'});
-          anyCancelled = true;
+      // 100x Edge Case: Concurrent resilient cancellation so a single failure doesn't halt the loop
+      await Future.wait(targetOrders.map((order) async {
+        try {
+          // Fetch fresh status for each individual sibling order
+          final fresh = await _supabase
+              .from('orders')
+              .select('status')
+              .eq('id', order.id)
+              .maybeSingle();
+              
+          if (fresh != null && fresh['status'] == expectedStatus) {
+            await _supabase.rpc('cancel_order',
+                params: {'p_order_id': order.id, 'p_reason': 'timeout'});
+            anyCancelled = true;
+          }
+        } catch (e) {
+          debugPrint('Error auto-canceling order ${order.id}: $e');
         }
-      }
+      }));
 
       if (anyCancelled && mounted) {
         // Re-fetch all group orders to sync sibling order states
@@ -1398,7 +1471,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _startPaymentCountdown(OrderModel order) {
     _paymentCountdownTimer?.cancel();
-    // BUG-9 FIX: Calculate seconds remaining from payment_deadline
+
     if (order.paymentDeadline != null) {
       final remaining =
           order.paymentDeadline!.difference(_serverTime).inSeconds;
@@ -1406,12 +1479,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     } else {
       _paymentSecondsLeft = 600;
     }
+
     _paymentCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
         return;
       }
       setState(() {
+        if (_hasPartialRejection) return; // FREEZE TIMER
         if (order.paymentDeadline != null) {
           final remaining =
               order.paymentDeadline!.difference(_serverTime).inSeconds;
@@ -1421,9 +1496,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         }
 
         if (_paymentSecondsLeft <= 0) {
-          _paymentSecondsLeft = 0;
           t.cancel();
-          _autoCancelOnTimeout('awaiting_payment');
+          if (!_hasPartialRejection) {
+            _autoCancelOnTimeout('awaiting_payment');
+          }
         }
       });
     });
@@ -1461,6 +1537,30 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
 
     try {
+      if (_order!.cartGroupId != null) {
+        try {
+          await _supabase.rpc('restart_payment_timer', params: {'p_cart_group_id': _order!.cartGroupId});
+        } catch (e) {
+          debugPrint('Error restarting timer for Razorpay: $e');
+          setState(() => _isProcessingPayment = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error. Please try again.')));
+          }
+          return;
+        }
+      } else {
+        try {
+          await _supabase.rpc('restart_payment_timer_single', params: {'p_order_id': widget.orderId});
+        } catch (e) {
+          debugPrint('Error restarting timer for Razorpay: $e');
+          setState(() => _isProcessingPayment = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error. Please try again.')));
+          }
+          return;
+        }
+      }
+
       // S1 FIX: Only include orders that are actually awaiting_payment.
       List<OrderModel> activeOrders = _groupOrders.isEmpty
           ? [_order!]
@@ -2602,7 +2702,27 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             color: const Color(0xFF0F9B58),
             isDark: isDark,
             loading: _isProcessingPayment,
-            onTap: () => _openRazorpay(),
+            onTap: () async {
+              setState(() => _isProcessingPayment = true);
+              try {
+                // 100x Edge Case: Cancel all rejected orders so they are cleaned up and no longer hold up _hasPartialRejection
+                final rejected = _groupOrders.where((o) => o.status == 'seller_rejected' || o.status == 'rider_rejected').toList();
+                await Future.wait(rejected.map((o) => _supabase.rpc('cancel_order', params: {'p_order_id': o.id, 'p_reason': 'customer_proceed_partial'})));
+                
+                if (_order?.cartGroupId != null) {
+                  await _supabase.rpc('restart_payment_timer', params: {'p_cart_group_id': _order!.cartGroupId});
+                }
+                
+                if (mounted) _openRazorpay();
+              } catch (e) {
+                debugPrint('Error proceeding with remaining: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error. Please try again.')));
+                }
+              } finally {
+                if (mounted) setState(() => _isProcessingPayment = false);
+              }
+            },
           ),
           const SizedBox(height: 10),
           _recoveryBtn(
@@ -2702,20 +2822,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       ),
                       trailing: ElevatedButton.icon(
                         onPressed: () {
-                          // Smart truncation: take first 3 words to avoid overly specific queries failing
-                          final words = item.productName.split(' ');
-                          final smartQuery = words.take(3).join(' ');
-
-                          Navigator.pushNamedAndRemoveUntil(
-                            context,
-                            AppRoutes.customerHome,
-                            (route) => false,
-                            arguments: {'searchQuery': smartQuery},
-                          );
+                          Navigator.pop(context); // Close the missing items sheet
+                          _showAlternativesDialog(item, rejectedOrders.firstWhere((o) => o.items.contains(item)));
                         },
                         icon: const Icon(Icons.search,
                             size: 16, color: Colors.white),
-                        label: Text('Search',
+                        label: Text('Find Alternative',
                             style: GoogleFonts.outfit(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600)),
@@ -2969,6 +3081,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.outfit(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -2976,6 +3090,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       )),
                   if (subtitle.isNotEmpty)
                     Text(subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           color: color.withValues(alpha: 0.7),
@@ -3534,5 +3650,97 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         );
       },
     );
+  }
+
+  void _showAlternativesDialog(OrderItem item, OrderModel rejectedOrder) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('Find Alternative', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          content: FutureBuilder(
+            future: _supabase.from('products').select('*, shops(*)')
+                .ilike('name', '%${item.productName.split(' ').take(2).join(' ')}%')
+                .eq('is_available', true)
+                .neq('shop_id', rejectedOrder.shopId ?? '')
+                .limit(5),
+            builder: (ctx, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+              if (snapshot.hasError) return Text('Error: ${snapshot.error}');
+              final List<dynamic> products = snapshot.data as List<dynamic>? ?? [];
+              if (products.isEmpty) return const Text('No alternatives found nearby.');
+              return SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: products.length,
+                  itemBuilder: (ctx, i) {
+                    final p = products[i];
+                    return ListTile(
+                      title: Text(p['name'], maxLines: 2, overflow: TextOverflow.ellipsis),
+                      subtitle: Text('${p['shops']['name']} • ₹${p['price']}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                      trailing: ElevatedButton(
+                        child: const Text('Add'),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _replaceRejectedOrderWithAlternative(p, item, rejectedOrder);
+                        },
+                      ),
+                    );
+                  }
+                )
+              );
+            },
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))
+          ],
+        );
+      }
+    );
+  }
+
+  void _replaceRejectedOrderWithAlternative(Map<String, dynamic> newProduct, OrderItem oldItem, OrderModel rejectedOrder) async {
+    final cart = context.read<CartProvider>();
+    final productModel = ProductModel.fromMap(newProduct);
+    final shopModel = ShopModel.fromMap(newProduct['shops']);
+    
+    // 100x Logic: Bump the payment deadline of the remaining orders so they don't expire 
+    if (_order?.cartGroupId != null) {
+      try {
+        await _supabase.rpc('restart_payment_timer', params: {'p_cart_group_id': _order!.cartGroupId});
+      } catch (e) {
+        debugPrint('Error restarting timer for replacement: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error. Please try again.')));
+        }
+        return; // Abort
+      }
+    }
+
+    // Go to checkout and pass the old order ID so it cancels ONLY if checkout succeeds
+    if (mounted) {
+      cart.clear(); // Ensure cart only has the replacement items
+      cart.addItem(productModel, shopModel, quantity: oldItem.quantity);
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (ctx) => CheckoutPage(
+          existingCartGroupId: _order!.cartGroupId,
+          orderIdToCancelOnSuccess: rejectedOrder.id,
+          activeOrdersCount: _groupOrders.where((o) => [
+            'awaiting_acceptance', 
+            'awaiting_payment', 
+            'pending_pickup', 
+            'accepted', 
+            'preparing', 
+            'ready_for_pickup'
+          ].contains(o.status)).length,
+        ))
+      ).then((_) {
+        // Upon returning from checkout, refetch order group
+        _fetchOrder();
+      });
+    }
   }
 }

@@ -51,7 +51,7 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
   Future<void> _loadData() async {
     final userId = context.read<AuthProvider>().currentUserId ?? '';
     try {
-      // Past withdrawals
+      // Past withdrawals for UI list
       final histRes = await _db
           .from('withdrawals')
           .select()
@@ -61,27 +61,16 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
           .limit(50);
       _history = List<Map<String, dynamic>>.from(histRes);
 
-      // Calculate total requested so far (processed + pending + approved)
-      double totalPaid = 0;
-      for (final w in _history) {
-        if (w['status'] != 'rejected') {
-          totalPaid += (w['amount'] as num).toDouble();
-        }
+      // Secure RPC call to get exact balance (prevents OOM and infinite withdrawal exploit)
+      final balanceRes = await _db.rpc('get_rider_balance', params: {
+        'p_rider_id': userId,
+      });
+
+      if (balanceRes != null) {
+        _availableBalance = (balanceRes['available_balance'] as num).toDouble();
+      } else {
+        _availableBalance = 0;
       }
-
-      // Total earnings = sum of rider_earnings + wait_time_penalty on delivered orders
-      final earningsRes = await _db
-          .from('orders')
-          .select('rider_earnings, delivery_charges, wait_time_penalty')
-          .eq('delivery_partner_id', userId)
-          .eq('status', 'delivered');
-
-      double totalEarned = 0;
-      for (final o in earningsRes as List) {
-        totalEarned += ((o['rider_earnings'] ?? o['delivery_charges'] ?? 0) as num).toDouble() + ((o['wait_time_penalty'] ?? 0) as num).toDouble();
-      }
-
-      _availableBalance = totalEarned - totalPaid;
     } catch (e) {
       debugPrint('RiderWithdrawalsPage._loadData error: $e');
     } finally {

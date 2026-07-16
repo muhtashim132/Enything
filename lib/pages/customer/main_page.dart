@@ -12,6 +12,9 @@ import 'home_page.dart';
 import 'favorites_page.dart';
 import 'order_history_page.dart';
 import '../settings/profile_settings_page.dart';
+import '../../providers/notification_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 class CustomerMainPage extends StatefulWidget {
   const CustomerMainPage({super.key});
@@ -20,10 +23,153 @@ class CustomerMainPage extends StatefulWidget {
   State<CustomerMainPage> createState() => _CustomerMainPageState();
 }
 
-class _CustomerMainPageState extends State<CustomerMainPage> {
+class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBindingObserver {
   int _navIndex = 0;
   DateTime? _lastBackPressTime;
   final GlobalKey<CustomerHomeViewState> _homeKey = GlobalKey();
+  StreamSubscription<String>? _orderCancelledSub;
+  Timer? _snackbarDebounceTimer;
+  int _pendingAddedCount = 0;
+  bool _isCheckingMissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkMissedCancellations();
+
+    // Listen to order cancellation to auto-readd items to cart
+    _orderCancelledSub = context.read<NotificationProvider>().onOrderCancelledStream.listen((orderId) async {
+      if (mounted) {
+        final result = await context.read<CartProvider>().restoreOrderToCart(orderId);
+        if (!mounted) return; // Prevent Unmounted Context crash!
+        if (result.added > 0) {
+          _showReaddSnackbar(result.added, warningMsg: result.error);
+        } else if (result.error != null) {
+          _showErrorSnackbar(result.error!);
+        }
+      }
+    });
+  }
+
+  Future<void> _checkMissedCancellations() async {
+    if (_isCheckingMissed) return;
+    _isCheckingMissed = true;
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Fetch orders from the last 48 hours that were cancelled or rejected
+      final fortyEightHoursAgo = DateTime.now().subtract(const Duration(hours: 48)).toIso8601String();
+      final missedOrders = await supabase
+          .from('orders')
+          .select('id')
+          .eq('customer_id', userId)
+          .gte('created_at', fortyEightHoursAgo)
+          .inFilter('status', ['cancelled', 'seller_rejected'])
+          .order('created_at', ascending: false)
+          .limit(20);
+
+      if (!mounted) return;
+      int totalAdded = 0;
+      List<String> fatalErrors = [];
+      String? lastWarning;
+      final cart = context.read<CartProvider>();
+      
+      for (final order in missedOrders) {
+        if (!mounted) break;
+        final result = await cart.restoreOrderToCart(order['id'] as String);
+        if (!mounted) break;
+        totalAdded += result.added;
+        if (result.error != null) {
+          if (result.added == 0) {
+            if (fatalErrors.length < 2) fatalErrors.add(result.error!);
+          } else {
+            lastWarning = result.error;
+          }
+        }
+      }
+      
+      if (!mounted) return;
+
+      if (totalAdded > 0) {
+        if (fatalErrors.isNotEmpty) {
+          lastWarning = (lastWarning != null) 
+              ? '$lastWarning Also: ${fatalErrors.first}' 
+              : fatalErrors.first;
+        }
+        _showReaddSnackbar(totalAdded, warningMsg: lastWarning);
+      } else if (fatalErrors.isNotEmpty) {
+        _showErrorSnackbar(fatalErrors.join(' '));
+      }
+    } catch (e) {
+      debugPrint('CustomerMainPage: _checkMissedCancellations failed: $e');
+    } finally {
+      _isCheckingMissed = false;
+    }
+  }
+
+  void _showErrorSnackbar(String errorMsg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to restore cancelled order: $errorMsg'),
+        backgroundColor: const Color(0xFFEF4444), // Red
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+
+
+  void _showReaddSnackbar(int added, {String? warningMsg}) {
+    _pendingAddedCount += added;
+    _snackbarDebounceTimer?.cancel();
+    _snackbarDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted || _pendingAddedCount == 0) return;
+      
+      ScaffoldMessenger.of(context).clearSnackBars();
+      
+      if (warningMsg != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$_pendingAddedCount item(s) restored. Warning: $warningMsg'),
+            backgroundColor: const Color(0xFFF59E0B), // Orange
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order cancelled. $_pendingAddedCount item(s) have been restored to your cart.'),
+            backgroundColor: const Color(0xFF10B981), // Green
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      _pendingAddedCount = 0;
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _orderCancelledSub?.cancel();
+    _snackbarDebounceTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkMissedCancellations();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

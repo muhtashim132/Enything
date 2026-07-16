@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:uuid/uuid.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
@@ -46,6 +47,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   double? _riderLat;
   double? _riderLng;
   bool _locationUnavailable = false;
+  String? _bgTrackingSecret;
 
   // Location broadcast timer — updates rider_lat/rider_lng every 15s
   Timer? _locationBroadcastTimer;
@@ -244,12 +246,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       debugPrint('[Dashboard] Cannot start background service: missing Supabase env vars');
       return;
     }
+    if (_bgTrackingSecret == null) {
+      debugPrint('[Dashboard] Cannot start background service: missing tracking secret');
+      return;
+    }
     RiderBackgroundService.instance.startService(
       riderId: riderId,
       supabaseUrl: url,
       anonKey: anonKey,
-      accessToken: accessToken,
-      refreshToken: refreshToken,
+      trackingSecret: _bgTrackingSecret!,
     );
   }
 
@@ -396,13 +401,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (auth.currentUserId != null) {
         final partnerResp = await _supabase
             .from('delivery_partners')
-            .select('is_active, is_accepting_orders, preferred_nav_app, vehicle_type')
+            .select('is_active, is_accepting_orders, preferred_nav_app, vehicle_type, bg_tracking_secret')
             .eq('id', auth.currentUserId!)
             .maybeSingle();
         if (partnerResp != null) {
           if (partnerResp['is_accepting_orders'] != null) _isOnline = partnerResp['is_accepting_orders'] as bool;
           if (partnerResp['preferred_nav_app'] != null) _navApp = partnerResp['preferred_nav_app'] as String;
           if (partnerResp['vehicle_type'] != null) _vehicleType = partnerResp['vehicle_type'] as String;
+          if (partnerResp['bg_tracking_secret'] != null) _bgTrackingSecret = partnerResp['bg_tracking_secret'] as String;
         }
       }
 
@@ -735,7 +741,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           'p_reason': 'rider_dropped',
           'p_disputed': status == 'reassign_disputed',
         });
-
+        // (100x Edge Case: Removed redundant retry_find_rider call. 
+        // The Postgres trigger `trigger_rider_reorder_push` automatically handles broadcasting 
+        // when status changes to 'awaiting_acceptance' securely.)
         // Notify customer and seller that the rider dropped the order
         if (mounted) {
           final notifProv = context.read<NotificationProvider>();
@@ -1401,19 +1409,24 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       setState(() => _isOnline = newVal);
                       if (newVal) {
                         _startLocationBroadcast();
-                        // Background service will be started by didChangeAppLifecycleState
-                        // when/if the app is backgrounded. No action needed here.
                       } else {
                         _stopLocationBroadcast();
-                        // Also stop the background service if it happened to be running
                         RiderBackgroundService.instance.stopService();
                       }
                       final auth = context.read<AuthProvider>();
                       if (auth.currentUserId != null) {
                         try {
+                          String? newSecret;
+                          if (newVal) {
+                            newSecret = const Uuid().v4();
+                            _bgTrackingSecret = newSecret;
+                          }
                           await _supabase
                               .from('delivery_partners')
-                              .update({'is_accepting_orders': newVal})
+                              .update({
+                                'is_accepting_orders': newVal,
+                                if (newSecret != null) 'bg_tracking_secret': newSecret,
+                              })
                               .eq('id', auth.currentUserId!);
                         } catch (e) {
                           debugPrint('Error updating duty status: $e');
@@ -1489,13 +1502,22 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                 _startLocationBroadcast();
                               } else {
                                 _stopLocationBroadcast();
+                                RiderBackgroundService.instance.stopService();
                               }
                               final auth = context.read<AuthProvider>();
                               if (auth.currentUserId != null) {
                                 try {
+                                  String? newSecret;
+                                  if (val) {
+                                    newSecret = const Uuid().v4();
+                                    _bgTrackingSecret = newSecret;
+                                  }
                                   await _supabase
                                       .from('delivery_partners')
-                                      .update({'is_accepting_orders': val})
+                                      .update({
+                                        'is_accepting_orders': val,
+                                        if (newSecret != null) 'bg_tracking_secret': newSecret,
+                                      })
                                       .eq('id', auth.currentUserId!);
                                 } catch (e) {
                                   debugPrint('Error updating duty status: $e');
@@ -1543,15 +1565,37 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   ),
                   const SizedBox(height: 24),
 
-                  // Active deliveries
                   if (_myGroups.isNotEmpty) ...[
                     _sectionHeader('🚗 My Active Deliveries',
                         '${_myGroups.length}', const Color(0xFF4C6EF5), isDark),
                     const SizedBox(height: 14),
-                    ..._myGroups.map((g) => _activeOrderGroupCard(g, isDark)),
-                    const SizedBox(height: 24),
                   ],
+                ]),
+              ),
+            ),
+            
+            if (_myGroups.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      return _activeOrderGroupCard(_myGroups[index], isDark);
+                    },
+                    childCount: _myGroups.length,
+                  ),
+                ),
+              ),
 
+            if (_myGroups.isNotEmpty)
+              const SliverPadding(
+                padding: EdgeInsets.only(bottom: 24),
+              ),
+
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
                   // Available orders
                   _sectionHeader(
                       '📦 Available Orders',
