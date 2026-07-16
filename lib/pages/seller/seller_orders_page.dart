@@ -309,7 +309,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   Future<void> _sellerReject(OrderModel order) async {
     final messageController = TextEditingController();
     String rejectReason =
-        order.prescriptionUrls.isNotEmpty ? 'prescription' : 'other';
+        order.prescriptionUrls.isNotEmpty ? 'prescription' : 'out_of_stock';
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
@@ -359,19 +359,30 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     // ignore: deprecated_member_use
                     onChanged: (val) => setState(() => rejectReason = val!),
                   ),
-                  RadioListTile<String>(
-                    title: Text('Other Reason (e.g. Out of stock)',
-                        style: GoogleFonts.outfit(color: Colors.white)),
-                    value: 'other',
-                    // ignore: deprecated_member_use
-                    groupValue: rejectReason,
-                    activeColor: AppColors.primary,
-                    contentPadding: EdgeInsets.zero,
-                    // ignore: deprecated_member_use
-                    onChanged: (val) => setState(() => rejectReason = val!),
-                  ),
-                  const SizedBox(height: 12),
                 ],
+                RadioListTile<String>(
+                  title: Text('Out of Stock',
+                      style: GoogleFonts.outfit(color: Colors.white)),
+                  value: 'out_of_stock',
+                  // ignore: deprecated_member_use
+                  groupValue: rejectReason,
+                  activeColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                  // ignore: deprecated_member_use
+                  onChanged: (val) => setState(() => rejectReason = val!),
+                ),
+                RadioListTile<String>(
+                  title: Text('Other Reason',
+                      style: GoogleFonts.outfit(color: Colors.white)),
+                  value: 'other',
+                  // ignore: deprecated_member_use
+                  groupValue: rejectReason,
+                  activeColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                  // ignore: deprecated_member_use
+                  onChanged: (val) => setState(() => rejectReason = val!),
+                ),
+                const SizedBox(height: 12),
                 Text('Send an optional message to the customer explaining why.',
                     style: GoogleFonts.outfit(
                         color: Colors.white54, fontSize: 13)),

@@ -2892,26 +2892,21 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             : 'The shop was unable to accept your order.';
         actions = [
           _recoveryBtn(
+            label: '🔍 Find Alternative Products',
+            subtitle: 'Search other shops for these same items',
+            color: const Color(0xFF0F9B58),
+            isDark: isDark,
+            loading: false,
+            onTap: () => _showMissingItemsSheet([rejectedOrder!], isDark),
+          ),
+          const SizedBox(height: 10),
+          _recoveryBtn(
             label: '🔄 Retry Same Shop',
             subtitle: 'Place the same order again with this shop',
             color: AppColors.primary,
             isDark: isDark,
             loading: _isRetrying,
             onTap: () => _retryOrder(retryGroup: false),
-          ),
-          const SizedBox(height: 10),
-          _recoveryBtn(
-            label: '🏪 Choose Different Shop',
-            subtitle:
-                'Remove this shop\'s items from cart and search for alternatives',
-            color: AppColors.accent,
-            isDark: isDark,
-            loading: false,
-            onTap: () => Navigator.pushNamedAndRemoveUntil(
-              context,
-              AppRoutes.customerHome,
-              (r) => false,
-            ),
           ),
           const SizedBox(height: 10),
           _recoveryBtn(

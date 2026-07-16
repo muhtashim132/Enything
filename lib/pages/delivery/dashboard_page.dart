@@ -616,15 +616,33 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         final notifProv = context.read<NotificationProvider>();
 
         if (bothAccepted) {
-          _showSnack('✅ Order accepted! Waiting for customer to pay.');
-          // Push customer to complete payment NOW
-          if (notifyCustomer) {
+          if (currentStatus == 'confirmed' || currentStatus == 'preparing') {
+             _showSnack('✅ Order accepted! The customer has already paid.');
+          } else {
+             _showSnack('✅ Order accepted! Waiting for customer to pay.');
+          }
+          // Push customer to complete payment NOW (only if not paid)
+          if (notifyCustomer && currentStatus != 'confirmed' && currentStatus != 'preparing') {
             notifProv.sendBackgroundPush(
               targetUserId: order.customerId,
-              title: '✅ Shop & Rider Ready! Pay Now 💳',
+              title: 'Ready for Payment! 💳',
               body:
                   'Both the shop and rider accepted your order. Open the app and complete payment within 10 minutes.',
-              data: {'order_id': order.id, 'action': 'pay'},
+              data: {
+                'route': '/track_order',
+                'order_id': order.id,
+              },
+            );
+          } else if (notifyCustomer && (currentStatus == 'confirmed' || currentStatus == 'preparing')) {
+            notifProv.sendBackgroundPush(
+              targetUserId: order.customerId,
+              title: 'New Rider Assigned! 🛵',
+              body:
+                  'A new rider has picked up your order and is on their way!',
+              data: {
+                'route': '/track_order',
+                'order_id': order.id,
+              },
             );
           }
           // Notify seller: waiting for customer payment
