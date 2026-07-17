@@ -1,5 +1,5 @@
--- Migration 20260868000000_100x_absolute_checkout_fortress.sql
--- Fixes Phase 15: The Absolute End (Negative Quantity Smuggling Exploit)
+-- Migration 20260870000000_100x_cascading_fortress.sql
+-- Fixes Phase 17: Cascading Logic Failures (Rider Pay, Coupon Locks, PK Spoofing)
 
 DROP FUNCTION IF EXISTS place_orders_transaction(jsonb,jsonb,uuid,uuid,text,uuid);
 
@@ -48,6 +48,8 @@ DECLARE
   v_secure_order JSONB;
   v_total_weight_kg NUMERIC := 0;
   
+  v_coupon_record RECORD;
+  
   v_global_platform_fee NUMERIC;
   v_sum_client_platform_fee NUMERIC := 0;
   v_global_small_cart_fee NUMERIC;
@@ -64,6 +66,20 @@ DECLARE
   v_refund_amount NUMERIC;
   v_acceptance_deadline TIMESTAMP WITH TIME ZONE;
 BEGIN
+  -- 100x STRESS TEST FIX: Pixel Overload Guard (Array Bombing)
+  IF p_orders IS NULL OR jsonb_array_length(p_orders) = 0 THEN
+    RAISE EXCEPTION 'Checkout requires at least one order.';
+  END IF;
+  IF jsonb_array_length(p_orders) > 10 THEN
+    RAISE EXCEPTION 'Pixel Overload Guard: Maximum 10 shops allowed per checkout.';
+  END IF;
+  
+  IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
+    RAISE EXCEPTION 'Checkout requires at least one item.';
+  END IF;
+  IF jsonb_array_length(p_items) > 100 THEN
+    RAISE EXCEPTION 'Pixel Overload Guard: Maximum 100 items allowed per checkout.';
+  END IF;
   IF p_order_id_to_cancel IS NOT NULL THEN
     SELECT payment_method, payment_status INTO v_payment_method, v_old_payment_status 
     FROM orders 
@@ -147,6 +163,24 @@ BEGIN
     IF COALESCE(v_order_totals.estimated_distance_km, 0) > 100.0 THEN
       RAISE EXCEPTION 'Distance spoofing detected (Money Laundering Exploit). The maximum allowed delivery radius is 100km. Claimed: % km', v_order_totals.estimated_distance_km;
     END IF;
+    
+    -- 100x STRESS TEST FIX: Reverse Deduction Exploit Guard
+    IF COALESCE(v_order_totals.delivery_charges, 0) < 0 OR
+       COALESCE(v_order_totals.multi_shop_surcharge, 0) < 0 OR
+       COALESCE(v_order_totals.platform_fee, 0) < 0 OR
+       COALESCE(v_order_totals.small_cart_fee, 0) < 0 OR
+       COALESCE(v_order_totals.heavy_order_fee, 0) < 0 OR
+       COALESCE(v_order_totals.coupon_discount, 0) < 0 THEN
+      RAISE EXCEPTION 'Negative Fee Smuggling Guard: Fees and discounts cannot be negative.';
+    END IF;
+
+    -- 100x STRESS TEST FIX: Hyper-Inflation Delivery Spoofing Guard
+    IF COALESCE(v_order_totals.delivery_charges, 0) > 2000.0 THEN
+      RAISE EXCEPTION 'Delivery charge exceeds maximum allowed physical limit (Rs 2000).';
+    END IF;
+    IF COALESCE(v_order_totals.multi_shop_surcharge, 0) > 500.0 THEN
+      RAISE EXCEPTION 'Multi-shop surcharge exceeds maximum allowed physical limit (Rs 500).';
+    END IF;
   END LOOP;
 
   IF ABS(v_sum_client_platform_fee - v_global_platform_fee) > 1.0 THEN
@@ -183,6 +217,32 @@ BEGIN
           AND status NOT IN ('cancelled', 'seller_rejected', 'verification_failed', 'timeout', 'payment_failed', 'shop_dispute_cancel')
       ) THEN
         RAISE EXCEPTION 'This coupon has already been used on this cart group.';
+      END IF;
+      
+      -- 100x STRESS TEST FIX: Coupon Global State Validation (with FOR UPDATE row lock to prevent race conditions)
+      SELECT * INTO v_coupon_record FROM coupons WHERE id = p_coupon_id FOR UPDATE;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'Coupon not found in database.';
+      END IF;
+      
+      IF v_coupon_record.is_active = false THEN
+        RAISE EXCEPTION 'This coupon is currently inactive.';
+      END IF;
+      
+      IF v_coupon_record.valid_until IS NOT NULL AND v_coupon_record.valid_until < NOW() THEN
+        RAISE EXCEPTION 'This coupon has expired.';
+      END IF;
+      
+      IF v_coupon_record.usage_count >= v_coupon_record.usage_limit THEN
+        RAISE EXCEPTION 'This coupon has reached its maximum usage limit.';
+      END IF;
+      
+      IF v_sum_expected_total_amount < COALESCE(v_coupon_record.min_order_value, v_coupon_record.min_order_amount, 0) THEN
+        RAISE EXCEPTION 'Order amount does not meet the minimum requirement for this coupon.';
+      END IF;
+      
+      IF v_coupon_record.max_discount_cap IS NOT NULL AND v_sum_client_coupon_discount > v_coupon_record.max_discount_cap THEN
+        RAISE EXCEPTION 'Claimed discount exceeds the coupons maximum cap.';
       END IF;
     END IF;
   ELSIF v_sum_client_coupon_discount > 0 THEN
@@ -276,7 +336,7 @@ BEGIN
                                     - v_tds_amount 
                                     - v_gw_deduct);
 
-    v_server_rider_earnings := ((COALESCE((v_order->>'delivery_charges')::numeric, 0) - v_server_gst_delivery) - COALESCE((v_order->>'small_cart_fee')::numeric, 0)) * 0.80;
+    v_server_rider_earnings := GREATEST(0, ((COALESCE((v_order->>'delivery_charges')::numeric, 0) - v_server_gst_delivery) - COALESCE((v_order->>'small_cart_fee')::numeric, 0)) * 0.80);
 
     v_secure_order := jsonb_build_object(
       'id', COALESCE(v_order->>'id', gen_random_uuid()::text),
@@ -426,7 +486,7 @@ BEGIN
       INSERT INTO order_items (
         id, order_id, product_id, variant_name, price, quantity, special_instructions
       ) VALUES (
-        v_item.id,
+        COALESCE(v_item.id, gen_random_uuid()),
         v_item.order_id,
         v_item.product_id,
         v_item.variant_name,
@@ -438,14 +498,7 @@ BEGIN
   END LOOP;
   
   IF p_coupon_id IS NOT NULL THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM orders 
-      WHERE cart_group_id = v_cart_group_id 
-        AND coupon_id = p_coupon_id
-        AND status NOT IN ('cancelled', 'seller_rejected', 'verification_failed', 'timeout', 'payment_failed', 'shop_dispute_cancel')
-    ) THEN
-      UPDATE coupons SET usage_count = usage_count + 1 WHERE id = p_coupon_id;
-    END IF;
+    UPDATE coupons SET usage_count = usage_count + 1 WHERE id = p_coupon_id;
   END IF;
 
   -- 100x ARCHITECTURE STRESS-TEST FIX: Atomic Swap Rebalance

@@ -1,5 +1,5 @@
--- Migration 20260868000000_100x_absolute_checkout_fortress.sql
--- Fixes Phase 15: The Absolute End (Negative Quantity Smuggling Exploit)
+-- Migration 20260870000000_100x_cascading_fortress.sql
+-- Fixes Phase 17: Cascading Logic Failures (Rider Pay, Coupon Locks, PK Spoofing)
 
 DROP FUNCTION IF EXISTS place_orders_transaction(jsonb,jsonb,uuid,uuid,text,uuid);
 
@@ -48,6 +48,8 @@ DECLARE
   v_secure_order JSONB;
   v_total_weight_kg NUMERIC := 0;
   
+  v_coupon_record RECORD;
+  
   v_global_platform_fee NUMERIC;
   v_sum_client_platform_fee NUMERIC := 0;
   v_global_small_cart_fee NUMERIC;
@@ -64,6 +66,20 @@ DECLARE
   v_refund_amount NUMERIC;
   v_acceptance_deadline TIMESTAMP WITH TIME ZONE;
 BEGIN
+  -- 100x STRESS TEST FIX: Pixel Overload Guard (Array Bombing)
+  IF p_orders IS NULL OR jsonb_array_length(p_orders) = 0 THEN
+    RAISE EXCEPTION 'Checkout requires at least one order.';
+  END IF;
+  IF jsonb_array_length(p_orders) > 10 THEN
+    RAISE EXCEPTION 'Pixel Overload Guard: Maximum 10 shops allowed per checkout.';
+  END IF;
+  
+  IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
+    RAISE EXCEPTION 'Checkout requires at least one item.';
+  END IF;
+  IF jsonb_array_length(p_items) > 100 THEN
+    RAISE EXCEPTION 'Pixel Overload Guard: Maximum 100 items allowed per checkout.';
+  END IF;
   IF p_order_id_to_cancel IS NOT NULL THEN
     SELECT payment_method, payment_status INTO v_payment_method, v_old_payment_status 
     FROM orders 
@@ -147,6 +163,24 @@ BEGIN
     IF COALESCE(v_order_totals.estimated_distance_km, 0) > 100.0 THEN
       RAISE EXCEPTION 'Distance spoofing detected (Money Laundering Exploit). The maximum allowed delivery radius is 100km. Claimed: % km', v_order_totals.estimated_distance_km;
     END IF;
+    
+    -- 100x STRESS TEST FIX: Reverse Deduction Exploit Guard
+    IF COALESCE(v_order_totals.delivery_charges, 0) < 0 OR
+       COALESCE(v_order_totals.multi_shop_surcharge, 0) < 0 OR
+       COALESCE(v_order_totals.platform_fee, 0) < 0 OR
+       COALESCE(v_order_totals.small_cart_fee, 0) < 0 OR
+       COALESCE(v_order_totals.heavy_order_fee, 0) < 0 OR
+       COALESCE(v_order_totals.coupon_discount, 0) < 0 THEN
+      RAISE EXCEPTION 'Negative Fee Smuggling Guard: Fees and discounts cannot be negative.';
+    END IF;
+
+    -- 100x STRESS TEST FIX: Hyper-Inflation Delivery Spoofing Guard
+    IF COALESCE(v_order_totals.delivery_charges, 0) > 2000.0 THEN
+      RAISE EXCEPTION 'Delivery charge exceeds maximum allowed physical limit (Rs 2000).';
+    END IF;
+    IF COALESCE(v_order_totals.multi_shop_surcharge, 0) > 500.0 THEN
+      RAISE EXCEPTION 'Multi-shop surcharge exceeds maximum allowed physical limit (Rs 500).';
+    END IF;
   END LOOP;
 
   IF ABS(v_sum_client_platform_fee - v_global_platform_fee) > 1.0 THEN
@@ -183,6 +217,32 @@ BEGIN
           AND status NOT IN ('cancelled', 'seller_rejected', 'verification_failed', 'timeout', 'payment_failed', 'shop_dispute_cancel')
       ) THEN
         RAISE EXCEPTION 'This coupon has already been used on this cart group.';
+      END IF;
+      
+      -- 100x STRESS TEST FIX: Coupon Global State Validation (with FOR UPDATE row lock to prevent race conditions)
+      SELECT * INTO v_coupon_record FROM coupons WHERE id = p_coupon_id FOR UPDATE;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'Coupon not found in database.';
+      END IF;
+      
+      IF v_coupon_record.is_active = false THEN
+        RAISE EXCEPTION 'This coupon is currently inactive.';
+      END IF;
+      
+      IF v_coupon_record.valid_until IS NOT NULL AND v_coupon_record.valid_until < NOW() THEN
+        RAISE EXCEPTION 'This coupon has expired.';
+      END IF;
+      
+      IF v_coupon_record.usage_count >= v_coupon_record.usage_limit THEN
+        RAISE EXCEPTION 'This coupon has reached its maximum usage limit.';
+      END IF;
+      
+      IF v_sum_expected_total_amount < COALESCE(v_coupon_record.min_order_value, v_coupon_record.min_order_amount, 0) THEN
+        RAISE EXCEPTION 'Order amount does not meet the minimum requirement for this coupon.';
+      END IF;
+      
+      IF v_coupon_record.max_discount_cap IS NOT NULL AND v_sum_client_coupon_discount > v_coupon_record.max_discount_cap THEN
+        RAISE EXCEPTION 'Claimed discount exceeds the coupons maximum cap.';
       END IF;
     END IF;
   ELSIF v_sum_client_coupon_discount > 0 THEN
@@ -263,8 +323,8 @@ BEGIN
       RAISE EXCEPTION 'Grand total mismatch for order %. Expected: %, Got: %', v_order->>'id', v_expected_grand_total, v_order->>'grand_total';
     END IF;
 
-    v_server_gst_platform := COALESCE((v_order->>'platform_fee')::numeric, 0) * 0.18;
-    v_server_gst_delivery := COALESCE((v_order->>'delivery_charges')::numeric, 0) * 0.18;
+    v_server_gst_platform := COALESCE((v_order->>'platform_fee')::numeric, 0) - (COALESCE((v_order->>'platform_fee')::numeric, 0) / 1.18);
+    v_server_gst_delivery := COALESCE((v_order->>'delivery_charges')::numeric, 0) - (COALESCE((v_order->>'delivery_charges')::numeric, 0) / 1.18);
 
     v_server_enything_commission := v_pure_commission + v_server_gst_platform;
     v_gw_deduct := (v_expected_grand_total * 0.02) * 1.18;
@@ -276,7 +336,10 @@ BEGIN
                                     - v_tds_amount 
                                     - v_gw_deduct);
 
-    v_server_rider_earnings := ((COALESCE((v_order->>'delivery_charges')::numeric, 0) - v_server_gst_delivery) - COALESCE((v_order->>'small_cart_fee')::numeric, 0)) * 0.80;
+    v_server_rider_earnings := GREATEST(0, (COALESCE((v_order->>'delivery_charges')::numeric, 0) - v_server_gst_delivery 
+                                           - COALESCE((v_order->>'small_cart_fee')::numeric, 0)
+                                           + COALESCE((v_order->>'multi_shop_surcharge')::numeric, 0)
+                                           + COALESCE((v_order->>'heavy_order_fee')::numeric, 0)) * 0.80);
 
     v_secure_order := jsonb_build_object(
       'id', COALESCE(v_order->>'id', gen_random_uuid()::text),
@@ -426,7 +489,7 @@ BEGIN
       INSERT INTO order_items (
         id, order_id, product_id, variant_name, price, quantity, special_instructions
       ) VALUES (
-        v_item.id,
+        COALESCE(v_item.id, gen_random_uuid()),
         v_item.order_id,
         v_item.product_id,
         v_item.variant_name,
@@ -452,6 +515,313 @@ BEGIN
   IF p_order_id_to_cancel IS NOT NULL THEN
     PERFORM reallocate_cancelled_delivery_fees(p_cart_group_id);
     PERFORM rebalance_active_delivery_fees(p_cart_group_id);
+  END IF;
+END;
+$$;
+-- =============================================================================
+-- rebalance_active_delivery_fees
+-- Phase 21: Correct inclusive GST extraction and Rider Earnings math
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.rebalance_active_delivery_fees(p_cart_group_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $$
+DECLARE
+  v_active_count INT;
+  v_total_delivery NUMERIC;
+  v_total_surcharge NUMERIC;
+  v_total_small NUMERIC;
+  v_total_heavy NUMERIC;
+  
+  v_split_delivery NUMERIC;
+  v_split_surcharge NUMERIC;
+  v_split_small NUMERIC;
+  v_split_heavy NUMERIC;
+  v_new_gst_delivery NUMERIC;
+  
+  rec RECORD;
+BEGIN
+  -- 1. Get active count
+  SELECT COUNT(id) INTO v_active_count
+  FROM orders
+  WHERE cart_group_id = p_cart_group_id
+    AND status IN ('awaiting_acceptance', 'awaiting_payment', 'pending_pickup', 'accepted', 'preparing', 'ready_for_pickup');
+    
+  IF v_active_count = 0 THEN RETURN; END IF;
+  
+  -- 2. Sum up all fees across ALL active orders
+  SELECT 
+    COALESCE(SUM(delivery_charges), 0),
+    COALESCE(SUM(multi_shop_surcharge), 0),
+    COALESCE(SUM(small_cart_fee), 0),
+    COALESCE(SUM(heavy_order_fee), 0)
+  INTO v_total_delivery, v_total_surcharge, v_total_small, v_total_heavy
+  FROM orders
+  WHERE cart_group_id = p_cart_group_id
+    AND status IN ('awaiting_acceptance', 'awaiting_payment', 'pending_pickup', 'accepted', 'preparing', 'ready_for_pickup');
+    
+  v_split_delivery := v_total_delivery / v_active_count;
+  v_split_surcharge := v_total_surcharge / v_active_count;
+  v_split_small := v_total_small / v_active_count;
+  v_split_heavy := v_total_heavy / v_active_count;
+  
+  -- 100x STRESS TEST FIX (Phase 21): GST is inclusive, not additive.
+  v_new_gst_delivery := v_split_delivery - (v_split_delivery / 1.18);
+  
+  -- 3. Update all active orders with the equal split
+  FOR rec IN 
+    SELECT id, total_amount, gst_item_total, platform_fee, gst_platform, COALESCE(coupon_discount, 0) as coupon_discount, payment_status
+    FROM orders
+    WHERE cart_group_id = p_cart_group_id
+      AND status IN ('awaiting_acceptance', 'awaiting_payment', 'pending_pickup', 'accepted', 'preparing', 'ready_for_pickup')
+  LOOP
+    UPDATE orders
+    SET delivery_charges = v_split_delivery,
+        multi_shop_surcharge = v_split_surcharge,
+        small_cart_fee = v_split_small,
+        heavy_order_fee = v_split_heavy,
+        -- 100x STRESS TEST FIX (Phase 21): Fix rider earnings to include surcharges and exact GST logic
+        rider_earnings = GREATEST(0, (v_split_delivery - v_new_gst_delivery - v_split_small + v_split_surcharge + v_split_heavy) * 0.80),
+        gst_delivery = v_new_gst_delivery,
+        grand_total = GREATEST(0, rec.total_amount + rec.gst_item_total + rec.platform_fee + rec.gst_platform + v_split_delivery + v_split_surcharge + v_split_small + v_split_heavy - rec.coupon_discount),
+        grand_total_collected = CASE WHEN rec.payment_status = 'captured' THEN GREATEST(0, rec.total_amount + rec.gst_item_total + rec.platform_fee + rec.gst_platform + v_split_delivery + v_split_surcharge + v_split_small + v_split_heavy - rec.coupon_discount) ELSE 0 END
+    WHERE id = rec.id;
+  END LOOP;
+END;
+$$;
+
+-- =============================================================================
+-- reallocate_cancelled_delivery_fees
+-- Phase 21: Correct inclusive GST extraction, Rider Earnings math, and Zero Active case
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.reallocate_cancelled_delivery_fees(p_cart_group_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $$
+DECLARE
+  v_active_count INT;
+  v_missing_delivery NUMERIC;
+  v_missing_surcharge NUMERIC;
+  v_missing_small NUMERIC;
+  v_missing_heavy NUMERIC;
+  v_missing_coupon NUMERIC := 0;
+  v_split_delivery NUMERIC;
+  v_split_surcharge NUMERIC;
+  v_split_small NUMERIC;
+  v_split_heavy NUMERIC;
+  v_split_coupon NUMERIC;
+  v_net_delivery NUMERIC;
+  v_new_gst_delivery NUMERIC;
+  v_trapped_coupon NUMERIC;
+  rec RECORD;
+BEGIN
+    -- 100x STRESS TEST FIX (Phase 8): Deterministic Bulk Locking (Deadlock & N+1 Prevention)
+    PERFORM id FROM orders 
+    WHERE cart_group_id = p_cart_group_id 
+    ORDER BY id FOR UPDATE;
+
+    SELECT COUNT(id) INTO v_active_count 
+    FROM orders 
+    WHERE cart_group_id = p_cart_group_id 
+      AND status IN ('awaiting_acceptance', 'awaiting_payment', 'pending_pickup', 'accepted', 'preparing', 'ready_for_pickup');
+
+    -- Aggregate missing fees
+    SELECT 
+        COALESCE(SUM(delivery_charges), 0),
+        COALESCE(SUM(multi_shop_surcharge), 0),
+        COALESCE(SUM(small_cart_fee), 0),
+        COALESCE(SUM(heavy_order_fee), 0)
+    INTO 
+        v_missing_delivery, v_missing_surcharge, v_missing_small, v_missing_heavy
+    FROM orders 
+    WHERE cart_group_id = p_cart_group_id 
+      AND status IN ('cancelled', 'seller_rejected', 'timeout', 'payment_failed', 'shop_dispute_cancel')
+      AND delivery_charges > 0
+      AND COALESCE(rider_earnings, 0) = 0;
+
+    -- Calculate TRAPPED COUPON
+    FOR rec IN 
+        SELECT id, total_amount, gst_item_total, platform_fee, gst_platform, coupon_discount
+        FROM orders 
+        WHERE cart_group_id = p_cart_group_id 
+          AND status IN ('cancelled', 'seller_rejected', 'timeout', 'payment_failed', 'shop_dispute_cancel') 
+          AND delivery_charges > 0
+          AND COALESCE(rider_earnings, 0) = 0
+        ORDER BY id
+    LOOP
+        v_trapped_coupon := COALESCE(rec.coupon_discount, 0) - (rec.total_amount + rec.gst_item_total + rec.platform_fee + rec.gst_platform);
+        IF v_trapped_coupon > 0 THEN
+            v_missing_coupon := v_missing_coupon + v_trapped_coupon;
+            
+            UPDATE orders 
+            SET coupon_discount = (rec.total_amount + rec.gst_item_total + rec.platform_fee + rec.gst_platform)
+            WHERE id = rec.id;
+        END IF;
+    END LOOP;
+
+    -- 100x STRESS TEST FIX (Phase 21): Even if no active orders remain, 
+    -- we MUST zero out the delivery charges on the cancelled orders so they don't artificially inflate platform revenue metrics.
+    IF v_missing_delivery > 0 THEN
+        -- Zero out the cancelled ones FIRST
+        FOR rec IN 
+            SELECT id, total_amount, gst_item_total, platform_fee, gst_platform, coupon_discount, payment_status
+            FROM orders 
+            WHERE cart_group_id = p_cart_group_id 
+              AND status IN ('cancelled', 'seller_rejected', 'timeout', 'payment_failed', 'shop_dispute_cancel') 
+              AND delivery_charges > 0
+              AND COALESCE(rider_earnings, 0) = 0
+            ORDER BY id
+        LOOP
+            UPDATE orders
+            SET delivery_charges = 0,
+                multi_shop_surcharge = 0,
+                small_cart_fee = 0,
+                heavy_order_fee = 0,
+                gst_delivery = 0,
+                grand_total = GREATEST(0, rec.total_amount + rec.gst_item_total + rec.platform_fee + rec.gst_platform - COALESCE(coupon_discount, 0)),
+                grand_total_collected = CASE 
+                    WHEN rec.payment_status = 'captured' THEN GREATEST(0, rec.total_amount + rec.gst_item_total + rec.platform_fee + rec.gst_platform - COALESCE(coupon_discount, 0)) 
+                    ELSE 0 
+                END
+            WHERE id = rec.id;
+        END LOOP;
+    END IF;
+
+    IF v_active_count = 0 OR v_missing_delivery = 0 THEN
+        RETURN FALSE;
+    END IF;
+
+    v_split_delivery := v_missing_delivery / v_active_count;
+    v_split_surcharge := v_missing_surcharge / v_active_count;
+    v_split_small := v_missing_small / v_active_count;
+    v_split_heavy := v_missing_heavy / v_active_count;
+    v_split_coupon := v_missing_coupon / v_active_count;
+
+    -- Add to active orders
+    FOR rec IN 
+        SELECT id, delivery_charges, multi_shop_surcharge, small_cart_fee, heavy_order_fee,
+               total_amount, gst_item_total, platform_fee, gst_platform, payment_status,
+               COALESCE(coupon_discount, 0) AS coupon_discount
+        FROM orders 
+        WHERE cart_group_id = p_cart_group_id 
+          AND status IN ('awaiting_acceptance', 'awaiting_payment', 'pending_pickup', 'accepted', 'preparing', 'ready_for_pickup')
+        ORDER BY id
+    LOOP
+        v_net_delivery := (rec.delivery_charges + v_split_delivery) 
+                        + (rec.multi_shop_surcharge + v_split_surcharge)
+                        + (rec.small_cart_fee + v_split_small)
+                        + (rec.heavy_order_fee + v_split_heavy);
+                        
+        -- 100x STRESS TEST FIX (Phase 21): Mathematically pure GST extraction
+        v_new_gst_delivery := (rec.delivery_charges + v_split_delivery) - ((rec.delivery_charges + v_split_delivery) / 1.18);
+        
+        UPDATE orders
+        SET delivery_charges = rec.delivery_charges + v_split_delivery,
+            -- 100x STRESS TEST FIX (Phase 21): Add surcharges to Rider Earnings
+            rider_earnings = GREATEST(0, ((rec.delivery_charges + v_split_delivery) - v_new_gst_delivery - (rec.small_cart_fee + v_split_small) + (rec.multi_shop_surcharge + v_split_surcharge) + (rec.heavy_order_fee + v_split_heavy)) * 0.80),
+            multi_shop_surcharge = rec.multi_shop_surcharge + v_split_surcharge,
+            small_cart_fee = rec.small_cart_fee + v_split_small,
+            heavy_order_fee = rec.heavy_order_fee + v_split_heavy,
+            coupon_discount = rec.coupon_discount + v_split_coupon,
+            gst_delivery = v_new_gst_delivery,
+            grand_total = GREATEST(0, rec.total_amount + rec.gst_item_total + rec.platform_fee + rec.gst_platform + v_net_delivery - (rec.coupon_discount + v_split_coupon)),
+            grand_total_collected = CASE 
+                WHEN rec.payment_status = 'captured' THEN GREATEST(0, rec.total_amount + rec.gst_item_total + rec.platform_fee + rec.gst_platform + v_net_delivery - (rec.coupon_discount + v_split_coupon)) 
+                ELSE 0 
+            END
+        WHERE id = rec.id;
+    END LOOP;
+
+    RETURN TRUE;
+END;
+$$;
+
+-- =============================================================================
+-- cancel_order
+-- Phase 21: Added explicit trigger to reallocate fees for customer cancellations
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.cancel_order(p_order_id uuid, p_reason text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $$
+DECLARE
+  v_customer_id uuid;
+  v_cart_group_id uuid;
+  v_rec record;
+  v_is_customer boolean;
+BEGIN
+  -- First find group ID without locking to avoid partial lock deadlocks
+  SELECT customer_id, cart_group_id INTO v_customer_id, v_cart_group_id
+  FROM orders WHERE id = p_order_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found';
+  END IF;
+
+  v_is_customer := (auth.uid() = v_customer_id);
+
+  -- 100x FIX: Prevent Global DoS Cancellation Exploit
+  IF NOT v_is_customer AND NOT public.is_active_admin(auth.uid()) THEN
+    RAISE EXCEPTION 'Unauthorized: Only the customer or an admin can cancel this order.';
+  END IF;
+
+  IF v_cart_group_id IS NOT NULL THEN
+    -- Lock all orders in group consistently ordered by ID
+    FOR v_rec IN SELECT id, status, payment_status, refund_status FROM orders WHERE cart_group_id = v_cart_group_id ORDER BY id FOR UPDATE LOOP
+      -- 100x FIX: Allow terminal states to exist in the cart group without blocking cancellation
+      IF v_is_customer AND v_rec.status NOT IN (
+        'awaiting_acceptance', 'awaiting_payment', 'pending',
+        'cancelled', 'seller_rejected', 'timeout', 'payment_failed', 'shop_dispute_cancel', 'rider_rejected'
+      ) THEN
+        RAISE EXCEPTION 'Order cannot be cancelled at this stage by customer';
+      END IF;
+      
+      IF v_rec.status IN ('awaiting_acceptance', 'awaiting_payment', 'pending', 'seller_rejected', 'rider_rejected') THEN
+        UPDATE orders
+        SET 
+          status = 'cancelled',
+          cancelled_reason = p_reason,
+          -- 100x STRESS TEST FIX (Phase 11): Prevent Customer-Triggered Double Refunds
+          refund_status = CASE 
+                            WHEN v_rec.payment_status = 'captured' AND COALESCE(v_rec.refund_status, 'none') NOT IN ('processing', 'completed') THEN 'processing' 
+                            ELSE v_rec.refund_status 
+                          END,
+          updated_at = NOW()
+        WHERE id = v_rec.id;
+      END IF;
+    END LOOP;
+    
+    -- 100x STRESS TEST FIX (Phase 21): Trigger Reallocation for Customer Cancellations!
+    PERFORM reallocate_cancelled_delivery_fees(v_cart_group_id);
+    
+  ELSE
+    -- Single order lock
+    FOR v_rec IN SELECT id, status, payment_status, refund_status FROM orders WHERE id = p_order_id FOR UPDATE LOOP
+      IF v_is_customer AND v_rec.status NOT IN (
+        'awaiting_acceptance', 'awaiting_payment', 'pending',
+        'cancelled', 'seller_rejected', 'timeout', 'payment_failed', 'shop_dispute_cancel', 'rider_rejected'
+      ) THEN
+        RAISE EXCEPTION 'Order cannot be cancelled at this stage by customer';
+      END IF;
+
+      IF v_rec.status IN ('awaiting_acceptance', 'awaiting_payment', 'pending', 'seller_rejected', 'rider_rejected') THEN
+        UPDATE orders
+        SET 
+          status = 'cancelled',
+          cancelled_reason = p_reason,
+          -- 100x STRESS TEST FIX (Phase 11): Prevent Customer-Triggered Double Refunds
+          refund_status = CASE 
+                            WHEN v_rec.payment_status = 'captured' AND COALESCE(v_rec.refund_status, 'none') NOT IN ('processing', 'completed') THEN 'processing' 
+                            ELSE v_rec.refund_status 
+                          END,
+          updated_at = NOW()
+        WHERE id = v_rec.id;
+      END IF;
+    END LOOP;
   END IF;
 END;
 $$;

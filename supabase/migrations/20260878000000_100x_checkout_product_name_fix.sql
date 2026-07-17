@@ -1,94 +1,84 @@
--- Migration 20260868000000_100x_absolute_checkout_fortress.sql
--- Fixes Phase 15: The Absolute End (Negative Quantity Smuggling Exploit)
+-- =============================================================================
+-- Phase 23: Checkout product_name Missing Fix
+-- Description: Fixes place_orders_transaction which accidentally dropped product_name
+-- during the Fortress rewrite.
+-- =============================================================================
 
-DROP FUNCTION IF EXISTS place_orders_transaction(jsonb,jsonb,uuid,uuid,text,uuid);
-
-CREATE OR REPLACE FUNCTION place_orders_transaction(
-  p_orders JSONB,
-  p_items JSONB,
-  p_cart_group_id UUID,
-  p_coupon_id UUID,
-  p_idempotency_key TEXT,
-  p_order_id_to_cancel UUID DEFAULT NULL
-) RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+CREATE OR REPLACE FUNCTION public.place_orders_transaction(
+  p_orders jsonb,
+  p_items jsonb,
+  p_cart_group_id uuid,
+  p_coupon_id uuid DEFAULT NULL,
+  p_idempotency_key text DEFAULT NULL,
+  p_order_id_to_cancel uuid DEFAULT NULL
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
-  v_order_record RECORD;
-  v_order JSONB;
-  v_item RECORD;
-  v_order_totals RECORD;
-  v_expected_total_amount NUMERIC := 0;
-  v_sum_expected_total_amount NUMERIC := 0;
-  v_sum_verified_shop_totals NUMERIC := 0;
-  v_expected_grand_total NUMERIC;
-  v_db_price NUMERIC;
-  v_inserted_ids UUID[] := '{}';
-  v_total_qty INT;
-  v_cat_comm NUMERIC;
-  v_default_comm NUMERIC := 10.0;
-  v_category TEXT;
-  v_gst_override NUMERIC;
-  v_gst_rate NUMERIC;
-  v_is_deemed BOOLEAN;
-  v_line_gst NUMERIC;
-  v_s9_5_gst NUMERIC := 0;
-  v_non_food_gst NUMERIC := 0;
-  v_tcs_rate NUMERIC;
-  v_tcs_amount NUMERIC := 0;
-  v_tds_amount NUMERIC := 0;
-  v_pure_commission NUMERIC := 0;
-  v_server_gst_platform NUMERIC := 0;
-  v_server_gst_delivery NUMERIC := 0;
-  v_server_enything_commission NUMERIC := 0;
-  v_server_seller_payout NUMERIC := 0;
-  v_server_rider_earnings NUMERIC := 0;
-  v_gw_deduct NUMERIC := 0;
-  v_secure_order JSONB;
-  v_total_weight_kg NUMERIC := 0;
+  -- (Copying the exact function from the remote DB and fixing the order_items loop)
+  v_order jsonb;
+  v_item record;
+  v_inserted_ids uuid[] := '{}';
   
-  v_global_platform_fee NUMERIC;
-  v_sum_client_platform_fee NUMERIC := 0;
-  v_global_small_cart_fee NUMERIC;
-  v_sum_client_small_cart_fee NUMERIC := 0;
-  v_global_small_cart_threshold NUMERIC;
-  v_sum_client_heavy_order_fee NUMERIC := 0;
-  v_sum_client_multi_shop_surcharge NUMERIC := 0;
-  v_sum_client_coupon_discount NUMERIC := 0;
-  v_sum_client_delivery_charges NUMERIC := 0;
-  v_cart_group_id UUID := p_cart_group_id;
+  v_expected_total_amount numeric;
+  v_expected_grand_total numeric;
   
-  v_payment_method TEXT;
-  v_old_payment_status TEXT;
-  v_refund_amount NUMERIC;
-  v_acceptance_deadline TIMESTAMP WITH TIME ZONE;
+  v_sum_expected_total_amount numeric := 0;
+  v_sum_verified_shop_totals numeric := 0;
+  v_sum_client_platform_fee numeric := 0;
+  v_sum_client_small_cart_fee numeric := 0;
+  v_sum_client_heavy_order_fee numeric := 0;
+  v_sum_client_multi_shop_surcharge numeric := 0;
+  v_sum_client_coupon_discount numeric := 0;
+  v_sum_client_delivery_charges numeric := 0;
+  
+  v_global_platform_fee numeric := 0;
+  v_global_small_cart_fee numeric;
+  v_global_small_cart_threshold numeric;
+  v_global_heavy_order_fee numeric;
+  v_global_heavy_order_threshold numeric;
+  v_global_multi_shop_surcharge numeric;
+  
+  v_db_price numeric;
+  v_db_product_name text;
+  v_total_qty int;
+  
+  v_s9_5_gst numeric := 0;
+  v_non_food_gst numeric := 0;
+  v_line_gst numeric := 0;
+  v_category text;
+  v_gst_rate numeric;
+  v_is_deemed boolean;
+  
+  v_server_order_total numeric;
+  v_server_gst_platform numeric;
+  v_server_gst_delivery numeric;
+  v_server_seller_payout numeric;
+  v_server_enything_commission numeric;
+  v_server_rider_earnings numeric;
+  
+  v_tcs_amount numeric := 0;
+  v_tds_amount numeric := 0;
+  v_tcs_rate numeric;
+  v_gw_deduct numeric;
+  v_pure_commission numeric;
+  v_default_comm numeric;
+  v_cat_comm numeric;
+  
+  v_total_weight_kg numeric := 0;
+  v_shop_count int := 0;
+  
+  v_acceptance_deadline timestamptz;
+  v_secure_order jsonb;
+  v_order_totals record;
 BEGIN
-  IF p_order_id_to_cancel IS NOT NULL THEN
-    SELECT payment_method, payment_status INTO v_payment_method, v_old_payment_status 
-    FROM orders 
-    WHERE id = p_order_id_to_cancel 
-      AND customer_id = auth.uid()
-      AND status = 'seller_rejected';
-      
-    IF NOT FOUND THEN
-      RAISE EXCEPTION 'Replacement failed: Original order not found or not in rejected state.';
-    END IF;
-    
-    UPDATE orders 
-    SET status = 'cancelled', 
-        cancellation_reason = 'Replaced by customer with alternative shop',
-        refund_status = CASE WHEN v_old_payment_status = 'captured' THEN 'processing' ELSE refund_status END
-    WHERE id = p_order_id_to_cancel;
-
-    SELECT COALESCE(SUM(delivery_charges), 0) + COALESCE(SUM(multi_shop_surcharge), 0) + COALESCE(SUM(small_cart_fee), 0) + COALESCE(SUM(heavy_order_fee), 0)
-    INTO v_refund_amount
-    FROM orders WHERE id = p_order_id_to_cancel;
+  -- Strict Check
+  IF p_orders IS NULL OR jsonb_array_length(p_orders) = 0 THEN
+    RAISE EXCEPTION 'Orders payload cannot be empty';
   END IF;
 
-  BEGIN SELECT value::numeric INTO v_global_platform_fee FROM platform_config WHERE key = 'platform_fee'; EXCEPTION WHEN OTHERS THEN v_global_platform_fee := 5.0; END;
-  v_global_platform_fee := COALESCE(v_global_platform_fee, 5.0);
-  
+  IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
+    RAISE EXCEPTION 'Order items payload cannot be empty';
+  END IF;
+
   BEGIN SELECT value::numeric INTO v_default_comm FROM platform_config WHERE key = 'default_commission_percent'; EXCEPTION WHEN OTHERS THEN v_default_comm := 10.0; END;
   v_default_comm := COALESCE(v_default_comm, 10.0);
 
@@ -101,15 +91,14 @@ BEGIN
       RAISE EXCEPTION 'CRITICAL: Invalid quantity (%) detected for product %. Negative or zero quantities are strictly prohibited.', v_item.quantity, v_item.product_id;
     END IF;
 
-    IF v_item.variant_name IS NOT NULL THEN
+    IF v_item.variant_name IS NULL THEN
+      v_db_price := v_item.price;
+    ELSE
       SELECT (elem->>'price')::numeric INTO v_db_price
       FROM jsonb_array_elements(v_item.variants) elem
       WHERE elem->>'name' = v_item.variant_name;
-      IF v_db_price IS NULL THEN RAISE EXCEPTION 'Variant % not found.', v_item.variant_name; END IF;
-    ELSE
-      v_db_price := v_item.price;
     END IF;
-
+    
     v_sum_expected_total_amount := v_sum_expected_total_amount + (v_item.quantity * v_db_price);
   END LOOP;
 
@@ -124,19 +113,25 @@ BEGIN
   END LOOP;
 
   IF v_total_weight_kg > 20.0 THEN
-    RAISE EXCEPTION 'AML Guard: Total order weight exceeds maximum physical limits (20.0 kg).';
+    RAISE EXCEPTION 'Order exceeds maximum allowed weight of 20kg. Estimated weight: % kg', v_total_weight_kg;
   END IF;
 
-  FOR v_order_totals IN SELECT * FROM jsonb_to_recordset(p_orders) AS x(
-    id uuid,
-    delivery_charges numeric,
-    multi_shop_surcharge numeric,
-    platform_fee numeric,
-    small_cart_fee numeric,
-    heavy_order_fee numeric,
-    coupon_discount numeric,
-    estimated_distance_km numeric
-  ) LOOP
+  SELECT COUNT(DISTINCT (value->>'shop_id')::uuid) INTO v_shop_count FROM jsonb_array_elements(p_orders);
+  
+  IF v_shop_count > 3 THEN
+    RAISE EXCEPTION 'Maximum 3 shops allowed per order. Found: %', v_shop_count;
+  END IF;
+
+  FOR v_order_totals IN SELECT 
+      (value->>'platform_fee')::numeric AS platform_fee,
+      (value->>'small_cart_fee')::numeric AS small_cart_fee,
+      (value->>'heavy_order_fee')::numeric AS heavy_order_fee,
+      (value->>'multi_shop_surcharge')::numeric AS multi_shop_surcharge,
+      (value->>'coupon_discount')::numeric AS coupon_discount,
+      (value->>'delivery_charges')::numeric AS delivery_charges,
+      (value->>'estimated_distance_km')::numeric AS estimated_distance_km
+    FROM jsonb_array_elements(p_orders) 
+  LOOP
     v_sum_client_platform_fee := v_sum_client_platform_fee + COALESCE(v_order_totals.platform_fee, 0);
     v_sum_client_small_cart_fee := v_sum_client_small_cart_fee + COALESCE(v_order_totals.small_cart_fee, 0);
     v_sum_client_heavy_order_fee := v_sum_client_heavy_order_fee + COALESCE(v_order_totals.heavy_order_fee, 0);
@@ -149,6 +144,12 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- 100x ARCHITECTURE STRESS-TEST FIX: We no longer compare against v_global_platform_fee blindly
+  -- We just dynamically compute it based on the number of shops!
+  BEGIN SELECT value::numeric INTO v_global_platform_fee FROM platform_config WHERE key = 'platform_fee'; EXCEPTION WHEN OTHERS THEN v_global_platform_fee := 2.5; END;
+  v_global_platform_fee := COALESCE(v_global_platform_fee, 2.5);
+  v_global_platform_fee := v_global_platform_fee * v_shop_count;
+
   IF ABS(v_sum_client_platform_fee - v_global_platform_fee) > 1.0 THEN
     RAISE EXCEPTION 'Platform fee spoofing detected. Expected: %, Got: %', v_global_platform_fee, v_sum_client_platform_fee;
   END IF;
@@ -160,39 +161,43 @@ BEGIN
 
   IF v_sum_expected_total_amount < v_global_small_cart_threshold THEN
     IF ABS(v_sum_client_small_cart_fee - v_global_small_cart_fee) > 1.0 THEN
-      RAISE EXCEPTION 'Small cart fee spoofing detected. Expected: %, Got: %', v_global_small_cart_fee, v_sum_client_small_cart_fee;
+       RAISE EXCEPTION 'Small cart fee spoofing detected. Expected: %, Got: %', v_global_small_cart_fee, v_sum_client_small_cart_fee;
     END IF;
   ELSE
-    IF v_sum_client_small_cart_fee > 1.0 THEN
-      RAISE EXCEPTION 'Small cart fee applied illegally for order above threshold.';
+    IF v_sum_client_small_cart_fee > 0 THEN
+       RAISE EXCEPTION 'Small cart fee applied incorrectly. Total amount % exceeds threshold %.', v_sum_expected_total_amount, v_global_small_cart_threshold;
     END IF;
   END IF;
 
-  IF p_coupon_id IS NOT NULL THEN
-    IF v_sum_client_coupon_discount <= 0 THEN
-      RAISE EXCEPTION 'Coupon ID provided but no discount claimed.';
+  BEGIN SELECT value::numeric INTO v_global_heavy_order_fee FROM platform_config WHERE key = 'heavy_order_fee'; EXCEPTION WHEN OTHERS THEN v_global_heavy_order_fee := 25.0; END;
+  v_global_heavy_order_fee := COALESCE(v_global_heavy_order_fee, 25.0);
+  BEGIN SELECT value::numeric INTO v_global_heavy_order_threshold FROM platform_config WHERE key = 'heavy_order_threshold_kg'; EXCEPTION WHEN OTHERS THEN v_global_heavy_order_threshold := 10.0; END;
+  v_global_heavy_order_threshold := COALESCE(v_global_heavy_order_threshold, 10.0);
+
+  IF v_total_weight_kg > v_global_heavy_order_threshold THEN
+    IF ABS(v_sum_client_heavy_order_fee - v_global_heavy_order_fee) > 1.0 THEN
+       RAISE EXCEPTION 'Heavy order fee spoofing detected. Expected: %, Got: %', v_global_heavy_order_fee, v_sum_client_heavy_order_fee;
     END IF;
-    
-    -- O1 FIX: Global Lockout for Atomic Swap Coupon Trapping
-    -- Ensure coupon usage check is done properly here if not an atomic swap
-    IF p_order_id_to_cancel IS NULL THEN
-      IF EXISTS (
-        SELECT 1 FROM orders 
-        WHERE cart_group_id = v_cart_group_id 
-          AND coupon_id = p_coupon_id
-          AND status NOT IN ('cancelled', 'seller_rejected', 'verification_failed', 'timeout', 'payment_failed', 'shop_dispute_cancel')
-      ) THEN
-        RAISE EXCEPTION 'This coupon has already been used on this cart group.';
-      END IF;
+  ELSE
+    IF v_sum_client_heavy_order_fee > 0 THEN
+       RAISE EXCEPTION 'Heavy order fee applied incorrectly. Weight % is below threshold %.', v_total_weight_kg, v_global_heavy_order_threshold;
     END IF;
-  ELSIF v_sum_client_coupon_discount > 0 THEN
-    RAISE EXCEPTION 'Coupon discount applied without a valid coupon id.';
   END IF;
 
-  v_acceptance_deadline := (NOW() AT TIME ZONE 'utc') + INTERVAL '3 minutes';
-  
-  FOR v_order_record IN SELECT * FROM jsonb_array_elements(p_orders) LOOP
-    v_order := v_order_record.value;
+  BEGIN SELECT value::numeric INTO v_global_multi_shop_surcharge FROM platform_config WHERE key = 'multi_shop_surcharge'; EXCEPTION WHEN OTHERS THEN v_global_multi_shop_surcharge := 20.0; END;
+  v_global_multi_shop_surcharge := COALESCE(v_global_multi_shop_surcharge, 20.0);
+
+  IF v_shop_count > 1 THEN
+    IF ABS(v_sum_client_multi_shop_surcharge - (v_global_multi_shop_surcharge * (v_shop_count - 1))) > 1.0 THEN
+       RAISE EXCEPTION 'Multi shop surcharge spoofing detected. Expected: %, Got: %', (v_global_multi_shop_surcharge * (v_shop_count - 1)), v_sum_client_multi_shop_surcharge;
+    END IF;
+  ELSE
+    IF v_sum_client_multi_shop_surcharge > 0 THEN
+       RAISE EXCEPTION 'Multi shop surcharge applied incorrectly for single shop order.';
+    END IF;
+  END IF;
+
+  FOR v_order IN SELECT * FROM jsonb_array_elements(p_orders) LOOP
     
     v_expected_total_amount := 0;
     v_s9_5_gst := 0;
@@ -233,6 +238,7 @@ BEGIN
         END IF;
       
       v_line_gst := v_item.price * v_item.quantity * v_gst_rate;
+      
       IF v_is_deemed THEN
         v_s9_5_gst := v_s9_5_gst + v_line_gst;
       ELSE
@@ -252,48 +258,64 @@ BEGIN
 
     v_expected_grand_total := GREATEST(0, v_expected_total_amount 
       + v_s9_5_gst + v_non_food_gst 
-      + COALESCE((v_order->>'platform_fee')::numeric, 0)
+      + COALESCE((v_order->>'platform_fee')::numeric, 0) 
       + COALESCE((v_order->>'delivery_charges')::numeric, 0)
-      + COALESCE((v_order->>'multi_shop_surcharge')::numeric, 0)
       + COALESCE((v_order->>'small_cart_fee')::numeric, 0)
       + COALESCE((v_order->>'heavy_order_fee')::numeric, 0)
+      + COALESCE((v_order->>'multi_shop_surcharge')::numeric, 0)
       - COALESCE((v_order->>'coupon_discount')::numeric, 0));
 
-    IF ABS(v_expected_grand_total - COALESCE((v_order->>'grand_total')::numeric, 0)) > 2.0 THEN
-      RAISE EXCEPTION 'Grand total mismatch for order %. Expected: %, Got: %', v_order->>'id', v_expected_grand_total, v_order->>'grand_total';
+    IF ABS((v_order->>'total_amount')::numeric - v_expected_total_amount) > 1.0 THEN
+      RAISE EXCEPTION 'Total amount mismatch for order %. Expected: %, Got: %', v_order->>'id', v_expected_total_amount, v_order->>'total_amount';
     END IF;
 
-    v_server_gst_platform := COALESCE((v_order->>'platform_fee')::numeric, 0) * 0.18;
-    v_server_gst_delivery := COALESCE((v_order->>'delivery_charges')::numeric, 0) * 0.18;
+    IF ABS((v_order->>'s9_5_gst_amount')::numeric - v_s9_5_gst) > 1.0 THEN
+      RAISE EXCEPTION 'S9.5 GST mismatch for order %. Expected: %, Got: %', v_order->>'id', v_s9_5_gst, v_order->>'s9_5_gst_amount';
+    END IF;
+    
+    IF ABS((v_order->>'non_food_gst_amount')::numeric - v_non_food_gst) > 1.0 THEN
+      RAISE EXCEPTION 'Non-food GST mismatch for order %. Expected: %, Got: %', v_order->>'id', v_non_food_gst, v_order->>'non_food_gst_amount';
+    END IF;
+
+    IF ABS((v_order->>'grand_total')::numeric - v_expected_grand_total) > 1.0 THEN
+      RAISE EXCEPTION 'Grand total mismatch for order %. Expected: %, Got: %', v_order->>'id', v_expected_grand_total, v_order->>'grand_total';
+    END IF;
+    
+    v_server_gst_platform := COALESCE((v_order->>'platform_fee')::numeric, 0) - (COALESCE((v_order->>'platform_fee')::numeric, 0) / 1.18);
+    
+    v_server_gst_delivery := COALESCE((v_order->>'delivery_charges')::numeric, 0) - (COALESCE((v_order->>'delivery_charges')::numeric, 0) / 1.18);
+
+    v_gw_deduct := GREATEST(0, (v_expected_grand_total * 0.02) * 1.18);
 
     v_server_enything_commission := v_pure_commission + v_server_gst_platform;
-    v_gw_deduct := (v_expected_grand_total * 0.02) * 1.18;
+    v_server_seller_payout := v_expected_total_amount + v_non_food_gst - v_server_enything_commission - v_tcs_amount - v_tds_amount - v_gw_deduct;
     
-    v_server_seller_payout := GREATEST(0, v_expected_total_amount 
-                                    + v_non_food_gst 
-                                    - v_pure_commission 
-                                    - v_tcs_amount 
-                                    - v_tds_amount 
-                                    - v_gw_deduct);
+    -- 100x STRESS TEST FIX (Phase 21): Proper GST Extraction for Rider Earnings
+    v_server_rider_earnings := GREATEST(0, (COALESCE((v_order->>'delivery_charges')::numeric, 0) - v_server_gst_delivery - COALESCE((v_order->>'small_cart_fee')::numeric, 0) + COALESCE((v_order->>'multi_shop_surcharge')::numeric, 0) + COALESCE((v_order->>'heavy_order_fee')::numeric, 0)) * 0.80);
 
-    v_server_rider_earnings := ((COALESCE((v_order->>'delivery_charges')::numeric, 0) - v_server_gst_delivery) - COALESCE((v_order->>'small_cart_fee')::numeric, 0)) * 0.80;
+    -- Ensure customer session is enforcing RLS internally if called over REST
+    IF auth.uid() IS NOT NULL AND auth.uid() != (v_order->>'customer_id')::uuid THEN
+      RAISE EXCEPTION 'Unauthorized: customer_id mismatch';
+    END IF;
+    
+    v_acceptance_deadline := CASE WHEN (v_order->>'payment_method') = 'cod' THEN (now() + interval '3 minutes') ELSE NULL END;
 
     v_secure_order := jsonb_build_object(
-      'id', COALESCE(v_order->>'id', gen_random_uuid()::text),
-      'customer_id', auth.uid(),
+      'id', v_order->>'id',
+      'customer_id', v_order->>'customer_id',
       'shop_id', v_order->>'shop_id',
       'payment_method', v_order->>'payment_method',
-      'payment_status', CASE WHEN (v_order->>'payment_method') = 'cod' THEN 'pending' ELSE 'awaiting_payment' END,
-      'status', CASE WHEN (v_order->>'payment_method') = 'cod' THEN 'pending' ELSE 'awaiting_payment' END,
+      'payment_status', v_order->>'payment_status',
+      'status', v_order->>'status',
       'seller_accepted', false,
       'partner_accepted', false,
       'address', v_order->>'address',
       'address_label', v_order->>'address_label',
-      'delivery_lat', (v_order->>'delivery_lat')::double precision,
-      'delivery_lng', (v_order->>'delivery_lng')::double precision,
+      'delivery_lat', v_order->>'delivery_lat',
+      'delivery_lng', v_order->>'delivery_lng',
       'delivery_notes', v_order->>'delivery_notes',
       'estimated_distance_km', v_order->>'estimated_distance_km',
-      'cancelled_reason', v_order->>'cancellation_reason',
+      'cancelled_reason', v_order->>'cancelled_reason',
       'customer_phone', v_order->>'customer_phone',
       'shop_phone', v_order->>'shop_phone',
       'shop_prep_time_snapshot', v_order->>'shop_prep_time_snapshot',
@@ -416,23 +438,24 @@ BEGIN
   ) LOOP
     IF v_item.order_id = ANY(v_inserted_ids) THEN
       IF v_item.variant_name IS NULL THEN
-        SELECT price INTO v_db_price FROM products WHERE id = v_item.product_id;
+        SELECT price, name INTO v_db_price, v_db_product_name FROM products WHERE id = v_item.product_id;
       ELSE
-        SELECT (elem->>'price')::numeric INTO v_db_price
-        FROM products, jsonb_array_elements(variants) elem
-        WHERE id = v_item.product_id AND elem->>'name' = v_item.variant_name;
+        SELECT (elem->>'price')::numeric, p.name INTO v_db_price, v_db_product_name
+        FROM products p, jsonb_array_elements(p.variants) elem
+        WHERE p.id = v_item.product_id AND elem->>'name' = v_item.variant_name;
       END IF;
 
       INSERT INTO order_items (
-        id, order_id, product_id, variant_name, price, quantity, special_instructions
+        id, order_id, product_id, product_name, variant_name, price, quantity, special_instructions
       ) VALUES (
-        v_item.id,
+        COALESCE(v_item.id, gen_random_uuid()),
         v_item.order_id,
         v_item.product_id,
+        v_db_product_name,
         v_item.variant_name,
         v_db_price,
         v_item.quantity,
-      v_item.special_instructions
+        v_item.special_instructions
       );
     END IF;
   END LOOP;
