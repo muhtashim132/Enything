@@ -21,7 +21,6 @@ import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
 import '../../widgets/order_countdown_timer.dart';
 import 'order_route_map_page.dart';
-import '../../utils/time_utils.dart';
 import '../../models/order_group.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../services/rider_background_service.dart';
@@ -240,9 +239,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     // (which has no access to the main isolate's in-memory dotenv state).
     final url = dotenv.env['SUPABASE_URL'] ?? '';
     final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
-    final session = _supabase.auth.currentSession;
-    final accessToken = session?.accessToken ?? '';
-    final refreshToken = session?.refreshToken ?? '';
 
     if (url.isEmpty || anonKey.isEmpty) {
       debugPrint('[Dashboard] Cannot start background service: missing Supabase env vars');
@@ -489,7 +485,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       double tempTodayEarnings = 0.0;
       double tempTotalKmsDriven = 0.0;
-      final today = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
       
       // Fetch delivered orders separately to compute earnings (using safe RPC to prevent payload DDOS)
       if (auth.currentUserId != null) {

@@ -100,15 +100,15 @@ class LocationProvider extends ChangeNotifier {
       }
 
       // Bypass location popup for all users
-      _currentLocation = const LatLng(34.4225, 74.6366);
-      _currentAddress = 'bandipora, jammu and kashmir';
-      _houseNumber = 'User';
-      _landmark = 'Near Jamia Masjid';
-      _pincode = '193502';
-      _permissionGranted = true;
-      _isLoading = false;
-      notifyListeners();
-      return true;
+      // _currentLocation = const LatLng(34.4225, 74.6366);
+      // _currentAddress = 'bandipora, jammu and kashmir';
+      // _houseNumber = 'User';
+      // _landmark = 'Near Jamia Masjid';
+      // _pincode = '193502';
+      // _permissionGranted = true;
+      // _isLoading = false;
+      // notifyListeners();
+      // return true;
 
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {

@@ -11,7 +11,11 @@ Future<void> main() async {
     if (line.startsWith('SUPABASE_ANON_KEY=')) supabaseAnonKey = line.split('=')[1].trim();
   }
 
-  final client = SupabaseClient(supabaseUrl, supabaseAnonKey);
+  final client = SupabaseClient(
+    supabaseUrl,
+    supabaseAnonKey,
+    authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
+  );
   try {
     final res = await client.auth.signUp(email: 'mock919999999996@enything.com', password: 'Dummy123');
     print('Signed up: ${res.user?.id}');

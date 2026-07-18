@@ -63,10 +63,10 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
         }
 
         final tSellers = res['top_sellers'] as List;
-        _topSellers = List<Map<String, dynamic>>.from(tSellers);
+        _topSellers = List<Map<String, dynamic>>.from(tSellers).take(10).toList();
 
         final tRiders = res['top_riders'] as List;
-        _topRiders = List<Map<String, dynamic>>.from(tRiders);
+        _topRiders = List<Map<String, dynamic>>.from(tRiders).take(10).toList();
 
         _churnRisk = _totalOrders > 0 ? (_cancelledOrders / _totalOrders) * 100 : 0;
         _newUsersToday = res['new_users_today'] as int;

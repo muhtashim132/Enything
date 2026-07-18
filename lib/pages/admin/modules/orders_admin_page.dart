@@ -356,11 +356,38 @@ class _OrderCardState extends State<_OrderCard> {
   }
 
   Widget _buildDetailPanel(Map<String, dynamic> o, int step, Color statusColor, String status) {
-    final profile = o['profiles'] as Map?;
-    final shop = o['shops'] as Map?;
-    final amount = (o['grand_total_collected'] as num?)?.toDouble() ??
-        (o['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final paymentMethod = (o['payment_method'] ?? 'COD') as String;
+    final profile = (o['profiles'] is Map) ? o['profiles'] as Map : null;
+    final shop = (o['shops'] is Map) ? o['shops'] as Map : null;
+    
+    double parseNum(dynamic val) {
+      if (val == null) return 0.0;
+      if (val is num) return val.toDouble();
+      return double.tryParse(val.toString()) ?? 0.0;
+    }
+
+    String parseStr(dynamic val, [String fallback = '—']) {
+      if (val == null) return fallback;
+      final s = val.toString().trim();
+      return s.isEmpty ? fallback : s;
+    }
+
+    final grandTotal = parseNum(o['grand_total_collected']);
+    final amount = (o['grand_total_collected'] != null && grandTotal >= 0) 
+        ? grandTotal 
+        : parseNum(o['total_amount']);
+    final paymentMethod = parseStr(o['payment_method'], 'COD');
+    
+    final partnerId = parseStr(o['delivery_partner_id'], 'Not Assigned');
+    final safePartnerId = partnerId.length > 8 ? partnerId.substring(0, 8).toUpperCase() : partnerId.toUpperCase();
+
+    String formatTime(dynamic t) {
+      if (t == null) return '—';
+      try {
+        return DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t.toString()).toIST());
+      } catch (_) {
+        return '—';
+      }
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -432,32 +459,104 @@ class _OrderCardState extends State<_OrderCard> {
           const Divider(color: AdminColors.cardBorder, height: 1),
           const SizedBox(height: 14),
 
-          // Info grid
-          Row(children: [
-            _InfoCell(
-                label: 'Customer',
-                value: profile?['full_name'] ?? 'Unknown'),
-            _InfoCell(
-                label: 'Phone',
-                value: profile?['phone'] ?? '—'),
+          // ── Detailed Info Sections ──────────────────────────
+          
+          // Customer Section
+          Text('Customer Details', style: AdminStyles.title(color: AdminColors.primary, size: 14)),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Name', value: parseStr(profile?['full_name'], 'Unknown')),
+            _InfoCell(label: 'Phone', value: parseStr(profile?['phone'] ?? o['customer_phone'])),
           ]),
           const SizedBox(height: 10),
-          Row(children: [
-            _InfoCell(
-                label: 'Shop',
-                value: shop?['name'] ?? 'Unknown'), // FIX: use 'name' not 'shop_name'
-            _InfoCell(
-                label: 'Payment',
-                value: paymentMethod.toUpperCase()),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Address', value: parseStr(o['address']), maxLines: null),
+          ]),
+          if (parseStr(o['delivery_notes'], '') != '') ...[
+            const SizedBox(height: 10),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _InfoCell(label: 'Notes', value: parseStr(o['delivery_notes']), maxLines: null),
+            ]),
+          ],
+          
+          const SizedBox(height: 16),
+          const Divider(color: AdminColors.cardBorder, height: 1),
+          const SizedBox(height: 14),
+
+          // Shop Section
+          Text('Shop Details', style: AdminStyles.title(color: AdminColors.primary, size: 14)),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Name', value: parseStr(shop?['name'], 'Unknown')),
+            _InfoCell(label: 'Phone', value: parseStr(o['shop_phone'])),
           ]),
           const SizedBox(height: 10),
-          Row(children: [
-            _InfoCell(
-                label: 'Amount',
-                value: '₹${amount.toStringAsFixed(0)}'),
-            _InfoCell(
-                label: 'Payment Status',
-                value: (o['payment_status'] ?? 'pending').toString().toUpperCase()),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Prep Time', value: '${parseStr(o['shop_prep_time_snapshot'], '30')} mins'),
+            _InfoCell(label: 'Ready At', value: formatTime(o['order_ready_time'])),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Wait Penalty', value: '₹${parseNum(o['wait_time_penalty']).toStringAsFixed(2)}'),
+            _InfoCell(label: 'Net Payout', value: '₹${parseNum(o['seller_payout']).toStringAsFixed(2)}'),
+          ]),
+          
+          const SizedBox(height: 16),
+          const Divider(color: AdminColors.cardBorder, height: 1),
+          const SizedBox(height: 14),
+
+          // Rider Section
+          Text('Rider Details', style: AdminStyles.title(color: AdminColors.primary, size: 14)),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Partner ID', value: safePartnerId),
+            _InfoCell(label: 'Phone', value: parseStr(o['rider_phone'])),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Distance', value: '${parseNum(o['estimated_distance_km']).toStringAsFixed(2)} km'),
+            _InfoCell(label: 'Earnings', value: '₹${parseNum(o['rider_earnings']).toStringAsFixed(2)}'),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Arrived At Shop', value: formatTime(o['arrived_at_shop_time'])),
+          ]),
+
+          const SizedBox(height: 16),
+          const Divider(color: AdminColors.cardBorder, height: 1),
+          const SizedBox(height: 14),
+
+          // Financial Breakdown
+          Text('Financial Breakdown', style: AdminStyles.title(color: AdminColors.primary, size: 14)),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Payment', value: paymentMethod.toUpperCase()),
+            _InfoCell(label: 'Status', value: parseStr(o['payment_status'], 'pending').toUpperCase()),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Item Total', value: '₹${parseNum(o['total_amount']).toStringAsFixed(2)}'),
+            _InfoCell(label: 'Delivery Charge', value: '₹${parseNum(o['delivery_charges']).toStringAsFixed(2)}'),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Platform Fee', value: '₹${parseNum(o['platform_fee']).toStringAsFixed(2)}'),
+            _InfoCell(label: 'Surcharges', value: '₹${(parseNum(o['small_cart_fee']) + parseNum(o['heavy_order_fee']) + parseNum(o['multi_shop_surcharge'])).toStringAsFixed(2)}'),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'GST (Items)', value: '₹${parseNum(o['gst_item_total']).toStringAsFixed(2)}'),
+            _InfoCell(label: 'GST (Delivery+Plat)', value: '₹${(parseNum(o['gst_delivery']) + parseNum(o['gst_platform'])).toStringAsFixed(2)}'),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Enything Comm.', value: '₹${parseNum(o['enything_commission']).toStringAsFixed(2)}'),
+            _InfoCell(label: 'TCS + TDS', value: '₹${(parseNum(o['tcs_amount']) + parseNum(o['tds_amount'])).toStringAsFixed(2)}'),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _InfoCell(label: 'Discount', value: '-₹${parseNum(o['coupon_discount']).toStringAsFixed(2)}'),
+            _InfoCell(label: 'Grand Total', value: '₹${amount.toStringAsFixed(2)}'),
           ]),
 
           const SizedBox(height: 16),
@@ -605,7 +704,8 @@ class _OrderCardState extends State<_OrderCard> {
 class _InfoCell extends StatelessWidget {
   final String label;
   final String value;
-  const _InfoCell({required this.label, required this.value});
+  final int? maxLines;
+  const _InfoCell({required this.label, required this.value, this.maxLines = 1});
 
   @override
   Widget build(BuildContext context) {
@@ -615,8 +715,8 @@ class _InfoCell extends StatelessWidget {
         const SizedBox(height: 2),
         Text(value,
             style: AdminStyles.body(size: 13),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+            maxLines: maxLines,
+            overflow: maxLines == null ? null : TextOverflow.ellipsis),
       ]),
     );
   }

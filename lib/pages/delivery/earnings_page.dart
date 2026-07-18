@@ -36,14 +36,6 @@ class _EarningsPageState extends State<EarningsPage> {
   Future<void> _loadEarnings() async {
     final auth = context.read<AuthProvider>();
     try {
-      // C3/H4 FIX: Compute today's IST midnight explicitly.
-      // DB stores UTC; toIST() converts delivery times to IST.
-      // todayStart must also be IST midnight for a consistent comparison.
-      // Previously used DateTime.now() (local tz) which was wrong for non-IST devices.
-      final nowUtc = DateTime.now().toUtc();
-      final nowIst = nowUtc.add(const Duration(hours: 5, minutes: 30));
-      final todayStartIst = DateTime(nowIst.year, nowIst.month, nowIst.day);
-
       // A1: Use the highly optimized get_rider_stats RPC to prevent Payload DDOS
       final stats = await _supabase.rpc('get_rider_stats', params: {'p_rider_id': auth.currentUserId ?? ''});
       

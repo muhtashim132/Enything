@@ -6,7 +6,7 @@ import 'package:enythingmobilenew/config/payment_config.dart';
 import 'package:enythingmobilenew/models/product_model.dart';
 import 'package:enythingmobilenew/models/shop_model.dart';
 import 'package:latlong2/latlong.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -15,6 +15,12 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    try {
+      await Supabase.initialize(
+        url: 'https://mock.supabase.co',
+        anonKey: 'mock',
+      );
+    } catch (_) {} // Ignore if already initialized
     platformProvider = PlatformConfigProvider();
     // In test environment, PlatformConfigProvider defaults to values matching PaymentConfig
     cartProvider = CartProvider();
