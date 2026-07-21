@@ -97,51 +97,51 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Hero banner image ─────────────────────────────────────
-              Stack(
-                children: [
-                  // Banner
-                  ClipRRect(
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(24)),
-                    child: shop.bannerImage != null
-                        ? CachedNetworkImage(
-                            imageUrl: shop.bannerImage!,
-                            height: 185,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => _imgPlaceholder(),
-                            errorWidget: (_, __, ___) => _imgPlaceholder(),
-                          )
-                        : _imgPlaceholder(),
-                  ),
-                  // Gradient overlay — stronger at bottom
-                  ClipRRect(
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(24)),
-                    child: Container(
-                      height: 185,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.65),
-                          ],
-                          stops: const [0.0, 0.45, 1.0],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Banner — Expanded prevents pixel overload but allows flexible height
+                    ClipRRect(
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(24)),
+                      child: shop.bannerImage != null
+                          ? CachedNetworkImage(
+                              imageUrl: shop.bannerImage!,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              memCacheHeight: 310, // 2× for crisp rendering, no pixel overload
+                              placeholder: (_, __) => _imgPlaceholder(),
+                              errorWidget: (_, __, ___) => _imgPlaceholder(),
+                            )
+                          : _imgPlaceholder(),
+                    ),
+                    // Gradient overlay — stronger at bottom
+                    ClipRRect(
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(24)),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.65),
+                            ],
+                            stops: const [0.0, 0.45, 1.0],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  // CLOSED Overlay
-                  if (!shop.isOpenRightNow)
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                      child: Container(
-                        height: 185,
-                        color: Colors.black.withValues(alpha: 0.65),
+                    // CLOSED Overlay
+                    if (!shop.isOpenRightNow)
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.65),
                         child: Center(
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -330,8 +330,9 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                     ),
                 ],
               ),
+            ),
 
-              // ── Info section ──────────────────────────────────────────
+            // ── Info section ──────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                 child: Column(
@@ -456,7 +457,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
   }
 
   Widget _imgPlaceholder() => Container(
-        height: 185,
+        height: double.infinity,
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(

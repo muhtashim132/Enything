@@ -123,7 +123,9 @@ class _ShopCardState extends State<ShopCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Header image strip ─────────────────────────────────────
-              Stack(
+              Expanded(
+                child: Stack(
+                fit: StackFit.expand,
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(
@@ -131,9 +133,9 @@ class _ShopCardState extends State<ShopCard> {
                     child: shop.bannerImage != null
                         ? CachedNetworkImage(
                             imageUrl: shop.bannerImage!,
-                            height: 120,
                             width: double.infinity,
                             fit: BoxFit.cover,
+                            memCacheHeight: 240, // 2× for crisp rendering, no pixel overload
                             placeholder: (c, i) => _headerPlaceholder(colors),
                             errorWidget: (c, e, s) =>
                                 _headerPlaceholder(colors),
@@ -146,7 +148,6 @@ class _ShopCardState extends State<ShopCard> {
                     borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(PremiumRadius.large)),
                     child: Container(
-                      height: 120,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -167,7 +168,6 @@ class _ShopCardState extends State<ShopCard> {
                     ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(PremiumRadius.large)),
                       child: Container(
-                        height: 120,
                         color: Colors.black.withValues(alpha: 0.65),
                         child: Center(
                           child: Container(
@@ -301,6 +301,7 @@ class _ShopCardState extends State<ShopCard> {
                   ),
                 ],
               ),
+              ),
 
               // ── Info section ──────────────────────────────────────────
               Padding(
@@ -390,7 +391,6 @@ class _ShopCardState extends State<ShopCard> {
 
   Widget _headerPlaceholder(List<Color> colors) {
     return Container(
-      height: 120,
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(

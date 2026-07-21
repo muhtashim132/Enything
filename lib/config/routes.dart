@@ -24,6 +24,7 @@ import '../pages/settings/refer_and_earn_page.dart';
 import '../pages/seller/dashboard_page.dart';
 import '../pages/seller/add_product_page.dart';
 import '../models/product_model.dart';
+import '../models/shop_model.dart';
 import '../pages/seller/manage_products_page.dart';
 import '../pages/seller/seller_orders_page.dart';
 import '../pages/seller/analytics_page.dart';
@@ -47,6 +48,7 @@ import '../pages/customer/customer_order_map_page.dart';
 import '../pages/seller/seller_order_map_page.dart';
 import '../pages/settings/about_enything_page.dart';
 import '../pages/legal/contact_us_page.dart';
+import '../pages/customer/all_listings_page.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -96,6 +98,7 @@ class AppRoutes {
   static const String aboutEnything = '/settings/about';
   static const String contactUs = '/legal/contact-us';
   static const String referAndEarn = '/settings/refer-and-earn';
+  static const String allListings = '/customer/all-listings';
 
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
@@ -213,6 +216,18 @@ class AppRoutes {
         return _build(const ContactUsPage(), routeSettings);
       case referAndEarn:
         return _build(const ReferAndEarnPage(), routeSettings);
+      case allListings:
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+          AllListingsPage(
+            type: (a?['type'] as ListingType?) ?? ListingType.shops,
+            shops: (a?['shops'] as List<ShopModel>?) ?? const [],
+            products: (a?['products'] as List<ProductModel>?) ?? const [],
+            productShops: (a?['productShops'] as Map<String, ShopModel>?) ?? const {},
+            sectionTitle: a?['sectionTitle'] as String?,
+          ),
+          routeSettings,
+        );
       case customerOrderMap:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         if (a?['order'] == null) {

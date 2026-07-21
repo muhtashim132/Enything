@@ -31,6 +31,7 @@ import '../../widgets/shop_detail_sheet.dart';
 import '../../widgets/restaurant_dashboard_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
 import '../../widgets/address_picker_sheet.dart';
+import 'all_listings_page.dart';
 
 class CustomerHomeView extends StatefulWidget {
   const CustomerHomeView({super.key});
@@ -221,8 +222,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   @override
   void initState() {
     super.initState();
-    // Load ALL shops/products on startup — no tab pre-selected
-    _checkLocationAndLoad();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkLocationAndLoad();
+    });
     _startNotifications();
     _checkActiveOrders();
     // Subscribe to live GPS updates so distance filter stays accurate
@@ -244,10 +246,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         context.read<FavoritesProvider>().fetchFavorites(auth.currentUserId!);
         context.read<LocationProvider>().loadAddressFromDb(auth.currentUserId!);
         context.read<ReferralProvider>().init(auth.currentUserId!);
-
       }
     });
   }
+
+
 
   bool _isActiveOrderNavigating = false;
   bool _isSettingsNavigating = false;
@@ -367,6 +370,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _locationProvider?.removeListener(_onLocationChanged);
     _searchController.dispose();
     _bannerController.dispose();
+    _bannerIndex.dispose();
     globalIsFiltering.value = false; // Reset state leakage
     super.dispose();
   }
@@ -1426,7 +1430,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                                      child: Text('\${_searchProductResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                                      child: Text('${_searchProductResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
                                     ),
                                   ],
                                 ),
@@ -1485,7 +1489,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                                      child: Text('\${_searchResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.secondary)),
+                                      child: Text('${_searchResults.length}', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.secondary)),
                                     ),
                                   ],
                                 ),
@@ -1604,11 +1608,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   : _isFoodTab
                                       ? 'Restaurants near you'
                                       : 'Shops near you',
-                              subtitle: '\${_shops.length} within \${DeliveryCalculator.maxRadiusKm.toInt()} km',
+                              subtitle: '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
                               count: _shops.length,
-                              onSeeAllTap: _shops.length > _shopsDisplayLimit
-                                  ? () => setState(() => _shopsDisplayLimit = _shops.length)
-                                  : null,
+                              onSeeAllTap: () => Navigator.pushNamed(
+                                        context,
+                                        AppRoutes.allListings,
+                                        arguments: {
+                                          'type': _isFoodTab
+                                              ? ListingType.restaurants
+                                              : ListingType.shops,
+                                          'shops': List<ShopModel>.from(_sortedNormalShops),
+                                          'sectionTitle': _selectedTabIndex < 0
+                                              ? 'All Stores Near You'
+                                              : _isFoodTab
+                                                  ? 'All Restaurants'
+                                                  : 'All Shops',
+                                        },
+                                      ),
                             ),
                           ),
                           const SliverToBoxAdapter(child: SizedBox(height: 16)),
@@ -1648,9 +1664,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           SliverToBoxAdapter(
                             child: _buildSectionTitle(
                               'Popular in your area',
-                              onSeeAllTap: _products.length > _productsDisplayLimit
-                                  ? () => setState(() => _productsDisplayLimit = _products.length)
-                                  : null,
+                              onSeeAllTap: () => Navigator.pushNamed(
+                                        context,
+                                        AppRoutes.allListings,
+                                        arguments: {
+                                          'type': ListingType.products,
+                                          'products': List<ProductModel>.from(_sortedNormalProducts),
+                                          'productShops': Map<String, ShopModel>.from(_productShops),
+                                          'sectionTitle': 'Popular in Your Area',
+                                        },
+                                      ),
                             ),
                           ),
                           const SliverToBoxAdapter(child: SizedBox(height: 16)),
@@ -1867,7 +1890,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'title': 'Get Food Instantly\nDelivered to you',
         'sub': 'Fast, fresh, and local restaurants',
         'icon': Icons.local_dining_rounded,
-        'colors': [
+        'colors': <Color>[
           const Color(0xFFFF512F),
           const Color(0xFFF09819),
           const Color(0xFFFF6A00)
@@ -1884,7 +1907,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'title': 'Grocery & Medicines\nAt your doorstep',
         'sub': 'Supermarkets and local pharmacies',
         'icon': Icons.shopping_basket_rounded,
-        'colors': [
+        'colors': <Color>[
           const Color(0xFF11998E),
           const Color(0xFF38EF7D),
           const Color(0xFF00B09B)
@@ -1901,7 +1924,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'title': 'Clothing, Shoes\nAnd everything else!',
         'sub': 'Local fashion and apparel stores',
         'icon': Icons.checkroom_rounded,
-        'colors': [
+        'colors': <Color>[
           const Color(0xFF0A1260),
           const Color(0xFF142999),
           const Color(0xFF1E3FD8)
@@ -2013,7 +2036,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     color: Colors.white,
                                     height: 1.15,
                                     letterSpacing: -0.3)),
-                            const SliverToBoxAdapter(child: SizedBox(height: 4)),
+                            const SizedBox(height: 4),
                             Text(s['sub'] as String,
                                 style: GoogleFonts.outfit(
                                     fontSize: 10, // Reduced from 11
