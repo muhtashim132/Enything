@@ -192,7 +192,14 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushNamedAndRemoveUntil(
+                  context, AppRoutes.roleSelect, (_) => false);
+            }
+          },
         ),
       ),
       body: Stack(

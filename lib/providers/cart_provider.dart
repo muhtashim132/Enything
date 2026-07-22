@@ -230,6 +230,10 @@ class CartProvider extends ChangeNotifier {
 
   String? addItem(ProductModel product, ShopModel shop,
       {int quantity = 1, ProductVariant? selectedVariant, bool suppressSave = false}) {
+    if (!shop.isOpenRightNow) {
+      return 'This shop is currently closed. Cannot accept orders right now.';
+    }
+
     if (totalItemCount + quantity > PaymentConfig.maxItemsPerOrder) {
       return 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
     }

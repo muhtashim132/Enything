@@ -22,10 +22,12 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
+  late FocusNode _phoneFocusNode;
 
   @override
   void initState() {
     super.initState();
+    _phoneFocusNode = FocusNode();
     _animCtrl = AnimationController(
         duration: const Duration(milliseconds: 800), vsync: this)
       ..forward();
@@ -45,6 +47,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
   void dispose() {
     _animCtrl.dispose();
     _phoneCtrl.dispose();
+    _phoneFocusNode.dispose();
     super.dispose();
   }
 
@@ -158,7 +161,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
               margin: const EdgeInsets.symmetric(horizontal: 32),
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFF141724), // Dark background matching app
+                color: const Color(0xFF1E2336), // Lighter background for better visibility
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
                   color: const Color(0xFFF4C542).withValues(alpha: 0.3),
@@ -207,28 +210,54 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  InkWell(
-                    onTap: () => Navigator.pop(context),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Ink(
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _agreedToTerms = true;
+                      });
+                      _phoneFocusNode.requestFocus();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFFD700), Color(0xFFF4A800)],
-                        ),
+                        color: Colors.white.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Got it',
-                          style: GoogleFonts.outfit(
-                            color: Colors.black,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: false,
+                              onChanged: (val) {
+                                if (val == true) {
+                                  Navigator.pop(context);
+                                  setState(() {
+                                    _agreedToTerms = true;
+                                  });
+                                  _phoneFocusNode.requestFocus();
+                                }
+                              },
+                              activeColor: const Color(0xFFF4C542),
+                              checkColor: Colors.black,
+                              side: const BorderSide(color: Colors.white54, width: 1.5),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'I agree to the Terms & Conditions',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -409,6 +438,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                                       opacity: _agreedToTerms ? 1.0 : 0.3,
                                       child: TextField(
                                         controller: _phoneCtrl,
+                                        focusNode: _phoneFocusNode,
                                         keyboardType: TextInputType.phone,
                                       maxLength: 10,
                                       inputFormatters: [
@@ -502,23 +532,26 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: Checkbox(
-                            value: _agreedToTerms,
-                            onChanged: (val) => setState(() => _agreedToTerms = val ?? false),
-                            activeColor: const Color(0xFFF4C542),
-                            checkColor: Colors.black,
-                            side: const BorderSide(color: Colors.white54, width: 1.5),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2.0),
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: _agreedToTerms,
+                              onChanged: (val) => setState(() => _agreedToTerms = val ?? false),
+                              activeColor: const Color(0xFFF4C542),
+                              checkColor: Colors.black,
+                              side: const BorderSide(color: Colors.white54, width: 1.5),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Flexible(
                           child: RichText(
-                            textAlign: TextAlign.center,
+                            textAlign: TextAlign.left,
                             text: TextSpan(
                               style: GoogleFonts.outfit(
                                 color: Colors.white54,
@@ -609,12 +642,16 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                     // Want to switch role?
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
-                      child: Text(
-                        '← Choose a different role',
-                        style: GoogleFonts.outfit(
-                          color: const Color(0xFFF4C542).withValues(alpha: 0.70),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                      child: Container(
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        child: Text(
+                          '← Choose a different role',
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFFF4C542).withValues(alpha: 0.70),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),

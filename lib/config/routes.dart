@@ -49,6 +49,8 @@ import '../pages/seller/seller_order_map_page.dart';
 import '../pages/settings/about_enything_page.dart';
 import '../pages/legal/contact_us_page.dart';
 import '../pages/customer/all_listings_page.dart';
+import '../pages/customer/category_products_page.dart';
+import '../pages/customer/all_categories_page.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -99,6 +101,8 @@ class AppRoutes {
   static const String contactUs = '/legal/contact-us';
   static const String referAndEarn = '/settings/refer-and-earn';
   static const String allListings = '/customer/all-listings';
+  static const String categoryProducts = '/customer/category-products';
+  static const String allCategories = '/customer/all-categories';
 
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
@@ -200,6 +204,11 @@ class AppRoutes {
           ), 
           routeSettings,
         );
+      case categoryProducts:
+        final args = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(CategoryProductsPage(categoryName: args?['categoryName'] ?? ''), routeSettings);
+      case allCategories:
+        return _build(const AllCategoriesPage(), routeSettings);
       case refundPolicy:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         return _build(

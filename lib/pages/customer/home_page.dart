@@ -1650,6 +1650,59 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               );
                             },
                           ),
+                          // ── "See all stores" CTA (matches old screenshot layout) ──
+                          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                          SliverToBoxAdapter(
+                            child: Center(
+                              child: OutlinedButton.icon(
+                                onPressed: () => Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.allListings,
+                                  arguments: {
+                                    'type': _isFoodTab
+                                        ? ListingType.restaurants
+                                        : ListingType.shops,
+                                    'shops': List<ShopModel>.from(_sortedNormalShops),
+                                    'sectionTitle': _selectedTabIndex < 0
+                                        ? 'All Stores Near You'
+                                        : _isFoodTab
+                                            ? 'All Restaurants'
+                                            : 'All Shops',
+                                  },
+                                ),
+                                icon: Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 16,
+                                  color: isDark ? Colors.white70 : AppColors.primary,
+                                ),
+                                iconAlignment: IconAlignment.end,
+                                label: Text(
+                                  _isFoodTab ? 'See all restaurants' : 'See all stores',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? Colors.white70 : AppColors.primary,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                                  side: BorderSide(
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.25)
+                                        : AppColors.primary.withValues(alpha: 0.4),
+                                    width: 1.5,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(32),
+                                  ),
+                                  backgroundColor: isDark
+                                      ? Colors.white.withValues(alpha: 0.05)
+                                      : AppColors.primary.withValues(alpha: 0.04),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SliverToBoxAdapter(child: SizedBox(height: 8)),
                         ] else if (!_isLoading && _selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
                           SliverToBoxAdapter(
                             child: locationProvider.hasLocation
@@ -1702,6 +1755,60 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 },
                               );
                             },
+                          ),
+                        ] else if (_shops.isNotEmpty && !_isLoading) ...[
+                          // ── "Popular in your area" empty state ──────────────
+                          // Shows when shops exist but no products returned yet.
+                          // This prevents the section from silently disappearing.
+                          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                          SliverToBoxAdapter(
+                            child: _buildSectionTitle('Popular in your area'),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 64,
+                                      height: 64,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? AppColors.primary.withValues(alpha: 0.12)
+                                            : AppColors.primary.withValues(alpha: 0.07),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Icon(
+                                        Icons.storefront_outlined,
+                                        size: 30,
+                                        color: isDark ? AppColors.primaryLight : AppColors.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'No popular items right now',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark ? Colors.white70 : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Check back soon — shops near you will list their popular items here.',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        color: isDark ? Colors.white38 : AppColors.textSecondary,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ] else if (_shops.isEmpty && (_selectedTabIndex >= 0 || _selectedFilterCategories.isNotEmpty) && !_isLoading) ...[
                           SliverToBoxAdapter(
