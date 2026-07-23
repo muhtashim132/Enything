@@ -177,6 +177,64 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   final ValueNotifier<int> _bannerIndex = ValueNotifier<int>(0);
   Timer? _bannerTimer;
   Timer? _searchDebounce;
+
+  // ── Trending Strip auto-scroll ──────────────────────────────────────────
+  final ScrollController _trendingScrollController = ScrollController();
+  Timer? _trendingScrollTimer;
+
+  // Dynamic trending keywords fetched from DB (real order data).
+  // Falls back to _staticFallbackKeywords if DB returns nothing or on error.
+  List<Map<String, dynamic>> _dynamicTrendingKeywords = [];
+
+  // Static fallback shown until/if DB data arrives or when DB is empty.
+  static const List<Map<String, dynamic>> _staticFallbackKeywords = [
+    {'label': 'Pizza', 'emoji': '🍕'},
+    {'label': 'Milk', 'emoji': '🥛'},
+    {'label': 'Burger', 'emoji': '🍔'},
+    {'label': 'Chicken', 'emoji': '🍗'},
+    {'label': 'Paracetamol', 'emoji': '💊'},
+    {'label': 'Eggs', 'emoji': '🥚'},
+    {'label': 'Bread', 'emoji': '🍞'},
+    {'label': 'Biryani', 'emoji': '🍛'},
+    {'label': 'Shoes', 'emoji': '👟'},
+    {'label': 'Mobile', 'emoji': '📱'},
+    {'label': 'Dal', 'emoji': '🫘'},
+    {'label': 'Kebab', 'emoji': '🥙'},
+  ];
+
+  // Helper: pick a relevant emoji for a product name based on keywords.
+  // Purely cosmetic — no logic impact.
+  static String _emojiForKeyword(String label) {
+    final l = label.toLowerCase();
+    if (l.contains('pizza'))        return '🍕';
+    if (l.contains('burger'))       return '🍔';
+    if (l.contains('chicken'))      return '🍗';
+    if (l.contains('milk'))         return '🥛';
+    if (l.contains('egg'))          return '🥚';
+    if (l.contains('bread'))        return '🍞';
+    if (l.contains('biryani') || l.contains('rice')) return '🍛';
+    if (l.contains('dal')  || l.contains('daal'))    return '🫘';
+    if (l.contains('kebab') || l.contains('kabab'))  return '🥙';
+    if (l.contains('tea')  || l.contains('chai'))    return '🍵';
+    if (l.contains('coffee'))       return '☕';
+    if (l.contains('juice'))        return '🍹';
+    if (l.contains('water'))        return '💧';
+    if (l.contains('fish'))         return '🐟';
+    if (l.contains('mutton') || l.contains('lamb')) return '🥩';
+    if (l.contains('paneer'))       return '🧀';
+    if (l.contains('roti') || l.contains('naan') || l.contains('paratha')) return '🫓';
+    if (l.contains('cake') || l.contains('sweet') || l.contains('mithai')) return '🎂';
+    if (l.contains('medicine') || l.contains('tablet') || l.contains('capsule') ||
+        l.contains('syrup') || l.contains('paracetamol')) return '💊';
+    if (l.contains('shoe') || l.contains('sandal')) return '👟';
+    if (l.contains('mobile') || l.contains('phone')) return '📱';
+    if (l.contains('shirt') || l.contains('cloth') || l.contains('dress')) return '👕';
+    if (l.contains('soap') || l.contains('shampoo') || l.contains('cream')) return '🧴';
+    if (l.contains('fruit') || l.contains('apple') || l.contains('mango')) return '🍎';
+    if (l.contains('veg') || l.contains('sabzi'))   return '🥬';
+    if (l.contains('ice cream') || l.contains('icecream')) return '🍨';
+    return '🛒'; // default: shopping bag
+  }
   bool _pendingLocationUpdate = false;
 
   /// True when a food-type tab is currently selected.
@@ -239,6 +297,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         curve: Curves.easeOutCubic,
       );
     });
+    // Auto-scroll trending strip + fetch real trending keywords
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startTrendingScroll();
+      _loadTrendingKeywords(); // fetch real trending from DB (additive, no SQL change)
+    });
     // Fetch favorites, saved address, and subscription state
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
@@ -248,6 +311,72 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         context.read<ReferralProvider>().init(auth.currentUserId!);
       }
     });
+  }
+
+  void _startTrendingScroll() {
+    _trendingScrollTimer?.cancel();
+    // Slowly auto-scroll the trending strip, wrap around when reaching end
+    _trendingScrollTimer = Timer.periodic(const Duration(milliseconds: 30), (_) {
+      if (!mounted || !_trendingScrollController.hasClients) return;
+      final max = _trendingScrollController.position.maxScrollExtent;
+      if (max <= 0) return;
+      final current = _trendingScrollController.offset;
+      if (current >= max) {
+        // Jump silently back to start for infinite loop effect
+        _trendingScrollController.jumpTo(0);
+      } else {
+        _trendingScrollController.jumpTo(current + 0.6);
+      }
+    });
+  }
+
+  /// Fetches real trending product names from DB (last 30 days, delivered orders).
+  /// Purely additive — new read-only RPC, zero changes to existing SQL logic.
+  /// On error or empty result, falls back to the static curated list.
+  Future<void> _loadTrendingKeywords() async {
+    try {
+      final response = await _supabase
+          .rpc('get_trending_keywords', params: {'p_limit': 12});
+
+      if (!mounted) return;
+
+      final rows = response as List?;
+      if (rows == null || rows.isEmpty) {
+        // No orders yet (fresh DB) — keep static fallback, do nothing
+        return;
+      }
+
+      final fetched = rows
+          .map((row) {
+            final keyword = (row['keyword'] as String? ?? '').trim();
+            if (keyword.isEmpty) return null;
+            return {
+              'label': keyword,
+              'emoji': _emojiForKeyword(keyword),
+            };
+          })
+          .whereType<Map<String, dynamic>>()
+          .toList();
+
+      if (fetched.length < 3) {
+        // Too few results (< 3) — not enough to make a good strip, keep fallback
+        return;
+      }
+
+      // Re-start the scroll from position 0 so it doesn't jump mid-way
+      if (mounted) {
+        setState(() => _dynamicTrendingKeywords = fetched);
+        // Reset scroll position so the new list starts from the beginning
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_trendingScrollController.hasClients) {
+            _trendingScrollController.jumpTo(0);
+          }
+        });
+      }
+    } catch (e) {
+      // Network error or RPC not yet deployed — silently use fallback, no crash
+      debugPrint('[Trending] Failed to load trending keywords: $e');
+    }
   }
 
 
@@ -366,6 +495,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _bannerTimer?.cancel();
     _locationDebounceTimer?.cancel();
     _searchDebounce?.cancel();
+    _trendingScrollTimer?.cancel();
+    _trendingScrollController.dispose();
     // Remove live location listener to avoid memory leaks
     _locationProvider?.removeListener(_onLocationChanged);
     _searchController.dispose();
@@ -1174,119 +1305,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             ),
           ),
 
-          // ── Categories Horizontal List (premium card style) ──────────────────
+          // ── Trending Now Auto-Marquee Strip ──────────────────────────────────
           if (_searchQuery.isEmpty && _selectedTabIndex < 0 && _selectedFilterCategories.isEmpty)
             SliverToBoxAdapter(
-            child: SizedBox(
-              height: 72,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _categories.length,
-                itemBuilder: (context, index) {
-                  final cat = _categories[index];
-                  final isSelected = _selectedTabIndex == index;
-                  final grad = cat['grad'] as List<Color>;
-                  return GestureDetector(
-                    onTap: () {
-                      if (_selectedTabIndex == index) {
-                        setState(() => _selectedTabIndex = -1);
-                        _loadAllData();
-                      } else {
-                        setState(() => _selectedTabIndex = index);
-                        _loadData(cat['name']);
-                      }
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 280),
-                      curve: Curves.easeOutCubic,
-                      margin: const EdgeInsets.only(right: 10, top: 6, bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        gradient: isSelected
-                            ? LinearGradient(
-                                colors: grad,
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight)
-                            : null,
-                        color: isSelected
-                            ? Colors.transparent
-                            : (isDark
-                                ? const Color(0xFF1A1D30)
-                                : Colors.white),
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                    color: grad.first.withValues(alpha: 0.45),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 5))
-                              ]
-                            : [
-                                BoxShadow(
-                                    color: isDark
-                                        ? Colors.black.withValues(alpha: 0.3)
-                                        : Colors.black.withValues(alpha: 0.06),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4))
-                              ],
-                        border: isSelected
-                            ? null
-                            : Border.all(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.08)
-                                    : Colors.grey.shade100),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedScale(
-                            scale: isSelected ? 1.15 : 1.0,
-                            duration: const Duration(milliseconds: 280),
-                            child: Text(
-                              cat['emoji'],
-                              style: TextStyle(fontSize: isSelected ? 22 : 19),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                cat['name'],
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w900
-                                      : FontWeight.w700,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : (isDark
-                                          ? Colors.white70
-                                          : const Color(0xFF2D3748)),
-                                ),
-                              ),
-                              if (isSelected)
-                                Container(
-                                  margin: const EdgeInsets.only(top: 2),
-                                  height: 2,
-                                  width: 20,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                    borderRadius: BorderRadius.circular(1),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
+              child: _buildTrendingStrip(isDark),
             ),
-          ),
 
           // ── Search Filter Bar (visible during search only) ───────────
           if (_searchQuery.isNotEmpty)
@@ -1548,6 +1571,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           const SliverToBoxAdapter(child: SizedBox(height: 24)),
                         ],
 
+                        // ── Explore Categories ─────────────────────────────────
+                        // Shown FIRST so users can orient themselves immediately.
+                        // Always visible when no search + no filter chip active.
+                        if (_searchQuery.isEmpty && _selectedFilterCategories.isEmpty)
+                          SliverToBoxAdapter(
+                            child: _buildCategorySection(isDark),
+                          ),
+
                         // ── Recently Viewed ─────────────────────────────
                         if (_selectedTabIndex < 0 && _selectedFilterCategories.isEmpty)
                           SliverToBoxAdapter(
@@ -1604,34 +1635,24 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           SliverToBoxAdapter(
                             child: _buildSectionTitle(
                               _selectedTabIndex < 0
-                                  ? 'All stores near you'
+                                  ? 'Stores near you'
                                   : _isFoodTab
                                       ? 'Restaurants near you'
                                       : 'Shops near you',
                               subtitle: '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
                               count: _shops.length,
-                              onSeeAllTap: () => Navigator.pushNamed(
-                                        context,
-                                        AppRoutes.allListings,
-                                        arguments: {
-                                          'type': _isFoodTab
-                                              ? ListingType.restaurants
-                                              : ListingType.shops,
-                                          'shops': List<ShopModel>.from(_sortedNormalShops),
-                                          'sectionTitle': _selectedTabIndex < 0
-                                              ? 'All Stores Near You'
-                                              : _isFoodTab
-                                                  ? 'All Restaurants'
-                                                  : 'All Shops',
-                                        },
-                                      ),
                             ),
                           ),
                           const SliverToBoxAdapter(child: SizedBox(height: 16)),
                           SliverLayoutBuilder(
                             builder: (context, constraints) {
                               final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 1, tablet: 2, desktop: 3);
-                              final displayShops = _sortedNormalShops.take(_shopsDisplayLimit).toList();
+                              List<ShopModel> displayShops;
+                              if (_selectedTabIndex < 0) {
+                                displayShops = _getTop4DiverseShops(_sortedNormalShops);
+                              } else {
+                                displayShops = _sortedNormalShops.take(_shopsDisplayLimit).toList();
+                              }
                               return SliverGrid.builder(
                                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: crossAxisCount,
@@ -1650,12 +1671,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               );
                             },
                           ),
-                          // ── "See all stores" CTA (matches old screenshot layout) ──
-                          const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                          SliverToBoxAdapter(
-                            child: Center(
-                              child: OutlinedButton.icon(
-                                onPressed: () => Navigator.pushNamed(
+                          // ── Professional "See all" button ──
+                          if (_sortedNormalShops.isNotEmpty) ...[
+                            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                            SliverToBoxAdapter(
+                              child: _buildModernSeeAllButton(
+                                context,
+                                label: _isFoodTab ? 'See all restaurants' : 'See all stores',
+                                onTap: () => Navigator.pushNamed(
                                   context,
                                   AppRoutes.allListings,
                                   arguments: {
@@ -1664,45 +1687,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                         : ListingType.shops,
                                     'shops': List<ShopModel>.from(_sortedNormalShops),
                                     'sectionTitle': _selectedTabIndex < 0
-                                        ? 'All Stores Near You'
+                                        ? 'Stores Near You'
                                         : _isFoodTab
                                             ? 'All Restaurants'
                                             : 'All Shops',
                                   },
                                 ),
-                                icon: Icon(
-                                  Icons.arrow_forward_rounded,
-                                  size: 16,
-                                  color: isDark ? Colors.white70 : AppColors.primary,
-                                ),
-                                iconAlignment: IconAlignment.end,
-                                label: Text(
-                                  _isFoodTab ? 'See all restaurants' : 'See all stores',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: isDark ? Colors.white70 : AppColors.primary,
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                                  side: BorderSide(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.25)
-                                        : AppColors.primary.withValues(alpha: 0.4),
-                                    width: 1.5,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(32),
-                                  ),
-                                  backgroundColor: isDark
-                                      ? Colors.white.withValues(alpha: 0.05)
-                                      : AppColors.primary.withValues(alpha: 0.04),
-                                ),
+                                isDark: isDark,
                               ),
                             ),
-                          ),
-                          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                          ],
                         ] else if (!_isLoading && _selectedTabIndex < 0 && _selectedFilterCategories.isEmpty) ...[
                           SliverToBoxAdapter(
                             child: locationProvider.hasLocation
@@ -1715,19 +1710,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         if (_products.isNotEmpty) ...[
                           const SliverToBoxAdapter(child: SizedBox(height: 8)),
                           SliverToBoxAdapter(
-                            child: _buildSectionTitle(
-                              'Popular in your area',
-                              onSeeAllTap: () => Navigator.pushNamed(
-                                        context,
-                                        AppRoutes.allListings,
-                                        arguments: {
-                                          'type': ListingType.products,
-                                          'products': List<ProductModel>.from(_sortedNormalProducts),
-                                          'productShops': Map<String, ShopModel>.from(_productShops),
-                                          'sectionTitle': 'Popular in Your Area',
-                                        },
-                                      ),
-                            ),
+                            child: _buildSectionTitle('Popular in your area'),
                           ),
                           const SliverToBoxAdapter(child: SizedBox(height: 16)),
                           SliverLayoutBuilder(
@@ -1756,6 +1739,26 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               );
                             },
                           ),
+                          if (_sortedNormalProducts.isNotEmpty) ...[
+                            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                            SliverToBoxAdapter(
+                              child: _buildModernSeeAllButton(
+                                context,
+                                label: 'See all popular items',
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.allListings,
+                                  arguments: {
+                                    'type': ListingType.products,
+                                    'products': List<ProductModel>.from(_sortedNormalProducts),
+                                    'productShops': Map<String, ShopModel>.from(_productShops),
+                                    'sectionTitle': 'Popular in Your Area',
+                                  },
+                                ),
+                                isDark: isDark,
+                              ),
+                            ),
+                          ],
                         ] else if (_shops.isNotEmpty && !_isLoading) ...[
                           // ── "Popular in your area" empty state ──────────────
                           // Shows when shops exist but no products returned yet.
@@ -2357,6 +2360,96 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     );
   }
 
+  List<ShopModel> _getTop4DiverseShops(List<ShopModel> allShops) {
+    if (allShops.isEmpty) return [];
+
+    final sortedByRating = List<ShopModel>.from(allShops)
+      ..sort((a, b) => b.rating.compareTo(a.rating));
+
+    ShopModel? restaurant;
+    ShopModel? grocery;
+    ShopModel? clothing;
+    ShopModel? pharmacy;
+
+    final remaining = <ShopModel>[];
+
+    for (final shop in sortedByRating) {
+      final group = AppCategories.groupFor(shop.category);
+      final catLower = shop.category.toLowerCase();
+
+      if (restaurant == null && group == CategoryGroup.food) {
+        restaurant = shop;
+      } else if (grocery == null &&
+          (group == CategoryGroup.perishable ||
+              catLower.contains('grocery') ||
+              catLower.contains('supermarket'))) {
+        grocery = shop;
+      } else if (clothing == null && catLower.contains('clothing')) {
+        clothing = shop;
+      } else if (pharmacy == null && group == CategoryGroup.pharmacy) {
+        pharmacy = shop;
+      } else {
+        remaining.add(shop);
+      }
+    }
+
+    final selected = <ShopModel>[];
+    if (restaurant != null) selected.add(restaurant);
+    if (grocery != null) selected.add(grocery);
+    if (clothing != null) selected.add(clothing);
+    if (pharmacy != null) selected.add(pharmacy);
+
+    for (final shop in remaining) {
+      if (selected.length >= 4) break;
+      selected.add(shop);
+    }
+
+    return selected;
+  }
+
+  Widget _buildModernSeeAllButton(BuildContext context, {required String label, required VoidCallback onTap, required bool isDark}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withValues(alpha: 0.05) : AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? Colors.white.withValues(alpha: 0.1) : AppColors.primary.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 20,
+                  color: isDark ? Colors.white : AppColors.primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNoShopsNearby() {
     return Center(
       child: Padding(
@@ -2364,7 +2457,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         child: Column(
           children: [
             const Text('🏪', style: TextStyle(fontSize: 64)),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            const SizedBox(height: 16),
             Text(
               'No shops nearby',
               style:
@@ -2666,6 +2759,358 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       backgroundColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade100,
       labelStyle: TextStyle(color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black)),
       side: BorderSide(color: isSelected ? AppColors.primary : Colors.transparent),
+    );
+  }
+
+  // ── Trending Now Auto-Marquee Strip ──────────────────────────────────────────
+  // Purely additive UI — no SQL, no new state, reuses existing _searchShops().
+  Widget _buildTrendingStrip(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF512F), Color(0xFFF09819)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('🔥', style: TextStyle(fontSize: 11)),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Trending',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Tap to search instantly',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Builder(builder: (context) {
+            // Active list: DB-fetched trending OR static fallback if DB empty/error
+            final activeKeywords = _dynamicTrendingKeywords.isNotEmpty
+                ? _dynamicTrendingKeywords
+                : _staticFallbackKeywords;
+            return SizedBox(
+              height: 36,
+              child: ListView.builder(
+                controller: _trendingScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                // Duplicate list for infinite loop illusion
+                itemCount: activeKeywords.length * 2,
+                itemBuilder: (context, index) {
+                  final kw = activeKeywords[index % activeKeywords.length];
+                  final label = kw['label'] as String;
+                  final emoji = kw['emoji'] as String;
+                  return GestureDetector(
+                    onTap: () {
+                      // Pause auto-scroll temporarily so user can see result
+                      _trendingScrollTimer?.cancel();
+                      _searchController.text = label;
+                      _searchShops(label);
+                      // Resume after 5 seconds
+                      Future.delayed(const Duration(seconds: 5), () {
+                        if (mounted) _startTrendingScroll();
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF1E2035)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.grey.shade200,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isDark
+                                ? Colors.black.withValues(alpha: 0.25)
+                                : Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(emoji, style: const TextStyle(fontSize: 13)),
+                          const SizedBox(width: 5),
+                          Text(
+                            label,
+                            style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white70 : const Color(0xFF2D3748),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ── Shop by Category Section ────────────────────────────────────────────────
+  // 5 main categories + a "See More" card, horizontally swipable.
+  // Tap: filter home page in-place (same logic as old upper chips).
+  // Long-press: navigate to dedicated CategoryProductsPage.
+  Widget _buildCategorySection(bool isDark) {
+    // First 5 entries from the already-existing _categories list
+    final mainCats = _categories.take(5).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(
+          'Explore Categories',
+          subtitle: _selectedTabIndex >= 0
+              ? 'Tap again to clear filter'
+              : 'Tap to filter • Long-press to browse',
+          onSeeAllTap: () => Navigator.pushNamed(context, AppRoutes.allCategories),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 108,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.only(left: 2, right: 2),
+            // +1 for the "See More" card
+            itemCount: mainCats.length + 1,
+            itemBuilder: (context, index) {
+              // ── "See More" card (last item) ────────────────────────────────
+              if (index == mainCats.length) {
+                return GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, AppRoutes.allCategories),
+                  child: Container(
+                    width: 88,
+                    margin: const EdgeInsets.only(right: 10, top: 2, bottom: 2),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF1A1D30)
+                          : const Color(0xFFF3F4FF),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.10)
+                            : AppColors.primary.withValues(alpha: 0.18),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.28)
+                              : AppColors.primary.withValues(alpha: 0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.10),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.grid_view_rounded,
+                            size: 18,
+                            color: isDark ? AppColors.primaryLight : AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'See More',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.primaryLight : AppColors.primary,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              // ── Main category card ─────────────────────────────────────────
+              final cat = mainCats[index];
+              final grad = cat['grad'] as List<Color>;
+              final catName = cat['name'] as String;
+              final emoji = cat['emoji'] as String;
+              final isSelected = _selectedTabIndex == index;
+
+              return GestureDetector(
+                // Tap: filter home page in-place (same exact logic as old upper chips)
+                onTap: () {
+                  if (_selectedTabIndex == index) {
+                    // Toggle off: already selected → reset to all
+                    setState(() => _selectedTabIndex = -1);
+                    _loadAllData();
+                  } else {
+                    // Select: filter by this category
+                    setState(() => _selectedTabIndex = index);
+                    _loadData(catName);
+                  }
+                },
+                // Long-press: navigate to dedicated full category page
+                onLongPress: () {
+                  Navigator.pushNamed(
+                    context,
+                    AppRoutes.categoryProducts,
+                    arguments: {'categoryName': catName},
+                  );
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  width: isSelected ? 96 : 88,
+                  margin: const EdgeInsets.only(right: 10, top: 2, bottom: 2),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: grad,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    // Selected state: brighter glow + white border ring
+                    boxShadow: [
+                      BoxShadow(
+                        color: isSelected
+                            ? grad.first.withValues(alpha: 0.60)
+                            : grad.first.withValues(alpha: 0.30),
+                        blurRadius: isSelected ? 18 : 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: isSelected
+                        ? Border.all(
+                            color: Colors.white.withValues(alpha: 0.70),
+                            width: 2.5,
+                          )
+                        : null,
+                  ),
+                  child: Stack(
+                    children: [
+                      // Subtle decorative circle top-right
+                      Positioned(
+                        right: -8,
+                        top: -8,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: isSelected ? 0.20 : 0.12),
+                          ),
+                        ),
+                      ),
+                      // Selected checkmark badge
+                      if (isSelected)
+                        Positioned(
+                          top: 5,
+                          left: 5,
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.90),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.check_rounded,
+                              size: 12,
+                              color: grad.first,
+                            ),
+                          ),
+                        ),
+                      // Content — CENTERED
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 12, 6, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            AnimatedScale(
+                              scale: isSelected ? 1.12 : 1.0,
+                              duration: const Duration(milliseconds: 250),
+                              child: Text(
+                                emoji,
+                                style: TextStyle(
+                                  fontSize: isSelected ? 30 : 28,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            Text(
+                              catName,
+                              style: GoogleFonts.outfit(
+                                fontSize: 11.5,
+                                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w800,
+                                color: Colors.white,
+                                height: 1.2,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }

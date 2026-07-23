@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -107,7 +106,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           });
         }
       }
-    } catch (e, st) {
+    } catch (e) {
       debugPrint('CategoryProductsPage Error: $e');
       if (mounted) {
         setState(() {

@@ -123,16 +123,30 @@ class AllCategoriesPage extends StatelessWidget {
                           ),
                         ),
                       ),
+                      Positioned(
+                        left: -14,
+                        bottom: -14,
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.07),
+                          ),
+                        ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.all(20),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               cat['emoji'] as String,
-                              style: const TextStyle(fontSize: 40),
+                              style: const TextStyle(fontSize: 44),
+                              textAlign: TextAlign.center,
                             ),
-                            const Spacer(),
+                            const SizedBox(height: 12),
                             Text(
                               cat['name'] as String,
                               style: GoogleFonts.outfit(
@@ -140,8 +154,9 @@ class AllCategoriesPage extends StatelessWidget {
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
                               ),
+                              textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Text(
                               cat['desc'] as String,
                               style: GoogleFonts.outfit(
@@ -151,6 +166,7 @@ class AllCategoriesPage extends StatelessWidget {
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
                             ),
                           ],
                         ),

@@ -115,6 +115,11 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
       final userId = context.read<AuthProvider>().currentUserId;
       if (userId == null) throw Exception('User not logged in');
 
+      // Cache route args before async gaps to avoid BuildContext-across-await lint
+      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final shopId = args?['shop_id'] as String?;
+      if (shopId == null) throw Exception('Shop ID not provided. Please restart the app.');
+
       // Upload Images
       final aadharFrontUrl =
           await _uploadFile(_aadharFront!, '${userId}_aadhar_front');
@@ -137,10 +142,6 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
         if (shopProof2Url != null) 'shop_proof_2': shopProof2Url,
         'bank_proof': bankProofUrl,
       };
-
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      final shopId = args?['shop_id'] as String?;
-      if (shopId == null) throw Exception('Shop ID not provided. Please restart the app.');
 
       // Update Shops Table via RPC
       await _db.rpc('submit_seller_kyc_v2', params: {
