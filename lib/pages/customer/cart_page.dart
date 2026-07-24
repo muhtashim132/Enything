@@ -478,14 +478,14 @@ class CartPage extends StatelessWidget {
                   ? () {
                       final auth = context.read<AuthProvider>();
                       final uniqueShops = cart.items.map((i) => i.shop.id).toSet();
-                      if (uniqueShops.length > 1) {
+                      if (uniqueShops.length > 3) {
                         showDialog(
                           context: context,
                           builder: (ctx) => AlertDialog(
                             backgroundColor: const Color(0xFF1E1E2C),
-                            title: const Text('Multiple Shops Detected', style: TextStyle(color: Colors.white)),
+                            title: const Text('Maximum Shops Exceeded', style: TextStyle(color: Colors.white)),
                             content: const SingleChildScrollView(
-                              child: Text('To ensure fast and reliable delivery, you can only order from one shop at a time. Please remove items from other shops to proceed.', style: TextStyle(color: Colors.white70)),
+                              child: Text('To ensure fast and reliable delivery, you can order from a maximum of 3 shops at a time. Please remove items from other shops to proceed.', style: TextStyle(color: Colors.white70)),
                             ),
                             actions: [
                               TextButton(

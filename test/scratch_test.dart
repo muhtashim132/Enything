@@ -35,8 +35,9 @@ Future<void> main() async {
   await client.rpc('place_orders_transaction', params: {
     'p_orders': [{
       'id': orderId, 'shop_id': shopId, 'customer_id': customerId, 'status': 'awaiting_acceptance',
-      'total_amount': 100.0, 'payment_status': 'pending', 'payment_method': 'cod', 'grand_total_collected': 100.0,
-      'delivery_charges': 0.0, 'platform_fee': 0.0, 'small_cart_fee': 0.0, 'heavy_order_fee': 0.0, 'coupon_discount': 0.0
+      'total_amount': 200.0, 'payment_status': 'pending', 'payment_method': 'cod', 'grand_total_collected': 230.0,
+      'delivery_charges': 10.0, 'platform_fee': 20.0, 'small_cart_fee': 0.0, 'heavy_order_fee': 0.0, 'coupon_discount': 0.0,
+      'estimated_distance_km': 1.0
     }],
     'p_items': [{
       'id': const Uuid().v4(), 'order_id': orderId, 'product_id': productId, 'quantity': 2, 'price': 100.0

@@ -3070,8 +3070,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           ),
                         ),
                       // Content — CENTERED
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(6, 12, 6, 10),
+                      Positioned.fill(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(6, 12, 6, 10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3101,6 +3102,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             ),
                           ],
                         ),
+                      ),
                       ),
                     ],
                   ),
