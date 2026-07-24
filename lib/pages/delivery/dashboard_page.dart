@@ -13,6 +13,7 @@ import 'package:uuid/uuid.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../models/order_model.dart';
 import '../../models/shop_model.dart';
 import '../../theme/app_colors.dart';
@@ -58,7 +59,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   double _maxRadiusKm = 15.0;
 
   // shopId → {lat, lng, name} resolved from joined shop data in available orders
-  final Map<String, ({double lat, double lng, String name})> _shopInfoCache = {};
+  final Map<String, ({double lat, double lng, String name})> _shopInfoCache =
+      {};
 
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
@@ -108,7 +110,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (userId != null) {
         final notifProvider = context.read<NotificationProvider>();
         notifProvider.listenAsDelivery(userId);
-        notifProvider.registerFcmToken(userId, 'delivery_partner'); // Register push token
+        notifProvider.registerFcmToken(
+            userId, 'delivery_partner'); // Register push token
         _setupRealtimeChannel(userId);
       }
 
@@ -116,7 +119,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _fcmForegroundSub = FirebaseMessaging.onMessage.listen((_) {
         if (mounted) _debouncedLoadOrders();
       });
-      
+
       _startPollingTimer();
     });
   }
@@ -127,67 +130,73 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     // clean up stale (claimed/cancelled) orders from the UI.
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted && _isOnline && !_isOrdersLoadInProgress) {
-         _debouncedLoadOrders();
+        _debouncedLoadOrders();
       }
     });
   }
 
   void _setupRealtimeChannel(String userId) {
-      if (_realtimeChannel != null) {
-        _supabase.removeChannel(_realtimeChannel!);
-      }
-      // A1 FIX: Realtime Global Firehose & DB DDOS Vulnerability
-      // We removed the global `insert` and unfiltered `update` listeners.
-      // Previously, every order placed globally triggered EVERY rider globally to 
-      // simultaneously execute `get_nearby_unassigned_orders`, causing massive DDOS spikes.
-      // Now, new orders are efficiently pushed via geographically-filtered FCM notifications
-      // (which trigger `_debouncedLoadOrders` via `_fcmForegroundSub`), and stale orders 
-      // are cleaned up by the lightweight 30-second polling timer.
-      // We ONLY keep the strict Realtime listener for the rider's OWN actively assigned orders.
-      _realtimeChannel = _supabase
-          .channel('delivery-orders-$userId')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'orders',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'delivery_partner_id',
-              value: userId,
-            ),
-            callback: (payload) {
-              if (mounted) {
-                final oldRec = payload.oldRecord;
-                final newRec = payload.newRecord;
-                if (oldRec['status'] != newRec['status']) {
-                  final newStatus = newRec['status'];
-                  if (newStatus == 'seller_accepted' || newStatus == 'confirmed') {
-                    _debouncedLoadOrders();
-                  } else if (newStatus == 'cancelled' || newStatus == 'delivered') {
-                    _debouncedLoadOrders();
-                  }
-                  
-                  if (newStatus == 'confirmed') {
-                    _showSnack('💳 Payment Confirmed! Head to the shop.', isError: false);
-                  } else if (newStatus == 'preparing') {
-                    _showSnack('👨‍🍳 A shop started preparing an order!', isError: false);
-                  } else if (newStatus == 'ready_for_pickup') {
-                    _showSnack('📦 An order is ready for pickup!', isError: false);
-                  }
+    if (_realtimeChannel != null) {
+      _supabase.removeChannel(_realtimeChannel!);
+    }
+    // A1 FIX: Realtime Global Firehose & DB DDOS Vulnerability
+    // We removed the global `insert` and unfiltered `update` listeners.
+    // Previously, every order placed globally triggered EVERY rider globally to
+    // simultaneously execute `get_nearby_unassigned_orders`, causing massive DDOS spikes.
+    // Now, new orders are efficiently pushed via geographically-filtered FCM notifications
+    // (which trigger `_debouncedLoadOrders` via `_fcmForegroundSub`), and stale orders
+    // are cleaned up by the lightweight 30-second polling timer.
+    // We ONLY keep the strict Realtime listener for the rider's OWN actively assigned orders.
+    _realtimeChannel = _supabase
+        .channel('delivery-orders-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'delivery_partner_id',
+            value: userId,
+          ),
+          callback: (payload) {
+            if (mounted) {
+              final oldRec = payload.oldRecord;
+              final newRec = payload.newRecord;
+              if (oldRec['status'] != newRec['status']) {
+                final newStatus = newRec['status'];
+                if (newStatus == 'seller_accepted' ||
+                    newStatus == 'confirmed') {
+                  _debouncedLoadOrders();
+                } else if (newStatus == 'cancelled' ||
+                    newStatus == 'delivered') {
+                  _debouncedLoadOrders();
                 }
-                _loadOrders();
+
+                if (newStatus == 'confirmed') {
+                  _showSnack('💳 Payment Confirmed! Head to the shop.',
+                      isError: false);
+                } else if (newStatus == 'preparing') {
+                  _showSnack('👨‍🍳 A shop started preparing an order!',
+                      isError: false);
+                } else if (newStatus == 'ready_for_pickup') {
+                  _showSnack('📦 An order is ready for pickup!',
+                      isError: false);
+                }
               }
-            },
-          )
-          .subscribe((status, [error]) {
-            if (status == RealtimeSubscribeStatus.closed || status == RealtimeSubscribeStatus.channelError) {
-              Future.delayed(const Duration(seconds: 5), () {
-                if (mounted && _isOnline) {
-                  _setupRealtimeChannel(userId);
-                }
-              });
+              _loadOrders();
             }
-          });
+          },
+        )
+        .subscribe((status, [error]) {
+      if (status == RealtimeSubscribeStatus.closed ||
+          status == RealtimeSubscribeStatus.channelError) {
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted && _isOnline) {
+            _setupRealtimeChannel(userId);
+          }
+        });
+      }
+    });
   }
 
   Timer? _pollingTimer;
@@ -222,7 +231,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         RiderBackgroundService.instance.stopService();
       }
     } else if (state == AppLifecycleState.paused ||
-               state == AppLifecycleState.detached) {
+        state == AppLifecycleState.detached) {
       // App went to background / screen locked — start background service
       // so GPS keeps updating for the customer map even when screen is off.
       if (_isOnline) {
@@ -243,11 +252,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
     if (url.isEmpty || anonKey.isEmpty) {
-      debugPrint('[Dashboard] Cannot start background service: missing Supabase env vars');
+      debugPrint(
+          '[Dashboard] Cannot start background service: missing Supabase env vars');
       return;
     }
     if (_bgTrackingSecret == null) {
-      debugPrint('[Dashboard] Cannot start background service: missing tracking secret');
+      debugPrint(
+          '[Dashboard] Cannot start background service: missing tracking secret');
       return;
     }
     RiderBackgroundService.instance.startService(
@@ -269,12 +280,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _stopLocationBroadcast();
       return;
     }
-    
+
     // Dynamic interval: 10s if active on orders, 30s if idle
     final bool isActiveDelivery = _myGroups.isNotEmpty;
     final int intervalSeconds = isActiveDelivery ? 10 : 30;
 
-    _locationBroadcastTimer = Timer(Duration(seconds: intervalSeconds), () async {
+    _locationBroadcastTimer =
+        Timer(Duration(seconds: intervalSeconds), () async {
       await _broadcastLocationRoutine();
       _scheduleNextBroadcast();
     });
@@ -285,39 +297,49 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _stopLocationBroadcast();
       return;
     }
-      await _fetchRiderLocation();
-      if (_riderLat == null || _riderLng == null) return;
-      
-      // Update the delivery partner's current location via RPC
+    await _fetchRiderLocation();
+    if (_riderLat == null || _riderLng == null) return;
+
+    // Update the delivery partner's current location via RPC
+    try {
+      await _supabase.rpc('update_rider_location', params: {
+        'p_lat': _riderLat,
+        'p_lng': _riderLng,
+      });
+    } catch (e) {
+      debugPrint('Failed to update delivery partner location: $e');
+    }
+
+    // Also update orders that the rider is actively handling
+    // BUG-GPS2 FIX: Include 'awaiting_payment' so the rider's location keeps
+    // updating while the customer is completing payment. Without it, the rider
+    // marker on the customer's map would freeze during the 10-minute payment window.
+    final activeStatuses = [
+      'awaiting_payment',
+      'confirmed',
+      'preparing',
+      'ready_for_pickup',
+      'picked_up',
+      'out_for_delivery'
+    ];
+
+    final activeOrders = _myGroups
+        .expand((g) => g.orders)
+        .where((o) => activeStatuses.contains(o.status))
+        .toList();
+
+    final activeOrderIds = activeOrders.map((o) => o.id).toList();
+    if (activeOrderIds.isNotEmpty) {
       try {
-        await _supabase.rpc('update_rider_location', params: {
+        await _supabase.rpc('update_rider_order_location', params: {
+          'p_order_ids': activeOrderIds,
           'p_lat': _riderLat,
           'p_lng': _riderLng,
         });
       } catch (e) {
-        debugPrint('Failed to update delivery partner location: $e');
+        debugPrint('Location broadcast error: $e');
       }
-
-      // Also update orders that the rider is actively handling
-      // BUG-GPS2 FIX: Include 'awaiting_payment' so the rider's location keeps
-      // updating while the customer is completing payment. Without it, the rider
-      // marker on the customer's map would freeze during the 10-minute payment window.
-      final activeStatuses = ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'];
-
-      final activeOrders = _myGroups.expand((g) => g.orders).where((o) => activeStatuses.contains(o.status)).toList();
-      
-      final activeOrderIds = activeOrders.map((o) => o.id).toList();
-      if (activeOrderIds.isNotEmpty) {
-        try {
-          await _supabase.rpc('update_rider_order_location', params: {
-            'p_order_ids': activeOrderIds,
-            'p_lat': _riderLat,
-            'p_lng': _riderLng,
-          });
-        } catch (e) {
-          debugPrint('Location broadcast error: $e');
-        }
-      }
+    }
   }
 
   void _stopLocationBroadcast() {
@@ -401,14 +423,19 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (auth.currentUserId != null) {
         final partnerResp = await _supabase
             .from('delivery_partners')
-            .select('is_active, is_accepting_orders, preferred_nav_app, vehicle_type, bg_tracking_secret')
+            .select(
+                'is_active, is_accepting_orders, preferred_nav_app, vehicle_type, bg_tracking_secret')
             .eq('id', auth.currentUserId!)
             .maybeSingle();
         if (partnerResp != null) {
-          if (partnerResp['is_accepting_orders'] != null) _isOnline = partnerResp['is_accepting_orders'] as bool;
-          if (partnerResp['preferred_nav_app'] != null) _navApp = partnerResp['preferred_nav_app'] as String;
-          if (partnerResp['vehicle_type'] != null) _vehicleType = partnerResp['vehicle_type'] as String;
-          if (partnerResp['bg_tracking_secret'] != null) _bgTrackingSecret = partnerResp['bg_tracking_secret'] as String;
+          if (partnerResp['is_accepting_orders'] != null)
+            _isOnline = partnerResp['is_accepting_orders'] as bool;
+          if (partnerResp['preferred_nav_app'] != null)
+            _navApp = partnerResp['preferred_nav_app'] as String;
+          if (partnerResp['vehicle_type'] != null)
+            _vehicleType = partnerResp['vehicle_type'] as String;
+          if (partnerResp['bg_tracking_secret'] != null)
+            _bgTrackingSecret = partnerResp['bg_tracking_secret'] as String;
         }
       }
 
@@ -416,29 +443,22 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       // 'confirmed'/'preparing'/'ready_for_pickup' with delivery_partner_id IS NULL
       // are theoretically impossible, but including them caused orphaned orders to
       // appear in the available list with no way to accept (RPC blocks it).
-      // BUG-8 FIX: Fetch configurable notification radius from platform_config.
+      // BUG-8 FIX: Fetch configurable notification radius synchronously from platform_config_provider.
       try {
-        final radiusResp = await _supabase
-            .from('platform_config')
-            .select('value')
-            .eq('key', 'rider_notification_radius_km')
-            .maybeSingle();
-        if (radiusResp != null && radiusResp['value'] != null) {
-          _maxRadiusKm = double.tryParse(radiusResp['value'].toString()) ?? 15.0;
-        }
+        final rawRadius = PlatformConfigProvider.instance?.riderNotificationRadiusKm ?? 15.0;
+        _maxRadiusKm = rawRadius.clamp(1.0, 50.0);
       } catch (_) {
         _maxRadiusKm = 15.0; // safe default
       }
 
       // 100x ARCHITECTURE FIX: Offload geographic search to PostGIS RPC
       // Prevents "Pixel Overloading" OOM crashes and "Geographic Starvation"
-      final available = await _supabase
-          .rpc('get_nearby_unassigned_orders', params: {
-            'p_rider_lat': _riderLat,
-            'p_rider_lng': _riderLng,
-            'p_radius_km': _maxRadiusKm,
-          })
-          .select('*, order_items(*), shops!shop_id(id, name, location)');
+      final available =
+          await _supabase.rpc('get_nearby_unassigned_orders', params: {
+        'p_rider_lat': _riderLat,
+        'p_rider_lng': _riderLng,
+        'p_radius_km': _maxRadiusKm,
+      }).select('*, order_items(*), shops!shop_id(id, name, location)');
 
       final myOrders = await _supabase
           .from('orders')
@@ -448,7 +468,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .neq('status', 'cancelled')
           .neq('status', 'seller_rejected')
           .neq('status', 'partner_rejected');
-          // awaiting_acceptance is INCLUDED: rider accepted first, waiting for seller
+      // awaiting_acceptance is INCLUDED: rider accepted first, waiting for seller
 
       if (!mounted) return;
 
@@ -482,19 +502,25 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }).toList();
 
       if (filtered.isEmpty) {
-        _supabase.from('app_logs').insert({'message': 'Rider load: allAvailable is empty. Query returned ${available.length} rows.'}).catchError((_) => null);
+        _supabase.from('app_logs').insert({
+          'message':
+              'Rider load: allAvailable is empty. Query returned ${available.length} rows.'
+        }).catchError((_) => null);
       }
 
       double tempTodayEarnings = 0.0;
       double tempTotalKmsDriven = 0.0;
-      
+
       // Fetch delivered orders separately to compute earnings (using safe RPC to prevent payload DDOS)
       if (auth.currentUserId != null) {
         try {
-          final stats = await _supabase.rpc('get_rider_stats', params: {'p_rider_id': auth.currentUserId!});
+          final stats = await _supabase.rpc('get_rider_stats',
+              params: {'p_rider_id': auth.currentUserId!});
           if (stats != null) {
-            tempTodayEarnings = (stats['today_earnings'] as num?)?.toDouble() ?? 0.0;
-            tempTotalKmsDriven = (stats['total_kms'] as num?)?.toDouble() ?? 0.0;
+            tempTodayEarnings =
+                (stats['today_earnings'] as num?)?.toDouble() ?? 0.0;
+            tempTotalKmsDriven =
+                (stats['total_kms'] as num?)?.toDouble() ?? 0.0;
           }
         } catch (e) {
           debugPrint('Error loading rider stats from RPC: $e');
@@ -504,17 +530,19 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (mounted) {
         setState(() {
           _availableGroups = _groupOrders(filtered);
-          
+
           final myRawOrders = (myOrders as List).map((o) {
             final model = OrderModel.fromMap(o);
-            model.items = (o['order_items'] as List? ?? []).map((i) => OrderItem.fromMap(i)).toList();
+            model.items = (o['order_items'] as List? ?? [])
+                .map((i) => OrderItem.fromMap(i))
+                .toList();
             return model;
           }).toList();
           _myGroups = _groupOrders(myRawOrders);
 
           _todayEarnings = tempTodayEarnings;
           _totalKmsDriven = tempTotalKmsDriven;
-          
+
           _isLoading = false;
         });
       }
@@ -525,7 +553,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
     } catch (e, stacktrace) {
       debugPrint('Error loading rider orders: $e');
-      _supabase.from('app_logs').insert({'message': 'Rider order load error: $e\n$stacktrace'}).catchError((_) => null);
+      _supabase.from('app_logs').insert({
+        'message': 'Rider order load error: $e\n$stacktrace'
+      }).catchError((_) => null);
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -544,7 +574,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     // A2: Track failures and surface them to the rider
     int failedCount = 0;
     for (int i = 0; i < group.orders.length; i++) {
-      final success = await _acceptOrder(group.orders[i], skipReload: true, notifyCustomer: i == 0);
+      final success = await _acceptOrder(group.orders[i],
+          skipReload: true, notifyCustomer: i == 0);
       if (!success) {
         failedCount += (group.orders.length - i);
         break; // Prevent cascading errors/dialogs for the rest of the group
@@ -561,7 +592,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     _loadOrders();
   }
 
-  Future<bool> _acceptOrder(OrderModel order, {bool skipReload = false, bool notifyCustomer = true}) async {
+  Future<bool> _acceptOrder(OrderModel order,
+      {bool skipReload = false, bool notifyCustomer = true}) async {
     final auth = context.read<AuthProvider>();
     try {
       double? shopLat;
@@ -582,12 +614,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
 
       // Fetch latest state to ensure order is still available (fast-fail)
-      final latest = await _supabase.from('orders').select('status').eq('id', order.id).maybeSingle();
+      final latest = await _supabase
+          .from('orders')
+          .select('status')
+          .eq('id', order.id)
+          .maybeSingle();
       final currentStatus = latest?['status'] as String?;
 
-      if (currentStatus != 'awaiting_acceptance' && currentStatus != 'pending') {
+      if (currentStatus != 'awaiting_acceptance' &&
+          currentStatus != 'pending') {
         if (mounted) {
-          _showSnack('⚠️ This order is no longer available to accept.', isError: true);
+          _showSnack('⚠️ This order is no longer available to accept.',
+              isError: true);
         }
         return false;
       }
@@ -601,10 +639,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       });
       final bothAccepted = result == true;
 
-      final verify = await _supabase.from('orders').select('delivery_partner_id').eq('id', order.id).maybeSingle();
-      if (verify == null || verify['delivery_partner_id'] != auth.currentUserId) {
+      final verify = await _supabase
+          .from('orders')
+          .select('delivery_partner_id')
+          .eq('id', order.id)
+          .maybeSingle();
+      if (verify == null ||
+          verify['delivery_partner_id'] != auth.currentUserId) {
         if (mounted) {
-          _showSnack('⚠️ This order was already assigned to another rider.', isError: true);
+          _showSnack('⚠️ This order was already assigned to another rider.',
+              isError: true);
         }
         return false;
       }
@@ -614,12 +658,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
         if (bothAccepted) {
           if (currentStatus == 'confirmed' || currentStatus == 'preparing') {
-             _showSnack('✅ Order accepted! The customer has already paid.');
+            _showSnack('✅ Order accepted! The customer has already paid.');
           } else {
-             _showSnack('✅ Order accepted! Waiting for customer to pay.');
+            _showSnack('✅ Order accepted! Waiting for customer to pay.');
           }
           // Push customer to complete payment NOW (only if not paid)
-          if (notifyCustomer && currentStatus != 'confirmed' && currentStatus != 'preparing') {
+          if (notifyCustomer &&
+              currentStatus != 'confirmed' &&
+              currentStatus != 'preparing') {
             notifProv.sendBackgroundPush(
               targetUserId: order.customerId,
               title: 'Ready for Payment! 💳',
@@ -630,12 +676,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 'order_id': order.id,
               },
             );
-          } else if (notifyCustomer && (currentStatus == 'confirmed' || currentStatus == 'preparing')) {
+          } else if (notifyCustomer &&
+              (currentStatus == 'confirmed' || currentStatus == 'preparing')) {
             notifProv.sendBackgroundPush(
               targetUserId: order.customerId,
               title: 'New Rider Assigned! 🛵',
-              body:
-                  'A new rider has picked up your order and is on their way!',
+              body: 'A new rider has picked up your order and is on their way!',
               data: {
                 'route': '/track_order',
                 'order_id': order.id,
@@ -676,7 +722,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 notifProv.sendBackgroundPush(
                   targetUserId: shopData['seller_id'] as String,
                   title: '🛵 A Rider is Ready!',
-                  body: 'A rider already accepted this order ₹${order.grandTotal.toStringAsFixed(0)}. Accept now to confirm!',
+                  body:
+                      'A rider already accepted this order ₹${order.grandTotal.toStringAsFixed(0)}. Accept now to confirm!',
                   data: {'order_id': order.id},
                 );
               }
@@ -688,7 +735,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             notifProv.sendBackgroundPush(
               targetUserId: order.customerId,
               title: '🛵 Rider is Ready!',
-              body: 'A rider accepted your order and is on standby. Waiting for the shop to also confirm.',
+              body:
+                  'A rider accepted your order and is on standby. Waiting for the shop to also confirm.',
             );
           }
         }
@@ -699,24 +747,28 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       debugPrint('Accept Postgrest error: $pe');
       if (mounted) {
         if (pe.message.contains('ORDER_CANCELLED')) {
-          _showSnack('⚠️ The customer just cancelled this order.', isError: true);
+          _showSnack('⚠️ The customer just cancelled this order.',
+              isError: true);
         } else if (pe.message.contains('MAX_ORDERS_REACHED')) {
           showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              backgroundColor: const Color(0xFF1E1E2C),
-              title: const Text('Maximum Orders Reached', style: TextStyle(color: Colors.white)),
-              content: const SingleChildScrollView(
-                child: Text('You can only accept a maximum of 3 active cart groups simultaneously to ensure timely delivery.', style: TextStyle(color: Colors.white70)),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK', style: TextStyle(color: Color(0xFFF4C542))),
-                )
-              ],
-            )
-          );
+              context: context,
+              builder: (context) => AlertDialog(
+                    backgroundColor: const Color(0xFF1E1E2C),
+                    title: const Text('Maximum Orders Reached',
+                        style: TextStyle(color: Colors.white)),
+                    content: const SingleChildScrollView(
+                      child: Text(
+                          'You can only accept a maximum of 3 active cart groups simultaneously to ensure timely delivery.',
+                          style: TextStyle(color: Colors.white70)),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('OK',
+                            style: TextStyle(color: Color(0xFFF4C542))),
+                      )
+                    ],
+                  ));
         } else {
           _showSnack(pe.message, isError: true);
         }
@@ -729,21 +781,32 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }
   }
 
-  Future<void> _updateStatus(OrderModel order, String status, {bool skipReload = false, bool skipRating = false, bool notifyCustomer = true}) async {
+  Future<void> _updateStatus(OrderModel order, String status,
+      {bool skipReload = false,
+      bool skipRating = false,
+      bool notifyCustomer = true}) async {
     try {
       if (status == 'arrived') {
-        if (order.shopLat == null || order.shopLng == null || order.shopLat == 0.0 || order.shopLng == 0.0) {
-          _showSnack('⚠️ Shop location missing. Cannot verify arrival.', isError: true);
+        if (order.shopLat == null ||
+            order.shopLng == null ||
+            order.shopLat == 0.0 ||
+            order.shopLng == 0.0) {
+          _showSnack('⚠️ Shop location missing. Cannot verify arrival.',
+              isError: true);
           return;
         }
         await _fetchRiderLocation();
         if (_riderLat == null || _riderLng == null) {
-          _showSnack('⚠️ Cannot fetch your GPS. Ensure location is enabled.', isError: true);
+          _showSnack('⚠️ Cannot fetch your GPS. Ensure location is enabled.',
+              isError: true);
           return;
         }
-        final dist = Geolocator.distanceBetween(_riderLat!, _riderLng!, order.shopLat!, order.shopLng!);
+        final dist = Geolocator.distanceBetween(
+            _riderLat!, _riderLng!, order.shopLat!, order.shopLng!);
         if (dist > 300) {
-          _showSnack('⚠️ Too far from shop! You are ${(dist).toInt()}m away (max 300m).', isError: true);
+          _showSnack(
+              '⚠️ Too far from shop! You are ${(dist).toInt()}m away (max 300m).',
+              isError: true);
           return;
         }
         await _supabase.rpc('set_arrived_at_shop', params: {
@@ -758,8 +821,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           'p_reason': 'rider_dropped',
           'p_disputed': status == 'reassign_disputed',
         });
-        // (100x Edge Case: Removed redundant retry_find_rider call. 
-        // The Postgres trigger `trigger_rider_reorder_push` automatically handles broadcasting 
+        // (100x Edge Case: Removed redundant retry_find_rider call.
+        // The Postgres trigger `trigger_rider_reorder_push` automatically handles broadcasting
         // when status changes to 'awaiting_acceptance' securely.)
         // Notify customer and seller that the rider dropped the order
         if (mounted) {
@@ -769,7 +832,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           notifProv.sendBackgroundPush(
             targetUserId: order.customerId,
             title: '🛵 Rider Dropped Your Order',
-            body: 'Your previous rider is unavailable. We are looking for a new rider now.',
+            body:
+                'Your previous rider is unavailable. We are looking for a new rider now.',
             data: {'order_id': order.id, 'role': 'customer'},
           );
 
@@ -796,7 +860,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
       } else if (status == 'shop_dispute_cancel') {
         // Rider reported shop lied / items not given. Cancel order, do NOT reassign.
-        await _supabase.rpc('set_shop_dispute', params: {'p_order_id': order.id, 'p_cancel': true});
+        await _supabase.rpc('set_shop_dispute',
+            params: {'p_order_id': order.id, 'p_cancel': true});
 
         if (mounted) {
           final notifProv = context.read<NotificationProvider>();
@@ -805,7 +870,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           notifProv.sendBackgroundPush(
             targetUserId: order.customerId,
             title: '😔 We\'re Sorry — Order Cancelled',
-            body: 'There was an issue at the shop. Your order has been cancelled. '
+            body:
+                'There was an issue at the shop. Your order has been cancelled. '
                 'If you were charged, a full refund will be initiated within 5–7 business days. '
                 'We sincerely apologise for this rare inconvenience.',
             data: {'order_id': order.id, 'role': 'customer'},
@@ -823,7 +889,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 notifProv.sendBackgroundPush(
                   targetUserId: shopData['seller_id'] as String,
                   title: '⚠️ Order Cancelled — Dispute Filed',
-                  body: 'The delivery rider reported that items were not given or the shop was not '
+                  body:
+                      'The delivery rider reported that items were not given or the shop was not '
                       'ready as stated. This order has been cancelled. Our team will review this report.',
                   data: {'order_id': order.id, 'role': 'seller'},
                 );
@@ -834,7 +901,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         _loadOrders();
         return;
       } else if (status == 'delivered') {
-
         await _supabase.rpc('update_order_status', params: {
           'p_order_id': order.id,
           'p_new_status': status,
@@ -844,7 +910,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           'p_rider_lng': _riderLng,
           'p_delivery_otp': null,
         });
-        
+
         if (mounted && notifyCustomer) {
           context.read<NotificationProvider>().sendBackgroundPush(
             targetUserId: order.customerId,
@@ -858,7 +924,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         // Never stop the background or foreground GPS broadcast if the rider is STILL ONLINE.
         // If they are online, they MUST send GPS to receive new orders. The broadcast timer
         // automatically scales down to a 30s idle heartbeat when _myGroups becomes empty.
-        final remainingActiveOrders = _myGroups.expand((g) => g.orders).where((o) => o.id != order.id && o.status != 'delivered' && o.status != 'cancelled').length;
+        final remainingActiveOrders = _myGroups
+            .expand((g) => g.orders)
+            .where((o) =>
+                o.id != order.id &&
+                o.status != 'delivered' &&
+                o.status != 'cancelled')
+            .length;
         if (remainingActiveOrders == 0 && !_isOnline) {
           _stopLocationBroadcast();
           RiderBackgroundService.instance.stopService();
@@ -874,13 +946,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         await _supabase.rpc('update_order_status', params: {
           'p_order_id': order.id,
           'p_new_status': status,
-          'p_ready_time': null, // Omit frontend override so backend computes wait penalty using actual arrived time
+          'p_ready_time':
+              null, // Omit frontend override so backend computes wait penalty using actual arrived time
           'p_wait_penalty': 0.0,
           'p_rider_lat': _riderLat,
           'p_rider_lng': _riderLng,
           'p_delivery_otp': null,
         });
-            
+
         if (mounted && notifyCustomer) {
           final notifProv = context.read<NotificationProvider>();
           if (status == 'picked_up') {
@@ -964,14 +1037,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   void _showGroupDeliveryRatingFlow(OrderGroup group) {
     if (!mounted || group.orders.isEmpty || _isSheetOpen) return;
     _isSheetOpen = true;
-    
+
     int currentShopIndex = 0;
-    
+
     void rateNextShop() {
       if (currentShopIndex < group.orders.length) {
         final orderToRate = group.orders[currentShopIndex];
         currentShopIndex++;
-        
+
         if (mounted) {
           showModalBottomSheet(
             context: context,
@@ -980,7 +1053,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
             builder: (_) => RatingBottomSheet(
-              title: group.orders.length > 1 ? 'Rate Shop $currentShopIndex 🏪' : 'Rate the Shop 🏪',
+              title: group.orders.length > 1
+                  ? 'Rate Shop $currentShopIndex 🏪'
+                  : 'Rate the Shop 🏪',
               subtitle: 'How was your wait time and experience at the shop?',
               onSubmit: (r, rv) async {
                 await _submitDeliveryRating(
@@ -1048,7 +1123,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         'review': review.isEmpty ? null : review,
       });
       if (markRated) {
-        await _supabase.rpc('set_delivery_rated', params: {'p_order_id': orderId});
+        await _supabase
+            .rpc('set_delivery_rated', params: {'p_order_id': orderId});
       }
     } catch (e) {
       debugPrint('Delivery rating error: $e');
@@ -1066,7 +1142,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             style: GoogleFonts.outfit()),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Go Back')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Go Back')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -1095,14 +1172,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             style: GoogleFonts.outfit()),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Go Back')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Go Back')),
           if (order.status == 'ready_for_pickup')
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
                 try {
-                  await _supabase.rpc('dispute_wait_time', params: {'p_order_id': order.id});
-                  _showSnack('Wait time disputed. Status reverted to Preparing.', isError: false);
+                  await _supabase.rpc('dispute_wait_time',
+                      params: {'p_order_id': order.id});
+                  _showSnack(
+                      'Wait time disputed. Status reverted to Preparing.',
+                      isError: false);
                   _loadOrders();
                 } catch (e) {
                   _showSnack('Error disputing wait time: $e', isError: true);
@@ -1130,7 +1211,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     );
   }
 
-
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1156,13 +1236,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }).toList();
 
     if (shops.any((s) => s.lat == 0.0 || s.lng == 0.0)) {
-      _showSnack('Map not available — shop location missing for one or more shops', isError: true);
+      _showSnack(
+          'Map not available — shop location missing for one or more shops',
+          isError: true);
       _isMapOpening = false;
       return;
     }
     final primaryOrder = group.orders.first;
     if (primaryOrder.deliveryLat == null || primaryOrder.deliveryLng == null) {
-      _showSnack('Map not available — customer location missing', isError: true);
+      _showSnack('Map not available — customer location missing',
+          isError: true);
       _isMapOpening = false;
       return;
     }
@@ -1193,497 +1276,582 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final size = MediaQuery.of(context).size;
 
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        if (_scrollController.hasClients && _scrollController.offset > 0) {
-          _scrollController.animateTo(
-            0,
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOutCubic,
-          );
-          return;
-        }
-        final now = DateTime.now();
-        if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
-          _lastBackPressTime = now;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Press back again to exit'),
-              duration: Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        } else {
-          // ignore: use_build_context_synchronously
-          SystemNavigator.pop();
-        }
-      },
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.light,
-        child: Scaffold(
-        backgroundColor:
-            isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
-        body: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            // ── Animated Header ───────────────────────────────────────────
-            SliverAppBar(
-              expandedHeight: 240,
-              pinned: true,
-              elevation: 0,
-              backgroundColor: const Color(0xFF0D2137),
-              surfaceTintColor: Colors.transparent,
-              leading: const SizedBox.shrink(),
-              flexibleSpace: FlexibleSpaceBar(
-                background: AnimatedBuilder(
-                  animation: _bgCtrl,
-                  builder: (_, __) => Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Color.lerp(const Color(0xFF0D2137),
-                              const Color(0xFF0A3260), _bgAnim.value)!,
-                          Color.lerp(const Color(0xFF061222),
-                              const Color(0xFF061A36), _bgAnim.value)!,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        // Blobs
-                        Positioned(
-                            top: -50,
-                            right: -50,
-                            child: _blob(220, const Color(0xFF00B4D8),
-                                0.12 + _bgAnim.value * 0.06)),
-                        Positioned(
-                            bottom: -40,
-                            left: -40,
-                            child: _blob(180, const Color(0xFF51CF66), 0.10)),
-                        // Stars
-                        CustomPaint(
-                            size: Size(size.width, 240),
-                            painter: _MiniStarPainter(_bgCtrl.value)),
-                        // Content
-                        SafeArea(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Top bar
-                                Row(children: [
-                                  _glassAvatar(auth.user?.initials ?? 'D',
-                                      const Color(0xFF00B4D8)),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                              'Hi, ${auth.user?.fullName.split(' ').first ?? 'Partner'}!',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: GoogleFonts.outfit(
-                                                  color: Colors.white,
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.w800)),
-                                          const SizedBox(height: 4),
-                                          _badge('🛵  Delivery Partner',
-                                              const Color(0xFF00B4D8)),
-                                        ]),
-                                  ),
-                                  _iconBtn(
-                                      isDark
-                                          ? Icons.light_mode_outlined
-                                          : Icons.dark_mode_outlined,
-                                      () => themeProvider.toggleTheme()),
-                                  const NotificationBell(
-                                    iconColor: Colors.white70,
-                                    containerColor: Colors.transparent,
-                                    badgeColor: Color(0xFFFF6B6B),
-                                  ),
-
-                                  _iconBtn(
-                                      Icons.settings_outlined,
-                                      () => Navigator.pushNamed(
-                                          context, AppRoutes.settings)),
-                                ]),
-                                const SizedBox(height: 24),
-
-                                // Stats row
-                                Row(children: [
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () => Navigator.pushNamed(
-                                          context, AppRoutes.earnings),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14, vertical: 12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(
-                                              color: Colors.white.withValues(alpha: 0.2)),
-                                        ),
-                                        child: Row(children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.success.withValues(alpha: 0.2),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Icon(
-                                                Icons.account_balance_wallet_rounded,
-                                                color: AppColors.success,
-                                                size: 20),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text('Today\'s Earnings',
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: GoogleFonts.outfit(
-                                                        color: Colors.white70,
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w600)),
-                                                Text('₹${_todayEarnings.toStringAsFixed(0)}',
-                                                    style: GoogleFonts.outfit(
-                                                        color: Colors.white,
-                                                        fontSize: 18,
-                                                        fontWeight: FontWeight.bold)),
-                                              ],
-                                            ),
-                                          ),
-                                        ]),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () => Navigator.pushNamed(
-                                          context, AppRoutes.earnings),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14, vertical: 12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(
-                                              color: Colors.white.withValues(alpha: 0.2)),
-                                        ),
-                                      child: Row(children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF00B4D8).withValues(alpha: 0.2),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                              Icons.local_shipping_rounded,
-                                              color: Color(0xFF00B4D8),
-                                              size: 20),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisAlignment: MainAxisAlignment.center,
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          if (_scrollController.hasClients && _scrollController.offset > 0) {
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOutCubic,
+            );
+            return;
+          }
+          final now = DateTime.now();
+          if (_lastBackPressTime == null ||
+              now.difference(_lastBackPressTime!) >
+                  const Duration(seconds: 2)) {
+            _lastBackPressTime = now;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Press back again to exit'),
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else {
+            // ignore: use_build_context_synchronously
+            SystemNavigator.pop();
+          }
+        },
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle.light,
+          child: Scaffold(
+            backgroundColor:
+                isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
+            body: CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                // ── Animated Header ───────────────────────────────────────────
+                SliverAppBar(
+                  expandedHeight: 240,
+                  pinned: true,
+                  elevation: 0,
+                  backgroundColor: const Color(0xFF0D2137),
+                  surfaceTintColor: Colors.transparent,
+                  leading: const SizedBox.shrink(),
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: AnimatedBuilder(
+                      animation: _bgCtrl,
+                      builder: (_, __) => Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Color.lerp(const Color(0xFF0D2137),
+                                  const Color(0xFF0A3260), _bgAnim.value)!,
+                              Color.lerp(const Color(0xFF061222),
+                                  const Color(0xFF061A36), _bgAnim.value)!,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Stack(
+                          children: [
+                            // Blobs
+                            Positioned(
+                                top: -50,
+                                right: -50,
+                                child: _blob(220, const Color(0xFF00B4D8),
+                                    0.12 + _bgAnim.value * 0.06)),
+                            Positioned(
+                                bottom: -40,
+                                left: -40,
+                                child:
+                                    _blob(180, const Color(0xFF51CF66), 0.10)),
+                            // Stars
+                            CustomPaint(
+                                size: Size(size.width, 240),
+                                painter: _MiniStarPainter(_bgCtrl.value)),
+                            // Content
+                            SafeArea(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Top bar
+                                    Row(children: [
+                                      _glassAvatar(auth.user?.initials ?? 'D',
+                                          const Color(0xFF00B4D8)),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              Text('Total KMs Driven',
+                                              Text(
+                                                  'Hi, ${auth.user?.fullName.split(' ').first ?? 'Partner'}!',
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: GoogleFonts.outfit(
-                                                      color: Colors.white70,
-                                                      fontSize: 12,
-                                                      fontWeight: FontWeight.w600)),
-                                              Text('${_totalKmsDriven.toStringAsFixed(1)} km',
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: GoogleFonts.outfit(
                                                       color: Colors.white,
-                                                      fontSize: 18,
-                                                      fontWeight: FontWeight.bold)),
-                                            ],
+                                                      fontSize: 20,
+                                                      fontWeight:
+                                                          FontWeight.w800)),
+                                              const SizedBox(height: 4),
+                                              _badge('🛵  Delivery Partner',
+                                                  const Color(0xFF00B4D8)),
+                                            ]),
+                                      ),
+                                      _iconBtn(
+                                          isDark
+                                              ? Icons.light_mode_outlined
+                                              : Icons.dark_mode_outlined,
+                                          () => themeProvider.toggleTheme()),
+                                      const NotificationBell(
+                                        iconColor: Colors.white70,
+                                        containerColor: Colors.transparent,
+                                        badgeColor: Color(0xFFFF6B6B),
+                                      ),
+                                      _iconBtn(
+                                          Icons.settings_outlined,
+                                          () => Navigator.pushNamed(
+                                              context, AppRoutes.settings)),
+                                    ]),
+                                    const SizedBox(height: 24),
+
+                                    // Stats row
+                                    Row(children: [
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: () => Navigator.pushNamed(
+                                              context, AppRoutes.earnings),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14, vertical: 12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              border: Border.all(
+                                                  color: Colors.white
+                                                      .withValues(alpha: 0.2)),
+                                            ),
+                                            child: Row(children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.success
+                                                      .withValues(alpha: 0.2),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                    Icons
+                                                        .account_balance_wallet_rounded,
+                                                    color: AppColors.success,
+                                                    size: 20),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Text('Today\'s Earnings',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style:
+                                                            GoogleFonts.outfit(
+                                                                color: Colors
+                                                                    .white70,
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600)),
+                                                    Text(
+                                                        '₹${_todayEarnings.toStringAsFixed(0)}',
+                                                        style:
+                                                            GoogleFonts.outfit(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 18,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ]),
                                           ),
                                         ),
-                                      ]),
-                                    ),
-                                  ),
-                                  ),
-                                ]),
-                              ],
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: () => Navigator.pushNamed(
+                                              context, AppRoutes.earnings),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14, vertical: 12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              border: Border.all(
+                                                  color: Colors.white
+                                                      .withValues(alpha: 0.2)),
+                                            ),
+                                            child: Row(children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF00B4D8)
+                                                      .withValues(alpha: 0.2),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                    Icons
+                                                        .local_shipping_rounded,
+                                                    color: Color(0xFF00B4D8),
+                                                    size: 20),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Text('Total KMs Driven',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style:
+                                                            GoogleFonts.outfit(
+                                                                color: Colors
+                                                                    .white70,
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600)),
+                                                    Text(
+                                                        '${_totalKmsDriven.toStringAsFixed(1)} km',
+                                                        style:
+                                                            GoogleFonts.outfit(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 18,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ]),
+                                          ),
+                                        ),
+                                      ),
+                                    ]),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
 
-            // ── Content ────────────────────────────────────────────────────
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  // Full-width Online Toggle Card
-                  GestureDetector(
-                    onTap: () async {
-                      final newVal = !_isOnline;
-                      setState(() => _isOnline = newVal);
-                      if (newVal) {
-                        _startLocationBroadcast();
-                      } else {
-                        _stopLocationBroadcast();
-                        RiderBackgroundService.instance.stopService();
-                      }
-                      final auth = context.read<AuthProvider>();
-                      if (auth.currentUserId != null) {
-                        try {
-                          String? newSecret;
+                // ── Content ────────────────────────────────────────────────────
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      // Full-width Online Toggle Card
+                      GestureDetector(
+                        onTap: () async {
+                          final newVal = !_isOnline;
+                          setState(() => _isOnline = newVal);
                           if (newVal) {
-                            newSecret = const Uuid().v4();
-                            _bgTrackingSecret = newSecret;
+                            _startLocationBroadcast();
+                          } else {
+                            _stopLocationBroadcast();
+                            RiderBackgroundService.instance.stopService();
                           }
-                          await _supabase
-                              .from('delivery_partners')
-                              .update({
+                          final auth = context.read<AuthProvider>();
+                          if (auth.currentUserId != null) {
+                            try {
+                              String? newSecret;
+                              if (newVal) {
+                                newSecret = const Uuid().v4();
+                                _bgTrackingSecret = newSecret;
+                              }
+                              await _supabase.from('delivery_partners').update({
                                 'is_accepting_orders': newVal,
-                                if (newSecret != null) 'bg_tracking_secret': newSecret,
-                              })
-                              .eq('id', auth.currentUserId!);
-                        } catch (e) {
-                          debugPrint('Error updating duty status: $e');
-                        }
-                      }
-                      if (newVal) _loadOrders();
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: _isOnline 
-                              ? [const Color(0xFF2ECC71), const Color(0xFF27AE60)]
-                              : isDark 
-                                  ? [const Color(0xFF2A2A3A), const Color(0xFF1E1E2E)]
-                                  : [Colors.grey.shade300, Colors.grey.shade200],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          if (_isOnline)
-                            BoxShadow(
-                              color: const Color(0xFF2ECC71).withValues(alpha: 0.4),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
+                                if (newSecret != null)
+                                  'bg_tracking_secret': newSecret,
+                              }).eq('id', auth.currentUserId!);
+                            } catch (e) {
+                              debugPrint('Error updating duty status: $e');
+                            }
+                          }
+                          if (newVal) _loadOrders();
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: _isOnline
+                                  ? [
+                                      const Color(0xFF2ECC71),
+                                      const Color(0xFF27AE60)
+                                    ]
+                                  : isDark
+                                      ? [
+                                          const Color(0xFF2A2A3A),
+                                          const Color(0xFF1E1E2E)
+                                        ]
+                                      : [
+                                          Colors.grey.shade300,
+                                          Colors.grey.shade200
+                                        ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              _isOnline ? Icons.power_rounded : Icons.power_off_rounded,
-                              color: _isOnline ? Colors.white : (isDark ? Colors.white54 : Colors.black54),
-                              size: 28,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _isOnline ? 'You\'re Online' : 'You\'re Offline',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: _isOnline ? Colors.white : (isDark ? Colors.white : Colors.black87),
-                                  ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              if (_isOnline)
+                                BoxShadow(
+                                  color: const Color(0xFF2ECC71)
+                                      .withValues(alpha: 0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
                                 ),
-                                Text(
-                                  _isOnline ? 'Receiving delivery requests' : 'Tap to start receiving orders',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 13,
-                                    color: _isOnline ? Colors.white.withValues(alpha: 0.8) : (isDark ? Colors.white54 : Colors.black54),
-                                  ),
-                                ),
-                              ],
-                            ),
+                            ],
                           ),
-                          Switch(
-                            value: _isOnline,
-                            onChanged: (val) async {
-                              setState(() => _isOnline = val);
-                              if (val) {
-                                _startLocationBroadcast();
-                              } else {
-                                _stopLocationBroadcast();
-                                RiderBackgroundService.instance.stopService();
-                              }
-                              final auth = context.read<AuthProvider>();
-                              if (auth.currentUserId != null) {
-                                try {
-                                  String? newSecret;
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _isOnline
+                                      ? Icons.power_rounded
+                                      : Icons.power_off_rounded,
+                                  color: _isOnline
+                                      ? Colors.white
+                                      : (isDark
+                                          ? Colors.white54
+                                          : Colors.black54),
+                                  size: 28,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _isOnline
+                                          ? 'You\'re Online'
+                                          : 'You\'re Offline',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: _isOnline
+                                            ? Colors.white
+                                            : (isDark
+                                                ? Colors.white
+                                                : Colors.black87),
+                                      ),
+                                    ),
+                                    Text(
+                                      _isOnline
+                                          ? 'Receiving delivery requests'
+                                          : 'Tap to start receiving orders',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        color: _isOnline
+                                            ? Colors.white
+                                                .withValues(alpha: 0.8)
+                                            : (isDark
+                                                ? Colors.white54
+                                                : Colors.black54),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: _isOnline,
+                                onChanged: (val) async {
+                                  setState(() => _isOnline = val);
                                   if (val) {
-                                    newSecret = const Uuid().v4();
-                                    _bgTrackingSecret = newSecret;
+                                    _startLocationBroadcast();
+                                  } else {
+                                    _stopLocationBroadcast();
+                                    RiderBackgroundService.instance
+                                        .stopService();
                                   }
-                                  await _supabase
-                                      .from('delivery_partners')
-                                      .update({
+                                  final auth = context.read<AuthProvider>();
+                                  if (auth.currentUserId != null) {
+                                    try {
+                                      String? newSecret;
+                                      if (val) {
+                                        newSecret = const Uuid().v4();
+                                        _bgTrackingSecret = newSecret;
+                                      }
+                                      await _supabase
+                                          .from('delivery_partners')
+                                          .update({
                                         'is_accepting_orders': val,
-                                        if (newSecret != null) 'bg_tracking_secret': newSecret,
-                                      })
-                                      .eq('id', auth.currentUserId!);
-                                } catch (e) {
-                                  debugPrint('Error updating duty status: $e');
-                                }
-                              }
-                              if (val) _loadOrders();
-                            },
-                            activeThumbColor: Colors.white,
-                            activeTrackColor: Colors.white.withValues(alpha: 0.3),
-                            inactiveThumbColor: isDark ? Colors.white54 : Colors.grey.shade400,
-                            inactiveTrackColor: isDark ? Colors.white10 : Colors.grey.shade300,
+                                        if (newSecret != null)
+                                          'bg_tracking_secret': newSecret,
+                                      }).eq('id', auth.currentUserId!);
+                                    } catch (e) {
+                                      debugPrint(
+                                          'Error updating duty status: $e');
+                                    }
+                                  }
+                                  if (val) _loadOrders();
+                                },
+                                activeThumbColor: Colors.white,
+                                activeTrackColor:
+                                    Colors.white.withValues(alpha: 0.3),
+                                inactiveThumbColor: isDark
+                                    ? Colors.white54
+                                    : Colors.grey.shade400,
+                                inactiveTrackColor: isDark
+                                    ? Colors.white10
+                                    : Colors.grey.shade300,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Work management secondary row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _actionTile(
+                              icon: Icons.two_wheeler_rounded,
+                              gradient: const [
+                                Color(0xFF00B4D8),
+                                Color(0xFF0077A8)
+                              ],
+                              title: 'Vehicle',
+                              subtitle: _vehicleTypeLabel(_vehicleType),
+                              badge: null,
+                              isDark: isDark,
+                              onTap: _showVehicleChangeSheet,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _actionTile(
+                              icon: Icons.settings_rounded,
+                              gradient: const [
+                                Color(0xFF4C6EF5),
+                                Color(0xFF364FC7)
+                              ],
+                              title: 'Settings',
+                              subtitle: 'Nav & Prefs',
+                              badge: null,
+                              isDark: isDark,
+                              onTap: _showWorkManagementSheet,
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Work management secondary row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _actionTile(
-                          icon: Icons.two_wheeler_rounded,
-                          gradient: const [Color(0xFF00B4D8), Color(0xFF0077A8)],
-                          title: 'Vehicle',
-                          subtitle: _vehicleTypeLabel(_vehicleType),
-                          badge: null,
-                          isDark: isDark,
-                          onTap: _showVehicleChangeSheet,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _actionTile(
-                          icon: Icons.settings_rounded,
-                          gradient: const [Color(0xFF4C6EF5), Color(0xFF364FC7)],
-                          title: 'Settings',
-                          subtitle: 'Nav & Prefs',
-                          badge: null,
-                          isDark: isDark,
-                          onTap: _showWorkManagementSheet,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                  if (_myGroups.isNotEmpty) ...[
-                    _sectionHeader('🚗 My Active Deliveries',
-                        '${_myGroups.length}', const Color(0xFF4C6EF5), isDark),
-                    const SizedBox(height: 14),
-                  ],
-                ]),
-              ),
-            ),
-            
-            if (_myGroups.isNotEmpty)
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      return _activeOrderGroupCard(_myGroups[index], isDark);
-                    },
-                    childCount: _myGroups.length,
+                      if (_myGroups.isNotEmpty) ...[
+                        _sectionHeader(
+                            '🚗 My Active Deliveries',
+                            '${_myGroups.length}',
+                            const Color(0xFF4C6EF5),
+                            isDark),
+                        const SizedBox(height: 14),
+                      ],
+                    ]),
                   ),
                 ),
-              ),
 
-            if (_myGroups.isNotEmpty)
-              const SliverPadding(
-                padding: EdgeInsets.only(bottom: 24),
-              ),
-
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  // Available orders
-                  _sectionHeader(
-                      '📦 Available Orders',
-                      '${_availableGroups.length}',
-                      const Color(0xFFFF8C42),
-                      isDark),
-                  const SizedBox(height: 14),
-
-
-                  // Location unavailable warning (kept):
-                  if (_locationUnavailable && _isOnline)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                if (_myGroups.isNotEmpty)
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          return _activeOrderGroupCard(
+                              _myGroups[index], isDark);
+                        },
+                        childCount: _myGroups.length,
                       ),
-                      child: Row(children: [
-                        const Icon(Icons.location_off_outlined,
-                            color: Colors.orange, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Location unavailable — showing all nearby orders. Enable GPS for distance-based filtering.',
-                            style: GoogleFonts.outfit(
-                                color: Colors.orange, fontSize: 12),
-                          ),
-                        ),
-                      ]),
                     ),
+                  ),
 
-                  if (_isLoading)
-                    const Center(
-                        child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(),
-                    ))
-                  else if (!_isOnline)
-                    _offlineState(isDark)
-                  else if (_availableGroups.isEmpty)
-                    _emptyState(isDark)
-                  else
-                    ..._availableGroups
-                        .map((g) => _availableOrderGroupCard(g, isDark)),
-                ]),
-              ),
+                if (_myGroups.isNotEmpty)
+                  const SliverPadding(
+                    padding: EdgeInsets.only(bottom: 24),
+                  ),
+
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      // Available orders
+                      _sectionHeader(
+                          '📦 Available Orders',
+                          '${_availableGroups.length}',
+                          const Color(0xFFFF8C42),
+                          isDark),
+                      const SizedBox(height: 14),
+
+                      // Location unavailable warning (kept):
+                      if (_locationUnavailable && _isOnline)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(children: [
+                            const Icon(Icons.location_off_outlined,
+                                color: Colors.orange, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Location unavailable — showing all nearby orders. Enable GPS for distance-based filtering.',
+                                style: GoogleFonts.outfit(
+                                    color: Colors.orange, fontSize: 12),
+                              ),
+                            ),
+                          ]),
+                        ),
+
+                      if (_isLoading)
+                        const Center(
+                            child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: CircularProgressIndicator(),
+                        ))
+                      else if (!_isOnline)
+                        _offlineState(isDark)
+                      else if (_availableGroups.isEmpty)
+                        _emptyState(isDark)
+                      else
+                        ..._availableGroups
+                            .map((g) => _availableOrderGroupCard(g, isDark)),
+                    ]),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    ));
+          ),
+        ));
   }
 
   // ── Card Builders ─────────────────────────────────────────────────────────
@@ -1758,7 +1926,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final sLat = shopInfo?.lat ?? order.shopLat;
     final sLng = shopInfo?.lng ?? order.shopLng;
     if (sLat == null || sLng == null) return null;
-    return Geolocator.distanceBetween(_riderLat!, _riderLng!, sLat, sLng) / 1000;
+    return Geolocator.distanceBetween(_riderLat!, _riderLng!, sLat, sLng) /
+        1000;
   }
 
   /// Straight-line km from shop to customer (used on the card chip).
@@ -1769,7 +1938,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final sLng = shopInfo?.lng ?? order.shopLng;
     if (sLat == null || sLng == null) return null;
     if (order.deliveryLat == null || order.deliveryLng == null) return null;
-    return Geolocator.distanceBetween(sLat, sLng, order.deliveryLat!, order.deliveryLng!) / 1000;
+    return Geolocator.distanceBetween(
+            sLat, sLng, order.deliveryLat!, order.deliveryLng!) /
+        1000;
   }
 
   // ignore: unused_element
@@ -1800,9 +1971,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           children: [
             Text(label,
                 style: GoogleFonts.outfit(
-                    fontSize: 10,
-                    color: color,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: 10, color: color, fontWeight: FontWeight.w600)),
             Text(
               km != null ? '${km.toStringAsFixed(1)} km' : '— km',
               style: GoogleFonts.outfit(
@@ -1817,175 +1986,215 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   Widget _availableOrderGroupCard(OrderGroup group, bool isDark) {
-    final totalEarnings = group.orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
+    final totalEarnings =
+        group.orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
     bool isExpanded = !_collapsedAvailableGroups.contains(group.groupId);
 
-    return StatefulBuilder(
-      builder: (context, setStateBuilder) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF121222) : Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6))
-            ],
-            border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.06)
-                    : Colors.transparent),
-          ),
-          child: Column(children: [
-            GestureDetector(
-              onTap: () {
-                setStateBuilder(() => isExpanded = !isExpanded);
-                if (isExpanded) {
-                  _collapsedAvailableGroups.remove(group.groupId);
-                } else {
-                  _collapsedAvailableGroups.add(group.groupId);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(colors: [Color(0xFF0D2137), Color(0xFF1A3A5C)]),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+    return StatefulBuilder(builder: (context, setStateBuilder) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF121222) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 6))
+          ],
+          border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.transparent),
+        ),
+        child: Column(children: [
+          GestureDetector(
+            onTap: () {
+              setStateBuilder(() => isExpanded = !isExpanded);
+              if (isExpanded) {
+                _collapsedAvailableGroups.remove(group.groupId);
+              } else {
+                _collapsedAvailableGroups.add(group.groupId);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                    colors: [Color(0xFF0D2137), Color(0xFF1A3A5C)]),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.storefront_outlined,
+                    color: Colors.white70, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Collected Order (${group.orders.length} Shops)',
+                      style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13)),
                 ),
-                child: Row(children: [
-                  const Icon(Icons.storefront_outlined, color: Colors.white70, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('Collected Order (${group.orders.length} Shops)',
-                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2ECC71),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF2ECC71).withValues(alpha: 0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                        color: const Color(0xFF2ECC71),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF2ECC71).withValues(alpha: 0.4),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.currency_rupee_rounded, color: Colors.white, size: 14),
-                        Text(totalEarnings.toStringAsFixed(0),
-                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white70),
-                ]),
-              ),
-            ),
-            if (isExpanded)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Row(children: [
-                        const Icon(Icons.location_on_outlined, size: 16, color: AppColors.danger),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: _buildAddressDisplay(
-                            address: group.customerAddress,
-                            isDark: isDark,
-                          ),
+                      const Icon(Icons.currency_rupee_rounded,
+                          color: Colors.white, size: 14),
+                      Text(totalEarnings.toStringAsFixed(0),
+                          style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: Colors.white70),
+              ]),
+            ),
+          ),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.location_on_outlined,
+                          size: 16, color: AppColors.danger),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _buildAddressDisplay(
+                          address: group.customerAddress,
+                          isDark: isDark,
                         ),
-                      ]),
-                      const SizedBox(height: 10),
-                      Text('Contains items from ${group.orders.length} shops', 
-                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.amber)),
-                      const SizedBox(height: 6),
-                      ...group.orders.map((o) {
-                        final shopName = _shopInfoCache[o.shopId]?.name ?? 'Shop';
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.circle, size: 6, color: Colors.amber),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(shopName, style: GoogleFonts.outfit(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87))),
-                            ],
-                          ),
-                        );
-                      }),
-                      if (group.orders.isNotEmpty && group.orders.first.acceptanceDeadline != null) ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.07),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.red.withValues(alpha: 0.18)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  'Acceptance Time Left',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.red,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              OrderCountdownTimer(
-                                acceptanceDeadline: group.orders.first.acceptanceDeadline!,
-                                fontSize: 13,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 14),
-                      Row(children: [
-                        OutlinedButton.icon(
-                          onPressed: () => _openRouteMapForGroup(group),
-                          icon: const Icon(Icons.map_rounded, size: 18),
-                          label: Text('See Route', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF4C6EF5),
-                            side: const BorderSide(color: Color(0xFF4C6EF5), width: 1.2),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : () => _acceptOrderGroup(group),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.success,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              elevation: 4,
-                              shadowColor: AppColors.success.withValues(alpha: 0.4),
-                            ),
-                            child: Text('Accept Group', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14)),
-                          ),
-                        ),
-                      ]),
+                      ),
                     ]),
-              ),
-          ]),
-        );
-      }
-    );
+                    const SizedBox(height: 10),
+                    Text('Contains items from ${group.orders.length} shops',
+                        style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber)),
+                    const SizedBox(height: 6),
+                    ...group.orders.map((o) {
+                      final shopName = _shopInfoCache[o.shopId]?.name ?? 'Shop';
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.circle,
+                                size: 6, color: Colors.amber),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                child: Text(shopName,
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 12,
+                                        color: isDark
+                                            ? Colors.white70
+                                            : Colors.black87))),
+                          ],
+                        ),
+                      );
+                    }),
+                    if (group.orders.isNotEmpty &&
+                        group.orders.first.acceptanceDeadline != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: Colors.red.withValues(alpha: 0.18)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Acceptance Time Left',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.red,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            OrderCountdownTimer(
+                              acceptanceDeadline:
+                                  group.orders.first.acceptanceDeadline!,
+                              fontSize: 13,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    Row(children: [
+                      OutlinedButton.icon(
+                        onPressed: () => _openRouteMapForGroup(group),
+                        icon: const Icon(Icons.map_rounded, size: 18),
+                        label: Text('See Route',
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w700)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF4C6EF5),
+                          side: const BorderSide(
+                              color: Color(0xFF4C6EF5), width: 1.2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () => _acceptOrderGroup(group),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            elevation: 4,
+                            shadowColor:
+                                AppColors.success.withValues(alpha: 0.4),
+                          ),
+                          child: Text('Accept Group',
+                              style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w800, fontSize: 14)),
+                        ),
+                      ),
+                    ]),
+                  ]),
+            ),
+        ]),
+      );
+    });
   }
 
   Widget _activeOrderGroupCard(OrderGroup group, bool isDark) {
@@ -1997,185 +2206,232 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
     bool isExpanded = !_collapsedActiveGroups.contains(group.groupId);
 
-    return StatefulBuilder(
-      builder: (context, setStateBuilder) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF121222) : Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: statusGradient.first.withValues(alpha: 0.3), width: 1.5),
-            boxShadow: [BoxShadow(color: statusGradient.first.withValues(alpha: 0.15), blurRadius: 16, offset: const Offset(0, 6))],
-          ),
-          child: Column(children: [
-            // Header
-            GestureDetector(
-              onTap: () {
-                setStateBuilder(() => isExpanded = !isExpanded);
-                if (isExpanded) {
-                  _collapsedActiveGroups.remove(group.groupId);
-                } else {
-                  _collapsedActiveGroups.add(group.groupId);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: statusGradient),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: Row(children: [
-                  Expanded(
-                    child: Text('Collected Order (${group.orders.length})',
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    constraints: const BoxConstraints(maxWidth: 180),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
-                    child: Text(group.groupStatus == 'awaiting_payment' ? 'PAYMENT IN PROGRESS' : group.groupStatus.toUpperCase().replaceAll('_', ' '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white70),
-                ]),
+    return StatefulBuilder(builder: (context, setStateBuilder) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF121222) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+              color: statusGradient.first.withValues(alpha: 0.3), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+                color: statusGradient.first.withValues(alpha: 0.15),
+                blurRadius: 16,
+                offset: const Offset(0, 6))
+          ],
+        ),
+        child: Column(children: [
+          // Header
+          GestureDetector(
+            onTap: () {
+              setStateBuilder(() => isExpanded = !isExpanded);
+              if (isExpanded) {
+                _collapsedActiveGroups.remove(group.groupId);
+              } else {
+                _collapsedActiveGroups.add(group.groupId);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: statusGradient),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
               ),
+              child: Row(children: [
+                Expanded(
+                  child: Text('Collected Order (${group.orders.length})',
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13)),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 180),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Text(
+                      group.groupStatus == 'awaiting_payment'
+                          ? 'PAYMENT IN PROGRESS'
+                          : group.groupStatus
+                              .toUpperCase()
+                              .replaceAll('_', ' '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: Colors.white70),
+              ]),
             ),
-            // Body
-            if (isExpanded)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(children: [
-                  // Destination
-                  Row(children: [
-                    const Icon(Icons.location_on_outlined, size: 16, color: AppColors.danger),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: _buildAddressDisplay(
-                        address: group.customerAddress,
-                        isDark: isDark,
-                        lightTheme: true,
-                      ),
+          ),
+          // Body
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(children: [
+                // Destination
+                Row(children: [
+                  const Icon(Icons.location_on_outlined,
+                      size: 16, color: AppColors.danger),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _buildAddressDisplay(
+                      address: group.customerAddress,
+                      isDark: isDark,
+                      lightTheme: true,
                     ),
-                  ]),
-                  // ── ETA chip for rider (drop-off time estimate) ──
-                  if (group.orders.isNotEmpty && group.orders.first.estimatedDistanceKm > 0) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(50),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                  ),
+                ]),
+                // ── ETA chip for rider (drop-off time estimate) ──
+                if (group.orders.isNotEmpty &&
+                    group.orders.first.estimatedDistanceKm > 0) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(50),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.access_time_rounded,
+                            color: Colors.white, size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Drop in ~${DeliveryCalculator.etaLabel(group.orders.first.estimatedDistanceKm, 0)}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '· by ${DeliveryCalculator.etaArrivalTime(group.orders.first.estimatedDistanceKm, 0)}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    if (group.customerPhone != null &&
+                        group.customerPhone!.isNotEmpty) ...[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _callPhone(group.customerPhone!),
+                          icon: const Icon(Icons.phone_outlined, size: 16),
+                          label: Text('Call Customer',
+                              style: GoogleFonts.outfit(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.access_time_rounded, color: Colors.white, size: 14),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Drop in ~${DeliveryCalculator.etaLabel(group.orders.first.estimatedDistanceKm, 0)}',
-                            style: GoogleFonts.outfit(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '· by ${DeliveryCalculator.etaArrivalTime(group.orders.first.estimatedDistanceKm, 0)}',
-                            style: GoogleFonts.outfit(
-                              fontSize: 11,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _openRouteMapForGroup(group, isViewOnly: true),
+                        icon: const Icon(Icons.map_outlined, size: 16),
+                        label: Text('See Route',
+                            style: GoogleFonts.outfit(fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF4C6EF5),
+                          side: const BorderSide(color: Color(0xFF4C6EF5)),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      if (group.customerPhone != null && group.customerPhone!.isNotEmpty) ...[
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => _callPhone(group.customerPhone!),
-                            icon: const Icon(Icons.phone_outlined, size: 16),
-                            label: Text('Call Customer', style: GoogleFonts.outfit(fontSize: 12)),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _openRouteMapForGroup(group, isViewOnly: true),
-                          icon: const Icon(Icons.map_outlined, size: 16),
-                          label: Text('See Route', style: GoogleFonts.outfit(fontSize: 12)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF4C6EF5),
-                            side: const BorderSide(color: Color(0xFF4C6EF5)),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  
-                  // Render individual shop pickup cards
-                  ...group.orders.map((o) => _buildShopPickupTile(o, isDark)),
+                ),
+                const SizedBox(height: 14),
 
-                  // Master Actions
-                  if (group.allPickedUp && !group.allOutForDelivery)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          for (int i = 0; i < group.orders.length; i++) {
-                            await _updateStatus(group.orders[i], 'out_for_delivery', skipReload: true, notifyCustomer: i == 0);
-                          }
-                          _loadOrders();
-                        },
-                        icon: const Icon(Icons.rocket_launch, size: 18),
-                        label: Text('Mark All Out for Delivery', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4C6EF5), foregroundColor: Colors.white),
-                      ),
+                // Render individual shop pickup cards
+                ...group.orders.map((o) => _buildShopPickupTile(o, isDark)),
+
+                // Master Actions
+                if (group.allPickedUp && !group.allOutForDelivery)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        for (int i = 0; i < group.orders.length; i++) {
+                          await _updateStatus(
+                              group.orders[i], 'out_for_delivery',
+                              skipReload: true, notifyCustomer: i == 0);
+                        }
+                        _loadOrders();
+                      },
+                      icon: const Icon(Icons.rocket_launch, size: 18),
+                      label: Text('Mark All Out for Delivery',
+                          style:
+                              GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4C6EF5),
+                          foregroundColor: Colors.white),
                     ),
-                  if (group.allOutForDelivery && group.groupStatus != 'delivered')
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          for (int i = 0; i < group.orders.length; i++) {
-                            await _updateStatus(group.orders[i], 'delivered', skipReload: true, skipRating: true, notifyCustomer: i == 0);
-                          }
-                          _loadOrders();
-                          if (mounted) {
-                            _showGroupDeliveryRatingFlow(group);
-                          }
-                        },
-                        icon: const Icon(Icons.check_circle_outline, size: 18),
-                        label: Text('Mark All Delivered', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white),
-                      ),
+                  ),
+                if (group.allOutForDelivery && group.groupStatus != 'delivered')
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        for (int i = 0; i < group.orders.length; i++) {
+                          await _updateStatus(group.orders[i], 'delivered',
+                              skipReload: true,
+                              skipRating: true,
+                              notifyCustomer: i == 0);
+                        }
+                        _loadOrders();
+                        if (mounted) {
+                          _showGroupDeliveryRatingFlow(group);
+                        }
+                      },
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: Text('Mark All Delivered',
+                          style:
+                              GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          foregroundColor: Colors.white),
                     ),
-                ]),
-              ),
-          ]),
-        );
-      }
-    );
+                  ),
+              ]),
+            ),
+        ]),
+      );
+    });
   }
 
   Widget _buildShopPickupTile(OrderModel order, bool isDark) {
@@ -2219,29 +2475,41 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       decoration: BoxDecoration(
         color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1)),
+        border: Border.all(
+            color:
+                (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.storefront_rounded, size: 16, color: AppColors.accent),
+              const Icon(Icons.storefront_rounded,
+                  size: 16, color: AppColors.accent),
               const SizedBox(width: 6),
-              Expanded(child: Text(shopName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis, maxLines: 1)),
+              Expanded(
+                  child: Text(shopName,
+                      style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w600, fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1)),
               const SizedBox(width: 6),
               Flexible(
                 flex: 0,
                 child: Container(
                   constraints: const BoxConstraints(maxWidth: 160),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: getStatusColor().withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: getStatusColor().withValues(alpha: 0.3)),
+                    border: Border.all(
+                        color: getStatusColor().withValues(alpha: 0.3)),
                   ),
                   child: Text(
-                    order.status == 'awaiting_payment' ? 'PAYMENT IN PROGRESS' : order.statusDisplay.toUpperCase(),
+                    order.status == 'awaiting_payment'
+                        ? 'PAYMENT IN PROGRESS'
+                        : order.statusDisplay.toUpperCase(),
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -2259,7 +2527,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             const SizedBox(height: 6),
             InkWell(
               onTap: () => _callPhone(order.shopPhone!),
-              child: Text('📞 Call Shop', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.accent, decoration: TextDecoration.underline)),
+              child: Text('📞 Call Shop',
+                  style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      color: AppColors.accent,
+                      decoration: TextDecoration.underline)),
             )
           ],
           if (nextLabel != null) ...[
@@ -2287,23 +2559,28 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               ),
             ),
           ],
-          if (order.status == 'confirmed' || order.status == 'preparing' || order.status == 'ready_for_pickup') ...[
+          if (order.status == 'confirmed' ||
+              order.status == 'preparing' ||
+              order.status == 'ready_for_pickup') ...[
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _showDisputeDialog(order),
-                    icon: const Icon(Icons.report_problem_outlined, color: AppColors.danger, size: 14),
+                    icon: const Icon(Icons.report_problem_outlined,
+                        color: AppColors.danger, size: 14),
                     label: Text(
                         order.status == 'ready_for_pickup'
                             ? 'Shop Lied'
                             : 'Report Issue',
-                        style: GoogleFonts.outfit(color: AppColors.danger, fontSize: 12)),
+                        style: GoogleFonts.outfit(
+                            color: AppColors.danger, fontSize: 12)),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppColors.danger),
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ),
@@ -2311,12 +2588,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _confirmDropOrder(order),
-                    icon: const Icon(Icons.cancel_outlined, color: Colors.orange, size: 14),
-                    label: Text('Drop Order', style: GoogleFonts.outfit(color: Colors.orange, fontSize: 12)),
+                    icon: const Icon(Icons.cancel_outlined,
+                        color: Colors.orange, size: 14),
+                    label: Text('Drop Order',
+                        style: GoogleFonts.outfit(
+                            color: Colors.orange, fontSize: 12)),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.orange),
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ),
@@ -2328,14 +2609,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     );
   }
 
-
   Widget _offlineState(bool isDark) => Container(
         margin: const EdgeInsets.only(top: 8),
         padding: const EdgeInsets.all(40),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF141425) : Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+          border:
+              Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
         ),
         child: Column(children: [
           Container(
@@ -2344,7 +2625,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               color: Colors.grey.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.power_off_rounded, size: 64, color: isDark ? Colors.white54 : Colors.grey),
+            child: Icon(Icons.power_off_rounded,
+                size: 64, color: isDark ? Colors.white54 : Colors.grey),
           ),
           const SizedBox(height: 24),
           Text('You\'re Offline',
@@ -2353,7 +2635,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   fontWeight: FontWeight.w800,
                   color: isDark ? Colors.white : const Color(0xFF0A0A14))),
           const SizedBox(height: 8),
-          Text('Toggle the switch above to go online and start accepting orders.',
+          Text(
+              'Toggle the switch above to go online and start accepting orders.',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                   color: isDark ? Colors.white60 : Colors.grey.shade600,
@@ -2367,7 +2650,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF141425) : Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+          border:
+              Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
         ),
         child: Column(children: [
           Container(
@@ -2376,7 +2660,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.radar_rounded, size: 64, color: AppColors.primary.withValues(alpha: 0.8)),
+            child: Icon(Icons.radar_rounded,
+                size: 64, color: AppColors.primary.withValues(alpha: 0.8)),
           ),
           const SizedBox(height: 24),
           Text('Finding Orders...',
@@ -2385,7 +2670,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   fontWeight: FontWeight.w800,
                   color: isDark ? Colors.white : const Color(0xFF0A0A14))),
           const SizedBox(height: 8),
-          Text('Stay in a busy area to increase your chances of receiving requests.',
+          Text(
+              'Stay in a busy area to increase your chances of receiving requests.',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                   color: isDark ? Colors.white60 : Colors.grey.shade600,
@@ -2420,7 +2706,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         width: 52,
         height: 52,
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.6)]),
+          gradient:
+              LinearGradient(colors: [color, color.withValues(alpha: 0.6)]),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
@@ -2454,7 +2741,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         onPressed: onTap,
         splashRadius: 20,
       );
-      
+
   // ignore: unused_element
   Widget _progressStep({required IconData icon, required bool isActive}) {
     return Container(
@@ -2480,6 +2767,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       ),
     );
   }
+
   Widget _blob(double size, Color color, double opacity) => Opacity(
         opacity: opacity.clamp(0.0, 1.0),
         child: Container(
@@ -2487,8 +2775,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             height: size,
             decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient:
-                    RadialGradient(colors: [color, color.withValues(alpha: 0)]))),
+                gradient: RadialGradient(
+                    colors: [color, color.withValues(alpha: 0)]))),
       );
 
   Widget _actionTile({
@@ -2514,9 +2802,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 offset: const Offset(0, 4))
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Container(
             padding: const EdgeInsets.all(12),
             width: 50,
@@ -2620,8 +2906,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       try {
                         await _supabase
                             .from('delivery_partners')
-                            .update({'is_accepting_orders': val})
-                            .eq('id', auth.currentUserId!);
+                            .update({'is_accepting_orders': val}).eq(
+                                'id', auth.currentUserId!);
                       } catch (e) {
                         debugPrint('Error updating duty status: $e');
                       }
@@ -2644,7 +2930,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       style: GoogleFonts.outfit(
                           fontWeight: FontWeight.bold,
                           color: isDark ? Colors.white : Colors.black)),
-                  subtitle: Text(_navApp == 'apple_maps' ? 'Apple Maps' : _navApp == 'waze' ? 'Waze' : 'Google Maps',
+                  subtitle: Text(
+                      _navApp == 'apple_maps'
+                          ? 'Apple Maps'
+                          : _navApp == 'waze'
+                              ? 'Waze'
+                              : 'Google Maps',
                       style: GoogleFonts.outfit(
                           color: isDark ? Colors.white70 : Colors.black54)),
                   leading: const Icon(Icons.map_outlined, color: Colors.blue),
@@ -2662,7 +2953,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     if (auth.currentUserId != null) {
                       await _supabase
                           .from('delivery_partners')
-                          .update({'preferred_nav_app': newApp}).eq('id', auth.currentUserId!);
+                          .update({'preferred_nav_app': newApp}).eq(
+                              'id', auth.currentUserId!);
                     }
                   },
                 ),
@@ -2694,36 +2986,46 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     _isSheetOpen = true;
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         return Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Change Vehicle', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('Change Vehicle',
+                  style: GoogleFonts.outfit(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
-              ...['bicycle', 'motorcycle', '3-wheeler', 'car'].map((type) => ListTile(
-                title: Text(_vehicleTypeLabel(type)),
-                trailing: _vehicleType == type ? const Icon(Icons.check, color: AppColors.success) : null,
-                onTap: () async {
-                  Navigator.pop(context);
-                  if (type == _vehicleType) return;
-                  final auth = context.read<AuthProvider>();
-                  if (auth.currentUserId != null) {
-                    try {
-                      await _supabase.from('vehicle_change_requests').insert({
-                        'rider_id': auth.currentUserId!,
-                        'requested_type': type,
-                      });
+              ...['bicycle', 'motorcycle', '3-wheeler', 'car']
+                  .map((type) => ListTile(
+                        title: Text(_vehicleTypeLabel(type)),
+                        trailing: _vehicleType == type
+                            ? const Icon(Icons.check, color: AppColors.success)
+                            : null,
+                        onTap: () async {
+                          Navigator.pop(context);
+                          if (type == _vehicleType) return;
+                          final auth = context.read<AuthProvider>();
+                          if (auth.currentUserId != null) {
+                            try {
+                              await _supabase
+                                  .from('vehicle_change_requests')
+                                  .insert({
+                                'rider_id': auth.currentUserId!,
+                                'requested_type': type,
+                              });
 
-                      _showSnack('Vehicle change requested. Awaiting admin approval.');
-                    } catch (e) {
-                      _showSnack('Error requesting vehicle change', isError: true);
-                    }
-                  }
-                },
-              )),
+                              _showSnack(
+                                  'Vehicle change requested. Awaiting admin approval.');
+                            } catch (e) {
+                              _showSnack('Error requesting vehicle change',
+                                  isError: true);
+                            }
+                          }
+                        },
+                      )),
             ],
           ),
         );
@@ -2743,13 +3045,17 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       return;
     }
     final Uri uri = switch (_navApp) {
-      'waze'        => Uri.parse('waze://?ll=$lat,$lng&navigate=yes'),
-      'apple_maps'  => Uri.parse('maps://maps.apple.com/?daddr=$lat,$lng'),
-      _             => Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'),
+      'waze' => Uri.parse('waze://?ll=$lat,$lng&navigate=yes'),
+      'apple_maps' => Uri.parse('maps://maps.apple.com/?daddr=$lat,$lng'),
+      _ => Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'),
     };
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       // Fallback
-      await launchUrl(Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'), mode: LaunchMode.externalApplication);
+      await launchUrl(
+          Uri.parse(
+              'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'),
+          mode: LaunchMode.externalApplication);
     }
   }
 

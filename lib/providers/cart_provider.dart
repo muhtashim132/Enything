@@ -17,58 +17,58 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ---------------------------------------------------------------------------
 
 Map<String, dynamic> _productToJson(ProductModel p) => {
-  'id': p.id,
-  'shop_id': p.shopId,
-  'name': p.name,
-  'category': p.category,
-  'sub_category': p.subCategory,
-  'brand': p.brand,
-  'price': p.price,
-  'original_price': p.originalPrice,
-  'total_quantity': p.totalQuantity,
-  'weight_per_unit': p.weightPerUnit,
-  'unit_type': p.unitType,
-  'description': p.description,
-  'images': p.images,
-  'is_veg': p.isVeg,
-  'menu_category': p.menuCategory,
-  'prep_time_minutes': p.prepTimeMinutes,
-  'special_tags': p.specialTags,
-  'is_available': p.isAvailable,
-  'rating': p.rating,
-  'requires_prescription': p.requiresPrescription,
-  'medicine_type': p.medicineType,
-  'gst_rate_override': p.gstRateOverride,
-  'variants': p.variants.map((v) => v.toMap()).toList(),
-};
+      'id': p.id,
+      'shop_id': p.shopId,
+      'name': p.name,
+      'category': p.category,
+      'sub_category': p.subCategory,
+      'brand': p.brand,
+      'price': p.price,
+      'original_price': p.originalPrice,
+      'total_quantity': p.totalQuantity,
+      'weight_per_unit': p.weightPerUnit,
+      'unit_type': p.unitType,
+      'description': p.description,
+      'images': p.images,
+      'is_veg': p.isVeg,
+      'menu_category': p.menuCategory,
+      'prep_time_minutes': p.prepTimeMinutes,
+      'special_tags': p.specialTags,
+      'is_available': p.isAvailable,
+      'rating': p.rating,
+      'requires_prescription': p.requiresPrescription,
+      'medicine_type': p.medicineType,
+      'gst_rate_override': p.gstRateOverride,
+      'variants': p.variants.map((v) => v.toMap()).toList(),
+    };
 
 ProductModel _productFromJson(Map<String, dynamic> m) => ProductModel.fromMap({
-  ...m,
-  'id': m['id'] ?? '',
-});
+      ...m,
+      'id': m['id'] ?? '',
+    });
 
 Map<String, dynamic> _shopToJson(ShopModel s) => {
-  'id': s.id,
-  'seller_id': s.sellerId,
-  'name': s.name,
-  'shop_type': s.shopType,
-  'cuisine_type': s.cuisineType,
-  'fssai_number': s.fssaiNumber,
-  'prep_time_minutes': s.prepTimeMinutes,
-  'is_veg_only': s.isVegOnly,
-  'opening_hours': s.openingHours,
-  'address': s.address,
-  // Store lat/lng manually since ShopModel uses POINT format in DB
-  '_lat': s.location.latitude,
-  '_lng': s.location.longitude,
-  'category': s.category,
-  'categories': s.categories,
-  'is_active': s.isActive,
-  'rating': s.rating,
-  'total_reviews': s.totalReviews,
-  'total_orders': s.totalOrders,
-  'banner_image': s.bannerImage,
-};
+      'id': s.id,
+      'seller_id': s.sellerId,
+      'name': s.name,
+      'shop_type': s.shopType,
+      'cuisine_type': s.cuisineType,
+      'fssai_number': s.fssaiNumber,
+      'prep_time_minutes': s.prepTimeMinutes,
+      'is_veg_only': s.isVegOnly,
+      'opening_hours': s.openingHours,
+      'address': s.address,
+      // Store lat/lng manually since ShopModel uses POINT format in DB
+      '_lat': s.location.latitude,
+      '_lng': s.location.longitude,
+      'category': s.category,
+      'categories': s.categories,
+      'is_active': s.isActive,
+      'rating': s.rating,
+      'total_reviews': s.totalReviews,
+      'total_orders': s.totalOrders,
+      'banner_image': s.bannerImage,
+    };
 
 ShopModel _shopFromJson(Map<String, dynamic> m) {
   final lat = (m['_lat'] as num?)?.toDouble() ?? 0.0;
@@ -102,7 +102,8 @@ class RestoreResult {
 }
 
 class CartProvider extends ChangeNotifier {
-  static const String _cartKey = 'enything_cart_v2'; // Bumped for variant support
+  static const String _cartKey =
+      'enything_cart_v2'; // Bumped for variant support
   static const String _legacyCartKey = 'enything_cart_v1';
   final List<CartItem> _items = [];
   final Set<String> _inFlightRestores = {};
@@ -116,7 +117,8 @@ class CartProvider extends ChangeNotifier {
     if (PlatformConfigProvider.instance != null) {
       PlatformConfigProvider.instance!.addListener(notifyListeners);
     } else if (retries < 10) {
-      Future.delayed(const Duration(milliseconds: 500), () => _safeAddPlatformListener(retries + 1));
+      Future.delayed(const Duration(milliseconds: 500),
+          () => _safeAddPlatformListener(retries + 1));
     }
   }
 
@@ -139,11 +141,15 @@ class CartProvider extends ChangeNotifier {
 
   int get totalItemCount => _items.fold(0, (sum, item) => sum + item.quantity);
 
-  double get totalWeight =>
-      _items.fold(0.0, (sum, item) => sum + item.weightKg);
+  double get totalWeight {
+    int totalGrams = _items.fold(0, (sum, item) {
+      int unitGrams = (item.weightKg * 1000).round();
+      return sum + unitGrams;
+    });
+    return totalGrams / 1000.0;
+  }
 
-  double get subtotal =>
-      _items.fold(0.0, (sum, item) => sum + item.totalPrice);
+  double get subtotal => _items.fold(0.0, (sum, item) => sum + item.totalPrice);
 
   /// Unique shops in the order they were first added to the cart.
   List<ShopModel> get shops {
@@ -158,9 +164,11 @@ class CartProvider extends ChangeNotifier {
 
   // PlatformConfigProvider.instance now safely attaches its listener even if it's delayed.
   // This ensures UI rebuilds instantly when admin updates platform fee or rates.
-  double get platformFee => PlatformConfigProvider.instance?.platformFee ?? PaymentConfig.platformFee;
+  double get platformFee =>
+      PlatformConfigProvider.instance?.platformFee ?? PaymentConfig.platformFee;
 
-  bool get requiresPrescription => _items.any((item) => item.product.requiresPrescription);
+  bool get requiresPrescription =>
+      _items.any((item) => item.product.requiresPrescription);
 
   // ---------------------------------------------------------------------------
   // Add-On GST helpers (tax_config.dart — ADD-ON MODEL)
@@ -202,25 +210,27 @@ class CartProvider extends ChangeNotifier {
             'category': i.product.category,
             'price': i.product.price, // BASE price, pre-GST
             'quantity': i.quantity,
-            'gst_rate_override': i.product.gstRateOverride, // null = use category
+            'gst_rate_override':
+                i.product.gstRateOverride, // null = use category
           })
       .toList();
 
   double get smallCartFee {
-    final threshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
-    final fee = PlatformConfigProvider.instance?.smallCartFee ?? PaymentConfig.smallCartFee;
+    final threshold = PlatformConfigProvider.instance?.smallCartThreshold ??
+        PaymentConfig.smallCartThreshold;
+    final fee = PlatformConfigProvider.instance?.smallCartFee ??
+        PaymentConfig.smallCartFee;
     return subtotal < threshold && subtotal > 0 ? fee : 0.0;
   }
 
   double get heavyOrderFee {
-    final threshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
-    final feePerKg = PlatformConfigProvider.instance?.heavyOrderFeePerKg ?? PaymentConfig.heavyOrderFee;
-    
+    final threshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ??
+        PaymentConfig.heavyOrderThreshold;
+    final fee = PlatformConfigProvider.instance?.heavyOrderFee ??
+        PaymentConfig.heavyOrderFee;
+
     if (totalWeight > threshold) {
-      // Safely apply penalty only to the weight strictly above the configured threshold
-      final extraWeight = (totalWeight - threshold).ceil();
-      final multiplier = extraWeight > 0 ? extraWeight : 0;
-      return feePerKg * multiplier;
+      return fee;
     }
     return 0.0;
   }
@@ -229,7 +239,9 @@ class CartProvider extends ChangeNotifier {
   bool get isMultiShopOrder => shops.length > 1;
 
   String? addItem(ProductModel product, ShopModel shop,
-      {int quantity = 1, ProductVariant? selectedVariant, bool suppressSave = false}) {
+      {int quantity = 1,
+      ProductVariant? selectedVariant,
+      bool suppressSave = false}) {
     if (!shop.isOpenRightNow) {
       return 'This shop is currently closed. Cannot accept orders right now.';
     }
@@ -238,7 +250,12 @@ class CartProvider extends ChangeNotifier {
       return 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
     }
 
-    final unitWeightKg = CartItem(product: product, shop: shop, quantity: 1, selectedVariant: selectedVariant).weightKg;
+    final unitWeightKg = CartItem(
+            product: product,
+            shop: shop,
+            quantity: 1,
+            selectedVariant: selectedVariant)
+        .weightKg;
     if (totalWeight + (unitWeightKg * quantity) > PaymentConfig.maxWeightKg) {
       return 'Maximum weight of ${PaymentConfig.maxWeightKg} kg allowed per order';
     }
@@ -249,8 +266,9 @@ class CartProvider extends ChangeNotifier {
       return 'Maximum 3 shops allowed per order. Please complete your current order first.';
     }
 
-    final existingIdx = _items.indexWhere(
-        (item) => item.product.id == product.id && item.selectedVariant?.name == selectedVariant?.name);
+    final existingIdx = _items.indexWhere((item) =>
+        item.product.id == product.id &&
+        item.selectedVariant?.name == selectedVariant?.name);
 
     if (existingIdx == -1) {
       _items.add(CartItem(
@@ -270,11 +288,13 @@ class CartProvider extends ChangeNotifier {
     return null;
   }
 
-  void addItemWithFeedback(BuildContext context, ProductModel product, ShopModel shop,
+  void addItemWithFeedback(
+      BuildContext context, ProductModel product, ShopModel shop,
       {int quantity = 1, ProductVariant? selectedVariant}) {
-    final err = addItem(product, shop, quantity: quantity, selectedVariant: selectedVariant);
+    final err = addItem(product, shop,
+        quantity: quantity, selectedVariant: selectedVariant);
     ScaffoldMessenger.of(context).clearSnackBars();
-    
+
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -288,19 +308,21 @@ class CartProvider extends ChangeNotifier {
       final msg = remaining > 0
           ? '${shops.length} shop${shops.length > 1 ? 's' : ''} selected, $remaining remaining if needed'
           : 'Added successfully. Cart is full (Max 3 shops).';
-          
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${product.name} added to cart! 🛒', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text('${product.name} added to cart! 🛒',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Text(msg, style: const TextStyle(fontSize: 12)),
             ],
           ),
-          backgroundColor: const Color(0xFF10B981), // AppColors.success fallback
+          backgroundColor:
+              const Color(0xFF10B981), // AppColors.success fallback
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 3),
         ),
@@ -309,13 +331,17 @@ class CartProvider extends ChangeNotifier {
   }
 
   void removeItem(String productId, {String? variantName}) {
-    _items.removeWhere((item) => item.product.id == productId && item.selectedVariant?.name == variantName);
+    _items.removeWhere((item) =>
+        item.product.id == productId &&
+        item.selectedVariant?.name == variantName);
     _saveCart(); // Bug #20
     notifyListeners();
   }
 
   void updateQuantity(String productId, int quantity, {String? variantName}) {
-    final idx = _items.indexWhere((item) => item.product.id == productId && item.selectedVariant?.name == variantName);
+    final idx = _items.indexWhere((item) =>
+        item.product.id == productId &&
+        item.selectedVariant?.name == variantName);
     if (idx != -1) {
       if (quantity <= 0) {
         _items.removeAt(idx);
@@ -346,25 +372,27 @@ class CartProvider extends ChangeNotifier {
       _needsSave = true;
       return;
     }
-    
+
     _isSaving = true;
     try {
       final prefs = await SharedPreferences.getInstance();
       do {
         _needsSave = false;
-        
+
         // Take a synchronous snapshot of the exact memory state at this microsecond
         // to guarantee the async JSON encoder serializes the correct data
         final snapshot = List<CartItem>.from(_items);
-        
-        final encoded = jsonEncode(snapshot.map((item) => {
-          'product': _productToJson(item.product),
-          'shop': _shopToJson(item.shop),
-          'quantity': item.quantity,
-          'special_instructions': item.specialInstructions,
-          'selected_variant': item.selectedVariant?.toMap(),
-        }).toList());
-        
+
+        final encoded = jsonEncode(snapshot
+            .map((item) => {
+                  'product': _productToJson(item.product),
+                  'shop': _shopToJson(item.shop),
+                  'quantity': item.quantity,
+                  'special_instructions': item.specialInstructions,
+                  'selected_variant': item.selectedVariant?.toMap(),
+                })
+            .toList());
+
         await prefs.setString(_cartKey, encoded);
       } while (_needsSave);
     } catch (e) {
@@ -380,30 +408,32 @@ class CartProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       String? raw = prefs.getString(_cartKey);
-      
+
       // Fallback to legacy cart if new one doesn't exist
       if (raw == null || raw.isEmpty) {
         raw = prefs.getString(_legacyCartKey);
       }
-      
+
       if (raw == null || raw.isEmpty) return;
 
       final List<dynamic> list = jsonDecode(raw) as List<dynamic>;
       final parsedList = <CartItem>[];
       for (final entry in list) {
         final map = entry as Map<String, dynamic>;
-        final product = _productFromJson(map['product'] as Map<String, dynamic>);
+        final product =
+            _productFromJson(map['product'] as Map<String, dynamic>);
         final shop = _shopFromJson(map['shop'] as Map<String, dynamic>);
         final qty = (map['quantity'] as num?)?.toInt() ?? 1;
         final instructions = map['special_instructions'] as String?;
         final variantMap = map['selected_variant'] as Map<String, dynamic>?;
-        
+
         parsedList.add(CartItem(
           product: product,
           shop: shop,
           quantity: qty,
           specialInstructions: instructions,
-          selectedVariant: variantMap != null ? ProductVariant.fromMap(variantMap) : null,
+          selectedVariant:
+              variantMap != null ? ProductVariant.fromMap(variantMap) : null,
         ));
       }
       _items.clear();
@@ -442,7 +472,8 @@ class CartProvider extends ChangeNotifier {
   double totalDeliveryCharges(double baseDistanceKm) {
     final base = calculateDeliveryCharges(baseDistanceKm);
     final effectiveBase = base >= 0 ? base : 25.0;
-    double totalWithoutGst = effectiveBase + multiShopSurcharge + heavyOrderFee + smallCartFee;
+    double totalWithoutGst =
+        effectiveBase + multiShopSurcharge + heavyOrderFee + smallCartFee;
     if (totalWithoutGst < 0) totalWithoutGst = 0.0;
     return totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
   }
@@ -450,13 +481,14 @@ class CartProvider extends ChangeNotifier {
   int getItemQuantity(String productId, {String? variantName}) {
     try {
       return _items
-          .where((item) => item.product.id == productId && item.selectedVariant?.name == variantName)
+          .where((item) =>
+              item.product.id == productId &&
+              item.selectedVariant?.name == variantName)
           .fold(0, (sum, item) => sum + item.quantity);
     } catch (_) {
       return 0;
     }
   }
-
 
   /// Restores items from a cancelled or rejected order back into the cart via RPC.
   /// Idempotent. Tracks processed orders in SharedPreferences. Returns RestoreResult.
@@ -471,41 +503,49 @@ class CartProvider extends ChangeNotifier {
 
       final prefsKey = 'readded_order_ids_$userId';
       final prefs = await SharedPreferences.getInstance();
-      List<String> processedList = List<String>.from(prefs.getStringList(prefsKey) ?? []);
-      
+      List<String> processedList =
+          List<String>.from(prefs.getStringList(prefsKey) ?? []);
+
       if (processedList.contains(orderId)) {
         return const RestoreResult(0); // Already processed
       }
 
-      final response = await supabase.rpc('get_order_reorder_data_v3', params: {'p_order_id': orderId}).timeout(const Duration(seconds: 8));
+      final response = await supabase.rpc('get_order_reorder_data_v3',
+          params: {'p_order_id': orderId}).timeout(const Duration(seconds: 8));
 
       // Level 12: Authentication Boundary Check
       // Prevent Cross-Account Ghost Injections if the user logs out during the async network transit.
       if (supabase.auth.currentUser?.id != userId) {
-        debugPrint('CartProvider: Aborting restoreOrderToCart due to logout or account switch.');
+        debugPrint(
+            'CartProvider: Aborting restoreOrderToCart due to logout or account switch.');
         return const RestoreResult(0);
       }
 
       if (response == null || response is! List || response.isEmpty) {
         // Mark as processed even if empty or corrupted to prevent infinite retries
-        List<String> currentList = List<String>.from(prefs.getStringList(prefsKey) ?? []);
+        List<String> currentList =
+            List<String>.from(prefs.getStringList(prefsKey) ?? []);
         currentList.remove(orderId);
         currentList.add(orderId);
-        if (currentList.length > 100) currentList = currentList.sublist(currentList.length - 100);
+        if (currentList.length > 100)
+          currentList = currentList.sublist(currentList.length - 100);
         await prefs.setStringList(prefsKey, currentList);
-        return const RestoreResult(0, 'All products in this order are no longer available or data is invalid.');
+        return const RestoreResult(0,
+            'All products in this order are no longer available or data is invalid.');
       }
 
       // Fetch original order count to detect if any products are out of stock / missing
       int originalCount = 0;
       bool countVerificationFailed = false;
       try {
-        final countResponse = await supabase
-            .rpc('get_order_item_count_v1', params: {'p_order_id': orderId})
-            .timeout(const Duration(seconds: 4));
+        final countResponse = await supabase.rpc('get_order_item_count_v1',
+            params: {
+              'p_order_id': orderId
+            }).timeout(const Duration(seconds: 4));
         originalCount = (countResponse as num).toInt();
       } catch (e) {
-        debugPrint('CartProvider: Failed to fetch original order items count: $e');
+        debugPrint(
+            'CartProvider: Failed to fetch original order items count: $e');
         countVerificationFailed = true;
       }
 
@@ -522,19 +562,24 @@ class CartProvider extends ChangeNotifier {
           ProductVariant? selectedVariant;
           if (variantName != null && product.variants.isNotEmpty) {
             try {
-              selectedVariant = product.variants.firstWhere((v) => v.name == variantName);
+              selectedVariant =
+                  product.variants.firstWhere((v) => v.name == variantName);
             } catch (_) {}
           }
 
           if (variantName != null && selectedVariant == null) {
             // The shop deleted this variant after the order was placed!
             // Skip adding this item to prevent corrupting the cart state.
-            debugPrint('CartProvider: Skipping item because variant $variantName is no longer available.');
+            debugPrint(
+                'CartProvider: Skipping item because variant $variantName is no longer available.');
             deletedVariantCount++;
             continue;
           }
 
-          final err = addItem(product, shop, quantity: quantity, selectedVariant: selectedVariant, suppressSave: true);
+          final err = addItem(product, shop,
+              quantity: quantity,
+              selectedVariant: selectedVariant,
+              suppressSave: true);
           if (err == null) {
             added++;
           } else {
@@ -542,20 +587,26 @@ class CartProvider extends ChangeNotifier {
           }
         } catch (e) {
           debugPrint('CartProvider: Failed to parse reorder item: $e');
-          lastError = 'Failed to parse some product details. Please add manually.';
+          lastError =
+              'Failed to parse some product details. Please add manually.';
         }
       }
 
-      final outOfStockCount = (originalCount > 0) ? (originalCount - response.length) + deletedVariantCount : 0;
+      final outOfStockCount = (originalCount > 0)
+          ? (originalCount - response.length) + deletedVariantCount
+          : 0;
       if (outOfStockCount > 0) {
         if (lastError == null) {
-          lastError = '$outOfStockCount product(s) are out of stock or unavailable.';
+          lastError =
+              '$outOfStockCount product(s) are out of stock or unavailable.';
         } else {
-          lastError = '$lastError Plus, $outOfStockCount product(s) are out of stock.';
+          lastError =
+              '$lastError Plus, $outOfStockCount product(s) are out of stock.';
         }
       } else if (countVerificationFailed && added > 0) {
         if (lastError == null) {
-          lastError = 'Poor network prevented checking for out-of-stock products.';
+          lastError =
+              'Poor network prevented checking for out-of-stock products.';
         } else {
           lastError = '$lastError Also, network prevented out-of-stock check.';
         }
@@ -567,10 +618,13 @@ class CartProvider extends ChangeNotifier {
       }
 
       // Mark as processed (re-read to prevent async write-overwrite race condition)
-      List<String> finalProcessedList = List<String>.from(prefs.getStringList(prefsKey) ?? []);
+      List<String> finalProcessedList =
+          List<String>.from(prefs.getStringList(prefsKey) ?? []);
       finalProcessedList.remove(orderId);
       finalProcessedList.add(orderId);
-      if (finalProcessedList.length > 100) finalProcessedList = finalProcessedList.sublist(finalProcessedList.length - 100);
+      if (finalProcessedList.length > 100)
+        finalProcessedList =
+            finalProcessedList.sublist(finalProcessedList.length - 100);
       await prefs.setStringList(prefsKey, finalProcessedList);
 
       return RestoreResult(added, lastError);
@@ -578,21 +632,26 @@ class CartProvider extends ChangeNotifier {
       debugPrint('CartProvider: restoreOrderToCart failed: $e');
       final errStr = e.toString().toLowerCase();
       // Poison Pill Catcher: If error is not a transient network issue, mark as processed to prevent infinite looping
-      if (!errStr.contains('timeout') && !errStr.contains('socketexception') && !errStr.contains('clientexception')) {
+      if (!errStr.contains('timeout') &&
+          !errStr.contains('socketexception') &&
+          !errStr.contains('clientexception')) {
         try {
           final prefs = await SharedPreferences.getInstance();
           final userId = Supabase.instance.client.auth.currentUser?.id;
           if (userId != null) {
             final prefsKey = 'readded_order_ids_$userId';
-            List<String> currentList = List<String>.from(prefs.getStringList(prefsKey) ?? []);
+            List<String> currentList =
+                List<String>.from(prefs.getStringList(prefsKey) ?? []);
             currentList.remove(orderId);
             currentList.add(orderId);
-            if (currentList.length > 100) currentList = currentList.sublist(currentList.length - 100);
+            if (currentList.length > 100)
+              currentList = currentList.sublist(currentList.length - 100);
             await prefs.setStringList(prefsKey, currentList);
           }
         } catch (_) {}
       }
-      return const RestoreResult(0, 'Network timeout or error. Could not restore order.');
+      return const RestoreResult(
+          0, 'Network timeout or error. Could not restore order.');
     } finally {
       _inFlightRestores.remove(orderId);
     }

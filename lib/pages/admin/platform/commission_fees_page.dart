@@ -38,7 +38,7 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
   Future<void> _saveEdit(
       String key, PlatformConfigProvider config, RbacProvider rbac) async {
     if (_isSaving) return;
-    
+
     final text = _ctrls[key]?.text.trim() ?? '';
     if (text.isEmpty || double.tryParse(text) == null) {
       setState(() => _editingKey = null);
@@ -46,7 +46,7 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
     }
 
     setState(() => _isSaving = true);
-    
+
     final success = await config.updateSetting(
       key: key,
       value: text,
@@ -105,7 +105,7 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   color: AdminColors.primary,
                   children: [
                     _buildItem(
-                        'commission_percent',
+                        'default_commission_percent',
                         'Platform Commission',
                         'Percentage charged on base item price',
                         config.commissionPercent,
@@ -182,6 +182,29 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                         'km',
                         config,
                         rbac),
+                    _buildItem(
+                        'rider_notification_radius_km',
+                        'Rider Notification Radius',
+                        'How far riders receive order alerts',
+                        config.riderNotificationRadiusKm,
+                        'km',
+                        config,
+                        rbac),
+                  ],
+                ),
+                _buildSection(
+                  title: 'Multi-Shop Orders',
+                  icon: Icons.layers_rounded,
+                  color: AdminColors.warning,
+                  children: [
+                    _buildItem(
+                        'multi_shop_surcharge',
+                        'Multi-Shop Surcharge',
+                        'Added per additional shop in order',
+                        config.multiShopSurcharge,
+                        '₹',
+                        config,
+                        rbac),
                   ],
                 ),
                 _buildSection(
@@ -213,11 +236,26 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                         config,
                         rbac),
                     _buildItem(
-                        'heavy_order_fee_per_kg',
-                        'Heavy Order Fee (Per KG)',
-                        'Penalty for every kg over threshold',
-                        config.heavyOrderFeePerKg,
+                        'heavy_order_fee',
+                        'Heavy Order Fee',
+                        'Flat penalty applied once over threshold',
+                        config.heavyOrderFee,
                         '₹',
+                        config,
+                        rbac),
+                  ],
+                ),
+                _buildSection(
+                  title: 'Rider Payouts',
+                  icon: Icons.directions_bike_rounded,
+                  color: AdminColors.info,
+                  children: [
+                    _buildItem(
+                        'rider_commission_percent',
+                        'Rider Commission',
+                        'Percentage of delivery fee given to rider',
+                        config.riderCommissionPercent,
+                        '%',
                         config,
                         rbac),
                   ],

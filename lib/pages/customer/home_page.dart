@@ -207,33 +207,33 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   // Purely cosmetic — no logic impact.
   static String _emojiForKeyword(String label) {
     final l = label.toLowerCase();
-    if (l.contains('pizza'))        return '🍕';
-    if (l.contains('burger'))       return '🍔';
-    if (l.contains('chicken'))      return '🍗';
-    if (l.contains('milk'))         return '🥛';
-    if (l.contains('egg'))          return '🥚';
-    if (l.contains('bread'))        return '🍞';
-    if (l.contains('biryani') || l.contains('rice')) return '🍛';
-    if (l.contains('dal')  || l.contains('daal'))    return '🫘';
-    if (l.contains('kebab') || l.contains('kabab'))  return '🥙';
-    if (l.contains('tea')  || l.contains('chai'))    return '🍵';
-    if (l.contains('coffee'))       return '☕';
-    if (l.contains('juice'))        return '🍹';
-    if (l.contains('water'))        return '💧';
-    if (l.contains('fish'))         return '🐟';
-    if (l.contains('mutton') || l.contains('lamb')) return '🥩';
-    if (l.contains('paneer'))       return '🧀';
-    if (l.contains('roti') || l.contains('naan') || l.contains('paratha')) return '🫓';
-    if (l.contains('cake') || l.contains('sweet') || l.contains('mithai')) return '🎂';
+    if (l.contains('pizza')) { return '🍕'; }
+    if (l.contains('burger')) { return '🍔'; }
+    if (l.contains('chicken')) { return '🍗'; }
+    if (l.contains('milk')) { return '🥛'; }
+    if (l.contains('egg')) { return '🥚'; }
+    if (l.contains('bread')) { return '🍞'; }
+    if (l.contains('biryani') || l.contains('rice')) { return '🍛'; }
+    if (l.contains('dal')  || l.contains('daal')) { return '🫘'; }
+    if (l.contains('kebab') || l.contains('kabab')) { return '🥙'; }
+    if (l.contains('tea')  || l.contains('chai')) { return '🍵'; }
+    if (l.contains('coffee')) { return '☕'; }
+    if (l.contains('juice')) { return '🍹'; }
+    if (l.contains('water')) { return '💧'; }
+    if (l.contains('fish')) { return '🐟'; }
+    if (l.contains('mutton') || l.contains('lamb')) { return '🥩'; }
+    if (l.contains('paneer')) { return '🧀'; }
+    if (l.contains('roti') || l.contains('naan') || l.contains('paratha')) { return '🫓'; }
+    if (l.contains('cake') || l.contains('sweet') || l.contains('mithai')) { return '🎂'; }
     if (l.contains('medicine') || l.contains('tablet') || l.contains('capsule') ||
-        l.contains('syrup') || l.contains('paracetamol')) return '💊';
-    if (l.contains('shoe') || l.contains('sandal')) return '👟';
-    if (l.contains('mobile') || l.contains('phone')) return '📱';
-    if (l.contains('shirt') || l.contains('cloth') || l.contains('dress')) return '👕';
-    if (l.contains('soap') || l.contains('shampoo') || l.contains('cream')) return '🧴';
-    if (l.contains('fruit') || l.contains('apple') || l.contains('mango')) return '🍎';
-    if (l.contains('veg') || l.contains('sabzi'))   return '🥬';
-    if (l.contains('ice cream') || l.contains('icecream')) return '🍨';
+        l.contains('syrup') || l.contains('paracetamol')) { return '💊'; }
+    if (l.contains('shoe') || l.contains('sandal')) { return '👟'; }
+    if (l.contains('mobile') || l.contains('phone')) { return '📱'; }
+    if (l.contains('shirt') || l.contains('cloth') || l.contains('dress')) { return '👕'; }
+    if (l.contains('soap') || l.contains('shampoo') || l.contains('cream')) { return '🧴'; }
+    if (l.contains('fruit') || l.contains('apple') || l.contains('mango')) { return '🍎'; }
+    if (l.contains('veg') || l.contains('sabzi')) { return '🥬'; }
+    if (l.contains('ice cream') || l.contains('icecream')) { return '🍨'; }
     return '🛒'; // default: shopping bag
   }
   bool _pendingLocationUpdate = false;
@@ -695,6 +695,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           prodResults.add(product);
           prodShops[product.id] = shop;
           addedProductIds.add(product.id);
+          
+          // Phase 25 Fix: Additive logic to ensure shops that sell the searched product
+          // also appear in the "Shops & Restaurants" section. Zero SQL changes required.
+          if (!allShopsSet.containsKey(shop.id)) {
+            allShopsSet[shop.id] = shop;
+            shopResults.add(shop);
+          }
         }
       }
 
