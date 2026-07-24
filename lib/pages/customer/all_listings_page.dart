@@ -52,6 +52,7 @@ class AllListingsPage extends StatefulWidget {
 
 class _AllListingsPageState extends State<AllListingsPage> {
   _AllListingsSortMode _sortMode = _AllListingsSortMode.bestRating;
+  int _displayLimit = 20;
 
   final _searchController = TextEditingController();
   String _searchQuery = '';
@@ -268,7 +269,10 @@ class _AllListingsPageState extends State<AllListingsPage> {
                         _searchDebounce = Timer(
                           const Duration(milliseconds: 250),
                           () {
-                            if (mounted) setState(() => _searchQuery = v.trim());
+                            if (mounted) setState(() {
+                              _searchQuery = v.trim();
+                              _displayLimit = 20;
+                            });
                           },
                         );
                       },
@@ -289,7 +293,10 @@ class _AllListingsPageState extends State<AllListingsPage> {
                                     const Icon(Icons.close_rounded, size: 18),
                                 onPressed: () {
                                   _searchController.clear();
-                                  setState(() => _searchQuery = '');
+                                  setState(() {
+                                    _searchQuery = '';
+                                    _displayLimit = 20;
+                                  });
                                 },
                               )
                             : null,
@@ -419,6 +426,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
     final sorted = _sortedProducts;
     if (sorted.isEmpty) return _buildEmptyState(isDark);
 
+    final displayProducts = sorted.take(_displayLimit).toList();
+
     return CustomScrollView(
       slivers: [
         SliverPadding(
@@ -444,9 +453,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
                   mainAxisSpacing: 16,
                   crossAxisSpacing: crossAxisSpacing,
                 ),
-                itemCount: sorted.length,
+                itemCount: displayProducts.length,
                 itemBuilder: (_, i) {
-                  final product = sorted[i];
+                  final product = displayProducts[i];
                   final shop = widget.productShops[product.id];
                   return ProductCard(product: product, shop: shop);
                 },
@@ -454,6 +463,31 @@ class _AllListingsPageState extends State<AllListingsPage> {
             },
           ),
         ),
+        if (sorted.length > _displayLimit)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 24),
+              child: Center(
+                child: TextButton(
+                  onPressed: () => setState(() => _displayLimit += 20),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    backgroundColor: isDark 
+                        ? Colors.white.withValues(alpha: 0.05) 
+                        : AppColors.primary.withValues(alpha: 0.05),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: Text(
+                    'Load more products',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -462,6 +496,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
   Widget _buildShopsBody(bool isDark) {
     final sorted = _sortedShops;
     if (sorted.isEmpty) return _buildEmptyState(isDark);
+
+    final displayShops = sorted.take(_displayLimit).toList();
 
     return CustomScrollView(
       slivers: [
@@ -482,9 +518,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
                 ),
-                itemCount: sorted.length,
+                itemCount: displayShops.length,
                 itemBuilder: (_, i) {
-                  final shop = sorted[i];
+                  final shop = displayShops[i];
                   final isFood = AppCategories.groupFor(shop.category) ==
                       CategoryGroup.food;
                   return isFood
@@ -503,6 +539,31 @@ class _AllListingsPageState extends State<AllListingsPage> {
             },
           ),
         ),
+        if (sorted.length > _displayLimit)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 24),
+              child: Center(
+                child: TextButton(
+                  onPressed: () => setState(() => _displayLimit += 20),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    backgroundColor: isDark 
+                        ? Colors.white.withValues(alpha: 0.05) 
+                        : AppColors.primary.withValues(alpha: 0.05),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: Text(
+                    'Load more items',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -567,7 +628,10 @@ class _AllListingsPageState extends State<AllListingsPage> {
               TextButton.icon(
                 onPressed: () {
                   _searchController.clear();
-                  setState(() => _searchQuery = '');
+                  setState(() {
+                    _searchQuery = '';
+                    _displayLimit = 20;
+                  });
                 },
                 icon: const Icon(Icons.clear_rounded,
                     color: AppColors.primary, size: 18),

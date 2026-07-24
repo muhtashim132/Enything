@@ -29,6 +29,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   bool _hasError = false;
   List<ProductModel> _products = [];
   Map<String, ShopModel> _productShops = {};
+  int _displayLimit = 20;
   
   static const Map<String, List<String>> _tabCategories = {
     'Food': ['Restaurant', 'Fast Food', 'Bakery', 'Sweets & Mithai', 'Tea & Coffee', 'Ice Cream', 'Paan Shop', 'Beverages'],
@@ -217,20 +218,53 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                         final itemHeight = itemWidth + 178;
                         final childAspectRatio = itemWidth / itemHeight;
 
-                        return GridView.builder(
-                          padding: const EdgeInsets.all(16),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxisCount,
-                            childAspectRatio: childAspectRatio,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: crossAxisSpacing,
-                          ),
-                          itemCount: _products.length,
-                          itemBuilder: (context, index) {
-                            final product = _products[index];
-                            final shop = _productShops[product.id];
-                            return ProductCard(product: product, shop: shop);
-                          },
+                        final displayProducts = _products.take(_displayLimit).toList();
+
+                        return CustomScrollView(
+                          slivers: [
+                            SliverPadding(
+                              padding: const EdgeInsets.all(16),
+                              sliver: SliverGrid.builder(
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  childAspectRatio: childAspectRatio,
+                                  mainAxisSpacing: 16,
+                                  crossAxisSpacing: crossAxisSpacing,
+                                ),
+                                itemCount: displayProducts.length,
+                                itemBuilder: (context, index) {
+                                  final product = displayProducts[index];
+                                  final shop = _productShops[product.id];
+                                  return ProductCard(product: product, shop: shop);
+                                },
+                              ),
+                            ),
+                            if (_products.length > _displayLimit)
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8, bottom: 24),
+                                  child: Center(
+                                    child: TextButton(
+                                      onPressed: () => setState(() => _displayLimit += 20),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                        backgroundColor: isDark 
+                                            ? Colors.white.withValues(alpha: 0.05) 
+                                            : AppColors.primary.withValues(alpha: 0.05),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                      ),
+                                      child: Text(
+                                        'Load more products',
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         );
                       },
                     ),

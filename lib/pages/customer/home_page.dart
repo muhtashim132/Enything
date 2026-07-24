@@ -179,6 +179,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   Timer? _searchDebounce;
 
   // ── Trending Strip auto-scroll ──────────────────────────────────────────
+  final ScrollController _mainScrollController = ScrollController();
   final ScrollController _trendingScrollController = ScrollController();
   Timer? _trendingScrollTimer;
 
@@ -510,6 +511,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _locationDebounceTimer?.cancel();
     _searchDebounce?.cancel();
     _trendingScrollTimer?.cancel();
+    _mainScrollController.dispose();
     _trendingScrollController.dispose();
     // Remove live location listener to avoid memory leaks
     _locationProvider?.removeListener(_onLocationChanged);
@@ -518,6 +520,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _bannerIndex.dispose();
     globalIsFiltering.value = false; // Reset state leakage
     super.dispose();
+  }
+
+  /// Scrolls the main view to the top if it's currently scrolled down.
+  /// Returns true if a scroll action was triggered, false otherwise.
+  bool scrollToTopIfNeeded() {
+    if (_mainScrollController.hasClients && _mainScrollController.offset > 0) {
+      _mainScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+      );
+      return true;
+    }
+    return false;
   }
 
   /// Runs a Supabase text search for shops by name across all categories.
@@ -1088,6 +1104,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: CustomScrollView(
+          controller: _mainScrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
           // ── Premium Modern AppBar ──────────────────────────────────────

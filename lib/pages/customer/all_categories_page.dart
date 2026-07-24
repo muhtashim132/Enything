@@ -119,38 +119,41 @@ class AllCategoriesPage extends StatelessWidget {
                       ),
                       Positioned.fill(
                         child: Padding(
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 emoji,
-                                style: const TextStyle(fontSize: 44),
+                                style: const TextStyle(fontSize: 38),
                                 textAlign: TextAlign.center,
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 8),
                               Text(
                                 catName,
                                 style: GoogleFonts.outfit(
-                                  fontSize: 20,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.w800,
                                   color: Colors.white,
                                 ),
                                 textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                desc,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-
-                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 4),
+                              Flexible(
+                                child: Text(
+                                  desc,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             ],
                           ),

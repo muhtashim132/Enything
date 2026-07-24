@@ -3770,14 +3770,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         MaterialPageRoute(builder: (ctx) => CheckoutPage(
           existingCartGroupId: _order!.cartGroupId,
           orderIdToCancelOnSuccess: rejectedOrder.id,
-          activeOrdersCount: _groupOrders.where((o) => [
-            'awaiting_acceptance', 
-            'awaiting_payment', 
-            'pending_pickup', 
-            'accepted', 
-            'preparing', 
-            'ready_for_pickup'
-          ].contains(o.status)).length,
         ))
       ).then((_) {
         // Upon returning from checkout, refetch order group

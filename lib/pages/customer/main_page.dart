@@ -189,6 +189,9 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
             _homeKey.currentState?.resetToHome();
             return;
           }
+          final scrolled = _homeKey.currentState?.scrollToTopIfNeeded() ?? false;
+          if (scrolled) return;
+
           final now = DateTime.now();
           if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
             _lastBackPressTime = now;
@@ -295,9 +298,9 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
                                 minHeight: 18,
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: AppColors.danger,
-                                shape: BoxShape.circle,
+                                borderRadius: BorderRadius.circular(9),
                               ),
                               child: Text(
                                 cart.totalItemCount > 99 ? '99+' : '${cart.totalItemCount}',

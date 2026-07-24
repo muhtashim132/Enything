@@ -54,6 +54,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
   DateTime? _lastBackPressTime;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -83,6 +84,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
       Supabase.instance.client.removeChannel(channel);
     }
     _realtimeChannels.clear();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -262,6 +264,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         canPop: false,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) return;
+          if (_scrollController.hasClients && _scrollController.offset > 0) {
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOutCubic,
+            );
+            return;
+          }
           final now = DateTime.now();
           if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
             _lastBackPressTime = now;
@@ -285,6 +295,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
             onRefresh: _loadStats,
             color: const Color(0xFF4C6EF5),
             child: CustomScrollView(
+              controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 // ── Animated Hero Header ──────────────────────────────────────

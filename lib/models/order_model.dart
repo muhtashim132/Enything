@@ -301,7 +301,9 @@ class OrderModel {
 
   /// Grand total as displayed to customer at checkout.
   /// O6 FIX: Fallback now includes ALL fee components so legacy orders
-  /// (where grandTotalCollected == 0) display the correct amount.
+  /// (where grandTotalCollected == -1) display the correct amount.
+  /// NOTE: deliveryCharges in the DB already includes multiShopSurcharge,
+  /// smallCartFee, and heavyOrderFee — do NOT add them again here.
   double get grandTotal => grandTotalCollected >= 0
       ? grandTotalCollected
       : math.max(
@@ -309,10 +311,7 @@ class OrderModel {
           totalAmount +
               gstItemTotal +
               deliveryCharges +
-              platformFee +
-              smallCartFee +
-              heavyOrderFee +
-              multiShopSurcharge -
+              platformFee -
               couponDiscount);
 
   /// Total GST across the entire order (items + delivery + platform).

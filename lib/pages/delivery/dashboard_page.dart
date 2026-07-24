@@ -70,6 +70,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   final Set<String> _collapsedAvailableGroups = {};
   final Set<String> _collapsedActiveGroups = {};
   DateTime? _lastBackPressTime;
+  final ScrollController _scrollController = ScrollController();
 
   // FCM foreground message subscription — triggers _loadOrders() on push
   StreamSubscription? _fcmForegroundSub;
@@ -207,6 +208,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     // visible after the rider has left the delivery screen.
     RiderBackgroundService.instance.stopService();
     _bgCtrl.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -1194,6 +1196,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
+        if (_scrollController.hasClients && _scrollController.offset > 0) {
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+          );
+          return;
+        }
         final now = DateTime.now();
         if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
           _lastBackPressTime = now;
@@ -1215,6 +1225,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         backgroundColor:
             isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
         body: CustomScrollView(
+          controller: _scrollController,
           slivers: [
             // ── Animated Header ───────────────────────────────────────────
             SliverAppBar(
@@ -1921,12 +1932,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Acceptance Time Left',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.red,
+                              Flexible(
+                                child: Text(
+                                  'Acceptance Time Left',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.red,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               OrderCountdownTimer(
@@ -2011,13 +2025,19 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: Row(children: [
-                  Text('Collected Order (${group.orders.length})',
-                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                  const Spacer(),
+                  Expanded(
+                    child: Text('Collected Order (${group.orders.length})',
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
+                  const SizedBox(width: 8),
                   Container(
+                    constraints: const BoxConstraints(maxWidth: 180),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
                     child: Text(group.groupStatus == 'awaiting_payment' ? 'PAYMENT IN PROGRESS' : group.groupStatus.toUpperCase().replaceAll('_', ' '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                   ),
                   const SizedBox(width: 8),
@@ -2208,21 +2228,28 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             children: [
               const Icon(Icons.storefront_rounded, size: 16, color: AppColors.accent),
               const SizedBox(width: 6),
-              Expanded(child: Text(shopName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13))),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: getStatusColor().withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: getStatusColor().withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  order.status == 'awaiting_payment' ? 'PAYMENT IN PROGRESS' : order.statusDisplay.toUpperCase(),
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                    color: getStatusColor(),
+              Expanded(child: Text(shopName, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis, maxLines: 1)),
+              const SizedBox(width: 6),
+              Flexible(
+                flex: 0,
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 160),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: getStatusColor().withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: getStatusColor().withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    order.status == 'awaiting_payment' ? 'PAYMENT IN PROGRESS' : order.statusDisplay.toUpperCase(),
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: getStatusColor(),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
@@ -2368,11 +2395,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   Widget _sectionHeader(String title, String count, Color color, bool isDark) =>
       Row(children: [
-        Text(title,
-            style: GoogleFonts.outfit(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: isDark ? Colors.white : const Color(0xFF0A0A14))),
+        Flexible(
+          child: Text(title,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF0A0A14))),
+        ),
         const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
