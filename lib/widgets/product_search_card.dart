@@ -56,7 +56,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             boxShadow: PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
           child: SizedBox(
-            height: 130,
+            height: 140,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

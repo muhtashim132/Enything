@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -184,6 +185,10 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
             _navIndex = 0;
           });
         } else {
+          if (CustomerHomeViewState.globalIsFiltering.value) {
+            _homeKey.currentState?.resetToHome();
+            return;
+          }
           final now = DateTime.now();
           if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
             _lastBackPressTime = now;
@@ -196,7 +201,7 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
             );
           } else {
             // ignore: use_build_context_synchronously
-            Navigator.of(context).pop();
+            SystemNavigator.pop();
           }
         }
       },

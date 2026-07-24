@@ -5,52 +5,28 @@ import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
+import '../../config/app_categories.dart';
 
 class AllCategoriesPage extends StatelessWidget {
   const AllCategoriesPage({super.key});
 
-  static const List<Map<String, dynamic>> _categories = [
-    {
-      'name': 'Food',
-      'emoji': '🍔',
-      'grad': [Color(0xFFFF6B6B), Color(0xFFEE5A24)],
-      'desc': 'Restaurants, fast food, sweets'
-    },
-    {
-      'name': 'Grocery',
-      'emoji': '🛒',
-      'grad': [Color(0xFF51CF66), Color(0xFF2F9E44)],
-      'desc': 'Supermarkets, fruits, daily needs'
-    },
-    {
-      'name': 'Pharmacy',
-      'emoji': '💊',
-      'grad': [Color(0xFF4C6EF5), Color(0xFF364FC7)],
-      'desc': 'Medicines, health, medical stores'
-    },
-    {
-      'name': 'Clothing',
-      'emoji': '👕',
-      'grad': [Color(0xFFFF8C42), Color(0xFFE8590C)],
-      'desc': 'Fashion, apparel, shoes'
-    },
-    {
-      'name': 'Electronics',
-      'emoji': '📱',
-      'grad': [Color(0xFFCC5DE8), Color(0xFF9C36B5)],
-      'desc': 'Mobiles, accessories, gadgets'
-    },
-    {
-      'name': 'More',
-      'emoji': '🛍️',
-      'grad': [Color(0xFF20C997), Color(0xFF0CA678)],
-      'desc': 'Stationery, hardware, beauty'
-    },
+  static const List<List<Color>> _gradients = [
+    [Color(0xFFFF6B6B), Color(0xFFEE5A24)], // Red/Orange
+    [Color(0xFF51CF66), Color(0xFF2F9E44)], // Green
+    [Color(0xFF4C6EF5), Color(0xFF364FC7)], // Blue
+    [Color(0xFFFF8C42), Color(0xFFE8590C)], // Orange
+    [Color(0xFFCC5DE8), Color(0xFF9C36B5)], // Purple
+    [Color(0xFF20C997), Color(0xFF0CA678)], // Teal
+    [Color(0xFF339AF0), Color(0xFF1864AB)], // Light Blue
+    [Color(0xFFFCC419), Color(0xFFE67700)], // Yellow
+    [Color(0xFFFF8787), Color(0xFFE03131)], // Pink/Red
+    [Color(0xFF22B8CF), Color(0xFF0B7285)], // Cyan
   ];
 
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
+    const categories = AppCategories.all;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -80,17 +56,23 @@ class AllCategoriesPage extends StatelessWidget {
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
             ),
-            itemCount: _categories.length,
+            itemCount: categories.length,
             itemBuilder: (context, index) {
-              final cat = _categories[index];
-              final grad = cat['grad'] as List<Color>;
+              final cat = categories[index];
+              final catName = cat['name']!;
+              final emoji = cat['emoji']!;
+              final grad = _gradients[index % _gradients.length];
+              
+              final group = AppCategories.groupFor(catName);
+              final groupInfo = AppCategories.groupInfo(group);
+              final desc = groupInfo['label'] ?? 'Explore $catName';
               
               return GestureDetector(
                 onTap: () {
                   Navigator.pushNamed(
                     context, 
                     AppRoutes.categoryProducts,
-                    arguments: {'categoryName': cat['name']},
+                    arguments: {'categoryName': catName},
                   );
                 },
                 child: Container(
@@ -143,13 +125,13 @@ class AllCategoriesPage extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                cat['emoji'] as String,
+                                emoji,
                                 style: const TextStyle(fontSize: 44),
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                cat['name'] as String,
+                                catName,
                                 style: GoogleFonts.outfit(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w800,
@@ -159,7 +141,7 @@ class AllCategoriesPage extends StatelessWidget {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                cat['desc'] as String,
+                                desc,
                                 style: GoogleFonts.outfit(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -167,6 +149,7 @@ class AllCategoriesPage extends StatelessWidget {
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
+
                                 textAlign: TextAlign.center,
                               ),
                             ],

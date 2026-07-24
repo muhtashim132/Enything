@@ -335,8 +335,22 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   /// On error or empty result, falls back to the static curated list.
   Future<void> _loadTrendingKeywords() async {
     try {
-      final response = await _supabase
-          .rpc('get_trending_keywords', params: {'p_limit': 12});
+      final locationProvider = context.read<LocationProvider>();
+      final lat = locationProvider.currentLocation?.latitude;
+      final lng = locationProvider.currentLocation?.longitude;
+      
+      dynamic response;
+      if (locationProvider.hasLocation && lat != null && lng != null) {
+        response = await _supabase.rpc('get_trending_keywords_geospatial', params: {
+          'p_lat': lat,
+          'p_lng': lng,
+          'p_radius_km': DeliveryCalculator.maxRadiusKm,
+          'p_limit': 12
+        });
+      } else {
+        response = await _supabase
+            .rpc('get_trending_keywords', params: {'p_limit': 12});
+      }
 
       if (!mounted) return;
 
@@ -1349,7 +1363,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ),
                                     if (!_isSearching)
                                       Text(
-                                        '\${_searchResults.length + _searchProductResults.length} result\${(_searchResults.length + _searchProductResults.length) == 1 ? "" : "s"} for "\$_searchQuery"',
+                                        '${_searchResults.length + _searchProductResults.length} result${(_searchResults.length + _searchProductResults.length) == 1 ? "" : "s"} for "$_searchQuery"',
                                         style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary),
                                       ),
                                   ],
@@ -1428,7 +1442,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     const SizedBox(height: 16),
                                     Text('No results for', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textSecondary)),
                                     const SizedBox(height: 4),
-                                    Text('"\$_searchQuery"', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
+                                    Text('"$_searchQuery"', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : AppColors.textPrimary)),
                                     const SizedBox(height: 8),
                                     Text('Try a different keyword', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textLight)),
                                   ],

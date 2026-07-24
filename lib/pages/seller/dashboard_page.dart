@@ -289,7 +289,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
               slivers: [
                 // ── Animated Hero Header ──────────────────────────────────────
                 SliverAppBar(
-                  expandedHeight: 200,
+                  expandedHeight: 230,
                   pinned: true,
                   elevation: 0,
                   backgroundColor: const Color(0xFF0A1260),
