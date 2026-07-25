@@ -35,11 +35,15 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     final hasDiscount =
         product.discountPercent != null && product.discountPercent! > 0;
 
+    final isShopClosed = !shop.isOpenRightNow;
+    final isProductUnavailable = !product.isAvailable;
+    final isLocked = isShopClosed || isProductUnavailable;
+
     return GestureDetector(
-      onTap: () => showProductDetailSheet(context, product.id),
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: isLocked ? null : () => showProductDetailSheet(context, product.id),
+      onTapDown: isLocked ? null : (_) => setState(() => _isPressed = true),
+      onTapUp: isLocked ? null : (_) => setState(() => _isPressed = false),
+      onTapCancel: isLocked ? null : () => setState(() => _isPressed = false),
       child: AnimatedScale(
         scale: _isPressed ? PremiumAnimations.pressedScale : PremiumAnimations.normalScale,
         duration: PremiumAnimations.fast,
@@ -132,6 +136,35 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                           ),
                         ),
 
+                      // Availability / Closed Overlay
+                      if (isLocked)
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(22)),
+                            child: Container(
+                              color: Colors.black.withValues(alpha: 0.65),
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.8),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.white38),
+                                  ),
+                                  child: Text(
+                                    isShopClosed ? 'CLOSED' : 'UNAVAILABLE',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.0,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -311,11 +344,13 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                   scale: animation,
                                   child: FadeTransition(opacity: animation, child: child),
                                 ),
-                              child: product.variants.isNotEmpty
-                                ? _buildAddButton(context, isDark)
-                                : quantity > 0
-                                  ? _buildStepper(context, quantity)
-                                  : _buildAddButton(context, isDark),
+                              child: isLocked
+                                ? _buildUnavailableButton(context, isDark)
+                                : product.variants.isNotEmpty
+                                  ? _buildAddButton(context, isDark)
+                                  : quantity > 0
+                                    ? _buildStepper(context, quantity)
+                                    : _buildAddButton(context, isDark),
                             ),
                       ],
                     ),
@@ -422,6 +457,30 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildUnavailableButton(BuildContext context, bool isDark) {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'UNAVAILABLE',
+            style: GoogleFonts.outfit(
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+              color: isDark ? Colors.white38 : Colors.grey.shade500,
+            ),
+          ),
+        ],
       ),
     );
   }

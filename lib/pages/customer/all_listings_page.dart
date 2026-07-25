@@ -121,7 +121,6 @@ class _AllListingsPageState extends State<AllListingsPage> {
     return list;
   }
 
-  // ── Sorted + filtered products ────────────────────────────────────────────
   List<ProductModel> get _sortedProducts {
     var list = widget.products.toList();
     if (_searchQuery.isNotEmpty) {
@@ -133,24 +132,30 @@ class _AllListingsPageState extends State<AllListingsPage> {
               p.category.toLowerCase().contains(q))
           .toList();
     }
-    switch (_sortMode) {
-      case _AllListingsSortMode.bestRating:
-        list.sort((a, b) => b.rating.compareTo(a.rating));
-      case _AllListingsSortMode.nearest:
-        list.sort((a, b) {
-          final sA = widget.productShops[a.id];
-          final sB = widget.productShops[b.id];
+    
+    list.sort((a, b) {
+      final sA = widget.productShops[a.id];
+      final sB = widget.productShops[b.id];
+      final availA = a.isAvailable && (sA?.isOpenRightNow ?? true);
+      final availB = b.isAvailable && (sB?.isOpenRightNow ?? true);
+      
+      if (availA && !availB) return -1;
+      if (!availA && availB) return 1;
+
+      switch (_sortMode) {
+        case _AllListingsSortMode.bestRating:
+          return b.rating.compareTo(a.rating);
+        case _AllListingsSortMode.nearest:
           return (sA?.distanceKm ?? double.infinity)
               .compareTo(sB?.distanceKm ?? double.infinity);
-        });
-      case _AllListingsSortMode.priceLow:
-        list.sort((a, b) => a.price.compareTo(b.price));
-      case _AllListingsSortMode.priceHigh:
-        list.sort((a, b) => b.price.compareTo(a.price));
-      case _AllListingsSortMode.discount:
-        list.sort((a, b) =>
-            (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0));
-    }
+        case _AllListingsSortMode.priceLow:
+          return a.price.compareTo(b.price);
+        case _AllListingsSortMode.priceHigh:
+          return b.price.compareTo(a.price);
+        case _AllListingsSortMode.discount:
+          return (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0);
+      }
+    });
     return list;
   }
 

@@ -63,11 +63,15 @@ class _ProductCardState extends State<ProductCard>
         ? product.originalPrice! - product.price
         : 0.0;
 
+    final isShopClosed = shop != null && !shop!.isOpenRightNow;
+    final isProductUnavailable = !product.isAvailable;
+    final isLocked = isShopClosed || isProductUnavailable;
+
     return GestureDetector(
-      onTap: () => showProductDetailSheet(context, product.id),
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: isLocked ? null : () => showProductDetailSheet(context, product.id),
+      onTapDown: isLocked ? null : (_) => setState(() => _isPressed = true),
+      onTapUp: isLocked ? null : (_) => setState(() => _isPressed = false),
+      onTapCancel: isLocked ? null : () => setState(() => _isPressed = false),
       child: AnimatedScale(
         scale: _isPressed
             ? PremiumAnimations.pressedScale
@@ -281,6 +285,36 @@ class _ProductCardState extends State<ProductCard>
                         ),
                       ),
                     ),
+
+                    // Availability / Closed Overlay
+                    if (isLocked)
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(PremiumRadius.large)),
+                          child: Container(
+                            color: Colors.black.withValues(alpha: 0.65),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.8),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.white38),
+                                ),
+                                child: Text(
+                                  isShopClosed ? 'SHOP CLOSED' : 'UNAVAILABLE',
+                                  style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -472,11 +506,13 @@ class _ProductCardState extends State<ProductCard>
                                 opacity: animation, child: child),
                           );
                         },
-                        child: product.variants.isNotEmpty
-                            ? _buildAddButton(cart, isDark)
-                            : quantity > 0
-                                ? _buildStepper(cart, quantity, isDark)
-                                : _buildAddButton(cart, isDark),
+                        child: isLocked 
+                            ? _buildUnavailableButton(isDark)
+                            : product.variants.isNotEmpty
+                                ? _buildAddButton(cart, isDark)
+                                : quantity > 0
+                                    ? _buildStepper(cart, quantity, isDark)
+                                    : _buildAddButton(cart, isDark),
                       ),
                     ],
                   ),
@@ -617,6 +653,27 @@ class _ProductCardState extends State<ProductCard>
             child: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUnavailableButton(bool isDark) {
+    return Container(
+      width: double.infinity,
+      height: 36,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white10 : Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Center(
+        child: Text(
+          'UNAVAILABLE',
+          style: GoogleFonts.outfit(
+            color: isDark ? Colors.white38 : Colors.grey.shade500,
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }

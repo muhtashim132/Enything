@@ -80,7 +80,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive || !shop.isOpenRightNow) continue;
+          if (!shop.isActive) continue;
 
           if (shop.location.latitude != 0 && shop.location.longitude != 0) {
             shop.distanceKm = locationProvider.distanceTo(shop.location);
@@ -90,8 +90,18 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           prodShops[product.id] = shop;
         }
 
-        // Sort by rating first
-        prods.sort((a, b) => b.rating.compareTo(a.rating));
+        // Sort by availability first, then by rating
+        prods.sort((a, b) {
+          final sA = prodShops[a.id];
+          final sB = prodShops[b.id];
+          final availA = a.isAvailable && (sA?.isOpenRightNow ?? true);
+          final availB = b.isAvailable && (sB?.isOpenRightNow ?? true);
+          
+          if (availA && !availB) return -1;
+          if (!availA && availB) return 1;
+          
+          return b.rating.compareTo(a.rating);
+        });
 
         if (mounted) {
           setState(() {

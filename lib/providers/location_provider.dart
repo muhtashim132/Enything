@@ -114,6 +114,7 @@ class LocationProvider extends ChangeNotifier {
       if (!serviceEnabled) {
         _isLoading = false;
         notifyListeners();
+        await Geolocator.openLocationSettings();
         return false;
       }
 
@@ -126,6 +127,7 @@ class LocationProvider extends ChangeNotifier {
         _isLoading = false;
         _permissionGranted = false;
         notifyListeners();
+        await Geolocator.openAppSettings();
         return false;
       }
 

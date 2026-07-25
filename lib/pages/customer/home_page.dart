@@ -155,57 +155,69 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   // Debounce timer for GPS listener to prevent race conditions
   Timer? _locationDebounceTimer;
 
+  int _compareAvailability(ProductModel a, ProductModel b, Map<String, ShopModel> shops) {
+    final sA = shops[a.id];
+    final sB = shops[b.id];
+    final availA = a.isAvailable && (sA?.isOpenRightNow ?? true);
+    final availB = b.isAvailable && (sB?.isOpenRightNow ?? true);
+    if (availA && !availB) return -1;
+    if (!availA && availB) return 1;
+    return 0;
+  }
+
   /// Returns search product results sorted by the current _sortMode.
   List<ProductModel> get _sortedProductResults {
     final list = List<ProductModel>.from(_searchProductResults);
-    switch (_sortMode) {
-      case _SortMode.bestRating:
-        list.sort((a, b) => b.rating.compareTo(a.rating));
-      case _SortMode.priceLow:
-        list.sort((a, b) => a.price.compareTo(b.price));
-      case _SortMode.priceHigh:
-        list.sort((a, b) => b.price.compareTo(a.price));
-      case _SortMode.discount:
-        list.sort((a, b) =>
-            (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0));
-      case _SortMode.nearest:
-        list.sort((a, b) {
+    list.sort((a, b) {
+      final availCmp = _compareAvailability(a, b, _searchProductShops);
+      if (availCmp != 0) return availCmp;
+
+      switch (_sortMode) {
+        case _SortMode.bestRating:
+          return b.rating.compareTo(a.rating);
+        case _SortMode.priceLow:
+          return a.price.compareTo(b.price);
+        case _SortMode.priceHigh:
+          return b.price.compareTo(a.price);
+        case _SortMode.discount:
+          return (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0);
+        case _SortMode.nearest:
           final sA = _searchProductShops[a.id];
           final sB = _searchProductShops[b.id];
           return (sA?.distanceKm ?? double.infinity)
               .compareTo(sB?.distanceKm ?? double.infinity);
-        });
-      case _SortMode.relevant:
-        break;
-    }
+        case _SortMode.relevant:
+          return 0; // Maintain original order
+      }
+    });
     return list;
   }
 
   /// Returns normal product results sorted by the current _sortMode.
   List<ProductModel> get _sortedNormalProducts {
     final list = List<ProductModel>.from(_products);
-    switch (_sortMode) {
-      case _SortMode.bestRating:
-        list.sort((a, b) => b.rating.compareTo(a.rating));
-      case _SortMode.priceLow:
-        list.sort((a, b) => a.price.compareTo(b.price));
-      case _SortMode.priceHigh:
-        list.sort((a, b) => b.price.compareTo(a.price));
-      case _SortMode.discount:
-        list.sort((a, b) =>
-            (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0));
-      case _SortMode.nearest:
-        list.sort((a, b) {
+    list.sort((a, b) {
+      final availCmp = _compareAvailability(a, b, _productShops);
+      if (availCmp != 0) return availCmp;
+
+      switch (_sortMode) {
+        case _SortMode.bestRating:
+          return b.rating.compareTo(a.rating);
+        case _SortMode.priceLow:
+          return a.price.compareTo(b.price);
+        case _SortMode.priceHigh:
+          return b.price.compareTo(a.price);
+        case _SortMode.discount:
+          return (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0);
+        case _SortMode.nearest:
           final sA = _productShops[a.id];
           final sB = _productShops[b.id];
           return (sA?.distanceKm ?? double.infinity)
               .compareTo(sB?.distanceKm ?? double.infinity);
-        });
-      case _SortMode.relevant:
-        list.sort((a, b) =>
-            b.rating.compareTo(a.rating)); // Default rating sort for relevant
-        break;
-    }
+        case _SortMode.relevant:
+          return b.rating.compareTo(a.rating); // Default rating sort for relevant
+      }
+    });
     return list;
   }
 
@@ -252,6 +264,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   final ValueNotifier<int> _bannerIndex = ValueNotifier<int>(0);
   Timer? _bannerTimer;
   Timer? _searchDebounce;
+
+  // Location Required block
+  final GlobalKey _locationRequiredKey = GlobalKey();
+  late AnimationController _locationGlowCtrl;
+  late Animation<double> _locationGlowAnim;
 
   // ── Trending Strip auto-scroll ──────────────────────────────────────────
   final ScrollController _mainScrollController = ScrollController();
@@ -412,6 +429,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   @override
   void initState() {
     super.initState();
+    _locationGlowCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600));
+    _locationGlowAnim = Tween<double>(begin: 0, end: 1).animate(
+        CurvedAnimation(parent: _locationGlowCtrl, curve: Curves.easeInOut));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLocationAndLoad();
     });
@@ -642,6 +663,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   @override
   void dispose() {
+    _locationGlowCtrl.dispose();
     _bannerTimer?.cancel();
     _locationDebounceTimer?.cancel();
     _searchDebounce?.cancel();
@@ -673,6 +695,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   /// Runs a Supabase text search for shops by name across all categories.
   Future<void> _searchShops(String query) async {
+    final locationProvider = context.read<LocationProvider>();
+    if (!locationProvider.hasLocation) {
+      _promptEnableLocation();
+      return;
+    }
     if (query.trim().isEmpty) {
       setState(() {
         _searchQuery = '';
@@ -816,7 +843,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       void addProducts(List<dynamic> response) {
         for (final p in response) {
           final product = ProductModel.fromMap(p);
-          if (!product.isAvailable) continue;
+          // Removed product.isAvailable check so unavailable items still render
           if (addedProductIds.contains(product.id)) continue;
 
           if (!locationProvider.hasLocation &&
@@ -1040,7 +1067,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
-          if (!product.isAvailable) continue;
+          // Removed product.isAvailable check so unavailable items still render
           if (effectiveCategories != null &&
               !effectiveCategories.contains(product.category)) continue;
           if (p['shops'] == null) continue;
@@ -1184,7 +1211,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
-          if (!product.isAvailable) continue;
+          // Removed product.isAvailable check so unavailable items still render
           if (effectiveCategories != null &&
               !effectiveCategories.contains(product.category)) continue;
           if (p['shops'] == null) continue;
@@ -2493,6 +2520,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'accent': const Color(0xFFFFE082),
         'emoji': '🍔',
         'action': () {
+          if (!context.read<LocationProvider>().hasLocation) {
+            _promptEnableLocation();
+            return;
+          }
           setState(() => _selectedTabIndex = 0);
           _loadData('Food');
         },
@@ -2510,6 +2541,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'accent': const Color(0xFFB9F6CA),
         'emoji': '🥦💊',
         'action': () {
+          if (!context.read<LocationProvider>().hasLocation) {
+            _promptEnableLocation();
+            return;
+          }
           setState(() => _selectedTabIndex = -1);
           _loadData('GroceryAndMed');
         },
@@ -2527,6 +2562,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'accent': const Color(0xFF00E5FF),
         'emoji': '👠👗',
         'action': () {
+          if (!context.read<LocationProvider>().hasLocation) {
+            _promptEnableLocation();
+            return;
+          }
           setState(() => _selectedTabIndex = 3);
           _loadData('Clothing');
         },
@@ -2971,35 +3010,77 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   }
 
   Widget _buildLocationRequired() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('📍', style: TextStyle(fontSize: 72)),
-            const SizedBox(height: 20),
-            Text(
-              'Location Required',
-              style:
-                  GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w700),
+    return AnimatedBuilder(
+      animation: _locationGlowAnim,
+      builder: (context, child) {
+        return Container(
+          key: _locationRequiredKey,
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              if (_locationGlowAnim.value > 0)
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.3 * _locationGlowAnim.value),
+                  blurRadius: 15 * _locationGlowAnim.value,
+                  spreadRadius: 5 * _locationGlowAnim.value,
+                )
+            ],
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: _locationGlowAnim.value),
+              width: 2 * _locationGlowAnim.value,
             ),
-            const SizedBox(height: 12),
-            Text(
-              'We need your location to show nearby shops and ensure delivery is available.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.outfit(
-                  color: AppColors.textSecondary, height: 1.5),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: () =>
-                  context.read<LocationProvider>().requestLocation(),
-              icon: const Icon(Icons.my_location),
-              label: const Text('Enable Location'),
-            ),
-          ],
+          ),
+          child: child,
+        );
+      },
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('📍', style: TextStyle(fontSize: 72)),
+              const SizedBox(height: 20),
+              Text(
+                'Location Required',
+                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'We need your location to show nearby shops and ensure delivery is available.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(color: AppColors.textSecondary, height: 1.5),
+              ),
+              const SizedBox(height: 28),
+              ElevatedButton.icon(
+                onPressed: () => context.read<LocationProvider>().requestLocation(),
+                icon: const Icon(Icons.my_location),
+                label: const Text('Enable Location'),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _promptEnableLocation() {
+    if (_locationRequiredKey.currentContext != null) {
+      Scrollable.ensureVisible(
+        _locationRequiredKey.currentContext!,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
+    _locationGlowCtrl.forward(from: 0).then((_) {
+      _locationGlowCtrl.reverse();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Please enable location to view nearby items.'),
+        backgroundColor: AppColors.danger,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -3534,6 +3615,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               return GestureDetector(
                 // Tap: filter home page in-place (same exact logic as old upper chips)
                 onTap: () {
+                  if (!context.read<LocationProvider>().hasLocation) {
+                    _promptEnableLocation();
+                    return;
+                  }
                   if (_selectedTabIndex == index) {
                     // Toggle off: already selected → reset to all
                     setState(() => _selectedTabIndex = -1);
@@ -3546,6 +3631,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 },
                 // Long-press: navigate to dedicated full category page
                 onLongPress: () {
+                  if (!context.read<LocationProvider>().hasLocation) {
+                    _promptEnableLocation();
+                    return;
+                  }
                   Navigator.pushNamed(
                     context,
                     AppRoutes.categoryProducts,

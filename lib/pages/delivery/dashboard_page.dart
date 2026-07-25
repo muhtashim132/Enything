@@ -11,6 +11,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/location_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/platform_config_provider.dart';
@@ -65,6 +66,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
 
+  final GlobalKey _locationRequiredKey = GlobalKey();
+  late AnimationController _locationGlowCtrl;
+  late Animation<double> _locationGlowAnim;
+
   String _navApp = 'google_maps';
   String _vehicleType = 'motorcycle';
 
@@ -94,6 +99,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         AnimationController(duration: const Duration(seconds: 5), vsync: this)
           ..repeat(reverse: true);
     _bgAnim = CurvedAnimation(parent: _bgCtrl, curve: Curves.easeInOut);
+
+    _locationGlowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _locationGlowAnim = CurvedAnimation(
+      parent: _locationGlowCtrl,
+      curve: Curves.easeInOut,
+    );
 
     _loadOrders();
     _initNotifications();
@@ -217,6 +231,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     // visible after the rider has left the delivery screen.
     RiderBackgroundService.instance.stopService();
     _bgCtrl.dispose();
+    _locationGlowCtrl.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -1559,9 +1574,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
+                      // Location Required Alert
+                      if (_locationUnavailable || !context.read<LocationProvider>().hasLocation) ...[
+                        _buildLocationRequired(),
+                        const SizedBox(height: 24),
+                      ],
                       // Full-width Online Toggle Card
                       GestureDetector(
                         onTap: () async {
+                          if (!context.read<LocationProvider>().hasLocation) {
+                            _promptEnableLocation();
+                            return;
+                          }
                           final newVal = !_isOnline;
                           setState(() => _isOnline = newVal);
                           if (newVal) {
@@ -3066,6 +3090,82 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     } else {
       _showSnack('Could not launch dialer');
     }
+  }
+
+  Widget _buildLocationRequired() {
+    return AnimatedBuilder(
+      animation: _locationGlowAnim,
+      builder: (context, child) {
+        return Container(
+          key: _locationRequiredKey,
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              if (_locationGlowAnim.value > 0)
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.3 * _locationGlowAnim.value),
+                  blurRadius: 15 * _locationGlowAnim.value,
+                  spreadRadius: 5 * _locationGlowAnim.value,
+                )
+            ],
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: _locationGlowAnim.value),
+              width: 2 * _locationGlowAnim.value,
+            ),
+          ),
+          child: child,
+        );
+      },
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('📍', style: TextStyle(fontSize: 72)),
+              const SizedBox(height: 20),
+              Text(
+                'Location Required',
+                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'We need your location to find nearby orders and calculate delivery distances.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(color: AppColors.textSecondary, height: 1.5),
+              ),
+              const SizedBox(height: 28),
+              ElevatedButton.icon(
+                onPressed: () => context.read<LocationProvider>().requestLocation(),
+                icon: const Icon(Icons.my_location),
+                label: const Text('Enable Location'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _promptEnableLocation() {
+    if (_locationRequiredKey.currentContext != null) {
+      Scrollable.ensureVisible(
+        _locationRequiredKey.currentContext!,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
+    _locationGlowCtrl.forward(from: 0).then((_) {
+      _locationGlowCtrl.reverse();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Please enable location to view nearby orders.'),
+        backgroundColor: AppColors.danger,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 }
 
