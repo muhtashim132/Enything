@@ -236,9 +236,9 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                         config,
                         rbac),
                     _buildItem(
-                        'heavy_order_fee',
-                        'Heavy Order Fee',
-                        'Flat penalty applied once over threshold',
+                        'heavy_order_fee_per_kg',
+                        'Heavy Order Fee (Per kg)',
+                        'Penalty applied per extra kg over threshold',
                         config.heavyOrderFee,
                         '₹',
                         config,

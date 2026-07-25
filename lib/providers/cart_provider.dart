@@ -226,11 +226,12 @@ class CartProvider extends ChangeNotifier {
   double get heavyOrderFee {
     final threshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ??
         PaymentConfig.heavyOrderThreshold;
-    final fee = PlatformConfigProvider.instance?.heavyOrderFee ??
+    final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ??
         PaymentConfig.heavyOrderFee;
 
     if (totalWeight > threshold) {
-      return fee;
+      final extraWeight = (totalWeight - threshold).ceil();
+      return feePerKg * extraWeight;
     }
     return 0.0;
   }

@@ -1070,7 +1070,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 rateNextShop();
               },
             ),
-          );
+          ).then((_) => _isSheetOpen = false);
         }
       } else {
         _isSheetOpen = false;
@@ -1098,7 +1098,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           rateNextShop();
         },
       ),
-    );
+    ).then((_) => _isSheetOpen = false);
   }
 
   Future<void> _submitDeliveryRating({
@@ -2964,7 +2964,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           ),
         );
       }),
-    );
+    ).then((_) => _isSheetOpen = false);
   }
 
   String _vehicleTypeLabel(String type) {
@@ -3030,7 +3030,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           ),
         );
       },
-    );
+    ).then((_) => _isSheetOpen = false);
   }
 
   // ignore: unused_element

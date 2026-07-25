@@ -131,7 +131,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
       final shopsResp = await _supabase
           .from('shops')
           .select(
-              'id, category, categories, is_active, average_rating, verification_status')
+              'id, category, categories, is_active, is_accepting_orders, average_rating, verification_status')
           .eq('seller_id', auth.currentUserId ?? '');
 
       if ((shopsResp as List).isEmpty) {
@@ -212,7 +212,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
             'products': products,
           };
           
-          _shopIsActive = firstShopData['is_active'] ?? false;
+          _shopIsActive = (firstShopData['is_active'] ?? true) && (firstShopData['is_accepting_orders'] ?? false);
           final rawRating = firstShopData['average_rating'];
           _shopRating = rawRating != null ? (rawRating as num).toStringAsFixed(1) : '--';
           _isLoading = false;

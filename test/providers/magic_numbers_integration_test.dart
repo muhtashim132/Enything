@@ -161,11 +161,18 @@ void main() {
       expect(cartProvider.totalWeight, PaymentConfig.heavyOrderThreshold);
       expect(cartProvider.heavyOrderFee, 0.0, reason: 'Heavy order fee should NOT apply at exactly threshold');
 
-      // Edge case: Just above threshold
+      // Edge case: Just above threshold (e.g. 10.1kg). Extra weight is 0.1 -> ceil to 1kg
       cartProvider.clear();
+      final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
       final productAbove = createProduct(id: 'h2', price: 100.0, weightPerUnit: PaymentConfig.heavyOrderThreshold + 0.1);
       cartProvider.addItem(productAbove, shop, quantity: 1);
-      expect(cartProvider.heavyOrderFee, PaymentConfig.heavyOrderFee, reason: 'Heavy order fee should apply strictly > threshold');
+      expect(cartProvider.heavyOrderFee, feePerKg, reason: 'Heavy order fee should apply strictly > threshold (1 extra kg)');
+
+      // Edge case: 5kg above threshold (e.g. 15.0kg). Extra weight is 5kg.
+      cartProvider.clear();
+      final productExtraHeavy = createProduct(id: 'h3', price: 100.0, weightPerUnit: PaymentConfig.heavyOrderThreshold + 5.0);
+      cartProvider.addItem(productExtraHeavy, shop, quantity: 1);
+      expect(cartProvider.heavyOrderFee, feePerKg * 5.0, reason: 'Heavy order fee should scale per extra kg');
     });
 
     test('Platform Fee is consistently applied', () {
