@@ -70,6 +70,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   bool _isRetrying = false;
 
+  // ── Magic reviewer auto-accept (2-second delay for visual effect) ──────────
+  Timer? _magicAutoAcceptTimer;
+  bool _magicAutoAcceptFired = false;
+
   // Server time tracking
   Duration _serverTimeOffset = Duration.zero;
   DateTime get _serverTime => DateTime.now().toUtc().add(_serverTimeOffset);
@@ -162,6 +166,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _pulseController.dispose();
     _paymentCountdownTimer?.cancel();
     _acceptanceCountdownTimer?.cancel();
+    _magicAutoAcceptTimer?.cancel();
     _pollingTimer?.cancel();
     if (_channel != null) _supabase.removeChannel(_channel!);
     _riderLocationsNotifier.dispose();
@@ -571,6 +576,23 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
       if (aggStatus == 'awaiting_acceptance') {
         _startAcceptanceCountdown(_order!);
+
+        // ── Magic reviewer auto-accept (2 seconds) ────────────────────────────
+        // Only fires for the 3 reviewer phone numbers. Zero impact on real orders.
+        if (!_magicAutoAcceptFired) {
+          final authUser = context.read<AuthProvider>().user;
+          final phone = authUser?.phone ?? '';
+          final isMagicUser = phone.endsWith('9999999996') ||
+              phone.endsWith('9999999997') ||
+              phone.endsWith('9999999998');
+          if (isMagicUser) {
+            _magicAutoAcceptFired = true;
+            _magicAutoAcceptTimer?.cancel();
+            _magicAutoAcceptTimer =
+                Timer(const Duration(seconds: 2), () => _performMagicAutoAccept());
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────────
       } else {
         _acceptanceCountdownTimer?.cancel();
       }
@@ -609,6 +631,47 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     }
   }
+
+  // ── Magic reviewer auto-accept ─────────────────────────────────────────────
+  // Called 2 seconds after the track page enters 'awaiting_acceptance' status,
+  // ONLY for the 3 magic reviewer phone numbers.
+  // Uses the magic_reviewer_auto_accept SECURITY DEFINER RPC because direct
+  // UPDATE on orders is revoked from authenticated users (100x_rls_financial_fortress).
+  // Then calls _fetchOrder() which triggers the existing Razorpay open flow.
+  // Zero impact on real accounts — gated by isMagicUser check in the caller.
+  Future<void> _performMagicAutoAccept() async {
+    if (!mounted || _order == null) return;
+    try {
+      // Build the list of order IDs to auto-accept (cart group or single order)
+      final List<String> orderIds = _groupOrders.isNotEmpty
+          ? _groupOrders
+              .where((o) =>
+                  o.status == 'awaiting_acceptance' ||
+                  o.status == 'awaiting_payment')
+              .map((o) => o.id)
+              .toList()
+          : [widget.orderId];
+
+      if (orderIds.isEmpty) return;
+
+      // Call the SECURITY DEFINER RPC — bypasses RLS REVOKE on orders.
+      // Gated inside Postgres to reviewer UUIDs only.
+      await _supabase.rpc('magic_reviewer_auto_accept', params: {
+        'p_order_ids': orderIds,
+      });
+
+      if (mounted) {
+        // Refresh the page state — this triggers _handleAggregateStatusChange()
+        // which detects 'awaiting_payment' and opens Razorpay automatically.
+        await _fetchOrder();
+      }
+    } catch (e) {
+      debugPrint('Magic auto-accept error: $e');
+      // Non-fatal for reviewer — they can still tap the Pay button manually.
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
 
   void _startDecisionCountdown() {
     _decisionCountdownTimer?.cancel();

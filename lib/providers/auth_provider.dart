@@ -704,6 +704,14 @@ class AuthProvider extends ChangeNotifier {
         const hardcodedLocation = 'POINT(74.6366 34.4225)';
 
         // 1. Upsert profile — handle phone uniqueness gracefully
+        // Reviewer names: 9999999996 → Rajesh Kumar (Customer)
+        //                 9999999997 → Amit Bandana (Seller)
+        //                 9999999998 → Kishan Nadda  (Delivery Partner)
+        final reviewerName = phone.endsWith('9999999996')
+            ? 'Rajesh Kumar'
+            : phone.endsWith('9999999997')
+                ? 'Amit Bandana'
+                : 'Kishan Nadda';
         try {
           final uniquePhone = phone.contains('999999999')
               ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}'
@@ -711,7 +719,7 @@ class AuthProvider extends ChangeNotifier {
           await _supabase.from('profiles').upsert({
             'id': userId,
             'role': assignedRole,
-            'full_name': 'Razorpay Reviewer',
+            'full_name': reviewerName,
             'phone': uniquePhone
           }, onConflict: 'id');
         } catch (e) {
@@ -728,10 +736,17 @@ class AuthProvider extends ChangeNotifier {
           } else if (assignedRole == 'seller') {
             await _supabase.from('shops').upsert({
               'seller_id': userId,
-              'name': 'Reviewer Shop',
+              'name': 'Amit Medical Store',
+              'category': 'Medical Store',
+              'categories': ['Medical Store'],
+              'address': 'Main Market, Bandipora, J&K 193502',
               'is_active': true,
+              'is_accepting_orders': true,
               'verification_status': 'verified',
               'location': hardcodedLocation,
+              'opening_hours': '00:00 - 23:59',
+              'open_time': '00:00:00',
+              'close_time': '23:59:59',
             }, onConflict: 'seller_id');
           } else if (assignedRole == 'delivery_partner') {
             await _supabase.from('delivery_partners').upsert({
