@@ -80,7 +80,7 @@ Future<void> main() async {
   final shopId = const Uuid().v4();
   await testConstraint(
     'Shops Description Constraint (2000)',
-    "INSERT INTO shops (id, owner_id, name, description, status) VALUES ('$shopId', '$id', 'Test', '$massiveString', 'active');",
+    "INSERT INTO shops (id, seller_id, name, description, status) VALUES ('$shopId', '$id', 'Test', '$massiveString', 'active');",
     'check constraint'
   );
 

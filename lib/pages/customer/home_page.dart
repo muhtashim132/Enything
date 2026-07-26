@@ -716,7 +716,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       _searchQuery = query;
       _isSearching = true;
       _searchError = false;
-      _searchShopsDisplayLimit = 12;
+      _searchShopsDisplayLimit = 2;
       _searchProductsDisplayLimit = 10;
     });
     try {
@@ -726,7 +726,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       final List<String> matchedSubcategories = [];
       _searchKeywords.forEach((catName, keywords) {
         bool match = keywords.any((k) {
-          if (lowerQuery.length < 3) return lowerQuery == k;
           return lowerQuery.contains(k) || k.contains(lowerQuery);
         });
         if (match) {

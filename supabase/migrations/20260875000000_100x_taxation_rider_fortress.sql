@@ -361,7 +361,7 @@ BEGIN
       'shop_phone', v_order->>'shop_phone',
       'shop_prep_time_snapshot', v_order->>'shop_prep_time_snapshot',
       'prescription_urls', v_order->'prescription_urls',
-      'gst_rate_snapshot', v_gst_rate,
+      'gst_rate_snapshot', v_order->'gst_rate_snapshot',
       'razorpay_payment_id', v_order->>'razorpay_payment_id',
       'razorpay_order_id', v_order->>'razorpay_order_id',
       'total_amount', v_expected_total_amount,

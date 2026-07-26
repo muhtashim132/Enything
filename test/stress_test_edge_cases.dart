@@ -127,6 +127,7 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
   await client.rpc('place_orders_transaction', params: {
     'p_orders': [order],
     'p_items': [item],
+    'p_cart_group_id': cartGroupId,
     'p_coupon_id': null,
     'p_idempotency_key': cartGroupId,
   });

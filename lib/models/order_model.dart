@@ -216,83 +216,99 @@ class OrderModel {
     this.couponDiscount = 0.0,
   });
 
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  static double? _parseDoubleNullable(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
   factory OrderModel.fromMap(Map<String, dynamic> map) {
     return OrderModel(
-      id: map['id'] ?? '',
-      customerId: map['customer_id'] ?? '',
-      status: map['status'] ?? 'pending',
-      totalAmount: (map['total_amount'] ?? 0.0).toDouble(),
-      deliveryCharges: (map['delivery_charges'] ?? 0.0).toDouble(),
-      riderEarnings: (map['rider_earnings'] ?? (map['delivery_charges'] ?? 0.0))
-          .toDouble(),
-      multiShopSurcharge: (map['multi_shop_surcharge'] ?? 0.0).toDouble(),
-      platformFee: (map['platform_fee'] ?? 0.0).toDouble(),
-      createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
-      deliveryPartnerId: map['delivery_partner_id'],
-      shopId: map['shop_id'],
-      address: map['address'],
-      addressLabel: map['address_label'],
-      deliveryNotes: map['delivery_notes'],
-      customerPhone: map['customer_phone'],
-      shopPhone: map['shop_phone'],
-      riderPhone: map['rider_phone'],
-      paymentMethod: map['payment_method'],
-      cancelledReason: map['cancelled_reason'],
-      rejectionMessage: map['rejection_message'],
-      cartGroupId: map['cart_group_id'],
+      id: map['id']?.toString() ?? '',
+      customerId: map['customer_id']?.toString() ?? '',
+      status: map['status']?.toString() ?? 'pending',
+      totalAmount: _parseDouble(map['total_amount']),
+      deliveryCharges: _parseDouble(map['delivery_charges']),
+      riderEarnings: _parseDouble(map['rider_earnings']) > 0 
+          ? _parseDouble(map['rider_earnings']) 
+          : _parseDouble(map['delivery_charges']),
+      multiShopSurcharge: _parseDouble(map['multi_shop_surcharge']),
+      platformFee: _parseDouble(map['platform_fee']),
+      createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
+      deliveryPartnerId: map['delivery_partner_id']?.toString(),
+      shopId: map['shop_id']?.toString(),
+      address: map['address']?.toString(),
+      addressLabel: map['address_label']?.toString(),
+      deliveryNotes: map['delivery_notes']?.toString(),
+      customerPhone: map['customer_phone']?.toString(),
+      shopPhone: map['shop_phone']?.toString(),
+      riderPhone: map['rider_phone']?.toString(),
+      paymentMethod: map['payment_method']?.toString(),
+      cancelledReason: map['cancelled_reason']?.toString(),
+      rejectionMessage: map['rejection_message']?.toString(),
+      cartGroupId: map['cart_group_id']?.toString(),
       acceptanceDeadline: map['acceptance_deadline'] != null
-          ? DateTime.tryParse(map['acceptance_deadline'])
+          ? DateTime.tryParse(map['acceptance_deadline'].toString())
           : null,
       paymentDeadline: map['payment_deadline'] != null
-          ? DateTime.tryParse(map['payment_deadline'])
+          ? DateTime.tryParse(map['payment_deadline'].toString())
           : null,
-      sellerAccepted: map['seller_accepted'] ?? false,
-      partnerAccepted: map['partner_accepted'] ?? false,
+      sellerAccepted: map['seller_accepted'] == true || map['seller_accepted'] == 'true',
+      partnerAccepted: map['partner_accepted'] == true || map['partner_accepted'] == 'true',
       arrivedAtShopTime: map['arrived_at_shop_time'] != null
-          ? DateTime.tryParse(map['arrived_at_shop_time'])
+          ? DateTime.tryParse(map['arrived_at_shop_time'].toString())
           : null,
       orderReadyTime: map['order_ready_time'] != null
-          ? DateTime.tryParse(map['order_ready_time'])
+          ? DateTime.tryParse(map['order_ready_time'].toString())
           : null,
-      waitTimePenalty: (map['wait_time_penalty'] ?? 0.0).toDouble(),
-      waitTimeDisputed: map['wait_time_disputed'] ?? false,
-      hasCustomerRated: map['has_customer_rated'] ?? false,
-      hasSellerRated: map['has_seller_rated'] ?? false,
-      hasDeliveryRated: map['has_delivery_rated'] ?? false,
-      deliveryLat: (map['delivery_lat'] as num?)?.toDouble(),
-      deliveryLng: (map['delivery_lng'] as num?)?.toDouble(),
-      riderLat: (map['rider_lat'] as num?)?.toDouble(),
-      riderLng: (map['rider_lng'] as num?)?.toDouble(),
+      waitTimePenalty: _parseDouble(map['wait_time_penalty']),
+      waitTimeDisputed: map['wait_time_disputed'] == true || map['wait_time_disputed'] == 'true',
+      hasCustomerRated: map['has_customer_rated'] == true || map['has_customer_rated'] == 'true',
+      hasSellerRated: map['has_seller_rated'] == true || map['has_seller_rated'] == 'true',
+      hasDeliveryRated: map['has_delivery_rated'] == true || map['has_delivery_rated'] == 'true',
+      deliveryLat: _parseDoubleNullable(map['delivery_lat']),
+      deliveryLng: _parseDoubleNullable(map['delivery_lng']),
+      riderLat: _parseDoubleNullable(map['rider_lat']),
+      riderLng: _parseDoubleNullable(map['rider_lng']),
       riderLocationUpdatedAt: map['rider_location_updated_at'] != null
-          ? DateTime.tryParse(map['rider_location_updated_at'])
+          ? DateTime.tryParse(map['rider_location_updated_at'].toString())
           : null,
-      shopLat: (map['shop_lat'] as num?)?.toDouble(),
-      shopLng: (map['shop_lng'] as num?)?.toDouble(),
+      shopLat: _parseDoubleNullable(map['shop_lat']),
+      shopLng: _parseDoubleNullable(map['shop_lng']),
       // ── Financial snapshot — read from frozen DB values ────────────────
-      gstItemTotal: (map['gst_item_total'] ?? 0.0).toDouble(),
-      s9_5GstAmount: (map['s9_5_gst_amount'] ?? 0.0).toDouble(),
-      nonFoodGstAmount: (map['non_food_gst_amount'] ?? 0.0).toDouble(),
-      gstDelivery: (map['gst_delivery'] ?? 0.0).toDouble(),
-      gstPlatform: (map['gst_platform'] ?? 0.0).toDouble(),
-      tcsAmount: (map['tcs_amount'] ?? 0.0).toDouble(),
-      tdsAmount: (map['tds_amount'] ?? 0.0).toDouble(),
-      enythingCommission: (map['enything_commission'] ?? 0.0).toDouble(),
-      sellerPayout: (map['seller_payout'] ?? 0.0).toDouble(),
-      gatewayDeduction: (map['gateway_deduction'] ?? 0.0).toDouble(),
-      grandTotalCollected: map['grand_total_collected'] != null
-          ? (map['grand_total_collected'] as num).toDouble()
-          : -1.0,
-      gstRateSnapshot:
-          (map['gst_rate_snapshot'] as Map<String, dynamic>?) ?? {},
-      prescriptionUrls: map['prescription_urls'] != null
-          ? List<String>.from(map['prescription_urls'])
+      gstItemTotal: _parseDouble(map['gst_item_total']),
+      s9_5GstAmount: _parseDouble(map['s9_5_gst_amount']),
+      nonFoodGstAmount: _parseDouble(map['non_food_gst_amount']),
+      gstDelivery: _parseDouble(map['gst_delivery']),
+      gstPlatform: _parseDouble(map['gst_platform']),
+      tcsAmount: _parseDouble(map['tcs_amount']),
+      tdsAmount: _parseDouble(map['tds_amount']),
+      enythingCommission: _parseDouble(map['enything_commission']),
+      sellerPayout: _parseDouble(map['seller_payout']),
+      gatewayDeduction: _parseDouble(map['gateway_deduction']),
+      grandTotalCollected: _parseDouble(map['grand_total_collected']),
+      gstRateSnapshot: map['gst_rate_snapshot'] is Map
+          ? Map<String, dynamic>.from(map['gst_rate_snapshot'] as Map)
+          : {},
+      prescriptionUrls: map['prescription_urls'] is List
+          ? (map['prescription_urls'] as List).map((e) => e.toString()).toList()
           : [],
-      estimatedDistanceKm: (map['estimated_distance_km'] ?? 0.0).toDouble(),
-      shopPrepTimeSnapshot: map['shop_prep_time_snapshot'] ?? 30,
-      smallCartFee: (map['small_cart_fee'] ?? 0.0).toDouble(),
-      heavyOrderFee: (map['heavy_order_fee'] ?? 0.0).toDouble(),
-      couponId: map['coupon_id'] as String?,
-      couponDiscount: (map['coupon_discount'] ?? 0.0).toDouble(),
+      estimatedDistanceKm: _parseDouble(map['estimated_distance_km']),
+      shopPrepTimeSnapshot: map['shop_prep_time_snapshot'] is int 
+          ? map['shop_prep_time_snapshot'] 
+          : int.tryParse(map['shop_prep_time_snapshot']?.toString() ?? '30') ?? 30,
+      smallCartFee: _parseDouble(map['small_cart_fee']),
+      heavyOrderFee: _parseDouble(map['heavy_order_fee']),
+      couponId: map['coupon_id']?.toString(),
+      couponDiscount: _parseDouble(map['coupon_discount']),
     );
   }
 
@@ -503,15 +519,15 @@ class OrderItem {
 
   factory OrderItem.fromMap(Map<String, dynamic> map) {
     return OrderItem(
-      id: map['id'] ?? '',
-      productId: map['product_id'] ?? '',
-      productName: map['product_name'] ?? '',
-      variantName: map['variant_name'],
-      quantity: map['quantity'] ?? 1,
-      price: (map['price'] ?? 0.0).toDouble(),
-      weightKg: (map['weight_kg'] ?? 0.0).toDouble(),
-      specialInstructions: map['special_instructions'],
-      requiresPrescription: map['requires_prescription'] ?? false,
+      id: map['id']?.toString() ?? '',
+      productId: map['product_id']?.toString() ?? '',
+      productName: map['product_name']?.toString() ?? '',
+      variantName: map['variant_name']?.toString(),
+      quantity: (map['quantity'] is num) ? (map['quantity'] as num).toInt() : int.tryParse(map['quantity']?.toString() ?? '1') ?? 1,
+      price: OrderModel._parseDouble(map['price']),
+      weightKg: OrderModel._parseDouble(map['weight_kg']),
+      specialInstructions: map['special_instructions']?.toString(),
+      requiresPrescription: map['requires_prescription'] == true || map['requires_prescription'] == 'true',
     );
   }
 

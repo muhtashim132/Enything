@@ -76,6 +76,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   // Track collapsed state so it doesn't reset on timer/realtime updates
   final Set<String> _collapsedAvailableGroups = {};
   final Set<String> _collapsedActiveGroups = {};
+  final Set<String> _ignoredAvailableGroups = {};
   DateTime? _lastBackPressTime;
   final ScrollController _scrollController = ScrollController();
 
@@ -544,7 +545,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       if (mounted) {
         setState(() {
-          _availableGroups = _groupOrders(filtered);
+          _availableGroups = _groupOrders(filtered)
+              .where((g) => !_ignoredAvailableGroups.contains(g.groupId))
+              .toList();
 
           final myRawOrders = (myOrders as List).map((o) {
             final model = OrderModel.fromMap(o);
@@ -2121,19 +2124,39 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     ...group.orders.map((o) {
                       final shopName = _shopInfoCache[o.shopId]?.name ?? 'Shop';
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.circle,
-                                size: 6, color: Colors.amber),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                child: Text(shopName,
+                            Row(
+                              children: [
+                                const Icon(Icons.circle,
+                                    size: 6, color: Colors.amber),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                    child: Text(shopName,
+                                        style: GoogleFonts.outfit(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.black87))),
+                              ],
+                            ),
+                            if (o.items.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 14, top: 4),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: o.items.map((item) => Text(
+                                    '${item.quantity}x ${item.productName}',
                                     style: GoogleFonts.outfit(
-                                        fontSize: 12,
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Colors.black87))),
+                                      fontSize: 12,
+                                      color: isDark ? Colors.white54 : Colors.black54,
+                                    )
+                                  )).toList(),
+                                ),
+                              ),
                           ],
                         ),
                       );
@@ -2175,20 +2198,43 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     ],
                     const SizedBox(height: 14),
                     Row(children: [
-                      OutlinedButton.icon(
-                        onPressed: () => _openRouteMapForGroup(group),
-                        icon: const Icon(Icons.map_rounded, size: 18),
-                        label: Text('See Route',
-                            style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.w700)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF4C6EF5),
-                          side: const BorderSide(
-                              color: Color(0xFF4C6EF5), width: 1.2),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        child: IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _ignoredAvailableGroups.add(group.groupId);
+                              _availableGroups.removeWhere((g) => g.groupId == group.groupId);
+                            });
+                          },
+                          icon: const Icon(Icons.close_rounded, size: 22),
+                          color: AppColors.danger,
+                          tooltip: 'Ignore Order',
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppColors.danger.withValues(alpha: 0.1),
+                            padding: const EdgeInsets.all(12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: BorderSide(color: AppColors.danger.withValues(alpha: 0.3)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _openRouteMapForGroup(group),
+                          icon: const Icon(Icons.map_rounded, size: 16),
+                          label: Text('Route',
+                              style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w700, fontSize: 13)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF4C6EF5),
+                            side: const BorderSide(
+                                color: Color(0xFF4C6EF5), width: 1.2),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -2200,15 +2246,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.success,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
                             elevation: 4,
                             shadowColor:
                                 AppColors.success.withValues(alpha: 0.4),
                           ),
-                          child: Text('Accept Group',
+                          child: Text('Accept',
                               style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.w800, fontSize: 14)),
                         ),
