@@ -34,28 +34,51 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
 
-    _bgCtrl = AnimationController(duration: const Duration(seconds: 4), vsync: this)..repeat(reverse: true);
+    _bgCtrl =
+        AnimationController(duration: const Duration(seconds: 4), vsync: this)
+          ..repeat(reverse: true);
     _bgAnim = CurvedAnimation(parent: _bgCtrl, curve: Curves.easeInOut);
 
-    _ringCtrl = AnimationController(duration: const Duration(milliseconds: 1600), vsync: this);
-    _ring1 = CurvedAnimation(parent: _ringCtrl, curve: const Interval(0.0, 0.65, curve: Curves.easeOut));
-    _ring2 = CurvedAnimation(parent: _ringCtrl, curve: const Interval(0.15, 0.80, curve: Curves.easeOut));
-    _ring3 = CurvedAnimation(parent: _ringCtrl, curve: const Interval(0.30, 1.00, curve: Curves.easeOut));
+    _ringCtrl = AnimationController(
+        duration: const Duration(milliseconds: 1600), vsync: this);
+    _ring1 = CurvedAnimation(
+        parent: _ringCtrl,
+        curve: const Interval(0.0, 0.65, curve: Curves.easeOut));
+    _ring2 = CurvedAnimation(
+        parent: _ringCtrl,
+        curve: const Interval(0.15, 0.80, curve: Curves.easeOut));
+    _ring3 = CurvedAnimation(
+        parent: _ringCtrl,
+        curve: const Interval(0.30, 1.00, curve: Curves.easeOut));
 
-    _logoCtrl = AnimationController(duration: const Duration(seconds: 2), vsync: this);
-    _logoScale = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _logoCtrl, curve: Curves.elasticOut));
-    _logoFade = CurvedAnimation(parent: _logoCtrl, curve: const Interval(0.0, 0.5, curve: Curves.easeIn));
+    _logoCtrl =
+        AnimationController(duration: const Duration(seconds: 2), vsync: this);
+    _logoScale = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _logoCtrl, curve: Curves.elasticOut));
+    _logoFade = CurvedAnimation(
+        parent: _logoCtrl,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeIn));
 
-    _shimmerCtrl = AnimationController(duration: const Duration(milliseconds: 1800), vsync: this)..repeat();
-    _shimmerAnim = Tween<double>(begin: -1.5, end: 2.5).animate(CurvedAnimation(parent: _shimmerCtrl, curve: Curves.linear));
+    _shimmerCtrl = AnimationController(
+        duration: const Duration(milliseconds: 1800), vsync: this)
+      ..repeat();
+    _shimmerAnim = Tween<double>(begin: -1.5, end: 2.5)
+        .animate(CurvedAnimation(parent: _shimmerCtrl, curve: Curves.linear));
 
-    _pulseCtrl = AnimationController(duration: const Duration(milliseconds: 2000), vsync: this)..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 1.0, end: 1.055).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    _pulseCtrl = AnimationController(
+        duration: const Duration(milliseconds: 2000), vsync: this)
+      ..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 1.0, end: 1.055)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
 
-    _textCtrl = AnimationController(duration: const Duration(milliseconds: 700), vsync: this);
-    _textSlide = Tween<double>(begin: 36, end: 0).animate(CurvedAnimation(parent: _textCtrl, curve: Curves.easeOut));
+    _textCtrl = AnimationController(
+        duration: const Duration(milliseconds: 700), vsync: this);
+    _textSlide = Tween<double>(begin: 36, end: 0)
+        .animate(CurvedAnimation(parent: _textCtrl, curve: Curves.easeOut));
     _textFade = CurvedAnimation(parent: _textCtrl, curve: Curves.easeIn);
-    _taglineFade = CurvedAnimation(parent: _textCtrl, curve: const Interval(0.4, 1.0, curve: Curves.easeIn));
+    _taglineFade = CurvedAnimation(
+        parent: _textCtrl,
+        curve: const Interval(0.4, 1.0, curve: Curves.easeIn));
 
     _runSequence();
   }
@@ -110,7 +133,8 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         if (status == 'verified' || status == 'approved') {
           Navigator.pushReplacementNamed(context, AppRoutes.sellerDashboard);
         } else if (status == 'pending' || status == 'rejected') {
-          Navigator.pushReplacementNamed(context, AppRoutes.sellerPendingVerification);
+          Navigator.pushReplacementNamed(
+              context, AppRoutes.sellerPendingVerification);
         } else {
           Navigator.pushReplacementNamed(context, AppRoutes.sellerKycUpload);
         }
@@ -120,7 +144,8 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         if (status == 'verified' || status == 'approved') {
           Navigator.pushReplacementNamed(context, AppRoutes.deliveryDashboard);
         } else if (status == 'pending' || status == 'rejected') {
-          Navigator.pushReplacementNamed(context, AppRoutes.deliveryPendingVerification);
+          Navigator.pushReplacementNamed(
+              context, AppRoutes.deliveryPendingVerification);
         } else {
           Navigator.pushReplacementNamed(context, AppRoutes.deliveryKycUpload);
         }
@@ -179,7 +204,8 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     // correctly replaces the splash-navigated route with their own dashboard.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if ((role == 'customer' || (role == null && orderId != null)) && orderId != null) {
+      if ((role == 'customer' || (role == null && orderId != null)) &&
+          orderId != null) {
         // customerHome is already on stack — push trackOrder on top
         Navigator.of(context).pushNamed(
           AppRoutes.trackOrder,
@@ -192,7 +218,6 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     });
   }
 
-
   void _showNetworkErrorRetry() {
     showDialog(
       context: context,
@@ -200,8 +225,12 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Connection Error', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text('Failed to load profile data. Please check your internet connection.', style: GoogleFonts.outfit(color: Colors.white70)),
+        title: Text('Connection Error',
+            style: GoogleFonts.outfit(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+            'Failed to load profile data. Please check your internet connection.',
+            style: GoogleFonts.outfit(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () {
@@ -209,7 +238,10 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
               context.read<AuthProvider>().retryProfileFetch();
               _navigate();
             },
-            child: Text('Retry', style: GoogleFonts.outfit(color: const Color(0xFF4C6EF5), fontWeight: FontWeight.bold)),
+            child: Text('Retry',
+                style: GoogleFonts.outfit(
+                    color: const Color(0xFF4C6EF5),
+                    fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -218,8 +250,12 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _bgCtrl.dispose(); _ringCtrl.dispose(); _logoCtrl.dispose();
-    _shimmerCtrl.dispose(); _pulseCtrl.dispose(); _textCtrl.dispose();
+    _bgCtrl.dispose();
+    _ringCtrl.dispose();
+    _logoCtrl.dispose();
+    _shimmerCtrl.dispose();
+    _pulseCtrl.dispose();
+    _textCtrl.dispose();
     super.dispose();
   }
 
@@ -228,7 +264,14 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     final size = MediaQuery.of(context).size;
     return Scaffold(
       body: AnimatedBuilder(
-        animation: Listenable.merge([_bgCtrl, _ringCtrl, _logoCtrl, _textCtrl, _shimmerCtrl, _pulseCtrl]),
+        animation: Listenable.merge([
+          _bgCtrl,
+          _ringCtrl,
+          _logoCtrl,
+          _textCtrl,
+          _shimmerCtrl,
+          _pulseCtrl
+        ]),
         builder: (_, __) => Container(
           width: size.width,
           height: size.height,
@@ -237,9 +280,11 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color.lerp(const Color(0xFF04091E), const Color(0xFF07124A), _bgAnim.value)!,
+                Color.lerp(const Color(0xFF04091E), const Color(0xFF07124A),
+                    _bgAnim.value)!,
                 const Color(0xFF02061A),
-                Color.lerp(const Color(0xFF08043E), const Color(0xFF120860), _bgAnim.value)!,
+                Color.lerp(const Color(0xFF08043E), const Color(0xFF120860),
+                    _bgAnim.value)!,
               ],
               stops: const [0.0, 0.5, 1.0],
             ),
@@ -251,25 +296,47 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
               Positioned(
                 top: -size.height * 0.08,
                 left: -size.width * 0.25,
-                child: _aurora(size.width * 0.85, const Color(0xFF2B4FD4), 0.18 + _bgAnim.value * 0.12),
+                child: _aurora(size.width * 0.85, const Color(0xFF2B4FD4),
+                    0.18 + _bgAnim.value * 0.12),
               ),
               Positioned(
                 bottom: -size.height * 0.12,
                 right: -size.width * 0.25,
-                child: _aurora(size.width * 0.95, const Color(0xFF6230C8), 0.15 + (1 - _bgAnim.value) * 0.12),
+                child: _aurora(size.width * 0.95, const Color(0xFF6230C8),
+                    0.15 + (1 - _bgAnim.value) * 0.12),
               ),
               // Blue center glow behind logo
               Opacity(
                 opacity: (_logoFade.value * 0.20).clamp(0.0, 1.0),
-                child: _aurora(size.shortestSide * 0.70, const Color(0xFF5B8BFF), 1.0),
+                child: _aurora(
+                    size.shortestSide * 0.70, const Color(0xFF5B8BFF), 1.0),
               ),
 
               // ── Expanding rings ──────────────────────────────────────────
               ...[
-                (_ring1, size.shortestSide * 0.42, const Color(0xFF5B8BFF), 2.0),
-                (_ring2, size.shortestSide * 0.30, const Color(0xFF4C6EF5), 1.4),
-                (_ring3, size.shortestSide * 0.22, const Color(0xFF5B8BFF), 0.9),
-              ].map((r) => _RingWidget(progress: r.$1.value, maxRadius: r.$2, color: r.$3, strokeW: r.$4)),
+                (
+                  _ring1,
+                  size.shortestSide * 0.42,
+                  const Color(0xFF5B8BFF),
+                  2.0
+                ),
+                (
+                  _ring2,
+                  size.shortestSide * 0.30,
+                  const Color(0xFF4C6EF5),
+                  1.4
+                ),
+                (
+                  _ring3,
+                  size.shortestSide * 0.22,
+                  const Color(0xFF5B8BFF),
+                  0.9
+                ),
+              ].map((r) => _RingWidget(
+                  progress: r.$1.value,
+                  maxRadius: r.$2,
+                  color: r.$3,
+                  strokeW: r.$4)),
 
               // ── Star field ───────────────────────────────────────────────
               CustomPaint(size: size, painter: _StarPainter(_bgCtrl.value)),
@@ -282,68 +349,78 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                  // Logo
-                  FadeTransition(
-                    opacity: _logoFade,
-                    child: ScaleTransition(
-                      scale: _logoScale,
+                    // Logo
+                    FadeTransition(
+                      opacity: _logoFade,
                       child: ScaleTransition(
-                        scale: _pulseAnim,
-                        child: _EnythingLogo(
-                          logoSize: size.shortestSide * 0.22,
-                          shimmer: _shimmerAnim,
-                          assemblyAnim: _logoCtrl,
+                        scale: _logoScale,
+                        child: ScaleTransition(
+                          scale: _pulseAnim,
+                          child: _EnythingLogo(
+                            logoSize: size.shortestSide * 0.22,
+                            shimmer: _shimmerAnim,
+                            assemblyAnim: _logoCtrl,
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  // Text block
-                  FadeTransition(
-                    opacity: _textFade,
-                    child: Transform.translate(
-                      offset: Offset(0, _textSlide.value),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // ENYTHING wordmark
-                          ShaderMask(
-                            shaderCallback: (b) => const LinearGradient(
-                              colors: [Color(0xFF8BAAFF), Color(0xFF5B8BFF), Color(0xFF4C6EF5)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ).createShader(b),
-                            child: Text('ENYTHING',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.outfit(
-                                color: Colors.white, fontSize: 52,
-                                fontWeight: FontWeight.w900, letterSpacing: 8, height: 1.0,
+                    // Text block
+                    FadeTransition(
+                      opacity: _textFade,
+                      child: Transform.translate(
+                        offset: Offset(0, _textSlide.value),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // ENYTHING wordmark
+                            ShaderMask(
+                              shaderCallback: (b) => const LinearGradient(
+                                colors: [
+                                  Color(0xFF8BAAFF),
+                                  Color(0xFF5B8BFF),
+                                  Color(0xFF4C6EF5)
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ).createShader(b),
+                              child: Text(
+                                'ENYTHING',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 52,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 8,
+                                  height: 1.0,
+                                ),
                               ),
                             ),
-                          ),
 
-                          const SizedBox(height: 14),
+                            const SizedBox(height: 14),
 
-                          FadeTransition(
-                            opacity: _taglineFade,
-                            child: Text(
-                              'Everything. Everywhere. Instantly.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.outfit(
-                                color: Colors.white.withValues(alpha: 0.55),
-                                fontSize: 15, fontWeight: FontWeight.w400, letterSpacing: 0.5,
+                            FadeTransition(
+                              opacity: _taglineFade,
+                              child: Text(
+                                'Everything. Everywhere. Instantly.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               ),
 
               // ── Bottom loading indicator ─────────────────────────────────
@@ -356,14 +433,18 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                     builder: (_, __) => Row(
                       mainAxisSize: MainAxisSize.min,
                       children: List.generate(3, (i) {
-                        final wave = (math.sin((_bgCtrl.value * 6) - i * 1.0) + 1) / 2;
+                        final wave =
+                            (math.sin((_bgCtrl.value * 6) - i * 1.0) + 1) / 2;
                         return Container(
                           margin: const EdgeInsets.symmetric(horizontal: 4),
                           width: i == 1 ? 9 : 5.5,
                           height: i == 1 ? 9 : 5.5,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Color.lerp(Colors.white.withValues(alpha: 0.15), const Color(0xFF5B8BFF), wave),
+                            color: Color.lerp(
+                                Colors.white.withValues(alpha: 0.15),
+                                const Color(0xFF5B8BFF),
+                                wave),
                           ),
                         );
                       }),
@@ -379,15 +460,17 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   }
 
   Widget _aurora(double size, Color color, double opacity) => Opacity(
-    opacity: opacity.clamp(0.0, 1.0),
-    child: Container(
-      width: size, height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
-      ),
-    ),
-  );
+        opacity: opacity.clamp(0.0, 1.0),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient:
+                RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
+          ),
+        ),
+      );
 }
 
 // ─── Enything Logo Widget ─────────────────────────────────────────────────────
@@ -395,7 +478,10 @@ class _EnythingLogo extends StatelessWidget {
   final double logoSize;
   final Animation<double> shimmer;
   final Animation<double> assemblyAnim;
-  const _EnythingLogo({required this.logoSize, required this.shimmer, required this.assemblyAnim});
+  const _EnythingLogo(
+      {required this.logoSize,
+      required this.shimmer,
+      required this.assemblyAnim});
 
   @override
   Widget build(BuildContext context) {
@@ -405,32 +491,45 @@ class _EnythingLogo extends StatelessWidget {
       children: [
         // Outer glow
         Container(
-          width: logoSize + 48, height: logoSize + 48,
+          width: logoSize + 48,
+          height: logoSize + 48,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
-              BoxShadow(color: const Color(0xFF5B8BFF).withValues(alpha: 0.35), blurRadius: 60, spreadRadius: 12),
-              BoxShadow(color: const Color(0xFF4C6EF5).withValues(alpha: 0.20), blurRadius: 30, spreadRadius: 4),
+              BoxShadow(
+                  color: const Color(0xFF5B8BFF).withValues(alpha: 0.35),
+                  blurRadius: 60,
+                  spreadRadius: 12),
+              BoxShadow(
+                  color: const Color(0xFF4C6EF5).withValues(alpha: 0.20),
+                  blurRadius: 30,
+                  spreadRadius: 4),
             ],
           ),
         ),
         // Inner glow ring
         Container(
-          width: logoSize + 16, height: logoSize + 16,
+          width: logoSize + 16,
+          height: logoSize + 16,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
-              BoxShadow(color: const Color(0xFF8BAAFF).withValues(alpha: 0.22), blurRadius: 20, spreadRadius: 2),
+              BoxShadow(
+                  color: const Color(0xFF8BAAFF).withValues(alpha: 0.22),
+                  blurRadius: 20,
+                  spreadRadius: 2),
             ],
           ),
         ),
         // Main logo container with frosted-glass border
         Container(
-          width: logoSize, height: logoSize,
+          width: logoSize,
+          height: logoSize,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFF1A2A6C), Color(0xFF0D1B4A), Color(0xFF07103A)],
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(r),
             border: Border.all(
@@ -460,13 +559,18 @@ class _EnythingLogo extends StatelessWidget {
                   builder: (_, __) => Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                         stops: [
                           (shimmer.value - 0.45).clamp(0.0, 1.0),
                           shimmer.value.clamp(0.0, 1.0),
                           (shimmer.value + 0.45).clamp(0.0, 1.0),
                         ],
-                        colors: [Colors.transparent, Colors.white.withValues(alpha: 0.09), Colors.transparent],
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withValues(alpha: 0.09),
+                          Colors.transparent
+                        ],
                       ),
                     ),
                   ),
@@ -491,28 +595,33 @@ class _LogoPartsPainter extends CustomPainter {
     final radius = Radius.circular(h * 0.12);
     final thickness = h * 0.24;
 
-    final topBox = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, thickness), radius);
-    final botBox = RRect.fromRectAndRadius(Rect.fromLTWH(0, h - thickness, w, thickness), radius);
-    final stemBox = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, thickness, h), radius);
-    final midBox = RRect.fromRectAndRadius(Rect.fromLTWH(0, h / 2 - thickness / 2, w * 0.8, thickness), radius);
+    final topBox =
+        RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, thickness), radius);
+    final botBox = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, h - thickness, w, thickness), radius);
+    final stemBox =
+        RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, thickness, h), radius);
+    final midBox = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, h / 2 - thickness / 2, w * 0.8, thickness), radius);
 
     double ease(double t) => Curves.easeOutCubic.transform(t.clamp(0.0, 1.0));
 
-    final tTop   = ease((progress - 0.1) / 0.3);
-    final tStem  = ease((progress - 0.3) / 0.3);
-    final tBot   = ease((progress - 0.5) / 0.3);
-    final tMid   = ease((progress - 0.7) / 0.3);
+    final tTop = ease((progress - 0.1) / 0.3);
+    final tStem = ease((progress - 0.3) / 0.3);
+    final tBot = ease((progress - 0.5) / 0.3);
+    final tMid = ease((progress - 0.7) / 0.3);
 
     void drawPart(RRect box, double t, Offset translation, Color color) {
       if (t <= 0) return;
       canvas.save();
-      final currentOffset = Offset(translation.dx * (1 - t), translation.dy * (1 - t));
+      final currentOffset =
+          Offset(translation.dx * (1 - t), translation.dy * (1 - t));
       canvas.translate(currentOffset.dx, currentOffset.dy);
-      
+
       final paint = Paint()
         ..color = color.withValues(alpha: t * color.a)
         ..style = PaintingStyle.fill;
-      
+
       canvas.drawRRect(box, paint);
       canvas.restore();
     }
@@ -529,20 +638,29 @@ class _LogoPartsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_LogoPartsPainter oldDelegate) => oldDelegate.progress != progress;
+  bool shouldRepaint(_LogoPartsPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 // ─── Custom Painters ──────────────────────────────────────────────────────────
 class _RingWidget extends StatelessWidget {
   final double progress, maxRadius, strokeW;
   final Color color;
-  const _RingWidget({required this.progress, required this.maxRadius, required this.color, required this.strokeW});
+  const _RingWidget(
+      {required this.progress,
+      required this.maxRadius,
+      required this.color,
+      required this.strokeW});
   @override
   Widget build(BuildContext context) {
     if (progress <= 0) return const SizedBox.shrink();
     return SizedBox.expand(
       child: CustomPaint(
-        painter: _RingPainter(radius: maxRadius * progress, opacity: (1 - progress).clamp(0.0, 1.0) * 0.5, color: color, strokeWidth: strokeW),
+        painter: _RingPainter(
+            radius: maxRadius * progress,
+            opacity: (1 - progress).clamp(0.0, 1.0) * 0.5,
+            color: color,
+            strokeWidth: strokeW),
       ),
     );
   }
@@ -551,29 +669,41 @@ class _RingWidget extends StatelessWidget {
 class _RingPainter extends CustomPainter {
   final double radius, opacity, strokeWidth;
   final Color color;
-  const _RingPainter({required this.radius, required this.opacity, required this.color, required this.strokeWidth});
+  const _RingPainter(
+      {required this.radius,
+      required this.opacity,
+      required this.color,
+      required this.strokeWidth});
   @override
   void paint(Canvas canvas, Size size) {
     if (opacity <= 0 || radius <= 0) return;
     canvas.drawCircle(
       Offset(size.width / 2, size.height / 2),
       radius,
-      Paint()..color = color.withValues(alpha: opacity)..style = PaintingStyle.stroke..strokeWidth = strokeWidth,
+      Paint()
+        ..color = color.withValues(alpha: opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth,
     );
   }
+
   @override
-  bool shouldRepaint(_RingPainter o) => o.radius != radius || o.opacity != opacity;
+  bool shouldRepaint(_RingPainter o) =>
+      o.radius != radius || o.opacity != opacity;
 }
 
 class _StarPainter extends CustomPainter {
   final double t;
   _StarPainter(this.t);
   static final _rnd = math.Random(13);
-  static final _stars = List.generate(55, (_) => [
-    _rnd.nextDouble(), _rnd.nextDouble(),
-    _rnd.nextDouble() * 1.6 + 0.5,
-    _rnd.nextDouble() * math.pi * 2,
-  ]);
+  static final _stars = List.generate(
+      55,
+      (_) => [
+            _rnd.nextDouble(),
+            _rnd.nextDouble(),
+            _rnd.nextDouble() * 1.6 + 0.5,
+            _rnd.nextDouble() * math.pi * 2,
+          ]);
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()..style = PaintingStyle.fill;
@@ -583,7 +713,7 @@ class _StarPainter extends CustomPainter {
       canvas.drawCircle(Offset(s[0] * size.width, s[1] * size.height), s[2], p);
     }
   }
+
   @override
   bool shouldRepaint(_StarPainter o) => o.t != t;
 }
-

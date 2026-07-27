@@ -29,16 +29,14 @@ class TeamRepository {
     final member = AdminUserModel.fromMap(data);
 
     // Load effective permissions
-    final perms = await _db
-        .rpc('get_user_permissions', params: {'p_user_id': userId});
+    final perms =
+        await _db.rpc('get_user_permissions', params: {'p_user_id': userId});
     final permCodes = (perms as List).map((r) => r['code'] as String).toList();
 
     // Fetch full permission objects for those codes
     if (permCodes.isNotEmpty) {
-      final permData = await _db
-          .from('permissions')
-          .select()
-          .inFilter('code', permCodes);
+      final permData =
+          await _db.from('permissions').select().inFilter('code', permCodes);
       final permList = (permData as List)
           .map((p) => PermissionModel.fromMap(p as Map<String, dynamic>))
           .toList();
@@ -136,13 +134,18 @@ class TeamRepository {
     required String invitedBy,
     required String actorRole,
   }) async {
-    final data = await _db.from('admin_invitations').insert({
-      'email': email,
-      'role_id': roleId,
-      'invited_by': invitedBy,
-      'status': 'pending',
-      'expires_at': DateTime.now().add(const Duration(days: 7)).toIso8601String(),
-    }).select('*, roles(name)').single();
+    final data = await _db
+        .from('admin_invitations')
+        .insert({
+          'email': email,
+          'role_id': roleId,
+          'invited_by': invitedBy,
+          'status': 'pending',
+          'expires_at':
+              DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+        })
+        .select('*, roles(name)')
+        .single();
 
     await _logAudit(
       actorId: invitedBy,
@@ -168,10 +171,10 @@ class TeamRepository {
 
   // ── Revoke invitation ───────────────────────────────────────
   Future<void> revokeInvitation(String invitationId) async {
-    await _db.from('admin_invitations').update({'status': 'revoked'}).eq('id', invitationId);
+    await _db
+        .from('admin_invitations')
+        .update({'status': 'revoked'}).eq('id', invitationId);
   }
-
-
 
   Future<void> _logAudit({
     required String actorId,

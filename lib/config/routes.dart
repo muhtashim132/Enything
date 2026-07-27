@@ -201,12 +201,14 @@ class AppRoutes {
           FaqSupportPage(
             initialTabIndex: a?['initialIndex'] as int? ?? 0,
             openTicketSheet: a?['showTicketSheet'] as bool? ?? false,
-          ), 
+          ),
           routeSettings,
         );
       case categoryProducts:
         final args = routeSettings.arguments as Map<String, dynamic>?;
-        return _build(CategoryProductsPage(categoryName: args?['categoryName'] ?? ''), routeSettings);
+        return _build(
+            CategoryProductsPage(categoryName: args?['categoryName'] ?? ''),
+            routeSettings);
       case allCategories:
         return _build(const AllCategoriesPage(), routeSettings);
       case refundPolicy:
@@ -232,7 +234,8 @@ class AppRoutes {
             type: (a?['type'] as ListingType?) ?? ListingType.shops,
             shops: (a?['shops'] as List<ShopModel>?) ?? const [],
             products: (a?['products'] as List<ProductModel>?) ?? const [],
-            productShops: (a?['productShops'] as Map<String, ShopModel>?) ?? const {},
+            productShops:
+                (a?['productShops'] as Map<String, ShopModel>?) ?? const {},
             sectionTitle: a?['sectionTitle'] as String?,
           ),
           routeSettings,
@@ -262,7 +265,8 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => Scaffold(
             appBar: AppBar(title: const Text('Route Error')),
-            body: Center(child: Text('No route defined for ${routeSettings.name}')),
+            body: Center(
+                child: Text('No route defined for ${routeSettings.name}')),
           ),
         );
     }

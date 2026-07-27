@@ -25,7 +25,7 @@ class FakeGoTrueClient implements GoTrueClient {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  
+
   group('NotificationProvider Deduplication Tests', () {
     late NotificationProvider provider;
 

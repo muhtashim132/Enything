@@ -27,7 +27,7 @@ class SheetSkeletonLoader extends StatelessWidget {
             ),
           ),
         ),
-        
+
         Expanded(
           child: Shimmer.fromColors(
             baseColor: PremiumShimmer.baseColor(isDark),
@@ -57,11 +57,13 @@ class SheetSkeletonLoader extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 8),
-                            _buildSkeletonLine(width: double.infinity, height: 14),
+                            _buildSkeletonLine(
+                                width: double.infinity, height: 14),
                             const SizedBox(height: 12),
                             _buildSkeletonLine(width: 100, height: 14),
                             const SizedBox(height: 12),
-                            _buildSkeletonLine(width: double.infinity, height: 14),
+                            _buildSkeletonLine(
+                                width: double.infinity, height: 14),
                             const SizedBox(height: 12),
                             _buildSkeletonLine(width: 140, height: 14),
                           ],

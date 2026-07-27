@@ -47,10 +47,7 @@ class AboutEnythingPage extends StatelessWidget {
               Container(
                 width: double.infinity,
                 padding: EdgeInsets.fromLTRB(
-                    24,
-                    MediaQuery.of(context).padding.top + 56 + 24,
-                    24,
-                    40),
+                    24, MediaQuery.of(context).padding.top + 56 + 24, 24, 40),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [AppColors.primaryDark, AppColors.primaryLight],
@@ -130,7 +127,6 @@ class AboutEnythingPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     // ── Business Identity ─────────────────────────────
                     _sectionTitle('Business Identity', isDark),
                     const SizedBox(height: 16),
@@ -170,8 +166,8 @@ class AboutEnythingPage extends StatelessWidget {
                       title: 'Shipping & Delivery Policy',
                       icon: Icons.local_shipping_outlined,
                       isDark: isDark,
-                      onTap: () =>
-                          Navigator.pushNamed(context, AppRoutes.shippingPolicy),
+                      onTap: () => Navigator.pushNamed(
+                          context, AppRoutes.shippingPolicy),
                     ),
 
                     const SizedBox(height: 32),
@@ -225,9 +221,8 @@ class AboutEnythingPage extends StatelessWidget {
                             '© ${DateTime.now().year} Enything. All Rights Reserved.',
                             style: GoogleFonts.outfit(
                               fontSize: 12,
-                              color: isDark
-                                  ? Colors.white38
-                                  : AppColors.textLight,
+                              color:
+                                  isDark ? Colors.white38 : AppColors.textLight,
                             ),
                           ),
                         ],
@@ -316,17 +311,13 @@ class AboutEnythingPage extends StatelessWidget {
       child: Column(
         children: [
           row(Icons.business_rounded, 'Business Name', 'Enything'),
-          row(Icons.person_rounded, 'Proprietor',
-              'Muhtaashim Kamran Nazki'),
+          row(Icons.person_rounded, 'Proprietor', 'Muhtaashim Kamran Nazki'),
           row(Icons.verified_rounded, 'Udyam Registration No.',
               'UDYAM-JK-02-0019684'),
-          row(Icons.receipt_rounded, 'GST Reg No.',
-              '01CQQPN6775H1ZD'),
+          row(Icons.receipt_rounded, 'GST Reg No.', '01CQQPN6775H1ZD'),
           row(Icons.assignment_rounded, 'Trade License No.',
               'JK-ULB-NOC/2026/08565'),
-          row(
-              Icons.location_on_rounded,
-              'Registered Address',
+          row(Icons.location_on_rounded, 'Registered Address',
               'Plan Bandipora, Ward No. 2\nBandipora, Jammu & Kashmir — 193502, India'),
           row(Icons.email_rounded, 'Email', 'support@enything.in'),
           Padding(
@@ -347,8 +338,7 @@ class AboutEnythingPage extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -360,8 +350,8 @@ class AboutEnythingPage extends StatelessWidget {
                 offset: const Offset(0, 4),
               ),
           ],
-          border: Border.all(
-              color: isDark ? Colors.white12 : Colors.transparent),
+          border:
+              Border.all(color: isDark ? Colors.white12 : Colors.transparent),
         ),
         child: Row(
           children: [
@@ -385,8 +375,7 @@ class AboutEnythingPage extends StatelessWidget {
               ),
             ),
             Icon(Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: isDark ? Colors.white38 : AppColors.textLight),
+                size: 16, color: isDark ? Colors.white38 : AppColors.textLight),
           ],
         ),
       ),

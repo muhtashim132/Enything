@@ -10,7 +10,8 @@ import '../../../widgets/admin/kyc_verification_dialog.dart';
 import '../rbac/forbidden_page.dart';
 import '../../../utils/time_utils.dart';
 
-void _showKycDialog(BuildContext context, Map<String, dynamic> data, String title, String tableName, String idColumn, VoidCallback onRefresh) {
+void _showKycDialog(BuildContext context, Map<String, dynamic> data,
+    String title, String tableName, String idColumn, VoidCallback onRefresh) {
   showDialog(
     context: context,
     builder: (_) => KycVerificationDialog(
@@ -23,20 +24,28 @@ void _showKycDialog(BuildContext context, Map<String, dynamic> data, String titl
   );
 }
 
-Future<void> _deleteUser(BuildContext context, String userId, String name, VoidCallback onSuccess) async {
+Future<void> _deleteUser(BuildContext context, String userId, String name,
+    VoidCallback onSuccess) async {
   final confirm = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       backgroundColor: AdminColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text('Delete User', style: AdminStyles.title(color: AdminColors.danger)),
-      content: Text('Are you sure you want to permanently delete $name?\n\nThis will wipe all their data from the database. This action CANNOT be undone.',
+      title: Text('Delete User',
+          style: AdminStyles.title(color: AdminColors.danger)),
+      content: Text(
+          'Are you sure you want to permanently delete $name?\n\nThis will wipe all their data from the database. This action CANNOT be undone.',
           style: AdminStyles.body(color: AdminColors.textSecondary)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AdminStyles.body())),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: AdminStyles.body())),
         ElevatedButton(
           onPressed: () => Navigator.pop(ctx, true),
-          style: ElevatedButton.styleFrom(backgroundColor: AdminColors.danger, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          style: ElevatedButton.styleFrom(
+              backgroundColor: AdminColors.danger,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12))),
           child: Text('Delete', style: AdminStyles.body(color: Colors.white)),
         ),
       ],
@@ -51,7 +60,9 @@ Future<void> _deleteUser(BuildContext context, String userId, String name, VoidC
       );
       if (res.status == 200) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User deleted successfully!'), backgroundColor: AdminColors.success));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('User deleted successfully!'),
+              backgroundColor: AdminColors.success));
         }
         onSuccess();
       } else {
@@ -59,7 +70,8 @@ Future<void> _deleteUser(BuildContext context, String userId, String name, VoidC
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.danger));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error: $e'), backgroundColor: AdminColors.danger));
       }
     }
   }
@@ -177,7 +189,9 @@ class _CustomersTabState extends State<_CustomersTab> {
     } catch (e) {
       debugPrint('Error fetching customers: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load customers'), backgroundColor: AdminColors.danger));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Failed to load customers'),
+            backgroundColor: AdminColors.danger));
       }
     }
     if (mounted) setState(() => _loading = false);
@@ -198,8 +212,8 @@ class _CustomersTabState extends State<_CustomersTab> {
     final rbac = context.read<RbacProvider>();
     final roles = rbac.allRoles.where((r) => r.slug != 'super_admin').toList();
     if (roles.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No roles available.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('No roles available.')));
       return;
     }
     RoleModel? selectedRole = roles.first;
@@ -210,7 +224,8 @@ class _CustomersTabState extends State<_CustomersTab> {
       builder: (_) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
           backgroundColor: AdminColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text('Promote to Admin', style: AdminStyles.title()),
           content: SingleChildScrollView(
             child: Column(
@@ -218,17 +233,23 @@ class _CustomersTabState extends State<_CustomersTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Make ${user['full_name'] ?? 'User'} an admin.',
-                    style: AdminStyles.body(size: 13, color: AdminColors.textSecondary)),
+                    style: AdminStyles.body(
+                        size: 13, color: AdminColors.textSecondary)),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<RoleModel>(
                   initialValue: selectedRole,
                   dropdownColor: AdminColors.surface,
                   style: AdminStyles.body(),
                   decoration: InputDecoration(
-                    filled: true, fillColor: AdminColors.cardBg,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: AdminColors.cardBg,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                  items: roles.map((r) => DropdownMenuItem(value: r, child: Text(r.name))).toList(),
+                  items: roles
+                      .map((r) =>
+                          DropdownMenuItem(value: r, child: Text(r.name)))
+                      .toList(),
                   onChanged: (v) => setS(() => selectedRole = v),
                 ),
                 const SizedBox(height: 12),
@@ -239,19 +260,27 @@ class _CustomersTabState extends State<_CustomersTab> {
                   decoration: InputDecoration(
                     hintText: 'Set admin password',
                     hintStyle: AdminStyles.body(color: AdminColors.textMuted),
-                    filled: true, fillColor: AdminColors.cardBg,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: AdminColors.cardBg,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AdminStyles.body(size: 13))),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancel', style: AdminStyles.body(size: 13))),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: Text('Promote', style: AdminStyles.body(size: 13, color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminColors.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
+              child: Text('Promote',
+                  style: AdminStyles.body(size: 13, color: Colors.white)),
             ),
           ],
         ),
@@ -270,12 +299,14 @@ class _CustomersTabState extends State<_CustomersTab> {
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Promoted to Admin!'), backgroundColor: AdminColors.success));
+              content: Text('Promoted to Admin!'),
+              backgroundColor: AdminColors.success));
         }
       } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Already an admin or error occurred.'), backgroundColor: AdminColors.danger));
+              content: Text('Already an admin or error occurred.'),
+              backgroundColor: AdminColors.danger));
         }
       }
     }
@@ -291,9 +322,13 @@ class _CustomersTabState extends State<_CustomersTab> {
           child: _loading
               ? _skelList()
               : _filtered.isEmpty
-                  ? const AdminEmptyState(icon: Icons.people_outline, message: 'No customers found')
+                  ? const AdminEmptyState(
+                      icon: Icons.people_outline, message: 'No customers found')
                   : RefreshIndicator(
-                      onRefresh: () async { setState(() => _loading = true); await _fetch(); },
+                      onRefresh: () async {
+                        setState(() => _loading = true);
+                        await _fetch();
+                      },
                       color: AdminColors.primary,
                       child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -301,7 +336,9 @@ class _CustomersTabState extends State<_CustomersTab> {
                         itemBuilder: (_, i) {
                           final u = _filtered[i];
                           final joined = u['created_at'] != null
-                              ? DateFormat('dd MMM yy').format(DateTime.parse(u['created_at'].toString()).toIST())
+                              ? DateFormat('dd MMM yy').format(
+                                  DateTime.parse(u['created_at'].toString())
+                                      .toIST())
                               : '';
                           return _UserCard(
                             name: u['full_name'] ?? 'Unknown',
@@ -315,19 +352,32 @@ class _CustomersTabState extends State<_CustomersTab> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
-                                        icon: const Icon(Icons.admin_panel_settings_rounded, color: AdminColors.primary, size: 20),
+                                        icon: const Icon(
+                                            Icons.admin_panel_settings_rounded,
+                                            color: AdminColors.primary,
+                                            size: 20),
                                         tooltip: 'Promote to Admin',
                                         onPressed: () => _promoteToAdmin(u),
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
+                                        icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: AdminColors.danger,
+                                            size: 20),
                                         tooltip: 'Delete User',
-                                        onPressed: () => _deleteUser(context, u['id'].toString(), u['full_name'] ?? 'Unknown', _fetch),
+                                        onPressed: () => _deleteUser(
+                                            context,
+                                            u['id'].toString(),
+                                            u['full_name'] ?? 'Unknown',
+                                            _fetch),
                                       ),
                                     ],
                                   )
                                 : null,
-                          ).animate().fadeIn(delay: Duration(milliseconds: i * 40)).slideY(begin: 0.08);
+                          )
+                              .animate()
+                              .fadeIn(delay: Duration(milliseconds: i * 40))
+                              .slideY(begin: 0.08);
                         },
                       ),
                     ),
@@ -371,7 +421,8 @@ class _SellersTabState extends State<_SellersTab> {
     try {
       final res = await _db.rpc('admin_get_all_shops');
       // FIX: RPC returns null when there are 0 shops — guard against List.from(null)
-      _sellers = res == null ? [] : List<Map<String, dynamic>>.from(res as List);
+      _sellers =
+          res == null ? [] : List<Map<String, dynamic>>.from(res as List);
       _filtered = _sellers;
     } catch (e) {
       debugPrint('Error fetching sellers: $e');
@@ -388,8 +439,11 @@ class _SellersTabState extends State<_SellersTab> {
         String ownerStr = '';
         if (profileData is Map) {
           ownerStr = (profileData['full_name'] ?? '').toString().toLowerCase();
-        } else if (profileData is List && profileData.isNotEmpty && profileData[0] is Map) {
-          ownerStr = (profileData[0]['full_name'] ?? '').toString().toLowerCase();
+        } else if (profileData is List &&
+            profileData.isNotEmpty &&
+            profileData[0] is Map) {
+          ownerStr =
+              (profileData[0]['full_name'] ?? '').toString().toLowerCase();
         }
         return name.contains(q) || ownerStr.contains(q);
       }).toList();
@@ -398,11 +452,8 @@ class _SellersTabState extends State<_SellersTab> {
 
   Future<void> _toggle(String id, bool cur) async {
     try {
-      await _db.rpc('admin_toggle_active', params: {
-        'p_target_id': id,
-        'p_type': 'shop',
-        'p_is_active': !cur
-      });
+      await _db.rpc('admin_toggle_active',
+          params: {'p_target_id': id, 'p_type': 'shop', 'p_is_active': !cur});
       _fetch();
     } catch (_) {}
   }
@@ -421,9 +472,13 @@ class _SellersTabState extends State<_SellersTab> {
           child: _loading
               ? _skelList()
               : _filtered.isEmpty
-                  ? const AdminEmptyState(icon: Icons.store_outlined, message: 'No sellers yet')
+                  ? const AdminEmptyState(
+                      icon: Icons.store_outlined, message: 'No sellers yet')
                   : RefreshIndicator(
-                      onRefresh: () async { setState(() => _loading = true); await _fetch(); },
+                      onRefresh: () async {
+                        setState(() => _loading = true);
+                        await _fetch();
+                      },
                       color: AdminColors.primary,
                       child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -431,12 +486,15 @@ class _SellersTabState extends State<_SellersTab> {
                         itemBuilder: (_, i) {
                           final s = _filtered[i];
                           final profile = s['profiles'] as Map?;
-                          final kycStatus = (s['verification_status'] ?? 'unverified') as String;
+                          final kycStatus = (s['verification_status'] ??
+                              'unverified') as String;
                           final isActive = s['is_active'] == true;
                           final (kycColor, kycLabel) = _kycBadge(kycStatus);
                           return _UserCard(
                             name: s['shop_name'] ?? 'Unknown Shop',
-                            sub: profile?['full_name'] ?? profile?['phone'] ?? '',
+                            sub: profile?['full_name'] ??
+                                profile?['phone'] ??
+                                '',
                             badge: kycLabel,
                             badgeColor: kycColor,
                             joined: '',
@@ -446,7 +504,9 @@ class _SellersTabState extends State<_SellersTab> {
                               children: [
                                 if (canApprove)
                                   IconButton(
-                                    icon: const Icon(Icons.verified_user_rounded, size: 20),
+                                    icon: const Icon(
+                                        Icons.verified_user_rounded,
+                                        size: 20),
                                     color: AdminColors.info,
                                     tooltip: 'Verify KYC',
                                     onPressed: () => _showKycDialog(
@@ -462,24 +522,45 @@ class _SellersTabState extends State<_SellersTab> {
                                   Switch(
                                     value: isActive,
                                     activeThumbColor: AdminColors.success,
-                                    onChanged: (_) => _toggle(s['id'].toString(), isActive),
+                                    onChanged: (_) =>
+                                        _toggle(s['id'].toString(), isActive),
                                   ),
                                 if (isSuperAdmin)
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: AdminColors.danger,
+                                        size: 20),
                                     tooltip: 'Delete User',
                                     onPressed: () {
-                                      final targetId = s['seller_id']?.toString() ?? (s['profiles'] is Map ? s['profiles']['id']?.toString() : null) ?? '';
+                                      final targetId = s['seller_id']
+                                              ?.toString() ??
+                                          (s['profiles'] is Map
+                                              ? s['profiles']['id']?.toString()
+                                              : null) ??
+                                          '';
                                       if (targetId.isNotEmpty) {
-                                        _deleteUser(context, targetId, s['shop_name'] ?? 'Unknown Shop', _fetch);
+                                        _deleteUser(
+                                            context,
+                                            targetId,
+                                            s['shop_name'] ?? 'Unknown Shop',
+                                            _fetch);
                                       } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot delete: Missing user ID'), backgroundColor: AdminColors.danger));
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                                content: Text(
+                                                    'Cannot delete: Missing user ID'),
+                                                backgroundColor:
+                                                    AdminColors.danger));
                                       }
                                     },
                                   ),
                               ],
                             ),
-                          ).animate().fadeIn(delay: Duration(milliseconds: i * 40)).slideY(begin: 0.08);
+                          )
+                              .animate()
+                              .fadeIn(delay: Duration(milliseconds: i * 40))
+                              .slideY(begin: 0.08);
                         },
                       ),
                     ),
@@ -489,10 +570,10 @@ class _SellersTabState extends State<_SellersTab> {
   }
 
   (Color, String) _kycBadge(String status) => switch (status) {
-    'approved' || 'verified' => (AdminColors.success, 'Verified'),
-    'rejected' => (AdminColors.danger, 'Rejected'),
-    _ => (AdminColors.warning, 'Pending KYC'),
-  };
+        'approved' || 'verified' => (AdminColors.success, 'Verified'),
+        'rejected' => (AdminColors.danger, 'Rejected'),
+        _ => (AdminColors.warning, 'Pending KYC'),
+      };
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -550,11 +631,8 @@ class _RidersTabState extends State<_RidersTab> {
 
   Future<void> _toggle(String id, bool cur) async {
     try {
-      await _db.rpc('admin_toggle_active', params: {
-        'p_target_id': id,
-        'p_type': 'rider',
-        'p_is_active': !cur
-      });
+      await _db.rpc('admin_toggle_active',
+          params: {'p_target_id': id, 'p_type': 'rider', 'p_is_active': !cur});
       _fetch();
     } catch (_) {}
   }
@@ -572,9 +650,14 @@ class _RidersTabState extends State<_RidersTab> {
           child: _loading
               ? _skelList()
               : _filtered.isEmpty
-                  ? const AdminEmptyState(icon: Icons.delivery_dining_outlined, message: 'No riders yet')
+                  ? const AdminEmptyState(
+                      icon: Icons.delivery_dining_outlined,
+                      message: 'No riders yet')
                   : RefreshIndicator(
-                      onRefresh: () async { setState(() => _loading = true); await _fetch(); },
+                      onRefresh: () async {
+                        setState(() => _loading = true);
+                        await _fetch();
+                      },
                       color: AdminColors.primary,
                       child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -583,12 +666,16 @@ class _RidersTabState extends State<_RidersTab> {
                           final r = _filtered[i];
                           final profile = r['profiles'] as Map?;
                           final isActive = r['is_active'] == true;
-                          final isVerified = r['verification_status'] == 'verified' || r['verification_status'] == 'approved';
+                          final isVerified =
+                              r['verification_status'] == 'verified' ||
+                                  r['verification_status'] == 'approved';
                           return _UserCard(
                             name: profile?['full_name'] ?? 'Unknown Rider',
                             sub: profile?['phone'] ?? '',
                             badge: isVerified ? 'Verified' : 'Pending KYC',
-                            badgeColor: isVerified ? AdminColors.success : AdminColors.warning,
+                            badgeColor: isVerified
+                                ? AdminColors.success
+                                : AdminColors.warning,
                             joined: '',
                             avatarUrl: profile?['avatar_url'],
                             action: Row(
@@ -596,7 +683,9 @@ class _RidersTabState extends State<_RidersTab> {
                               children: [
                                 if (canApprove)
                                   IconButton(
-                                    icon: const Icon(Icons.verified_user_rounded, size: 20),
+                                    icon: const Icon(
+                                        Icons.verified_user_rounded,
+                                        size: 20),
                                     color: AdminColors.info,
                                     tooltip: 'Verify KYC',
                                     onPressed: () => _showKycDialog(
@@ -612,17 +701,29 @@ class _RidersTabState extends State<_RidersTab> {
                                   Switch(
                                     value: isActive,
                                     activeThumbColor: AdminColors.success,
-                                    onChanged: (_) => _toggle(r['id'].toString(), isActive),
+                                    onChanged: (_) =>
+                                        _toggle(r['id'].toString(), isActive),
                                   ),
                                 if (isSuperAdmin)
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: AdminColors.danger,
+                                        size: 20),
                                     tooltip: 'Delete User',
-                                    onPressed: () => _deleteUser(context, r['id'].toString(), profile?['full_name'] ?? 'Unknown Rider', _fetch),
+                                    onPressed: () => _deleteUser(
+                                        context,
+                                        r['id'].toString(),
+                                        profile?['full_name'] ??
+                                            'Unknown Rider',
+                                        _fetch),
                                   ),
                               ],
                             ),
-                          ).animate().fadeIn(delay: Duration(milliseconds: i * 40)).slideY(begin: 0.08);
+                          )
+                              .animate()
+                              .fadeIn(delay: Duration(milliseconds: i * 40))
+                              .slideY(begin: 0.08);
                         },
                       ),
                     ),
@@ -648,7 +749,8 @@ class _SearchBar extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: AdminStyles.body(color: AdminColors.textMuted),
-          prefixIcon: const Icon(Icons.search_rounded, color: AdminColors.textMuted, size: 20),
+          prefixIcon: const Icon(Icons.search_rounded,
+              color: AdminColors.textMuted, size: 20),
           filled: true,
           fillColor: AdminColors.cardBg,
           border: OutlineInputBorder(
@@ -663,7 +765,8 @@ class _SearchBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(color: AdminColors.primary),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),
     );
@@ -702,14 +805,23 @@ class _UserCard extends StatelessWidget {
           backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
           child: avatarUrl == null
               ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: AdminStyles.title(size: 16, color: AdminColors.primary))
+                  style:
+                      AdminStyles.title(size: 16, color: AdminColors.primary))
               : null,
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name, style: AdminStyles.body(size: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (sub.isNotEmpty) Text(sub, style: AdminStyles.caption(), maxLines: 1, overflow: TextOverflow.ellipsis),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name,
+                style: AdminStyles.body(size: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            if (sub.isNotEmpty)
+              Text(sub,
+                  style: AdminStyles.caption(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
             AdminBadge(label: badge, color: badgeColor),
           ]),
@@ -730,12 +842,14 @@ Widget _skelList() => ListView.builder(
         child: const Row(children: [
           SkeletonBox(width: 44, height: 44, radius: 22),
           SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SkeletonBox(width: 120, height: 13),
-            SizedBox(height: 6),
-            SkeletonBox(width: 80, height: 11),
-          ])),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                SkeletonBox(width: 120, height: 13),
+                SizedBox(height: 6),
+                SkeletonBox(width: 80, height: 11),
+              ])),
         ]),
       ).animate().shimmer(duration: 1500.ms),
     );
-

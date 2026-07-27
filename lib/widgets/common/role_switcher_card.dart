@@ -54,13 +54,17 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
   bool _isRoleEnabled(UserModel user, String role) {
     if (!user.activeRoles.contains(role)) return false;
     if (role == 'customer' || role == 'admin') return true;
-    
+
     // God Mode: Admins can bypass KYC verification to access any dashboard
     if (user.activeRoles.contains('admin')) return true;
-    
+
     // Accept both 'verified' and 'approved' — older admin flows use 'approved'
-    if (role == 'seller') return const ['verified', 'approved'].contains(user.sellerVerificationStatus);
-    if (role == 'delivery_partner') return const ['verified', 'approved'].contains(user.riderVerificationStatus);
+    if (role == 'seller')
+      return const ['verified', 'approved']
+          .contains(user.sellerVerificationStatus);
+    if (role == 'delivery_partner')
+      return const ['verified', 'approved']
+          .contains(user.riderVerificationStatus);
     return false;
   }
 
@@ -68,13 +72,17 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
   bool _isRolePendingVerification(UserModel user, String role) {
     if (role == 'customer' || role == 'admin') return false;
     if (!user.activeRoles.contains(role)) return false;
-    
+
     // God Mode: Admins don't get the pending lock UI
     if (user.activeRoles.contains('admin')) return false;
-    
+
     // Not pending if status is 'verified' OR 'approved'
-    if (role == 'seller') return !const ['verified', 'approved'].contains(user.sellerVerificationStatus);
-    if (role == 'delivery_partner') return !const ['verified', 'approved'].contains(user.riderVerificationStatus);
+    if (role == 'seller')
+      return !const ['verified', 'approved']
+          .contains(user.sellerVerificationStatus);
+    if (role == 'delivery_partner')
+      return !const ['verified', 'approved']
+          .contains(user.riderVerificationStatus);
     return false;
   }
 
@@ -344,8 +352,8 @@ class _RoleCardState extends State<_RoleCard>
                   ]
                 : [
                     BoxShadow(
-                      color: Colors.black.withValues(
-                          alpha: widget.isDark ? 0.25 : 0.04),
+                      color: Colors.black
+                          .withValues(alpha: widget.isDark ? 0.25 : 0.04),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),

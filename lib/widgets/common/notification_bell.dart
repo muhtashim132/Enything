@@ -42,7 +42,8 @@ class _NotificationBellState extends State<NotificationBell>
       TweenSequenceItem(tween: Tween(begin: 0.08, end: -0.06), weight: 2),
       TweenSequenceItem(tween: Tween(begin: -0.06, end: 0.06), weight: 2),
       TweenSequenceItem(tween: Tween(begin: 0.06, end: 0.0), weight: 1),
-    ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
+    ]).animate(
+        CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
   }
 
   @override
@@ -119,7 +120,8 @@ class _NotificationBellState extends State<NotificationBell>
                         color: widget.badgeColor ?? AppColors.danger,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isDark ? const Color(0xFF12121A) : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF12121A) : Colors.white,
                           width: 1.5,
                         ),
                         boxShadow: [
@@ -226,7 +228,9 @@ class _NotificationPanel extends StatelessWidget {
 
           Divider(
               height: 1,
-              color: isDark ? Colors.white.withValues(alpha: 0.08) : AppColors.divider),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : AppColors.divider),
 
           // List
           Expanded(
@@ -334,7 +338,8 @@ class _NotificationTile extends StatelessWidget {
                 gradient: LinearGradient(
                   colors: [
                     AppColors.primary.withValues(alpha: isDark ? 0.25 : 0.12),
-                    AppColors.primaryLight.withValues(alpha: isDark ? 0.15 : 0.08),
+                    AppColors.primaryLight
+                        .withValues(alpha: isDark ? 0.15 : 0.08),
                   ],
                 ),
                 shape: BoxShape.circle,

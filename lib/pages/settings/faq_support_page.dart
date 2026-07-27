@@ -24,7 +24,8 @@ class FaqSupportPage extends StatefulWidget {
   State<FaqSupportPage> createState() => _FaqSupportPageState();
 }
 
-class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProviderStateMixin {
+class _FaqSupportPageState extends State<FaqSupportPage>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   SupabaseClient get _supabase => Supabase.instance.client;
   List<Map<String, dynamic>> _myTickets = [];
@@ -35,10 +36,11 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
+    _tabController = TabController(
+        length: 3, vsync: this, initialIndex: widget.initialTabIndex);
     _loadFaqs();
     _loadMyTickets();
-    
+
     if (widget.openTicketSheet) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showSubmitTicketSheet();
@@ -55,49 +57,59 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
       _faqs = [
         {
           'q': 'How do I track my order?',
-          'a': 'You can track your order in real-time by navigating to the "Orders" tab and clicking on your active order. You will see the delivery partner\'s live location once they pick up your order.'
+          'a':
+              'You can track your order in real-time by navigating to the "Orders" tab and clicking on your active order. You will see the delivery partner\'s live location once they pick up your order.'
         },
         {
           'q': 'What is your refund policy?',
-          'a': 'If an order is rejected by the seller or cancelled before preparation begins, your refund will be automatically processed within 3-5 business days. For delivered items, please contact support within 24 hours of delivery.'
+          'a':
+              'If an order is rejected by the seller or cancelled before preparation begins, your refund will be automatically processed within 3-5 business days. For delivered items, please contact support within 24 hours of delivery.'
         },
         {
           'q': 'Why do I need to upload a prescription?',
-          'a': 'Under the Drugs and Cosmetics Act (India), certain medications legally require a valid prescription from a registered medical practitioner before they can be dispensed by our partner pharmacies.'
+          'a':
+              'Under the Drugs and Cosmetics Act (India), certain medications legally require a valid prescription from a registered medical practitioner before they can be dispensed by our partner pharmacies.'
         },
         {
           'q': 'Can I change my delivery address after placing an order?',
-          'a': 'Once an order is confirmed by the seller, the delivery address cannot be changed. Please ensure you have selected the correct address before checkout.'
+          'a':
+              'Once an order is confirmed by the seller, the delivery address cannot be changed. Please ensure you have selected the correct address before checkout.'
         },
       ];
     } else if (role == 'seller') {
       _faqs = [
         {
           'q': 'When do I receive my payouts?',
-          'a': 'Payouts are processed weekly. Any earnings from Monday to Sunday will be credited to your registered bank account by the following Wednesday.'
+          'a':
+              'Payouts are processed weekly. Any earnings from Monday to Sunday will be credited to your registered bank account by the following Wednesday.'
         },
         {
           'q': 'How do I add new products?',
-          'a': 'Go to your Dashboard, tap "Add New Product" under Quick Actions. Fill in the details, upload an image, and submit.'
+          'a':
+              'Go to your Dashboard, tap "Add New Product" under Quick Actions. Fill in the details, upload an image, and submit.'
         },
         {
           'q': 'Can I reject an order?',
-          'a': 'Yes, you can reject an order if an item is out of stock. However, frequent rejections may negatively impact your store rating.'
+          'a':
+              'Yes, you can reject an order if an item is out of stock. However, frequent rejections may negatively impact your store rating.'
         },
       ];
     } else if (role == 'delivery_partner') {
       _faqs = [
         {
           'q': 'How are delivery earnings calculated?',
-          'a': 'Earnings are based on base pay + distance pay. Wait time at restaurants (over 10 mins) is also compensated.'
+          'a':
+              'Earnings are based on base pay + distance pay. Wait time at restaurants (over 10 mins) is also compensated.'
         },
         {
           'q': 'What if the customer is unreachable?',
-          'a': 'Please try calling them at least 3 times. If they still don\'t respond, contact Support to cancel the order. Do not mark it as delivered.'
+          'a':
+              'Please try calling them at least 3 times. If they still don\'t respond, contact Support to cancel the order. Do not mark it as delivered.'
         },
         {
           'q': 'How do I update my vehicle details?',
-          'a': 'Go to Settings -> Vehicle Information to request a vehicle change. It requires admin approval.'
+          'a':
+              'Go to Settings -> Vehicle Information to request a vehicle change. It requires admin approval.'
         },
       ];
     }
@@ -117,7 +129,7 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           .select()
           .eq('user_id', auth.currentUserId!)
           .order('created_at', ascending: false);
-      
+
       if (mounted) {
         setState(() {
           _myTickets = List<Map<String, dynamic>>.from(res);
@@ -139,16 +151,16 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
     final Uri emailLaunchUri = Uri(
       scheme: 'mailto',
       path: 'support@enything.in',
-      queryParameters: {
-        'subject': 'Support Request: Enything App'
-      },
+      queryParameters: {'subject': 'Support Request: Enything App'},
     );
     if (await canLaunchUrl(emailLaunchUri)) {
       await launchUrl(emailLaunchUri);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open email client. Please email support@enything.in directly.')),
+          const SnackBar(
+              content: Text(
+                  'Could not open email client. Please email support@enything.in directly.')),
         );
       }
     }
@@ -169,10 +181,14 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
 
   void _showSubmitTicketSheet() {
     final subjectCtrl = TextEditingController(
-      text: widget.prefillOrderId != null ? 'Issue with Order #${widget.prefillOrderId!.substring(0, 8).toUpperCase()}' : '',
+      text: widget.prefillOrderId != null
+          ? 'Issue with Order #${widget.prefillOrderId!.substring(0, 8).toUpperCase()}'
+          : '',
     );
     final bodyCtrl = TextEditingController(
-      text: widget.prefillOrderId != null ? 'Order ID: ${widget.prefillOrderId}\n\n' : '',
+      text: widget.prefillOrderId != null
+          ? 'Order ID: ${widget.prefillOrderId}\n\n'
+          : '',
     );
     String priority = widget.prefillOrderId != null ? 'high' : 'normal';
 
@@ -180,50 +196,65 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return StatefulBuilder(builder: (context, setSheetState) {
           return Padding(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+            padding: EdgeInsets.fromLTRB(
+                24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Submit Support Ticket', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700)),
+                Text('Submit Support Ticket',
+                    style: GoogleFonts.outfit(
+                        fontSize: 20, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 24),
-                
                 TextField(
                   controller: subjectCtrl,
                   decoration: InputDecoration(
                     labelText: 'Subject',
                     hintText: 'Briefly describe your issue',
                     filled: true,
-                    fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    fillColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none),
                   ),
                 ),
                 const SizedBox(height: 16),
-                
                 DropdownButtonFormField<String>(
                   initialValue: priority,
                   decoration: InputDecoration(
                     labelText: 'Priority',
                     filled: true,
-                    fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    fillColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'normal', child: Text('Normal - General queries')),
-                    DropdownMenuItem(value: 'high', child: Text('High - Payments / Missing items')),
-                    DropdownMenuItem(value: 'urgent', child: Text('Urgent - App broken / Emergency')),
+                    DropdownMenuItem(
+                        value: 'normal',
+                        child: Text('Normal - General queries')),
+                    DropdownMenuItem(
+                        value: 'high',
+                        child: Text('High - Payments / Missing items')),
+                    DropdownMenuItem(
+                        value: 'urgent',
+                        child: Text('Urgent - App broken / Emergency')),
                   ],
                   onChanged: (val) {
                     if (val != null) setSheetState(() => priority = val);
                   },
                 ),
                 const SizedBox(height: 16),
-                
                 TextField(
                   controller: bodyCtrl,
                   maxLines: 4,
@@ -231,26 +262,31 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
                     labelText: 'Message',
                     hintText: 'Please provide details about your issue...',
                     filled: true,
-                    fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    fillColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none),
                   ),
                 ),
                 const SizedBox(height: 24),
-                
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
                     onPressed: () async {
-                      if (subjectCtrl.text.trim().isEmpty || bodyCtrl.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+                      if (subjectCtrl.text.trim().isEmpty ||
+                          bodyCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                            content: Text('Please fill all fields')));
                         return;
                       }
-                      
+
                       final auth = context.read<AuthProvider>();
                       final user = auth.user;
                       if (user == null) return;
-                      
+
                       try {
                         await _supabase.from('support_tickets').insert({
                           'user_id': user.id,
@@ -261,25 +297,34 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
                           'priority': priority,
                           'status': 'open',
                         });
-                        
+
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ticket submitted successfully!'), backgroundColor: AppColors.success));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content:
+                                      Text('Ticket submitted successfully!'),
+                                  backgroundColor: AppColors.success));
                           _loadMyTickets();
                           _tabController.animateTo(2); // Go to My Tickets tab
                         }
                       } catch (e) {
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Failed to submit ticket: $e'), backgroundColor: AppColors.danger));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                              content: Text('Failed to submit ticket: $e'),
+                              backgroundColor: AppColors.danger));
                         }
                       }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: Text('Submit Ticket', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700)),
+                    child: Text('Submit Ticket',
+                        style: GoogleFonts.outfit(
+                            fontSize: 16, fontWeight: FontWeight.w700)),
                   ),
                 ),
               ],
@@ -297,7 +342,8 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : AppColors.background,
       appBar: AppBar(
-        title: Text('Help & Support', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        title: Text('Help & Support',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
         backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
         bottom: TabBar(
           controller: _tabController,
@@ -322,14 +368,16 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           ],
         ),
       ),
-      floatingActionButton: _tabController.index == 2 
-        ? FloatingActionButton.extended(
-            onPressed: _showSubmitTicketSheet,
-            backgroundColor: AppColors.primary,
-            icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
-            label: Text('New Ticket', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
-          )
-        : null,
+      floatingActionButton: _tabController.index == 2
+          ? FloatingActionButton.extended(
+              onPressed: _showSubmitTicketSheet,
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
+              label: Text('New Ticket',
+                  style: GoogleFonts.outfit(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
+            )
+          : null,
     );
   }
 
@@ -342,7 +390,8 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: isDark ? 0 : 2,
           shadowColor: Colors.black.withValues(alpha: 0.05),
           child: Theme(
@@ -386,7 +435,8 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
               color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.support_agent_rounded, size: 64, color: AppColors.primary),
+            child: const Icon(Icons.support_agent_rounded,
+                size: 64, color: AppColors.primary),
           ),
           const SizedBox(height: 24),
           Text(
@@ -426,7 +476,8 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           _buildContactCard(
             icon: Icons.location_on_outlined,
             title: 'Our Address',
-            subtitle: 'Plan Bandipora, Ward No. 2\nBandipora, Jammu & Kashmir — 193502, India',
+            subtitle:
+                'Plan Bandipora, Ward No. 2\nBandipora, Jammu & Kashmir — 193502, India',
             onTap: () {},
             isDark: isDark,
           ),
@@ -449,9 +500,16 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.05)),
+          border: Border.all(
+              color: isDark
+                  ? Colors.white12
+                  : Colors.black.withValues(alpha: 0.05)),
           boxShadow: [
-            if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
+            if (!isDark)
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4)),
           ],
         ),
         child: Row(
@@ -488,7 +546,8 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: isDark ? Colors.white54 : Colors.black26),
+            Icon(Icons.chevron_right,
+                color: isDark ? Colors.white54 : Colors.black26),
           ],
         ),
       ),
@@ -507,13 +566,18 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.assignment_outlined, size: 64, color: isDark ? Colors.white24 : Colors.grey.shade300),
+              Icon(Icons.assignment_outlined,
+                  size: 64,
+                  color: isDark ? Colors.white24 : Colors.grey.shade300),
               const SizedBox(height: 16),
-              Text('No Tickets Yet', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700)),
+              Text('No Tickets Yet',
+                  style: GoogleFonts.outfit(
+                      fontSize: 20, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Text('If you have any issues, feel free to submit a support ticket.', 
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(color: AppColors.textSecondary)),
+              Text(
+                  'If you have any issues, feel free to submit a support ticket.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(color: AppColors.textSecondary)),
             ],
           ),
         ),
@@ -526,15 +590,17 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
       itemBuilder: (context, index) {
         final ticket = _myTickets[index];
         final status = ticket['status'] as String? ?? 'open';
-        
+
         Color statusColor = AppColors.info;
-        if (status == 'resolved' || status == 'closed') statusColor = AppColors.success;
+        if (status == 'resolved' || status == 'closed')
+          statusColor = AppColors.success;
         if (status == 'in_progress') statusColor = AppColors.warning;
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: isDark ? 0 : 2,
           shadowColor: Colors.black.withValues(alpha: 0.05),
           child: Padding(
@@ -546,31 +612,42 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(status.toUpperCase(), 
-                        style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: statusColor)),
+                      child: Text(status.toUpperCase(),
+                          style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: statusColor)),
                     ),
                     Text(
                       _formatDate(ticket['created_at']),
-                      style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary),
+                      style: GoogleFonts.outfit(
+                          fontSize: 12, color: AppColors.textSecondary),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Text(
                   ticket['subject'] ?? 'No Subject',
-                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : AppColors.textPrimary),
+                  style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppColors.textPrimary),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   ticket['body'] ?? '',
-                  style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white70 : AppColors.textSecondary),
+                  style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      color: isDark ? Colors.white70 : AppColors.textSecondary),
                 ),
-                if (ticket['admin_reply'] != null && ticket['admin_reply'].toString().isNotEmpty) ...[
+                if (ticket['admin_reply'] != null &&
+                    ticket['admin_reply'].toString().isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Container(
                     width: double.infinity,
@@ -578,14 +655,24 @@ class _FaqSupportPageState extends State<FaqSupportPage> with SingleTickerProvid
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.1)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Support Reply', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                        Text('Support Reply',
+                            style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary)),
                         const SizedBox(height: 4),
-                        Text(ticket['admin_reply'], style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.white : AppColors.textPrimary)),
+                        Text(ticket['admin_reply'],
+                            style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                color: isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary)),
                       ],
                     ),
                   ),

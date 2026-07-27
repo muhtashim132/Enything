@@ -61,7 +61,8 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
       final res = await _db
           .from('reviews')
           // FIX: 'shop_name' column does not exist on shops table; actual column is 'name'
-          .select('*, profiles:user_id(full_name, avatar_url), shops:shop_id(name)')
+          .select(
+              '*, profiles:user_id(full_name, avatar_url), shops:shop_id(name)')
           .order('created_at', ascending: false)
           .limit(80);
       _reviews = List<Map<String, dynamic>>.from(res);
@@ -163,7 +164,8 @@ class _ComplaintsTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const AdminBadge(label: 'Table: support_tickets', color: AdminColors.info),
+          const AdminBadge(
+              label: 'Table: support_tickets', color: AdminColors.info),
         ],
       );
     }
@@ -198,7 +200,8 @@ class _ComplaintCard extends StatelessWidget {
     final profile = complaint['profiles'] as Map?;
     final status = (complaint['status'] ?? 'open') as String;
     final priority = (complaint['priority'] ?? 'normal') as String;
-    final subject = (complaint['subject'] ?? complaint['title'] ?? 'No subject') as String;
+    final subject =
+        (complaint['subject'] ?? complaint['title'] ?? 'No subject') as String;
     final body = (complaint['body'] ?? complaint['message'] ?? '') as String;
     final time = complaint['created_at'] != null
         ? DateFormat('dd MMM, hh:mm a')
@@ -212,7 +215,8 @@ class _ComplaintCard extends StatelessWidget {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AdminColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text('Reply to Ticket', style: AdminStyles.title()),
           content: TextField(
             controller: ctrl,
@@ -223,15 +227,23 @@ class _ComplaintCard extends StatelessWidget {
               hintStyle: AdminStyles.body(color: AdminColors.textMuted),
               filled: true,
               fillColor: AdminColors.cardBg,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AdminStyles.body())),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancel', style: AdminStyles.body())),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: Text('Send Reply', style: AdminStyles.body(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminColors.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
+              child: Text('Send Reply',
+                  style: AdminStyles.body(color: Colors.white)),
             ),
           ],
         ),
@@ -245,13 +257,15 @@ class _ComplaintCard extends StatelessWidget {
           }).eq('id', complaint['id']);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Reply sent successfully'), backgroundColor: AdminColors.success));
+                content: Text('Reply sent successfully'),
+                backgroundColor: AdminColors.success));
           }
           await onRefresh();
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Error: $e'), backgroundColor: AdminColors.danger));
+                content: Text('Error: $e'),
+                backgroundColor: AdminColors.danger));
           }
         }
       }
@@ -302,14 +316,16 @@ class _ComplaintCard extends StatelessWidget {
                   const Icon(Icons.person_rounded,
                       color: AdminColors.textMuted, size: 14),
                   const SizedBox(width: 6),
-                  Text(complaint['user_name'] ?? profile?['full_name'] ?? 'Unknown',
+                  Text(
+                      complaint['user_name'] ??
+                          profile?['full_name'] ??
+                          'Unknown',
                       style: AdminStyles.caption()),
                   const SizedBox(width: 12),
                   const Icon(Icons.phone_rounded,
                       color: AdminColors.textMuted, size: 14),
                   const SizedBox(width: 6),
-                  Text(profile?['phone'] ?? '—',
-                      style: AdminStyles.caption()),
+                  Text(profile?['phone'] ?? '—', style: AdminStyles.caption()),
                 ]),
                 if (adminReply != null && adminReply.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -319,14 +335,19 @@ class _ComplaintCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AdminColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AdminColors.primary.withValues(alpha: 0.2)),
+                      border: Border.all(
+                          color: AdminColors.primary.withValues(alpha: 0.2)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Admin Reply:', style: AdminStyles.label(color: AdminColors.primary)),
+                        Text('Admin Reply:',
+                            style:
+                                AdminStyles.label(color: AdminColors.primary)),
                         const SizedBox(height: 4),
-                        Text(adminReply, style: AdminStyles.body(size: 13, color: AdminColors.textPrimary)),
+                        Text(adminReply,
+                            style: AdminStyles.body(
+                                size: 13, color: AdminColors.textPrimary)),
                       ],
                     ),
                   ),
@@ -336,19 +357,23 @@ class _ComplaintCard extends StatelessWidget {
           ),
 
           // Action footer
-          if (status != 'resolved' && status != 'closed' && (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.reply') || context.read<RbacProvider>().can('support.close')))
+          if (status != 'resolved' &&
+              status != 'closed' &&
+              (context.read<RbacProvider>().isSuperAdmin ||
+                  context.read<RbacProvider>().can('support.reply') ||
+                  context.read<RbacProvider>().can('support.close')))
             Container(
               decoration: BoxDecoration(
                 color: AdminColors.surface.withValues(alpha: 0.5),
                 borderRadius:
                     const BorderRadius.vertical(bottom: Radius.circular(20)),
-                border:
-                    const Border(top: BorderSide(color: AdminColors.cardBorder)),
+                border: const Border(
+                    top: BorderSide(color: AdminColors.cardBorder)),
               ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(children: [
-                if (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.reply'))
+                if (context.read<RbacProvider>().isSuperAdmin ||
+                    context.read<RbacProvider>().can('support.reply'))
                   Expanded(
                     child: OutlinedButton(
                       onPressed: showReplyDialog,
@@ -361,25 +386,33 @@ class _ComplaintCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                       child: Text('Reply',
-                          style: AdminStyles.caption(
-                              color: AdminColors.info)),
+                          style: AdminStyles.caption(color: AdminColors.info)),
                     ),
                   ),
-                if ((context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.reply')) && (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.close')))
+                if ((context.read<RbacProvider>().isSuperAdmin ||
+                        context.read<RbacProvider>().can('support.reply')) &&
+                    (context.read<RbacProvider>().isSuperAdmin ||
+                        context.read<RbacProvider>().can('support.close')))
                   const SizedBox(width: 10),
-                if (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.close'))
+                if (context.read<RbacProvider>().isSuperAdmin ||
+                    context.read<RbacProvider>().can('support.close'))
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
                         try {
-                          await db
-                              .from('support_tickets')
-                              .update({'status': 'resolved'}).eq(
-                                  'id', complaint['id']);
-                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ticket resolved'), backgroundColor: AdminColors.success));
+                          await db.from('support_tickets').update(
+                              {'status': 'resolved'}).eq('id', complaint['id']);
+                          if (context.mounted)
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Ticket resolved'),
+                                    backgroundColor: AdminColors.success));
                           await onRefresh();
                         } catch (e) {
-                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.danger));
+                          if (context.mounted)
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Error: $e'),
+                                backgroundColor: AdminColors.danger));
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -424,16 +457,24 @@ class _ReviewsTab extends StatelessWidget {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AdminColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Delete Review', style: AdminStyles.title(color: AdminColors.danger)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Delete Review',
+              style: AdminStyles.title(color: AdminColors.danger)),
           content: Text('Are you sure you want to delete this review?',
               style: AdminStyles.body(color: AdminColors.textSecondary)),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AdminStyles.body())),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancel', style: AdminStyles.body())),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.danger, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: Text('Delete', style: AdminStyles.body(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminColors.danger,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
+              child:
+                  Text('Delete', style: AdminStyles.body(color: Colors.white)),
             ),
           ],
         ),
@@ -444,13 +485,15 @@ class _ReviewsTab extends StatelessWidget {
           await Supabase.instance.client.from('reviews').delete().eq('id', id);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Review deleted successfully'), backgroundColor: AdminColors.success));
+                content: Text('Review deleted successfully'),
+                backgroundColor: AdminColors.success));
           }
           await onRefresh();
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Error deleting review: $e'), backgroundColor: AdminColors.danger));
+                content: Text('Error deleting review: $e'),
+                backgroundColor: AdminColors.danger));
           }
         }
       }
@@ -478,9 +521,8 @@ class _ReviewsTab extends StatelessWidget {
     }
 
     // Compute average rating
-    final ratings = reviews
-        .map((r) => (r['rating'] as num?)?.toDouble() ?? 0.0)
-        .toList();
+    final ratings =
+        reviews.map((r) => (r['rating'] as num?)?.toDouble() ?? 0.0).toList();
     final avg = ratings.isEmpty
         ? 0.0
         : ratings.reduce((a, b) => a + b) / ratings.length;
@@ -500,7 +542,8 @@ class _ReviewsTab extends StatelessWidget {
                   style: AdminStyles.heading(size: 40)),
               const SizedBox(width: 16),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                StarRatingDisplay(rating: avg, size: 18, color: AdminColors.warning),
+                StarRatingDisplay(
+                    rating: avg, size: 18, color: AdminColors.warning),
                 const SizedBox(height: 4),
                 Text('Average from ${reviews.length} reviews',
                     style: AdminStyles.caption(color: Colors.white70)),
@@ -516,7 +559,10 @@ class _ReviewsTab extends StatelessWidget {
             final profile = r['profiles'] as Map?;
             final shop = r['shops'] as Map?;
             final rating = (r['rating'] as num?)?.toDouble() ?? 0.0;
-            final comment = (r['comment'] ?? r['review'] ?? r['review_text'] ?? '') as String;
+            final comment = (r['comment'] ??
+                r['review'] ??
+                r['review_text'] ??
+                '') as String;
             final time = r['created_at'] != null
                 ? DateFormat('dd MMM yy')
                     .format(DateTime.parse(r['created_at'].toString()).toIST())
@@ -532,7 +578,8 @@ class _ReviewsTab extends StatelessWidget {
                   Row(children: [
                     CircleAvatar(
                       radius: 18,
-                      backgroundColor: AdminColors.primary.withValues(alpha: 0.2),
+                      backgroundColor:
+                          AdminColors.primary.withValues(alpha: 0.2),
                       backgroundImage: profile?['avatar_url'] != null
                           ? NetworkImage(profile!['avatar_url'])
                           : null,
@@ -556,11 +603,16 @@ class _ReviewsTab extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      StarRatingDisplay(rating: rating, size: 14, color: AdminColors.warning),
-                      const SizedBox(height: 2),
-                      Text(time, style: AdminStyles.label()),
-                    ]),
+                    Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          StarRatingDisplay(
+                              rating: rating,
+                              size: 14,
+                              color: AdminColors.warning),
+                          const SizedBox(height: 2),
+                          Text(time, style: AdminStyles.label()),
+                        ]),
                   ]),
                   if (comment.isNotEmpty) ...[
                     const SizedBox(height: 10),
@@ -568,17 +620,21 @@ class _ReviewsTab extends StatelessWidget {
                         style: AdminStyles.body(
                             size: 13, color: AdminColors.textSecondary)),
                   ],
-                  if (context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('support.close')) ...[
+                  if (context.read<RbacProvider>().isSuperAdmin ||
+                      context.read<RbacProvider>().can('support.close')) ...[
                     const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton.icon(
                         onPressed: () => deleteReview(r['id'].toString()),
-                        icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                        label: Text('Delete Review', style: AdminStyles.caption()),
+                        icon:
+                            const Icon(Icons.delete_outline_rounded, size: 16),
+                        label:
+                            Text('Delete Review', style: AdminStyles.caption()),
                         style: TextButton.styleFrom(
                           foregroundColor: AdminColors.danger,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
@@ -606,18 +662,20 @@ Widget _skelList() => ListView.builder(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: AdminDecorations.glassCard(),
-        child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            SkeletonBox(width: 60, height: 20, radius: 20),
-            SizedBox(width: 8),
-            SkeletonBox(width: 60, height: 20, radius: 20),
-            Spacer(),
-            SkeletonBox(width: 60, height: 11),
-          ]),
-          SizedBox(height: 10),
-          SkeletonBox(width: double.infinity, height: 14),
-          SizedBox(height: 6),
-          SkeletonBox(width: 200, height: 11),
-        ]),
+        child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                SkeletonBox(width: 60, height: 20, radius: 20),
+                SizedBox(width: 8),
+                SkeletonBox(width: 60, height: 20, radius: 20),
+                Spacer(),
+                SkeletonBox(width: 60, height: 11),
+              ]),
+              SizedBox(height: 10),
+              SkeletonBox(width: double.infinity, height: 14),
+              SizedBox(height: 6),
+              SkeletonBox(width: 200, height: 11),
+            ]),
       ).animate().shimmer(duration: 1500.ms),
     );

@@ -19,6 +19,7 @@
 // ============================================================================
 
 import 'dart:math' as math;
+
 class OrderModel {
   final String id;
   final String customerId;
@@ -120,7 +121,6 @@ class OrderModel {
 
   /// Surcharge applied for orders exceeding the maximum base weight limit.
   final double heavyOrderFee;
-
 
   /// Gross commission Enything charged on base item subtotal (5% standard).
   final double enythingCommission;
@@ -237,12 +237,13 @@ class OrderModel {
       status: map['status']?.toString() ?? 'pending',
       totalAmount: _parseDouble(map['total_amount']),
       deliveryCharges: _parseDouble(map['delivery_charges']),
-      riderEarnings: _parseDouble(map['rider_earnings']) > 0 
-          ? _parseDouble(map['rider_earnings']) 
+      riderEarnings: _parseDouble(map['rider_earnings']) > 0
+          ? _parseDouble(map['rider_earnings'])
           : _parseDouble(map['delivery_charges']),
       multiShopSurcharge: _parseDouble(map['multi_shop_surcharge']),
       platformFee: _parseDouble(map['platform_fee']),
-      createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ??
+          DateTime.now(),
       deliveryPartnerId: map['delivery_partner_id']?.toString(),
       shopId: map['shop_id']?.toString(),
       address: map['address']?.toString(),
@@ -261,8 +262,10 @@ class OrderModel {
       paymentDeadline: map['payment_deadline'] != null
           ? DateTime.tryParse(map['payment_deadline'].toString())
           : null,
-      sellerAccepted: map['seller_accepted'] == true || map['seller_accepted'] == 'true',
-      partnerAccepted: map['partner_accepted'] == true || map['partner_accepted'] == 'true',
+      sellerAccepted:
+          map['seller_accepted'] == true || map['seller_accepted'] == 'true',
+      partnerAccepted:
+          map['partner_accepted'] == true || map['partner_accepted'] == 'true',
       arrivedAtShopTime: map['arrived_at_shop_time'] != null
           ? DateTime.tryParse(map['arrived_at_shop_time'].toString())
           : null,
@@ -270,10 +273,14 @@ class OrderModel {
           ? DateTime.tryParse(map['order_ready_time'].toString())
           : null,
       waitTimePenalty: _parseDouble(map['wait_time_penalty']),
-      waitTimeDisputed: map['wait_time_disputed'] == true || map['wait_time_disputed'] == 'true',
-      hasCustomerRated: map['has_customer_rated'] == true || map['has_customer_rated'] == 'true',
-      hasSellerRated: map['has_seller_rated'] == true || map['has_seller_rated'] == 'true',
-      hasDeliveryRated: map['has_delivery_rated'] == true || map['has_delivery_rated'] == 'true',
+      waitTimeDisputed: map['wait_time_disputed'] == true ||
+          map['wait_time_disputed'] == 'true',
+      hasCustomerRated: map['has_customer_rated'] == true ||
+          map['has_customer_rated'] == 'true',
+      hasSellerRated:
+          map['has_seller_rated'] == true || map['has_seller_rated'] == 'true',
+      hasDeliveryRated: map['has_delivery_rated'] == true ||
+          map['has_delivery_rated'] == 'true',
       deliveryLat: _parseDoubleNullable(map['delivery_lat']),
       deliveryLng: _parseDoubleNullable(map['delivery_lng']),
       riderLat: _parseDoubleNullable(map['rider_lat']),
@@ -302,9 +309,10 @@ class OrderModel {
           ? (map['prescription_urls'] as List).map((e) => e.toString()).toList()
           : [],
       estimatedDistanceKm: _parseDouble(map['estimated_distance_km']),
-      shopPrepTimeSnapshot: map['shop_prep_time_snapshot'] is int 
-          ? map['shop_prep_time_snapshot'] 
-          : int.tryParse(map['shop_prep_time_snapshot']?.toString() ?? '30') ?? 30,
+      shopPrepTimeSnapshot: map['shop_prep_time_snapshot'] is int
+          ? map['shop_prep_time_snapshot']
+          : int.tryParse(map['shop_prep_time_snapshot']?.toString() ?? '30') ??
+              30,
       smallCartFee: _parseDouble(map['small_cart_fee']),
       heavyOrderFee: _parseDouble(map['heavy_order_fee']),
       couponId: map['coupon_id']?.toString(),
@@ -523,11 +531,14 @@ class OrderItem {
       productId: map['product_id']?.toString() ?? '',
       productName: map['product_name']?.toString() ?? '',
       variantName: map['variant_name']?.toString(),
-      quantity: (map['quantity'] is num) ? (map['quantity'] as num).toInt() : int.tryParse(map['quantity']?.toString() ?? '1') ?? 1,
+      quantity: (map['quantity'] is num)
+          ? (map['quantity'] as num).toInt()
+          : int.tryParse(map['quantity']?.toString() ?? '1') ?? 1,
       price: OrderModel._parseDouble(map['price']),
       weightKg: OrderModel._parseDouble(map['weight_kg']),
       specialInstructions: map['special_instructions']?.toString(),
-      requiresPrescription: map['requires_prescription'] == true || map['requires_prescription'] == 'true',
+      requiresPrescription: map['requires_prescription'] == true ||
+          map['requires_prescription'] == 'true',
     );
   }
 

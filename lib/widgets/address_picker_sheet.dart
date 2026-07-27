@@ -11,7 +11,7 @@ bool _isAddressPickerOpen = false;
 /// Shows saved addresses, current GPS option, and lets users add new addresses.
 void showAddressPickerSheet(BuildContext context) {
   if (_isAddressPickerOpen) return;
-  
+
   final auth = context.read<AuthProvider>();
   final userId = auth.currentUserId;
   if (userId == null) return;
@@ -36,6 +36,7 @@ void showAddressPickerSheet(BuildContext context) {
 
 class _AddressPickerContent extends StatefulWidget {
   final String userId;
+
   /// Parent (scaffold) context — stays alive after the sheet is dismissed.
   /// Used when launching the 2-step add/edit address flow.
   final BuildContext rootContext;
@@ -239,8 +240,7 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                         if (isActive) ...[
                           const SizedBox(width: 6),
                           Icon(Icons.check_circle_rounded,
-                              size: 16,
-                              color: Theme.of(context).primaryColor),
+                              size: 16, color: Theme.of(context).primaryColor),
                         ],
                       ],
                     ),
@@ -250,8 +250,7 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color:
-                            isDark ? Colors.white54 : Colors.grey.shade600,
+                        color: isDark ? Colors.white54 : Colors.grey.shade600,
                       ),
                     ),
                     trailing: GestureDetector(
@@ -276,9 +275,8 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                         ),
                         child: Icon(Icons.edit_location_alt_outlined,
                             size: 18,
-                            color: isDark
-                                ? Colors.white54
-                                : Colors.grey.shade600),
+                            color:
+                                isDark ? Colors.white54 : Colors.grey.shade600),
                       ),
                     ),
                     onTap: () {
@@ -298,22 +296,27 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
               child: SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: locProv.savedAddresses.length >= 4 ? () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Maximum 4 addresses allowed. Please edit or delete an existing one.'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                      )
-                    );
-                  } : () {
-                    // Use rootContext (parent scaffold context) for the same
-                    // reason as in the edit flow above.
-                    Navigator.pop(context);
-                    showAddEditAddressDialog(widget.rootContext);
-                  },
+                  onPressed: locProv.savedAddresses.length >= 4
+                      ? () {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                            content: Text(
+                                'Maximum 4 addresses allowed. Please edit or delete an existing one.'),
+                            backgroundColor: Colors.red,
+                            behavior: SnackBarBehavior.floating,
+                          ));
+                        }
+                      : () {
+                          // Use rootContext (parent scaffold context) for the same
+                          // reason as in the edit flow above.
+                          Navigator.pop(context);
+                          showAddEditAddressDialog(widget.rootContext);
+                        },
                   icon: const Icon(Icons.add_location_alt_outlined, size: 18),
-                  label: Text(locProv.savedAddresses.length >= 4 ? 'Maximum 4 addresses' : 'Add new address',
+                  label: Text(
+                      locProv.savedAddresses.length >= 4
+                          ? 'Maximum 4 addresses'
+                          : 'Add new address',
                       style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -323,7 +326,9 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                     side: BorderSide(
                       color: isDark
                           ? Colors.white24
-                          : Theme.of(context).primaryColor.withValues(alpha: 0.4),
+                          : Theme.of(context)
+                              .primaryColor
+                              .withValues(alpha: 0.4),
                     ),
                   ),
                 ),

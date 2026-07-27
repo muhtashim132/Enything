@@ -4,20 +4,24 @@ import 'dart:io';
 
 void main() async {
   final fs = LocalFileSystem();
-  final inputFile = fs.file(r'e:\Enything\supabase\migrations\20271125000008_100x_unit_type_weight_fix.sql');
+  final inputFile = fs.file(
+      r'e:\Enything\supabase\migrations\20271125000008_100x_unit_type_weight_fix.sql');
   final content = await inputFile.readAsString();
 
-  final regex = RegExp(r'(CREATE OR REPLACE FUNCTION public\.place_orders_transaction.*?\$function\$\n;)', dotAll: true);
+  final regex = RegExp(
+      r'(CREATE OR REPLACE FUNCTION public\.place_orders_transaction.*?\$function\$\n;)',
+      dotAll: true);
   final match = regex.firstMatch(content);
-  
+
   if (match == null) {
     print("Function not found");
     exit(1);
   }
-  
+
   String funcContent = match.group(1)!;
-  
-  final oldLoop = '''  FOR v_item IN SELECT y.quantity, p.weight_per_unit, p.unit_type 
+
+  final oldLoop =
+      '''  FOR v_item IN SELECT y.quantity, p.weight_per_unit, p.unit_type 
                 FROM jsonb_to_recordset(p_items) AS y(product_id uuid, quantity int)
                 JOIN products p ON p.id = y.product_id LOOP
     IF v_item.weight_per_unit IS NULL THEN
@@ -34,7 +38,8 @@ void main() async {
     END IF;
   END LOOP;''';
 
-  final newLoop = '''  FOR v_item IN SELECT y.quantity, p.weight_per_unit, p.unit_type 
+  final newLoop =
+      '''  FOR v_item IN SELECT y.quantity, p.weight_per_unit, p.unit_type 
                 FROM jsonb_to_recordset(p_items) AS y(product_id uuid, quantity int)
                 JOIN products p ON p.id = y.product_id LOOP
     IF v_item.weight_per_unit IS NULL THEN
@@ -65,7 +70,8 @@ void main() async {
 
   funcContent = funcContent.replaceAll(oldLoop, newLoop);
 
-  final finalContent = '''-- =============================================================================
+  final finalContent =
+      '''-- =============================================================================
 -- Migration: 20271125000009_100x_unit_type_exhaustive_fix.sql
 -- Description: ADDITIVE ONLY — CREATE OR REPLACE FUNCTION only.
 --              Extends the previous weight fix to exhaustively cover EVERY single
@@ -73,9 +79,12 @@ void main() async {
 --              ('liter', 'grams', 'gram', 'ml', 'kg', 'pieces', 'piece', etc.)
 -- =============================================================================
 
-''' + funcContent + '\n';
+''' +
+          funcContent +
+          '\n';
 
-  final outputFile = fs.file(r'e:\Enything\supabase\migrations\20271125000009_100x_unit_type_exhaustive_fix.sql');
+  final outputFile = fs.file(
+      r'e:\Enything\supabase\migrations\20271125000009_100x_unit_type_exhaustive_fix.sql');
   await outputFile.writeAsString(finalContent);
 
   print("Migration created successfully.");

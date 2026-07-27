@@ -60,7 +60,8 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     try {
       final resp = await _supabase
           .from('shops')
-          .select('id, is_active, is_accepting_orders, banner_url, open_time, close_time, address')
+          .select(
+              'id, is_active, is_accepting_orders, banner_url, open_time, close_time, address')
           .eq('seller_id', auth.currentUserId ?? '')
           .limit(1)
           .maybeSingle();
@@ -103,7 +104,8 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   Future<void> _pickImage() async {
     final source = await showImageSourceSheet(context);
     if (source == null) return;
-    final pickedFile = await _picker.pickImage(source: source, imageQuality: 70);
+    final pickedFile =
+        await _picker.pickImage(source: source, imageQuality: 70);
     if (pickedFile != null && mounted) {
       final cropped = await cropImage(
         context,
@@ -123,10 +125,13 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     if (_shopId == null) return;
     setState(() => _isSaving = true);
     try {
-      String? uploadedUrl = _bannerCtrl.text.trim().isEmpty ? null : _bannerCtrl.text.trim();
-      
+      String? uploadedUrl =
+          _bannerCtrl.text.trim().isEmpty ? null : _bannerCtrl.text.trim();
+
       if (_selectedImage != null) {
-        final bytes = await ImageCompressionService.compressFile(_selectedImage!) ?? await _selectedImage!.readAsBytes();
+        final bytes =
+            await ImageCompressionService.compressFile(_selectedImage!) ??
+                await _selectedImage!.readAsBytes();
         const fileExt = 'jpg';
         final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
         final filePath = 'banners/$_shopId/$fileName';
@@ -253,273 +258,313 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                   child: RefreshIndicator(
                     onRefresh: _loadShop,
                     child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ── Open / Closed Toggle ────────────────────────────
-                        _sectionCard(
-                          isDark: isDark,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: (_isActive
-                                          ? AppColors.success
-                                          : AppColors.danger)
-                                      .withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(
-                                  _isActive
-                                      ? Icons.store_rounded
-                                      : Icons.store_mall_directory_outlined,
-                                  color: _isActive
-                                      ? AppColors.success
-                                      : AppColors.danger,
-                                  size: 26,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Shop Status',
-                                        style: GoogleFonts.outfit(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 15,
-                                            color: isDark
-                                                ? Colors.white
-                                                : const Color(0xFF0A0A14))),
-                                    Text(
-                                        _isActive
-                                            ? 'Open — accepting orders'
-                                            : 'Closed — not visible to customers',
-                                        style: GoogleFonts.outfit(
-                                            fontSize: 12,
-                                            color: _isActive
-                                                ? AppColors.success
-                                                : AppColors.danger)),
-                                  ],
-                                ),
-                              ),
-                              Switch(
-                                value: _isActive,
-                                onChanged: _toggleShopStatus,
-                                activeThumbColor: AppColors.success,
-                                inactiveThumbColor: AppColors.danger,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ── Update Location ──────────────────────────────────────
-                        _sectionCard(
-                          isDark: isDark,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Shop Location',
-                                  style: GoogleFonts.outfit(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                      color: isDark ? Colors.white : const Color(0xFF0A0A14))),
-                              const SizedBox(height: 8),
-                              if (_currentAddress != null && _currentAddress!.isNotEmpty)
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── Open / Closed Toggle ────────────────────────────
+                          _sectionCard(
+                            isDark: isDark,
+                            child: Row(
+                              children: [
                                 Container(
-                                  padding: const EdgeInsets.all(12),
-                                  margin: const EdgeInsets.only(bottom: 12),
+                                  width: 48,
+                                  height: 48,
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+                                    color: (_isActive
+                                            ? AppColors.success
+                                            : AppColors.danger)
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  child: Icon(
+                                    _isActive
+                                        ? Icons.store_rounded
+                                        : Icons.store_mall_directory_outlined,
+                                    color: _isActive
+                                        ? AppColors.success
+                                        : AppColors.danger,
+                                    size: 26,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(Icons.location_on, color: AppColors.primary, size: 20),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          _currentAddress!,
+                                      Text('Shop Status',
                                           style: GoogleFonts.outfit(
-                                            fontSize: 14,
-                                            color: isDark ? Colors.white70 : Colors.black87,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 15,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : const Color(0xFF0A0A14))),
+                                      Text(
+                                          _isActive
+                                              ? 'Open — accepting orders'
+                                              : 'Closed — not visible to customers',
+                                          style: GoogleFonts.outfit(
+                                              fontSize: 12,
+                                              color: _isActive
+                                                  ? AppColors.success
+                                                  : AppColors.danger)),
                                     ],
                                   ),
                                 ),
-                              Text('Pin your exact shop location on the map so customers can find you within ${(PlatformConfigProvider.instance?.maxDeliveryRadiusKm ?? 15.0).toInt()}km.',
-                                  style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary)),
-                              const SizedBox(height: 12),
-                              ElevatedButton.icon(
-                                onPressed: _isSaving ? null : () => _pickShopLocationOnMap(context),
-                                icon: const Icon(Icons.edit_location_alt_rounded),
-                                label: const Text('Set Location on Map'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
+                                Switch(
+                                  value: _isActive,
+                                  onChanged: _toggleShopStatus,
+                                  activeThumbColor: AppColors.success,
+                                  inactiveThumbColor: AppColors.danger,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ── Banner Image Upload ────────────────────────────────────
-                        _sectionCard(
-                          isDark: isDark,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _label('Banner Image', isDark),
-                              const SizedBox(height: 12),
-                              GestureDetector(
-                                onTap: _pickImage,
-                                child: Container(
-                                  width: double.infinity,
-                                  height: 160,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2), width: 1.5),
-                                  ),
-                                  child: _selectedImage != null
-                                      ? ClipRRect(
-                                          borderRadius: BorderRadius.circular(15),
-                                          child: Image.file(_selectedImage!, fit: BoxFit.cover),
-                                        )
-                                      : _bannerCtrl.text.isNotEmpty
-                                          ? ClipRRect(
-                                              borderRadius: BorderRadius.circular(15),
-                                              child: CachedNetworkImage(
-                                                imageUrl: _bannerCtrl.text, 
-                                                fit: BoxFit.cover,
-                                                memCacheWidth: 600,
-                                              ),
-                                            )
-                                          : Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                const Icon(Icons.add_photo_alternate_outlined, size: 40, color: AppColors.primary),
-                                                const SizedBox(height: 8),
-                                                Text('Tap to upload banner\nRecommended size: 16:9 or 2:1', textAlign: TextAlign.center, style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                                              ],
-                                            ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ── Opening Hours ───────────────────────────────────
-                        _sectionCard(
-                          isDark: isDark,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Opening Hours',
-                                  style: GoogleFonts.outfit(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                      color: isDark
-                                          ? Colors.white
-                                          : const Color(0xFF0A0A14))),
-                              const SizedBox(height: 14),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        _label('Opens at', isDark),
-                                        const SizedBox(height: 6),
-                                        GestureDetector(
-                                          onTap: () => _pickTime(_openTimeCtrl),
-                                          child: AbsorbPointer(
-                                            child: _inputField(
-                                              controller: _openTimeCtrl,
-                                              hint: '09:00',
-                                              icon: Icons.access_time_rounded,
-                                              isDark: isDark,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        _label('Closes at', isDark),
-                                        const SizedBox(height: 6),
-                                        GestureDetector(
-                                          onTap: () =>
-                                              _pickTime(_closeTimeCtrl),
-                                          child: AbsorbPointer(
-                                            child: _inputField(
-                                              controller: _closeTimeCtrl,
-                                              hint: '21:00',
-                                              icon: Icons.access_time_outlined,
-                                              isDark: isDark,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 28),
-
-                        // ── Save Button ─────────────────────────────────────
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton(
-                            onPressed: _isSaving ? null : _saveDetails,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0A1260),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16)),
-                              elevation: 4,
+                              ],
                             ),
-                            child: _isSaving
-                                ? const SizedBox(
-                                    height: 22,
-                                    width: 22,
-                                    child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2.5),
-                                  )
-                                : Text('Save Changes',
-                                    style: GoogleFonts.outfit(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700)),
                           ),
-                        ),
-                        const SizedBox(height: 40),
-                      ],
+                          const SizedBox(height: 16),
+
+                          // ── Update Location ──────────────────────────────────────
+                          _sectionCard(
+                            isDark: isDark,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Shop Location',
+                                    style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                        color: isDark
+                                            ? Colors.white
+                                            : const Color(0xFF0A0A14))),
+                                const SizedBox(height: 8),
+                                if (_currentAddress != null &&
+                                    _currentAddress!.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                          color: AppColors.primary
+                                              .withValues(alpha: 0.1)),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Icon(Icons.location_on,
+                                            color: AppColors.primary, size: 20),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            _currentAddress!,
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 14,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : Colors.black87,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                Text(
+                                    'Pin your exact shop location on the map so customers can find you within ${(PlatformConfigProvider.instance?.maxDeliveryRadiusKm ?? 15.0).toInt()}km.',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        color: AppColors.textSecondary)),
+                                const SizedBox(height: 12),
+                                ElevatedButton.icon(
+                                  onPressed: _isSaving
+                                      ? null
+                                      : () => _pickShopLocationOnMap(context),
+                                  icon: const Icon(
+                                      Icons.edit_location_alt_rounded),
+                                  label: const Text('Set Location on Map'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // ── Banner Image Upload ────────────────────────────────────
+                          _sectionCard(
+                            isDark: isDark,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _label('Banner Image', isDark),
+                                const SizedBox(height: 12),
+                                GestureDetector(
+                                  onTap: _pickImage,
+                                  child: Container(
+                                    width: double.infinity,
+                                    height: 160,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                          color: AppColors.primary
+                                              .withValues(alpha: 0.2),
+                                          width: 1.5),
+                                    ),
+                                    child: _selectedImage != null
+                                        ? ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(15),
+                                            child: Image.file(_selectedImage!,
+                                                fit: BoxFit.cover),
+                                          )
+                                        : _bannerCtrl.text.isNotEmpty
+                                            ? ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(15),
+                                                child: CachedNetworkImage(
+                                                  imageUrl: _bannerCtrl.text,
+                                                  fit: BoxFit.cover,
+                                                  memCacheWidth: 600,
+                                                ),
+                                              )
+                                            : Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                      Icons
+                                                          .add_photo_alternate_outlined,
+                                                      size: 40,
+                                                      color: AppColors.primary),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                      'Tap to upload banner\nRecommended size: 16:9 or 2:1',
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      style: GoogleFonts.outfit(
+                                                          color:
+                                                              AppColors.primary,
+                                                          fontWeight:
+                                                              FontWeight.w600)),
+                                                ],
+                                              ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // ── Opening Hours ───────────────────────────────────
+                          _sectionCard(
+                            isDark: isDark,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Opening Hours',
+                                    style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                        color: isDark
+                                            ? Colors.white
+                                            : const Color(0xFF0A0A14))),
+                                const SizedBox(height: 14),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          _label('Opens at', isDark),
+                                          const SizedBox(height: 6),
+                                          GestureDetector(
+                                            onTap: () =>
+                                                _pickTime(_openTimeCtrl),
+                                            child: AbsorbPointer(
+                                              child: _inputField(
+                                                controller: _openTimeCtrl,
+                                                hint: '09:00',
+                                                icon: Icons.access_time_rounded,
+                                                isDark: isDark,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          _label('Closes at', isDark),
+                                          const SizedBox(height: 6),
+                                          GestureDetector(
+                                            onTap: () =>
+                                                _pickTime(_closeTimeCtrl),
+                                            child: AbsorbPointer(
+                                              child: _inputField(
+                                                controller: _closeTimeCtrl,
+                                                hint: '21:00',
+                                                icon:
+                                                    Icons.access_time_outlined,
+                                                isDark: isDark,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+
+                          // ── Save Button ─────────────────────────────────────
+                          SizedBox(
+                            width: double.infinity,
+                            height: 54,
+                            child: ElevatedButton(
+                              onPressed: _isSaving ? null : _saveDetails,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0A1260),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                elevation: 4,
+                              ),
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      height: 22,
+                                      width: 22,
+                                      child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5),
+                                    )
+                                  : Text('Save Changes',
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                        ],
+                      ),
                     ),
                   ),
-                ),
                 ),
     );
   }
@@ -572,8 +617,9 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
             GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 13),
         prefixIcon: Icon(icon, size: 18, color: AppColors.primary),
         filled: true,
-        fillColor:
-            isDark ? Colors.white.withValues(alpha: 0.05) : AppColors.background,
+        fillColor: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : AppColors.background,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,

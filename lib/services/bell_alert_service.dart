@@ -30,7 +30,7 @@ class BellAlertService {
   bool _isPlaying = false;
 
   bool get hasPendingOrders => _pendingOrderIds.isNotEmpty;
-  int  get pendingCount     => _pendingOrderIds.length;
+  int get pendingCount => _pendingOrderIds.length;
 
   String? get _userId {
     try {
@@ -47,13 +47,15 @@ class BellAlertService {
   Future<void> addPendingOrder(String orderId) async {
     if (_pendingOrderIds.contains(orderId)) return;
     _pendingOrderIds.add(orderId);
-    
+
     // STRESS-TEST FIX: Prevent synchronous FFI bottleneck on the main thread during high burst loads.
     if (kDebugMode) {
       if (_pendingOrderIds.length <= 10) {
-        debugPrint('[BellAlert] +order: $orderId | pending=${_pendingOrderIds.length}');
+        debugPrint(
+            '[BellAlert] +order: $orderId | pending=${_pendingOrderIds.length}');
       } else if (_pendingOrderIds.length % 50 == 0) {
-        debugPrint('[BellAlert] +batch orders... pending=${_pendingOrderIds.length}');
+        debugPrint(
+            '[BellAlert] +batch orders... pending=${_pendingOrderIds.length}');
       }
     }
 
@@ -71,7 +73,8 @@ class BellAlertService {
   Future<void> removePendingOrder(String orderId) async {
     final removed = _pendingOrderIds.remove(orderId);
     if (!removed) return; // was never tracked — no-op
-    debugPrint('[BellAlert] -order: $orderId | pending=${_pendingOrderIds.length}');
+    debugPrint(
+        '[BellAlert] -order: $orderId | pending=${_pendingOrderIds.length}');
     if (_pendingOrderIds.isEmpty) await stopBell();
   }
 
@@ -165,7 +168,7 @@ class BellAlertService {
       await oldPlayer?.stop();
     } catch (_) {}
     oldPlayer?.dispose();
-    
+
     // Final check before instantiating new player
     if (_pendingOrderIds.isEmpty) {
       _isPlaying = false;
@@ -211,7 +214,8 @@ class BellAlertService {
         }
         return;
       } catch (e) {
-        debugPrint('[BellAlert] Custom sound failed, falling back to default: $e');
+        debugPrint(
+            '[BellAlert] Custom sound failed, falling back to default: $e');
       }
     }
     // Default: enything_bell.wav bundled in assets/sounds/
@@ -223,14 +227,14 @@ class BellAlertService {
     // STRESS-TEST FIX: Prevent stopBell from accidentally killing a newly started _player during event-loop yields.
     final currentPlayer = _player;
     _player = null;
-    
+
     if (currentPlayer != null) {
       try {
         await currentPlayer.stop();
       } catch (_) {}
       currentPlayer.dispose();
     }
-    
+
     debugPrint('[BellAlert] Bell stopped.');
   }
 }

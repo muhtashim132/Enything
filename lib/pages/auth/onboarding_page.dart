@@ -129,7 +129,8 @@ class _OnboardingPageState extends State<OnboardingPage>
             children: [
               // ── Top bar with skip ────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -280,7 +281,7 @@ class _OnboardingPageState extends State<OnboardingPage>
                       ),
                     ),
                   ),
-                  
+
                   // Pulsing center hero
                   AnimatedBuilder(
                     animation: _pulseAnim,
@@ -370,17 +371,20 @@ class _OnboardingPageState extends State<OnboardingPage>
                   Positioned(
                     top: 10,
                     right: 0,
-                    child: _FloatingEmoji(emoji: slide.floatingEmoji1, delay: 0),
+                    child:
+                        _FloatingEmoji(emoji: slide.floatingEmoji1, delay: 0),
                   ),
                   Positioned(
                     bottom: 20,
                     left: 10,
-                    child: _FloatingEmoji(emoji: slide.floatingEmoji2, delay: 200),
+                    child:
+                        _FloatingEmoji(emoji: slide.floatingEmoji2, delay: 200),
                   ),
                   Positioned(
                     top: 50,
                     left: 0,
-                    child: _FloatingEmoji(emoji: slide.floatingEmoji3, delay: 400),
+                    child:
+                        _FloatingEmoji(emoji: slide.floatingEmoji3, delay: 400),
                   ),
                 ],
               ),
@@ -502,7 +506,8 @@ class _FloatingEmojiState extends State<_FloatingEmoji>
       builder: (_, child) {
         // Create an organic floating effect using translation and slight rotation
         final yOffset = -10 * _anim.value;
-        final rotation = 0.15 * _anim.value - 0.075; // Rotates back and forth slightly
+        final rotation =
+            0.15 * _anim.value - 0.075; // Rotates back and forth slightly
 
         return Transform.translate(
           offset: Offset(0, yOffset),

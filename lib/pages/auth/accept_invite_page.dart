@@ -31,8 +31,9 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
       _error = null;
     });
 
-    final details = await context.read<AuthProvider>().fetchInviteDetails(token);
-    
+    final details =
+        await context.read<AuthProvider>().fetchInviteDetails(token);
+
     if (!mounted) return;
     setState(() {
       _isLoading = false;
@@ -40,28 +41,29 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
         _inviteDetails = details;
         _tokenValidated = true;
       } else {
-        _error = context.read<AuthProvider>().error ?? 'Invalid or expired token.';
+        _error =
+            context.read<AuthProvider>().error ?? 'Invalid or expired token.';
       }
     });
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     final err = await context.read<AuthProvider>().acceptAdminInvite(
-      token: _tokenCtrl.text.trim(),
-      email: _inviteDetails!['email'] as String,
-      password: _passCtrl.text,
-      fullName: _nameCtrl.text.trim(),
-    );
+          token: _tokenCtrl.text.trim(),
+          email: _inviteDetails!['email'] as String,
+          password: _passCtrl.text,
+          fullName: _nameCtrl.text.trim(),
+        );
 
     if (!mounted) return;
-    
+
     if (err == null) {
       // Success! Head to Admin Dashboard
       Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
@@ -97,7 +99,8 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                   color: const Color(0xFF8B2FC9).withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.admin_panel_settings_rounded, size: 48, color: Color(0xFF8B2FC9)),
+                child: const Icon(Icons.admin_panel_settings_rounded,
+                    size: 48, color: Color(0xFF8B2FC9)),
               ),
               const SizedBox(height: 24),
               Text(
@@ -114,7 +117,6 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                 style: GoogleFonts.outfit(color: Colors.white54, fontSize: 14),
               ),
               const SizedBox(height: 40),
-
               if (!_tokenValidated) ...[
                 _buildInputField(
                   controller: _tokenCtrl,
@@ -133,25 +135,30 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.3)),
+                    border: Border.all(
+                        color: const Color(0xFF4CAF50).withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     children: [
-                      const Icon(Icons.check_circle_rounded, color: Color(0xFF4CAF50)),
+                      const Icon(Icons.check_circle_rounded,
+                          color: Color(0xFF4CAF50)),
                       const SizedBox(height: 8),
                       Text(
                         'Invited as ${_inviteDetails!['role_name']}',
-                        style: GoogleFonts.outfit(color: const Color(0xFF4CAF50), fontWeight: FontWeight.w700),
+                        style: GoogleFonts.outfit(
+                            color: const Color(0xFF4CAF50),
+                            fontWeight: FontWeight.w700),
                       ),
                       Text(
                         _inviteDetails!['email'],
-                        style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12),
+                        style: GoogleFonts.outfit(
+                            color: Colors.white70, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 32),
-                
+
                 Form(
                   key: _formKey,
                   child: Column(
@@ -160,7 +167,8 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                         controller: _nameCtrl,
                         hint: 'Full Name',
                         icon: Icons.person_rounded,
-                        validator: (v) => v!.isEmpty ? 'Name is required' : null,
+                        validator: (v) =>
+                            v!.isEmpty ? 'Name is required' : null,
                       ),
                       const SizedBox(height: 16),
                       _buildInputField(
@@ -168,7 +176,8 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                         hint: 'Secure Password',
                         icon: Icons.lock_rounded,
                         obscure: true,
-                        validator: (v) => v!.length < 6 ? 'Min 6 characters' : null,
+                        validator: (v) =>
+                            v!.length < 6 ? 'Min 6 characters' : null,
                       ),
                     ],
                   ),
@@ -179,10 +188,12 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                   onPressed: _submit,
                 ),
               ],
-              
               if (_error != null) ...[
                 const SizedBox(height: 24),
-                Text(_error!, textAlign: TextAlign.center, style: GoogleFonts.outfit(color: const Color(0xFFFF5722), fontSize: 13)),
+                Text(_error!,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                        color: const Color(0xFFFF5722), fontSize: 13)),
               ],
             ],
           ),
@@ -209,14 +220,21 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
         prefixIcon: Icon(icon, color: Colors.white38, size: 20),
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF8B2FC9))),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF5722))),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFF8B2FC9))),
+        errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFFF5722))),
       ),
     );
   }
 
-  Widget _buildButton({required String label, required VoidCallback onPressed}) {
+  Widget _buildButton(
+      {required String label, required VoidCallback onPressed}) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
@@ -224,11 +242,20 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF8B2FC9),
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: _isLoading
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Text(label, style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2))
+            : Text(label,
+                style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold)),
       ),
     );
   }

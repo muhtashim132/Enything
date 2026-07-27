@@ -71,8 +71,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
     super.initState();
 
     if (widget.order.riderLat != null && widget.order.riderLng != null) {
-      _riderLatLng =
-          LatLng(widget.order.riderLat!, widget.order.riderLng!);
+      _riderLatLng = LatLng(widget.order.riderLat!, widget.order.riderLng!);
       _riderUpdatedAt = widget.order.riderLocationUpdatedAt;
     }
 
@@ -189,7 +188,10 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
     final custLat = order.deliveryLat;
     final custLng = order.deliveryLng;
 
-    if (shopLat == null || shopLng == null || custLat == null || custLng == null) {
+    if (shopLat == null ||
+        shopLng == null ||
+        custLat == null ||
+        custLng == null) {
       if (mounted) setState(() => _loadingRoutes = false);
       return;
     }
@@ -325,8 +327,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
           ),
           const SizedBox(height: 2),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: _kRiderMarkerColor,
               borderRadius: BorderRadius.circular(8),
@@ -377,9 +378,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
             children: [
               Text(label,
                   style: GoogleFonts.outfit(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600)),
+                      color: color, fontSize: 11, fontWeight: FontWeight.w600)),
               if (loading)
                 SizedBox(
                   height: 10,
@@ -483,8 +482,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.enything.app',
                 ),
 
@@ -533,9 +531,8 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E1E2E)
-                              : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF1E1E2E) : Colors.white,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
@@ -558,9 +555,8 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E1E2E)
-                              : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF1E1E2E) : Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
@@ -603,9 +599,8 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E1E2E)
-                              : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF1E1E2E) : Colors.white,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
@@ -638,9 +633,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 20, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF1E1E2E)
-                          : Colors.white,
+                      color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
@@ -665,9 +658,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                             style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? Colors.white
-                                    : Colors.black87)),
+                                color: isDark ? Colors.white : Colors.black87)),
                       ],
                     ),
                   ),
@@ -758,8 +749,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                                   loading: _loadingRoutes,
                                 ),
                               ),
-                            if (_riderLatLng != null)
-                              const SizedBox(width: 10),
+                            if (_riderLatLng != null) const SizedBox(width: 10),
                             Expanded(
                               child: _distanceChip(
                                 color: _kDeliveryColor,
@@ -774,14 +764,16 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                         const SizedBox(height: 16),
 
                         // Call buttons
-                        if ((order.customerPhone != null && order.customerPhone!.isNotEmpty) ||
-                            (order.riderPhone != null && order.riderPhone!.isNotEmpty)) ...[
+                        if ((order.customerPhone != null &&
+                                order.customerPhone!.isNotEmpty) ||
+                            (order.riderPhone != null &&
+                                order.riderPhone!.isNotEmpty)) ...[
                           Row(children: [
-                            if (order.customerPhone != null && order.customerPhone!.isNotEmpty)
+                            if (order.customerPhone != null &&
+                                order.customerPhone!.isNotEmpty)
                               Expanded(
                                 child: OutlinedButton.icon(
-                                  onPressed: () =>
-                                      _call(order.customerPhone!),
+                                  onPressed: () => _call(order.customerPhone!),
                                   icon: const Icon(Icons.phone_outlined,
                                       size: 16),
                                   label: Text('Customer',
@@ -800,10 +792,13 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                                   ),
                                 ),
                               ),
-                            if ((order.customerPhone != null && order.customerPhone!.isNotEmpty) &&
-                                (order.riderPhone != null && order.riderPhone!.isNotEmpty))
+                            if ((order.customerPhone != null &&
+                                    order.customerPhone!.isNotEmpty) &&
+                                (order.riderPhone != null &&
+                                    order.riderPhone!.isNotEmpty))
                               const SizedBox(width: 10),
-                            if (order.riderPhone != null && order.riderPhone!.isNotEmpty)
+                            if (order.riderPhone != null &&
+                                order.riderPhone!.isNotEmpty)
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () => _call(order.riderPhone!),
@@ -840,8 +835,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
     );
   }
 
-  int _secondsAgo(DateTime dt) =>
-      DateTime.now().difference(dt).inSeconds.abs();
+  int _secondsAgo(DateTime dt) => DateTime.now().difference(dt).inSeconds.abs();
 }
 
 // ── Extension helper ─────────────────────────────────────────────────────────

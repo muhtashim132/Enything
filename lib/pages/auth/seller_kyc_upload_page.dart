@@ -53,8 +53,7 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
     final source = await showImageSourceSheet(context);
     if (source == null) return;
     final picker = ImagePicker();
-    final pickedFile =
-        await picker.pickImage(source: source, imageQuality: 70);
+    final pickedFile = await picker.pickImage(source: source, imageQuality: 70);
     if (pickedFile != null) {
       setState(() => onPicked(File(pickedFile.path)));
     }
@@ -62,7 +61,8 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
 
   Future<String?> _uploadFile(File file, String path) async {
     try {
-      final bytes = await ImageCompressionService.compressFile(file) ?? await file.readAsBytes();
+      final bytes = await ImageCompressionService.compressFile(file) ??
+          await file.readAsBytes();
       const ext = 'jpg';
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_$path.$ext';
       await _db.storage.from('seller_kyc_docs').uploadBinary(fileName, bytes);
@@ -116,9 +116,11 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
       if (userId == null) throw Exception('User not logged in');
 
       // Cache route args before async gaps to avoid BuildContext-across-await lint
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       final shopId = args?['shop_id'] as String?;
-      if (shopId == null) throw Exception('Shop ID not provided. Please restart the app.');
+      if (shopId == null)
+        throw Exception('Shop ID not provided. Please restart the app.');
 
       // Upload Images
       final aadharFrontUrl =
@@ -158,7 +160,8 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
 
       if (mounted) {
         final notifProvider = context.read<NotificationProvider>();
-        final adminRows = await _db.from('admin_users').select('id').eq('is_active', true);
+        final adminRows =
+            await _db.from('admin_users').select('id').eq('is_active', true);
         for (final admin in (adminRows as List)) {
           notifProvider.sendBackgroundPush(
             targetUserId: admin['id'] as String,
@@ -192,7 +195,8 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Colors.white, size: 20),
           onPressed: () {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
@@ -208,116 +212,120 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
           SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Final Step: Legal & KYC',
-                style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            Text(
-                'Please provide your tax details and upload verification documents. Clear images speed up the approval process.',
-                style: GoogleFonts.outfit(color: Colors.white54, fontSize: 14)),
-            const SizedBox(height: 32),
-            const _SectionHeader(title: 'Tax & Identity Details'),
-            _DarkField(
-                label: 'Aadhaar Number *',
-                controller: _aadharCtrl,
-                number: true),
-            const SizedBox(height: 16),
-            _DarkField(label: 'PAN Number *', controller: _panCtrl, caps: true),
-            const SizedBox(height: 16),
-            _DarkField(
-                label: 'GSTIN (Optional depending on category)',
-                controller: _gstCtrl,
-                caps: true),
-            const SizedBox(height: 16),
-            _DarkField(
-                label: 'Trade License Number (Optional)',
-                controller: _tradeLicenseCtrl),
-            const SizedBox(height: 32),
-            const _SectionHeader(title: 'Bank Account Details'),
-            _DarkField(
-                label: 'Account Holder Name *', controller: _accountHolderCtrl),
-            const SizedBox(height: 16),
-            _DarkField(
-                label: 'Account Number *',
-                controller: _bankAccountCtrl,
-                number: true),
-            const SizedBox(height: 16),
-            _DarkField(label: 'IFSC Code *', controller: _ifscCtrl, caps: true),
-            const SizedBox(height: 32),
-            const _SectionHeader(title: 'Document Uploads'),
-            _UploadRow(
-              title: 'Aadhaar Card (Front & Back) *',
-              file1: _aadharFront,
-              file2: _aadharBack,
-              label1: 'Front',
-              label2: 'Back',
-              onPick1: () => _pickImage((f) => _aadharFront = f),
-              onPick2: () => _pickImage((f) => _aadharBack = f),
-            ),
-            const SizedBox(height: 24),
-            _UploadRow(
-              title: 'PAN Card (Front & Back) *',
-              file1: _panFront,
-              file2: _panBack,
-              label1: 'Front',
-              label2: 'Back',
-              onPick1: () => _pickImage((f) => _panFront = f),
-              onPick2: () => _pickImage((f) => _panBack = f),
-            ),
-            const SizedBox(height: 24),
-            _UploadRow(
-              title: 'Shop Proof (Electricity Bill / Rent Agreement) *',
-              file1: _shopProof1,
-              file2: _shopProof2,
-              label1: 'Page 1',
-              label2: 'Page 2 (Opt)',
-              onPick1: () => _pickImage((f) => _shopProof1 = f),
-              onPick2: () => _pickImage((f) => _shopProof2 = f),
-            ),
-            const SizedBox(height: 24),
-            _UploadRow(
-              title: 'Bank Proof (Cancelled Cheque / Passbook) *',
-              file1: _bankProof,
-              file2: null,
-              label1: 'Upload Image',
-              label2: '',
-              onPick1: () => _pickImage((f) => _bankProof = f),
-              onPick2: () {},
-              single: true,
-            ),
-            const SizedBox(height: 48),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF4C542),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Final Step: Legal & KYC',
+                    style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                Text(
+                    'Please provide your tax details and upload verification documents. Clear images speed up the approval process.',
+                    style: GoogleFonts.outfit(
+                        color: Colors.white54, fontSize: 14)),
+                const SizedBox(height: 32),
+                const _SectionHeader(title: 'Tax & Identity Details'),
+                _DarkField(
+                    label: 'Aadhaar Number *',
+                    controller: _aadharCtrl,
+                    number: true),
+                const SizedBox(height: 16),
+                _DarkField(
+                    label: 'PAN Number *', controller: _panCtrl, caps: true),
+                const SizedBox(height: 16),
+                _DarkField(
+                    label: 'GSTIN (Optional depending on category)',
+                    controller: _gstCtrl,
+                    caps: true),
+                const SizedBox(height: 16),
+                _DarkField(
+                    label: 'Trade License Number (Optional)',
+                    controller: _tradeLicenseCtrl),
+                const SizedBox(height: 32),
+                const _SectionHeader(title: 'Bank Account Details'),
+                _DarkField(
+                    label: 'Account Holder Name *',
+                    controller: _accountHolderCtrl),
+                const SizedBox(height: 16),
+                _DarkField(
+                    label: 'Account Number *',
+                    controller: _bankAccountCtrl,
+                    number: true),
+                const SizedBox(height: 16),
+                _DarkField(
+                    label: 'IFSC Code *', controller: _ifscCtrl, caps: true),
+                const SizedBox(height: 32),
+                const _SectionHeader(title: 'Document Uploads'),
+                _UploadRow(
+                  title: 'Aadhaar Card (Front & Back) *',
+                  file1: _aadharFront,
+                  file2: _aadharBack,
+                  label1: 'Front',
+                  label2: 'Back',
+                  onPick1: () => _pickImage((f) => _aadharFront = f),
+                  onPick2: () => _pickImage((f) => _aadharBack = f),
                 ),
-                child: _loading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                            color: Colors.black, strokeWidth: 2))
-                    : Text('Submit Application',
-                        style: GoogleFonts.outfit(
-                            color: Colors.black,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold)),
-              ),
+                const SizedBox(height: 24),
+                _UploadRow(
+                  title: 'PAN Card (Front & Back) *',
+                  file1: _panFront,
+                  file2: _panBack,
+                  label1: 'Front',
+                  label2: 'Back',
+                  onPick1: () => _pickImage((f) => _panFront = f),
+                  onPick2: () => _pickImage((f) => _panBack = f),
+                ),
+                const SizedBox(height: 24),
+                _UploadRow(
+                  title: 'Shop Proof (Electricity Bill / Rent Agreement) *',
+                  file1: _shopProof1,
+                  file2: _shopProof2,
+                  label1: 'Page 1',
+                  label2: 'Page 2 (Opt)',
+                  onPick1: () => _pickImage((f) => _shopProof1 = f),
+                  onPick2: () => _pickImage((f) => _shopProof2 = f),
+                ),
+                const SizedBox(height: 24),
+                _UploadRow(
+                  title: 'Bank Proof (Cancelled Cheque / Passbook) *',
+                  file1: _bankProof,
+                  file2: null,
+                  label1: 'Upload Image',
+                  label2: '',
+                  onPick1: () => _pickImage((f) => _bankProof = f),
+                  onPick2: () {},
+                  single: true,
+                ),
+                const SizedBox(height: 48),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF4C542),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: _loading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                                color: Colors.black, strokeWidth: 2))
+                        : Text('Submit Application',
+                            style: GoogleFonts.outfit(
+                                color: Colors.black,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ],
             ),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
+          ),
           if (_loading)
             Positioned.fill(
               child: Container(
@@ -362,8 +370,8 @@ class _SectionHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-              child:
-                  Container(height: 1, color: Colors.white.withValues(alpha: 0.08))),
+              child: Container(
+                  height: 1, color: Colors.white.withValues(alpha: 0.08))),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(title,
@@ -373,8 +381,8 @@ class _SectionHeader extends StatelessWidget {
                     fontWeight: FontWeight.w600)),
           ),
           Expanded(
-              child:
-                  Container(height: 1, color: Colors.white.withValues(alpha: 0.08))),
+              child: Container(
+                  height: 1, color: Colors.white.withValues(alpha: 0.08))),
         ],
       ),
     );
@@ -405,7 +413,9 @@ class _DarkField extends StatelessWidget {
           controller: controller,
           keyboardType: number ? TextInputType.number : TextInputType.text,
           maxLength: 200,
-          buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+          buildCounter: (BuildContext context,
+                  {int? currentLength, int? maxLength, bool? isFocused}) =>
+              null,
           textCapitalization:
               caps ? TextCapitalization.characters : TextCapitalization.none,
           style: GoogleFonts.outfit(color: Colors.white, fontSize: 15),
@@ -484,8 +494,9 @@ class _UploadBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.03),
           border: Border.all(
-              color:
-                  file != null ? Colors.green : Colors.white.withValues(alpha: 0.15)),
+              color: file != null
+                  ? Colors.green
+                  : Colors.white.withValues(alpha: 0.15)),
           borderRadius: BorderRadius.circular(12),
           image: file != null
               ? DecorationImage(

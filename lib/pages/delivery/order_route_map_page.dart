@@ -96,7 +96,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
             pts[i - 1].longitude,
             pts[i].latitude,
             pts[i].longitude,
-          ) / 1000;
+          ) /
+          1000;
     }
     return km;
   }
@@ -111,14 +112,16 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     List<LatLng> shopPts = [];
     if (widget.shops.isNotEmpty) {
       final unvisited = widget.shops.map((s) => LatLng(s.lat, s.lng)).toList();
-      LatLng currentPos = (widget.riderLat != null && widget.riderLng != null) 
-          ? LatLng(widget.riderLat!, widget.riderLng!) 
+      LatLng currentPos = (widget.riderLat != null && widget.riderLng != null)
+          ? LatLng(widget.riderLat!, widget.riderLng!)
           : unvisited.first;
-          
+
       while (unvisited.isNotEmpty) {
         unvisited.sort((a, b) {
-          final distA = Geolocator.distanceBetween(currentPos.latitude, currentPos.longitude, a.latitude, a.longitude);
-          final distB = Geolocator.distanceBetween(currentPos.latitude, currentPos.longitude, b.latitude, b.longitude);
+          final distA = Geolocator.distanceBetween(currentPos.latitude,
+              currentPos.longitude, a.latitude, a.longitude);
+          final distB = Geolocator.distanceBetween(currentPos.latitude,
+              currentPos.longitude, b.latitude, b.longitude);
           return distA.compareTo(distB);
         });
         final nearest = unvisited.removeAt(0);
@@ -127,10 +130,13 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
       }
     }
 
-    final customerPt = (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
-        ? LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!)
-        : null;
-    final riderPt = (widget.riderLat != null && widget.riderLng != null && widget.riderLat != 0.0)
+    final customerPt =
+        (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
+            ? LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!)
+            : null;
+    final riderPt = (widget.riderLat != null &&
+            widget.riderLng != null &&
+            widget.riderLat != 0.0)
         ? LatLng(widget.riderLat!, widget.riderLng!)
         : null;
 
@@ -166,9 +172,15 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
   void _fitMapBounds() {
     final allPoints = [
-      if (widget.riderLat != null && widget.riderLng != null && widget.riderLat != 0.0) LatLng(widget.riderLat!, widget.riderLng!),
-      ...widget.shops.where((s) => s.lat != 0.0).map((s) => LatLng(s.lat, s.lng)),
-      if (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0) LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!),
+      if (widget.riderLat != null &&
+          widget.riderLng != null &&
+          widget.riderLat != 0.0)
+        LatLng(widget.riderLat!, widget.riderLng!),
+      ...widget.shops
+          .where((s) => s.lat != 0.0)
+          .map((s) => LatLng(s.lat, s.lng)),
+      if (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
+        LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!),
     ];
     if (allPoints.isEmpty) return;
 
@@ -190,37 +202,44 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     );
 
     try {
-      _mapCtrl.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)));
+      _mapCtrl.fitCamera(
+          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)));
     } catch (_) {}
   }
 
   Future<void> _openInExternalMap() async {
-    final origin = (widget.riderLat != null && widget.riderLng != null && widget.riderLat != 0.0)
+    final origin = (widget.riderLat != null &&
+            widget.riderLng != null &&
+            widget.riderLat != 0.0)
         ? '${widget.riderLat},${widget.riderLng}'
         : widget.shops.isNotEmpty
             ? '${widget.shops.first.lat},${widget.shops.first.lng}'
             : '';
 
-    final destination = (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
-        ? '${widget.group.deliveryLat},${widget.group.deliveryLng}'
-        : widget.shops.isNotEmpty
-            ? '${widget.shops.last.lat},${widget.shops.last.lng}'
-            : '';
+    final destination =
+        (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
+            ? '${widget.group.deliveryLat},${widget.group.deliveryLng}'
+            : widget.shops.isNotEmpty
+                ? '${widget.shops.last.lat},${widget.shops.last.lng}'
+                : '';
 
     if (origin.isEmpty || destination.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot open map: Missing location data.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Cannot open map: Missing location data.')));
       }
       return;
     }
 
     final waypoints = widget.shops.map((s) => '${s.lat},${s.lng}').toList();
-    
-    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&waypoints=${waypoints.join('|')}');
-    
+
+    final uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&waypoints=${waypoints.join('|')}');
+
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open map.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Could not open map.')));
       }
     }
   }
@@ -235,7 +254,12 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 12, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(
+                  color: color.withValues(alpha: 0.45),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4))
+            ],
             border: Border.all(color: Colors.white, width: 2.5),
           ),
           child: Icon(icon, color: Colors.white, size: 22),
@@ -243,8 +267,13 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
         const SizedBox(height: 2),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-          child: Text(label, style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+          decoration: BoxDecoration(
+              color: color, borderRadius: BorderRadius.circular(8)),
+          child: Text(label,
+              style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700)),
         ),
       ],
     );
@@ -259,7 +288,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
       double jLat = lat;
       double jLng = lng;
       int attempts = 0;
-      while (seenCoords.contains('${jLat.toStringAsFixed(5)}_${jLng.toStringAsFixed(5)}') && attempts < 5) {
+      while (seenCoords.contains(
+              '${jLat.toStringAsFixed(5)}_${jLng.toStringAsFixed(5)}') &&
+          attempts < 5) {
         jLat += 0.00015;
         jLng += 0.00015;
         attempts++;
@@ -274,15 +305,18 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
           point: applyJitter(widget.shops[i].lat, widget.shops[i].lng),
           width: 80,
           height: 70,
-          child: _mapMarker(_kShopMarker, Icons.storefront_rounded, widget.shops[i].name),
+          child: _mapMarker(
+              _kShopMarker, Icons.storefront_rounded, widget.shops[i].name),
         ),
       if (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
         Marker(
-          point: applyJitter(widget.group.deliveryLat!, widget.group.deliveryLng!),
+          point:
+              applyJitter(widget.group.deliveryLat!, widget.group.deliveryLng!),
           width: 80,
           height: 70,
-        child: _mapMarker(_kCustomerMarker, Icons.location_on_rounded, 'Customer'),
-      ),
+          child: _mapMarker(
+              _kCustomerMarker, Icons.location_on_rounded, 'Customer'),
+        ),
       if (widget.riderLat != null && widget.riderLng != null)
         Marker(
           point: applyJitter(widget.riderLat!, widget.riderLng!),
@@ -295,49 +329,111 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
+        backgroundColor:
+            isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
         body: Stack(
           children: [
             FlutterMap(
               mapController: _mapCtrl,
               options: MapOptions(
-                initialCenter: widget.shops.isNotEmpty ? LatLng(widget.shops.first.lat, widget.shops.first.lng) : const LatLng(0,0),
+                initialCenter: widget.shops.isNotEmpty
+                    ? LatLng(widget.shops.first.lat, widget.shops.first.lng)
+                    : const LatLng(0, 0),
                 initialZoom: 13,
-                interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+                interactionOptions:
+                    const InteractionOptions(flags: InteractiveFlag.all),
               ),
               children: [
-                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.enything.app'),
-                if (_pickupRoute.isNotEmpty) PolylineLayer(polylines: [Polyline(points: _pickupRoute, color: _kPickupColor, strokeWidth: 4.5, borderStrokeWidth: 1.5, borderColor: Colors.white.withValues(alpha: 0.6))]),
-                if (_deliveryRoute.isNotEmpty) PolylineLayer(polylines: [Polyline(points: _deliveryRoute, color: _kDeliveryColor, strokeWidth: 4.5, borderStrokeWidth: 1.5, borderColor: Colors.white.withValues(alpha: 0.6))]),
+                TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.enything.app'),
+                if (_pickupRoute.isNotEmpty)
+                  PolylineLayer(polylines: [
+                    Polyline(
+                        points: _pickupRoute,
+                        color: _kPickupColor,
+                        strokeWidth: 4.5,
+                        borderStrokeWidth: 1.5,
+                        borderColor: Colors.white.withValues(alpha: 0.6))
+                  ]),
+                if (_deliveryRoute.isNotEmpty)
+                  PolylineLayer(polylines: [
+                    Polyline(
+                        points: _deliveryRoute,
+                        color: _kDeliveryColor,
+                        strokeWidth: 4.5,
+                        borderStrokeWidth: 1.5,
+                        borderColor: Colors.white.withValues(alpha: 0.6))
+                  ]),
                 MarkerLayer(markers: markers),
               ],
             ),
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
-                        width: 42, height: 42,
-                        decoration: BoxDecoration(color: isDark ? const Color(0xFF1E1E2E) : Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 10, offset: const Offset(0, 3))]),
-                        child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: isDark ? Colors.white : Colors.black87),
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                            color:
+                                isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3))
+                            ]),
+                        child: Icon(Icons.arrow_back_ios_new_rounded,
+                            size: 18,
+                            color: isDark ? Colors.white : Colors.black87),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(color: isDark ? const Color(0xFF1E1E2E) : Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 10, offset: const Offset(0, 3))]),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                            color:
+                                isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.12),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3))
+                            ]),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(widget.group.isMultiShop ? 'Multi-Shop Order (${widget.shops.length} Shops)' : 'Order #${widget.group.orders.first.id.substring(0, 8).toUpperCase()}',
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 14, color: isDark ? Colors.white : Colors.black87)),
-                            Text(widget.group.isMultiShop ? 'Various Shops' : widget.shops.first.name,
-                                style: GoogleFonts.outfit(fontSize: 12, color: isDark ? Colors.white54 : Colors.grey.shade600), overflow: TextOverflow.ellipsis),
+                            Text(
+                                widget.group.isMultiShop
+                                    ? 'Multi-Shop Order (${widget.shops.length} Shops)'
+                                    : 'Order #${widget.group.orders.first.id.substring(0, 8).toUpperCase()}',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    color: isDark
+                                        ? Colors.white
+                                        : Colors.black87)),
+                            Text(
+                                widget.group.isMultiShop
+                                    ? 'Various Shops'
+                                    : widget.shops.first.name,
+                                style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.grey.shade600),
+                                overflow: TextOverflow.ellipsis),
                           ],
                         ),
                       ),
@@ -346,9 +442,20 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                     GestureDetector(
                       onTap: _fitMapBounds,
                       child: Container(
-                        width: 42, height: 42,
-                        decoration: BoxDecoration(color: isDark ? const Color(0xFF1E1E2E) : Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 10, offset: const Offset(0, 3))]),
-                        child: const Icon(Icons.my_location_rounded, size: 20, color: AppColors.primary),
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                            color:
+                                isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3))
+                            ]),
+                        child: const Icon(Icons.my_location_rounded,
+                            size: 20, color: AppColors.primary),
                       ),
                     ),
                   ],
@@ -356,12 +463,22 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
               ),
             ),
             Positioned(
-              left: 0, right: 0, bottom: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1A1A2E).withValues(alpha: 0.97) : Colors.white.withValues(alpha: 0.97),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 24, offset: const Offset(0, -6))],
+                  color: isDark
+                      ? const Color(0xFF1A1A2E).withValues(alpha: 0.97)
+                      : Colors.white.withValues(alpha: 0.97),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(28)),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        blurRadius: 24,
+                        offset: const Offset(0, -6))
+                  ],
                 ),
                 child: SafeArea(
                   top: false,
@@ -372,13 +489,31 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                       children: [
                         Row(
                           children: [
-                            Container(width: 14, height: 4, decoration: BoxDecoration(color: _kPickupColor, borderRadius: BorderRadius.circular(2))),
+                            Container(
+                                width: 14,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                    color: _kPickupColor,
+                                    borderRadius: BorderRadius.circular(2))),
                             const SizedBox(width: 6),
-                            Text('Pickup', style: GoogleFonts.outfit(fontSize: 12, color: _kPickupColor, fontWeight: FontWeight.w600)),
+                            Text('Pickup',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    color: _kPickupColor,
+                                    fontWeight: FontWeight.w600)),
                             const SizedBox(width: 20),
-                            Container(width: 14, height: 4, decoration: BoxDecoration(color: _kDeliveryColor, borderRadius: BorderRadius.circular(2))),
+                            Container(
+                                width: 14,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                    color: _kDeliveryColor,
+                                    borderRadius: BorderRadius.circular(2))),
                             const SizedBox(width: 6),
-                            Text('Delivery', style: GoogleFonts.outfit(fontSize: 12, color: _kDeliveryColor, fontWeight: FontWeight.w600)),
+                            Text('Delivery',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    color: _kDeliveryColor,
+                                    fontWeight: FontWeight.w600)),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -386,18 +521,53 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                           children: [
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(color: const Color(0xFF00B4D8).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF00B4D8).withValues(alpha: 0.35), width: 1.2)),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                    color: const Color(0xFF00B4D8)
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                        color: const Color(0xFF00B4D8)
+                                            .withValues(alpha: 0.35),
+                                        width: 1.2)),
                                 child: Row(
                                   children: [
-                                    Container(width: 30, height: 30, decoration: const BoxDecoration(color: Color(0xFF00B4D8), shape: BoxShape.circle), child: const Icon(Icons.route_rounded, color: Colors.white, size: 16)),
+                                    Container(
+                                        width: 30,
+                                        height: 30,
+                                        decoration: const BoxDecoration(
+                                            color: Color(0xFF00B4D8),
+                                            shape: BoxShape.circle),
+                                        child: const Icon(Icons.route_rounded,
+                                            color: Colors.white, size: 16)),
                                     const SizedBox(width: 10),
                                     Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text('Total Distance', style: GoogleFonts.outfit(color: const Color(0xFF00B4D8), fontSize: 11, fontWeight: FontWeight.w600)),
-                                        if (_loadingRoutes) const SizedBox(height: 10, width: 40, child: LinearProgressIndicator(color: Color(0xFF00B4D8)))
-                                        else Text(_totalKm != null ? '${_totalKm!.toStringAsFixed(1)} km' : '— km', style: GoogleFonts.outfit(color: _totalKm != null ? const Color(0xFF00B4D8) : Colors.grey, fontSize: 15, fontWeight: FontWeight.w800)),
+                                        Text('Total Distance',
+                                            style: GoogleFonts.outfit(
+                                                color: const Color(0xFF00B4D8),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600)),
+                                        if (_loadingRoutes)
+                                          const SizedBox(
+                                              height: 10,
+                                              width: 40,
+                                              child: LinearProgressIndicator(
+                                                  color: Color(0xFF00B4D8)))
+                                        else
+                                          Text(
+                                              _totalKm != null
+                                                  ? '${_totalKm!.toStringAsFixed(1)} km'
+                                                  : '— km',
+                                              style: GoogleFonts.outfit(
+                                                  color: _totalKm != null
+                                                      ? const Color(0xFF00B4D8)
+                                                      : Colors.grey,
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w800)),
                                       ],
                                     ),
                                   ],
@@ -409,12 +579,31 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                         const SizedBox(height: 16),
                         Row(
                           children: [
-                            Text('₹${widget.group.totalGrand.toStringAsFixed(0)} order', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.black87)),
+                            Text(
+                                '₹${widget.group.totalGrand.toStringAsFixed(0)} order',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? Colors.white
+                                        : Colors.black87)),
                             const Spacer(),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.success.withValues(alpha: 0.4))),
-                              child: Text('₹${widget.group.totalEarnings.toStringAsFixed(0)} earn', style: GoogleFonts.outfit(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w700)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color:
+                                      AppColors.success.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: AppColors.success
+                                          .withValues(alpha: 0.4))),
+                              child: Text(
+                                  '₹${widget.group.totalEarnings.toStringAsFixed(0)} earn',
+                                  style: GoogleFonts.outfit(
+                                      color: AppColors.success,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700)),
                             ),
                           ],
                         ),
@@ -424,12 +613,16 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                           child: OutlinedButton.icon(
                             onPressed: _openInExternalMap,
                             icon: const Icon(Icons.map_rounded, size: 20),
-                            label: Text('Open in Google Maps', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                            label: Text('Open in Google Maps',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w800, fontSize: 15)),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF4C6EF5),
-                              side: const BorderSide(color: Color(0xFF4C6EF5), width: 1.5),
+                              side: const BorderSide(
+                                  color: Color(0xFF4C6EF5), width: 1.5),
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
                             ),
                           ),
                         ),
@@ -439,9 +632,23 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               onPressed: widget.onAccept,
-                              icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
-                              label: Text('Accept Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
-                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 4, shadowColor: AppColors.success.withValues(alpha: 0.4)),
+                              icon: const Icon(
+                                  Icons.check_circle_outline_rounded,
+                                  size: 20),
+                              label: Text('Accept Order',
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15)),
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.success,
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16)),
+                                  elevation: 4,
+                                  shadowColor:
+                                      AppColors.success.withValues(alpha: 0.4)),
                             ),
                           ),
                         ],

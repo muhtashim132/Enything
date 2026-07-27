@@ -38,9 +38,8 @@ class _OrderCountdownTimerState extends State<OrderCountdownTimer> {
   }
 
   void _updateTime() {
-    final remaining = widget.acceptanceDeadline
-        .difference(DateTime.now().toUtc())
-        .inSeconds;
+    final remaining =
+        widget.acceptanceDeadline.difference(DateTime.now().toUtc()).inSeconds;
     final clamped = remaining.clamp(0, 180);
     if (clamped == 0 && _secondsLeft > 0) {
       widget.onExpire?.call();
@@ -64,7 +63,8 @@ class _OrderCountdownTimerState extends State<OrderCountdownTimer> {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.timer_off_outlined, size: widget.fontSize + 2, color: Colors.red),
+          Icon(Icons.timer_off_outlined,
+              size: widget.fontSize + 2, color: Colors.red),
           const SizedBox(width: 4),
           Text(
             'Expired',
@@ -80,8 +80,10 @@ class _OrderCountdownTimerState extends State<OrderCountdownTimer> {
 
     final m = _secondsLeft ~/ 60;
     final s = _secondsLeft % 60;
-    final timeStr = '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    final textColor = widget.color ?? (_secondsLeft < 60 ? Colors.red : Colors.orange);
+    final timeStr =
+        '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    final textColor =
+        widget.color ?? (_secondsLeft < 60 ? Colors.red : Colors.orange);
 
     return Row(
       mainAxisSize: MainAxisSize.min,

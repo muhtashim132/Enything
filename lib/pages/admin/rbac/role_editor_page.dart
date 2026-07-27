@@ -29,9 +29,16 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
   bool get _isEditing => widget.role != null;
 
   static const List<String> _colors = [
-    '#8B2FC9', '#2196F3', '#4CAF50', '#FF9800',
-    '#E91E63', '#00BCD4', '#FF5722', '#F4C542',
-    '#9C27B0', '#607D8B',
+    '#8B2FC9',
+    '#2196F3',
+    '#4CAF50',
+    '#FF9800',
+    '#E91E63',
+    '#00BCD4',
+    '#FF5722',
+    '#F4C542',
+    '#9C27B0',
+    '#607D8B',
   ];
 
   @override
@@ -54,7 +61,10 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _saving = true; _error = null; });
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
 
     final repo = RolesRepository();
     final rbac = context.read<RbacProvider>();
@@ -78,7 +88,10 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
           action: 'role_updated',
           entityType: 'role',
           entityId: widget.role!.id,
-          metadata: {'name': _nameCtrl.text.trim(), 'permission_count': _selectedCodes.length},
+          metadata: {
+            'name': _nameCtrl.text.trim(),
+            'permission_count': _selectedCodes.length
+          },
           createdAt: DateTime.now(),
         ));
       } else {
@@ -102,7 +115,9 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
       await rbac.reloadRoles();
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      setState(() { _error = e.toString(); });
+      setState(() {
+        _error = e.toString();
+      });
     }
     if (mounted) setState(() => _saving = false);
   }
@@ -137,7 +152,8 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                 onPressed: _saving ? null : _save,
                 child: _saving
                     ? const SizedBox(
-                        width: 16, height: 16,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
                             color: Color(0xFF8B2FC9), strokeWidth: 2))
                     : Text('Save',
@@ -162,10 +178,15 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                 controller: _nameCtrl,
                 enabled: canEdit,
                 maxLength: 50,
-                buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                buildCounter: (BuildContext context,
+                        {int? currentLength,
+                        int? maxLength,
+                        bool? isFocused}) =>
+                    null,
                 style: GoogleFonts.outfit(color: Colors.white),
                 decoration: _inputDec('e.g. Content Moderator'),
-                validator: (v) => (v == null || v.isEmpty) ? 'Name is required' : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Name is required' : null,
               ),
               const SizedBox(height: 14),
               _label('Description'),
@@ -175,7 +196,11 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                 enabled: canEdit,
                 maxLines: 2,
                 maxLength: 250,
-                buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                buildCounter: (BuildContext context,
+                        {int? currentLength,
+                        int? maxLength,
+                        bool? isFocused}) =>
+                    null,
                 style: GoogleFonts.outfit(color: Colors.white),
                 decoration: _inputDec('What can this role do?'),
               ),
@@ -188,12 +213,15 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                   final isSelected = c == _selectedColor;
                   Color color;
                   try {
-                    color = Color(int.parse('FF${c.replaceAll('#', '')}', radix: 16));
+                    color = Color(
+                        int.parse('FF${c.replaceAll('#', '')}', radix: 16));
                   } catch (_) {
                     color = const Color(0xFF8B2FC9);
                   }
                   return GestureDetector(
-                    onTap: canEdit ? () => setState(() => _selectedColor = c) : null,
+                    onTap: canEdit
+                        ? () => setState(() => _selectedColor = c)
+                        : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: 32,
@@ -206,11 +234,16 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                           width: 2.5,
                         ),
                         boxShadow: isSelected
-                            ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 8)]
+                            ? [
+                                BoxShadow(
+                                    color: color.withValues(alpha: 0.5),
+                                    blurRadius: 8)
+                              ]
                             : null,
                       ),
                       child: isSelected
-                          ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+                          ? const Icon(Icons.check_rounded,
+                              color: Colors.white, size: 16)
                           : null,
                     ),
                   );
@@ -226,7 +259,8 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
               decoration: BoxDecoration(
                 color: const Color(0xFF8B2FC9).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF8B2FC9).withValues(alpha: 0.3)),
+                border: Border.all(
+                    color: const Color(0xFF8B2FC9).withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -247,11 +281,14 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                         if (_selectedCodes.length == totalPerms) {
                           _selectedCodes.clear();
                         } else {
-                          _selectedCodes = rbac.allPermissions.map((p) => p.code).toSet();
+                          _selectedCodes =
+                              rbac.allPermissions.map((p) => p.code).toSet();
                         }
                       }),
                       child: Text(
-                        _selectedCodes.length == totalPerms ? 'Clear All' : 'Select All',
+                        _selectedCodes.length == totalPerms
+                            ? 'Clear All'
+                            : 'Select All',
                         style: GoogleFonts.outfit(
                             color: const Color(0xFF8B2FC9),
                             fontSize: 12,
@@ -274,16 +311,19 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
               )
             else
               ...permsByModule.entries.map((entry) {
-                final perms = entry.value.map((p) => {
-                  'code': p.code,
-                  'name': p.name,
-                }).toList();
+                final perms = entry.value
+                    .map((p) => {
+                          'code': p.code,
+                          'name': p.name,
+                        })
+                    .toList();
                 return PermissionGroupCard(
                   module: entry.key,
                   permissions: perms,
                   selected: _selectedCodes,
                   enabled: canEdit,
-                  onChanged: (updated) => setState(() => _selectedCodes = updated),
+                  onChanged: (updated) =>
+                      setState(() => _selectedCodes = updated),
                 );
               }),
 
@@ -295,7 +335,8 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFF5722).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFFF5722).withValues(alpha: 0.3)),
+                  border: Border.all(
+                      color: const Color(0xFFFF5722).withValues(alpha: 0.3)),
                 ),
                 child: Text(_error!,
                     style: GoogleFonts.outfit(
@@ -310,7 +351,8 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  border:
+                      Border.all(color: Colors.amber.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -320,7 +362,8 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
                     Expanded(
                       child: Text(
                         'System roles cannot be edited. Duplicate it to create a custom version.',
-                        style: GoogleFonts.outfit(color: Colors.amber, fontSize: 12),
+                        style: GoogleFonts.outfit(
+                            color: Colors.amber, fontSize: 12),
                       ),
                     ),
                   ],
@@ -380,6 +423,7 @@ class _RoleEditorPageState extends State<RoleEditorPage> {
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: Color(0xFFFF5722)),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       );
 }

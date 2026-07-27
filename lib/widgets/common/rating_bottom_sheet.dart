@@ -77,7 +77,9 @@ class _RatingBottomSheetState extends State<RatingBottomSheet> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: Icon(
-                    index < _rating ? Icons.star_rounded : Icons.star_border_rounded,
+                    index < _rating
+                        ? Icons.star_rounded
+                        : Icons.star_border_rounded,
                     color: index < _rating ? Colors.amber : Colors.grey[300],
                     size: 48,
                   ),

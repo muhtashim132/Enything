@@ -42,18 +42,20 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
         _deliveredOrders = res['delivered_orders'] as int;
         _cancelledOrders = res['cancelled_orders'] as int;
         _avgOrderValue = (res['avg_order_value'] as num).toDouble();
-        
+
         final obStatus = res['orders_by_status'] as Map<String, dynamic>;
         _ordersByStatus = obStatus.map((k, v) => MapEntry(k, v as int));
 
         final hDist = res['hourly_distribution'] as Map<String, dynamic>;
         _hourlySpots = List.generate(24, (h) {
-          return FlSpot(h.toDouble(), (hDist[h.toString()] as num?)?.toDouble() ?? 0.0);
+          return FlSpot(
+              h.toDouble(), (hDist[h.toString()] as num?)?.toDouble() ?? 0.0);
         });
 
         // Peak hour
         if (hDist.isNotEmpty) {
-          final peak = hDist.entries.reduce((a, b) => (a.value as num) > (b.value as num) ? a : b);
+          final peak = hDist.entries
+              .reduce((a, b) => (a.value as num) > (b.value as num) ? a : b);
           final h = int.parse(peak.key);
           final suffix = h >= 12 ? 'PM' : 'AM';
           final display = h == 0 ? 12 : (h > 12 ? h - 12 : h);
@@ -63,12 +65,14 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
         }
 
         final tSellers = res['top_sellers'] as List;
-        _topSellers = List<Map<String, dynamic>>.from(tSellers).take(10).toList();
+        _topSellers =
+            List<Map<String, dynamic>>.from(tSellers).take(10).toList();
 
         final tRiders = res['top_riders'] as List;
         _topRiders = List<Map<String, dynamic>>.from(tRiders).take(10).toList();
 
-        _churnRisk = _totalOrders > 0 ? (_cancelledOrders / _totalOrders) * 100 : 0;
+        _churnRisk =
+            _totalOrders > 0 ? (_cancelledOrders / _totalOrders) * 100 : 0;
         _newUsersToday = res['new_users_today'] as int;
       }
     } catch (e) {
@@ -114,7 +118,10 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
                 icon: Icons.cancel_outlined,
                 gradient: AdminGradients.danger,
                 loading: _loading,
-              ).animate().fadeIn(delay: 100.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 100.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Delivery Rate',
                 value: _totalOrders > 0
@@ -124,23 +131,30 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
                 icon: Icons.check_circle_rounded,
                 gradient: AdminGradients.success,
                 loading: _loading,
-              ).animate().fadeIn(delay: 150.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 150.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Avg Order Value',
-                value: _loading
-                    ? '—'
-                    : '₹${_avgOrderValue.toStringAsFixed(0)}',
+                value: _loading ? '—' : '₹${_avgOrderValue.toStringAsFixed(0)}',
                 icon: Icons.bar_chart_rounded,
                 gradient: AdminGradients.info,
                 loading: _loading,
-              ).animate().fadeIn(delay: 200.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 200.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'New Users Today',
                 value: _loading ? '—' : _newUsersToday.toString(),
                 icon: Icons.person_add_rounded,
                 gradient: AdminGradients.warning,
                 loading: _loading,
-              ).animate().fadeIn(delay: 250.ms).scale(begin: const Offset(0.95, 0.95)),
+              )
+                  .animate()
+                  .fadeIn(delay: 250.ms)
+                  .scale(begin: const Offset(0.95, 0.95)),
             ],
           ),
 
@@ -168,9 +182,8 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
                 : Column(
                     children: _ordersByStatus.entries.map((e) {
                       final (color, label) = _statusStyle(e.key);
-                      final pct = _totalOrders > 0
-                          ? e.value / _totalOrders
-                          : 0.0;
+                      final pct =
+                          _totalOrders > 0 ? e.value / _totalOrders : 0.0;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Column(
@@ -179,7 +192,8 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
                             Row(children: [
                               AdminBadge(label: label, color: color),
                               const Spacer(),
-                              Text('${e.value}  (${(pct * 100).toStringAsFixed(1)}%)',
+                              Text(
+                                  '${e.value}  (${(pct * 100).toStringAsFixed(1)}%)',
                                   style: AdminStyles.caption()),
                             ]),
                             const SizedBox(height: 6),
@@ -302,7 +316,8 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
       barTouchData: BarTouchData(enabled: true),
       titlesData: FlTitlesData(
         leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
@@ -336,18 +351,21 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
       gridData: const FlGridData(show: false),
       borderData: FlBorderData(show: false),
       barGroups: _hourlySpots.map((s) {
-        final isPeak = s.y == _hourlySpots.fold<double>(0, (m, sp) => sp.y > m ? sp.y : m);
+        final isPeak =
+            s.y == _hourlySpots.fold<double>(0, (m, sp) => sp.y > m ? sp.y : m);
         return BarChartGroupData(
           x: s.x.toInt(),
           barRods: [
             BarChartRodData(
               toY: s.y,
-              gradient: isPeak ? AdminGradients.primary : LinearGradient(
-                colors: [
-                  AdminColors.primary.withValues(alpha: 0.4),
-                  AdminColors.primaryEnd.withValues(alpha: 0.4),
-                ],
-              ),
+              gradient: isPeak
+                  ? AdminGradients.primary
+                  : LinearGradient(
+                      colors: [
+                        AdminColors.primary.withValues(alpha: 0.4),
+                        AdminColors.primaryEnd.withValues(alpha: 0.4),
+                      ],
+                    ),
               width: 8,
               borderRadius: BorderRadius.circular(4),
             ),
@@ -378,14 +396,16 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
           icon: Icons.security_rounded,
           color: AdminColors.danger,
           title: 'Fraud Detection',
-          body: 'Connect Razorpay Fraud Shield for real-time payment anomaly detection. '
+          body:
+              'Connect Razorpay Fraud Shield for real-time payment anomaly detection. '
               'Currently running in manual review mode.',
         ),
         const _AiCard(
           icon: Icons.rocket_launch_rounded,
           color: AdminColors.success,
           title: 'Recommended Promotion',
-          body: 'Launch a "Free Delivery Weekend" campaign targeting inactive users '
+          body:
+              'Launch a "Free Delivery Weekend" campaign targeting inactive users '
               'from the last 14 days to re-engage churned customers.',
         ),
       ];
@@ -437,10 +457,11 @@ class _AiInsightBanner extends StatelessWidget {
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('AI Insights Active',
-                style: AdminStyles.body(
-                    size: 13, color: AdminColors.textPrimary)),
+                style:
+                    AdminStyles.body(size: 13, color: AdminColors.textPrimary)),
             const SizedBox(height: 3),
             Text(
               loading
@@ -475,7 +496,8 @@ class _AiCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: AdminDecorations.glassCard(borderColor: color.withValues(alpha: 0.25)),
+      decoration: AdminDecorations.glassCard(
+          borderColor: color.withValues(alpha: 0.25)),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
           padding: const EdgeInsets.all(8),
@@ -487,7 +509,8 @@ class _AiCard extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: AdminStyles.body(size: 13)),
             const SizedBox(height: 4),
             Text(body,
@@ -507,19 +530,22 @@ class _StatusSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: List.generate(3, (i) => const Padding(
-        padding: EdgeInsets.only(bottom: 14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            SkeletonBox(width: 80, height: 20, radius: 20),
-            Spacer(),
-            SkeletonBox(width: 50, height: 13),
-          ]),
-          SizedBox(height: 8),
-          SkeletonBox(width: double.infinity, height: 6, radius: 4),
-        ]),
-      )).toList(),
+      children: List.generate(
+          3,
+          (i) => const Padding(
+                padding: EdgeInsets.only(bottom: 14),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        SkeletonBox(width: 80, height: 20, radius: 20),
+                        Spacer(),
+                        SkeletonBox(width: 50, height: 13),
+                      ]),
+                      SizedBox(height: 8),
+                      SkeletonBox(width: double.infinity, height: 6, radius: 4),
+                    ]),
+              )).toList(),
     );
   }
 }
-

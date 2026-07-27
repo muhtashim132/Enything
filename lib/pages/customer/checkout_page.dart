@@ -29,7 +29,8 @@ class CheckoutPage extends StatefulWidget {
   final String? existingCartGroupId;
   final String? orderIdToCancelOnSuccess;
 
-  const CheckoutPage({super.key, this.existingCartGroupId, this.orderIdToCancelOnSuccess});
+  const CheckoutPage(
+      {super.key, this.existingCartGroupId, this.orderIdToCancelOnSuccess});
 
   @override
   State<CheckoutPage> createState() => _CheckoutPageState();
@@ -59,7 +60,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Phase 25 Fix: Deep join with shops to verify shop is still active, and fetch variants/price to check spoofing.
       final latestProducts = await Supabase.instance.client
           .from('products')
-          .select('id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
+          .select(
+              'id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
           .inFilter('id', productIds);
 
       final issues = <String>[];
@@ -67,22 +69,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Aggregated Inventory Guard to prevent Quantity Accumulation Bypass
       final Map<String, int> productQtyMap = {};
       for (var item in cart.items) {
-         productQtyMap[item.product.id] = (productQtyMap[item.product.id] ?? 0) + item.quantity;
+        productQtyMap[item.product.id] =
+            (productQtyMap[item.product.id] ?? 0) + item.quantity;
       }
 
       for (var cartItem in cart.items) {
         final dbProduct = latestProducts
             .where((p) => p['id'] == cartItem.product.id)
             .firstOrNull;
-            
+
         if (dbProduct == null) {
           issues.add("${cartItem.product.name} is no longer available.");
           continue;
         }
-        
+
         // 1. Ghost Kitchens II (Banned Shop Checkout) Guard
-        if (dbProduct['shops'] != null && dbProduct['shops']['is_active'] == false) {
-          issues.add("${dbProduct['shops']['name']} is currently not accepting orders.");
+        if (dbProduct['shops'] != null &&
+            dbProduct['shops']['is_active'] == false) {
+          issues.add(
+              "${dbProduct['shops']['name']} is currently not accepting orders.");
           continue;
         }
 
@@ -91,18 +96,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
           issues.add("${cartItem.product.name} is currently out of stock.");
           continue;
         }
-        
+
         // 3. Stock Quantity Guard
-        final totalRequestedQty = productQtyMap[cartItem.product.id] ?? cartItem.quantity;
+        final totalRequestedQty =
+            productQtyMap[cartItem.product.id] ?? cartItem.quantity;
         if (dbProduct['total_quantity'] != null &&
             dbProduct['total_quantity'] < totalRequestedQty) {
-          issues.add("Only ${dbProduct['total_quantity']} total units of ${cartItem.product.name} are available, but you have $totalRequestedQty in your cart.");
+          issues.add(
+              "Only ${dbProduct['total_quantity']} total units of ${cartItem.product.name} are available, but you have $totalRequestedQty in your cart.");
           continue;
         }
-        
+
         // 4. Cart Price Spoofing Guard
         double freshPrice = (dbProduct['price'] ?? 0.0).toDouble();
-        
+
         if (cartItem.selectedVariant != null) {
           bool variantFound = false;
           if (dbProduct['variants'] != null) {
@@ -111,7 +118,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               if (v['name'] == cartItem.selectedVariant!.name) {
                 freshPrice = (v['price'] ?? 0.0).toDouble();
                 if (v['is_available'] == false) {
-                  issues.add("Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is out of stock.");
+                  issues.add(
+                      "Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is out of stock.");
                 }
                 variantFound = true;
                 break;
@@ -119,14 +127,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
             }
           }
           if (!variantFound) {
-             issues.add("Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is no longer available.");
-             continue;
+            issues.add(
+                "Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is no longer available.");
+            continue;
           }
         }
-        
-        double cartPrice = cartItem.selectedVariant?.price ?? cartItem.product.price;
+
+        double cartPrice =
+            cartItem.selectedVariant?.price ?? cartItem.product.price;
         if ((freshPrice - cartPrice).abs() > 0.01) {
-           issues.add("Price changed for ${cartItem.product.name} (from ₹${cartPrice.toStringAsFixed(0)} to ₹${freshPrice.toStringAsFixed(0)}).");
+          issues.add(
+              "Price changed for ${cartItem.product.name} (from ₹${cartPrice.toStringAsFixed(0)} to ₹${freshPrice.toStringAsFixed(0)}).");
         }
       }
 
@@ -263,7 +274,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       _isProcessing.value = false;
@@ -351,7 +363,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final location = context.read<LocationProvider>();
     // Capture coupon ID & discount before any await to avoid BuildContext-across-async-gaps warning
     final couponProv = context.read<CouponProvider>();
-    
+
     // O1 FIX: Coupon State Desync Guard
     // If the cart was modified after the coupon was applied (e.g., items removed),
     // the static discount amount in CouponProvider becomes stale. We must dynamically
@@ -360,14 +372,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (couponProv.hasCoupon && couponProv.appliedCoupon != null) {
       final code = couponProv.appliedCoupon!.code;
       final stillValid = await couponProv.validateAndApply(
-         code: code,
-         cartTotal: cart.subtotal,
+        code: code,
+        cartTotal: cart.subtotal,
       );
       if (!stillValid) {
-         throw Exception("Your cart total has changed and the coupon '$code' is no longer valid or its discount amount has been adjusted. Please review your cart and try again.");
+        throw Exception(
+            "Your cart total has changed and the coupon '$code' is no longer valid or its discount amount has been adjusted. Please review your cart and try again.");
       }
     }
-    
+
     // Capture coupon ID & discount after re-validation
     final appliedCouponId = couponProv.appliedCoupon?.id;
     final appliedCouponDiscount = couponProv.discountAmount;
@@ -380,7 +393,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // 0. Self-Dealing Guard (Anti-Sybil / Fraud Prevention)
       for (final shop in cart.shops) {
         if (shop.sellerId == auth.currentUserId) {
-          throw Exception("Self-Dealing Blocked: You cannot place orders on your own shop (${shop.name}).");
+          throw Exception(
+              "Self-Dealing Blocked: You cannot place orders on your own shop (${shop.name}).");
         }
       }
 
@@ -389,44 +403,51 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Phase 25 Fix: Deep join with shops to verify shop is still active, and fetch variants/price to check spoofing.
       final latestProducts = await supabase
           .from('products')
-          .select('id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
+          .select(
+              'id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
           .inFilter('id', productIds);
 
       // Aggregated Inventory Guard to prevent Quantity Accumulation Bypass
       final Map<String, int> productQtyMap = {};
       for (var item in cart.items) {
-         productQtyMap[item.product.id] = (productQtyMap[item.product.id] ?? 0) + item.quantity;
+        productQtyMap[item.product.id] =
+            (productQtyMap[item.product.id] ?? 0) + item.quantity;
       }
 
       for (var cartItem in cart.items) {
         final dbProduct = latestProducts
             .where((p) => p['id'] == cartItem.product.id)
             .firstOrNull;
-            
+
         if (dbProduct == null) {
           throw Exception("${cartItem.product.name} is no longer available.");
         }
-        
+
         // 1. Ghost Kitchens II (Banned Shop Checkout) Guard
-        if (dbProduct['shops'] != null && dbProduct['shops']['is_active'] == false) {
-          throw Exception("${dbProduct['shops']['name']} is currently not accepting orders.");
+        if (dbProduct['shops'] != null &&
+            dbProduct['shops']['is_active'] == false) {
+          throw Exception(
+              "${dbProduct['shops']['name']} is currently not accepting orders.");
         }
 
         // 2. Availability Guard
         if (dbProduct['is_available'] == false) {
-          throw Exception("${cartItem.product.name} is currently out of stock.");
+          throw Exception(
+              "${cartItem.product.name} is currently out of stock.");
         }
-        
+
         // 3. Stock Quantity Guard
-        final totalRequestedQty = productQtyMap[cartItem.product.id] ?? cartItem.quantity;
+        final totalRequestedQty =
+            productQtyMap[cartItem.product.id] ?? cartItem.quantity;
         if (dbProduct['total_quantity'] != null &&
             dbProduct['total_quantity'] < totalRequestedQty) {
-          throw Exception("Only ${dbProduct['total_quantity']} total units of ${cartItem.product.name} are available, but you have $totalRequestedQty in your cart.");
+          throw Exception(
+              "Only ${dbProduct['total_quantity']} total units of ${cartItem.product.name} are available, but you have $totalRequestedQty in your cart.");
         }
-        
+
         // 4. Cart Price Spoofing Guard
         double freshPrice = (dbProduct['price'] ?? 0.0).toDouble();
-        
+
         if (cartItem.selectedVariant != null) {
           bool variantFound = false;
           if (dbProduct['variants'] != null) {
@@ -435,7 +456,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               if (v['name'] == cartItem.selectedVariant!.name) {
                 freshPrice = (v['price'] ?? 0.0).toDouble();
                 if (v['is_available'] == false) {
-                  throw Exception("Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is out of stock.");
+                  throw Exception(
+                      "Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is out of stock.");
                 }
                 variantFound = true;
                 break;
@@ -443,13 +465,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
             }
           }
           if (!variantFound) {
-             throw Exception("Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is no longer available.");
+            throw Exception(
+                "Variant ${cartItem.selectedVariant!.name} for ${cartItem.product.name} is no longer available.");
           }
         }
-        
-        double cartPrice = cartItem.selectedVariant?.price ?? cartItem.product.price;
+
+        double cartPrice =
+            cartItem.selectedVariant?.price ?? cartItem.product.price;
         if ((freshPrice - cartPrice).abs() > 0.01) {
-           throw Exception("The price of ${cartItem.product.name} has changed from ₹${cartPrice.toStringAsFixed(0)} to ₹${freshPrice.toStringAsFixed(0)}. Please review your cart.");
+          throw Exception(
+              "The price of ${cartItem.product.name} has changed from ₹${cartPrice.toStringAsFixed(0)} to ₹${freshPrice.toStringAsFixed(0)}. Please review your cart.");
         }
       }
 
@@ -590,7 +615,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         // Splitting by distance prevents the "Ghost Rider Scam"
         final shopDelivery = totalDelivery * distanceProportion;
         final shopRiderEarnings = riderEarnings * distanceProportion;
-        
+
         // Platform fee is still split by food value
         final shopPlatformFee = cart.platformFee * proportion;
 
@@ -688,14 +713,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'non_food_gst_amount': shopNonFoodGst,
           'tcs_amount': shopTcs,
           'tds_amount': shopTds,
-          'grand_total_collected':
-              math.max(0.0, shopGrandTotal - (appliedCouponDiscount * proportion)),
+          'grand_total_collected': math.max(
+              0.0, shopGrandTotal - (appliedCouponDiscount * proportion)),
           'gst_rate_snapshot': rateSnapshot,
           'prescription_urls': uploadedPrescriptionUrls,
           'estimated_distance_km': shopDistanceKm,
           'shop_prep_time_snapshot': shop.prepTimeMinutes,
           'coupon_id': appliedCouponId,
-          'coupon_discount': math.min(shopGrandTotal, appliedCouponDiscount * proportion),
+          'coupon_discount':
+              math.min(shopGrandTotal, appliedCouponDiscount * proportion),
         });
 
         final itemsToInsert = shopItems.map((item) {
@@ -748,7 +774,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           }
         }
       }
-      
+
       // 100x Edge Case: Cancel old order logic has been moved INTO place_orders_transaction above for 100% atomicity.
 
       // Cleanup
@@ -787,7 +813,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.watch<CartProvider>();
     final location = context.watch<LocationProvider>();
     final couponProv = context.watch<CouponProvider>();
-
 
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
@@ -1280,7 +1305,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           'Multi-shop fee (${cart.shops.length} shops)',
                           '+₹${surcharge.toStringAsFixed(0)}',
                           valueColor: Colors.orange.shade700,
-                          hint: '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10).toInt()}/km between shops',
+                          hint:
+                              '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10).toInt()}/km between shops',
                         ),
                       ],
                       const SizedBox(height: 8),
@@ -1473,8 +1499,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
-                    color:
-                        isBold ? AppColors.textPrimary : AppColors.textSecondary,
+                    color: isBold
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
                     fontSize: isBold ? 15 : 13,
                     fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
                   )),

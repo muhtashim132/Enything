@@ -86,7 +86,7 @@ void main() {
       totalOrders: 500,
       bannerImage: null,
     );
-    
+
     final testShop2 = ShopModel(
       id: 's2',
       sellerId: 'sel2',
@@ -160,10 +160,11 @@ void main() {
       expect(cartProvider.isMultiShopOrder, true);
       expect(cartProvider.shops.length, 2);
     });
-    
+
     test('Can load cart from shared preferences', () async {
       SharedPreferences.setMockInitialValues({
-        'enything_cart_v2': '[{"product":{"id":"p1","shop_id":"s1","name":"Test Product","category":"Food","sub_category":"Snacks","brand":"TestBrand","price":100.0,"original_price":120.0,"total_quantity":50,"weight_per_unit":0.5,"unit_type":"kg","description":"A test product","images":["image1.jpg"],"is_veg":true,"menu_category":"Snacks","prep_time_minutes":10,"special_tags":[],"is_available":true,"rating":4.5,"requires_prescription":false,"medicine_type":"","gst_rate_override":null},"shop":{"id":"s1","seller_id":"sel1","name":"Test Shop","shop_type":"restaurant","cuisine_type":"Indian","fssai_number":"12345678901234","prep_time_minutes":20,"is_veg_only":false,"opening_hours":"{}","address":"123 Test St","_lat":10.0,"_lng":20.0,"category":"Food","categories":["Food"],"is_active":true,"rating":4.5,"total_reviews":100,"total_orders":500,"banner_image":null},"quantity":2}]'
+        'enything_cart_v2':
+            '[{"product":{"id":"p1","shop_id":"s1","name":"Test Product","category":"Food","sub_category":"Snacks","brand":"TestBrand","price":100.0,"original_price":120.0,"total_quantity":50,"weight_per_unit":0.5,"unit_type":"kg","description":"A test product","images":["image1.jpg"],"is_veg":true,"menu_category":"Snacks","prep_time_minutes":10,"special_tags":[],"is_available":true,"rating":4.5,"requires_prescription":false,"medicine_type":"","gst_rate_override":null},"shop":{"id":"s1","seller_id":"sel1","name":"Test Shop","shop_type":"restaurant","cuisine_type":"Indian","fssai_number":"12345678901234","prep_time_minutes":20,"is_veg_only":false,"opening_hours":"{}","address":"123 Test St","_lat":10.0,"_lng":20.0,"category":"Food","categories":["Food"],"is_active":true,"rating":4.5,"total_reviews":100,"total_orders":500,"banner_image":null},"quantity":2}]'
       });
       await cartProvider.loadCart();
       expect(cartProvider.isEmpty, false);

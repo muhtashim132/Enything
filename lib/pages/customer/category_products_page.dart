@@ -30,14 +30,44 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   List<ProductModel> _products = [];
   Map<String, ShopModel> _productShops = {};
   int _displayLimit = 20;
-  
+
   static const Map<String, List<String>> _tabCategories = {
-    'Food': ['Restaurant', 'Fast Food', 'Bakery', 'Sweets & Mithai', 'Tea & Coffee', 'Ice Cream', 'Paan Shop', 'Beverages'],
-    'Grocery': ['Grocery', 'Supermarket / Hypermarket', 'Fruits & Vegs', 'Dairy & Eggs', 'Butcher', 'Fish & Seafood', 'Organic'],
+    'Food': [
+      'Restaurant',
+      'Fast Food',
+      'Bakery',
+      'Sweets & Mithai',
+      'Tea & Coffee',
+      'Ice Cream',
+      'Paan Shop',
+      'Beverages'
+    ],
+    'Grocery': [
+      'Grocery',
+      'Supermarket / Hypermarket',
+      'Fruits & Vegs',
+      'Dairy & Eggs',
+      'Butcher',
+      'Fish & Seafood',
+      'Organic'
+    ],
     'Pharmacy': ['Pharmacy', 'Medical Store'],
     'Clothing': ['Clothing', 'Footwear', 'Jewellery'],
     'Electronics': ['Electronics', 'Mobile & Repair'],
-    'More': ['Hardware Store', 'Stationery', 'Toys & Games', 'Sports', 'Pet Supplies', 'Cosmetics & Beauty', 'Salon & Beauty', 'Flowers', 'Home Decor', 'Furniture', 'Auto Parts', 'Other'],
+    'More': [
+      'Hardware Store',
+      'Stationery',
+      'Toys & Games',
+      'Sports',
+      'Pet Supplies',
+      'Cosmetics & Beauty',
+      'Salon & Beauty',
+      'Flowers',
+      'Home Decor',
+      'Furniture',
+      'Auto Parts',
+      'Other'
+    ],
   };
 
   @override
@@ -59,10 +89,12 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
       final lat = locationProvider.currentLocation?.latitude;
       final lng = locationProvider.currentLocation?.longitude;
 
-      final subcategories = _tabCategories[widget.categoryName] ?? [widget.categoryName];
+      final subcategories =
+          _tabCategories[widget.categoryName] ?? [widget.categoryName];
 
       if (lat != null && lng != null) {
-        final productsResponse = await _supabase.rpc('search_products_geospatial', params: {
+        final productsResponse =
+            await _supabase.rpc('search_products_geospatial', params: {
           'p_lat': lat,
           'p_lng': lng,
           'p_query': null,
@@ -96,10 +128,10 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           final sB = prodShops[b.id];
           final availA = a.isAvailable && (sA?.isOpenRightNow ?? true);
           final availB = b.isAvailable && (sB?.isOpenRightNow ?? true);
-          
+
           if (availA && !availB) return -1;
           if (!availA && availB) return 1;
-          
+
           return b.rating.compareTo(a.rating);
         });
 
@@ -129,9 +161,11 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   }
 
   Widget _buildShimmer(bool isDark) {
-    final shimmerBase = isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF0F0F8);
-    final shimmerHigh = isDark ? const Color(0xFF2A2A3E) : const Color(0xFFE0E0E8);
-    
+    final shimmerBase =
+        isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF0F0F8);
+    final shimmerHigh =
+        isDark ? const Color(0xFF2A2A3E) : const Color(0xFFE0E0E8);
+
     return Shimmer.fromColors(
       baseColor: shimmerBase,
       highlightColor: shimmerHigh,
@@ -173,7 +207,8 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : AppColors.textPrimary),
+        iconTheme:
+            IconThemeData(color: isDark ? Colors.white : AppColors.textPrimary),
       ),
       body: _isLoading
           ? _buildShimmer(isDark)
@@ -182,20 +217,27 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.error_outline_rounded, size: 64, color: AppColors.danger.withValues(alpha: 0.7)),
+                      Icon(Icons.error_outline_rounded,
+                          size: 64,
+                          color: AppColors.danger.withValues(alpha: 0.7)),
                       const SizedBox(height: 16),
                       Text(
                         'Oops! Something went wrong.',
-                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700),
+                        style: GoogleFonts.outfit(
+                            fontSize: 18, fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: _fetchProducts,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: Text('Retry', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+                        child: Text('Retry',
+                            style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
@@ -205,37 +247,49 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.inventory_2_outlined, size: 64, color: isDark ? Colors.white30 : Colors.black26),
+                          Icon(Icons.inventory_2_outlined,
+                              size: 64,
+                              color: isDark ? Colors.white30 : Colors.black26),
                           const SizedBox(height: 16),
                           Text(
                             'No products found',
-                            style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700),
+                            style: GoogleFonts.outfit(
+                                fontSize: 20, fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'We couldn\'t find any products for this category.',
-                            style: GoogleFonts.outfit(color: AppColors.textSecondary),
+                            style: GoogleFonts.outfit(
+                                color: AppColors.textSecondary),
                           ),
                         ],
                       ),
                     )
                   : LayoutBuilder(
                       builder: (context, constraints) {
-                        final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 4, desktop: 5);
+                        final crossAxisCount = Responsive.getGridCrossAxisCount(
+                            context,
+                            mobile: 2,
+                            tablet: 4,
+                            desktop: 5);
                         const crossAxisSpacing = 16.0;
                         final availableWidth = constraints.maxWidth;
-                        final itemWidth = (availableWidth - (crossAxisSpacing * (crossAxisCount + 1))) / crossAxisCount;
+                        final itemWidth = (availableWidth -
+                                (crossAxisSpacing * (crossAxisCount + 1))) /
+                            crossAxisCount;
                         final itemHeight = itemWidth + 178;
                         final childAspectRatio = itemWidth / itemHeight;
 
-                        final displayProducts = _products.take(_displayLimit).toList();
+                        final displayProducts =
+                            _products.take(_displayLimit).toList();
 
                         return CustomScrollView(
                           slivers: [
                             SliverPadding(
                               padding: const EdgeInsets.all(16),
                               sliver: SliverGrid.builder(
-                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: crossAxisCount,
                                   childAspectRatio: childAspectRatio,
                                   mainAxisSpacing: 16,
@@ -245,23 +299,31 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                 itemBuilder: (context, index) {
                                   final product = displayProducts[index];
                                   final shop = _productShops[product.id];
-                                  return ProductCard(product: product, shop: shop);
+                                  return ProductCard(
+                                      product: product, shop: shop);
                                 },
                               ),
                             ),
                             if (_products.length > _displayLimit)
                               SliverToBoxAdapter(
                                 child: Padding(
-                                  padding: const EdgeInsets.only(top: 8, bottom: 24),
+                                  padding:
+                                      const EdgeInsets.only(top: 8, bottom: 24),
                                   child: Center(
                                     child: TextButton(
-                                      onPressed: () => setState(() => _displayLimit += 20),
+                                      onPressed: () =>
+                                          setState(() => _displayLimit += 20),
                                       style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                        backgroundColor: isDark 
-                                            ? Colors.white.withValues(alpha: 0.05) 
-                                            : AppColors.primary.withValues(alpha: 0.05),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 24, vertical: 12),
+                                        backgroundColor: isDark
+                                            ? Colors.white
+                                                .withValues(alpha: 0.05)
+                                            : AppColors.primary
+                                                .withValues(alpha: 0.05),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(20)),
                                       ),
                                       child: Text(
                                         'Load more products',

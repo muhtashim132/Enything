@@ -38,11 +38,14 @@ class NotificationService {
               Future.microtask(() {
                 navigatorKey.currentState?.pushNamed(AppRoutes.sellerOrders);
               });
-            } else if (role == 'rider' || role == 'delivery' || action == 'new_order') {
+            } else if (role == 'rider' ||
+                role == 'delivery' ||
+                action == 'new_order') {
               // Rider tap: go to delivery dashboard.
               navigatorKey.currentState?.pushNamedAndRemoveUntil(
                   AppRoutes.deliveryDashboard, (route) => false);
-            } else if (role == 'customer' || (role == null && orderId != null)) {
+            } else if (role == 'customer' ||
+                (role == null && orderId != null)) {
               // Customer tap: establish customerHome as base, then push
               // trackOrder on top so the back button works correctly.
               if (orderId != null) {
@@ -70,12 +73,12 @@ class NotificationService {
     // CRITICAL: Create the notification channel that FCM uses when app is killed.
     // Must match the channel ID in AndroidManifest.xml and in the Edge Function.
     // Without this channel created with HIGH importance, Android shows notifications silently.
-    final androidPlugin = _flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
+    final androidPlugin =
+        _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'enything_push_channel',         // must match AndroidManifest.xml
+        'enything_push_channel', // must match AndroidManifest.xml
         'Enything Notifications',
         description: 'Push notifications for orders and updates',
         importance: Importance.max,
@@ -94,7 +97,8 @@ class NotificationService {
       const AndroidNotificationChannel(
         'order_alert_loop_channel',
         'Order Alert Bell',
-        description: 'Custom bell sound for order notifications (Enything Bell)',
+        description:
+            'Custom bell sound for order notifications (Enything Bell)',
         importance: Importance.max,
         playSound: true,
         sound: RawResourceAndroidNotificationSound('enything_bell'),
@@ -116,7 +120,6 @@ class NotificationService {
       ),
     );
   }
-
 
   Future<void> showOrderProgressNotification({
     required String title,
@@ -161,7 +164,8 @@ class NotificationService {
     const androidDetails = AndroidNotificationDetails(
       'order_alert_loop_channel',
       'Order Alert Bell',
-      channelDescription: 'Custom bell sound for order notifications (Enything Bell)',
+      channelDescription:
+          'Custom bell sound for order notifications (Enything Bell)',
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,

@@ -168,7 +168,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       final shopsList = shopsRaw as List;
       if (shopsList.isEmpty) {
         _supabase.from('app_logs').insert({
-          'message': 'Seller order load: shopsList is empty for user ${auth.currentUserId}'
+          'message':
+              'Seller order load: shopsList is empty for user ${auth.currentUserId}'
         }).catchError((_) => null);
         if (mounted) setState(() => _isLoading = false);
         return;
@@ -205,12 +206,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       }
     } catch (e, stacktrace) {
       debugPrint('Seller _loadOrders error: $e');
-      _supabase
-          .from('app_logs')
-          .insert({'message': 'Seller order load error: $e\n$stacktrace'})
-          .catchError((_) => null);
+      _supabase.from('app_logs').insert({
+        'message': 'Seller order load error: $e\n$stacktrace'
+      }).catchError((_) => null);
       if (mounted) {
-        _showSnack('Failed to load orders. Pull down to refresh.', isError: true);
+        _showSnack('Failed to load orders. Pull down to refresh.',
+            isError: true);
         setState(() => _isLoading = false);
       }
     } finally {
@@ -243,7 +244,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       }
 
       // Update DB and capture boolean return value to prevent TOCTOU races
-      final result = await _supabase.rpc('accept_order_seller', params: {'p_order_id': order.id});
+      final result = await _supabase
+          .rpc('accept_order_seller', params: {'p_order_id': order.id});
       final riderAlreadyAccepted = result == true;
 
       if (mounted) {
@@ -458,12 +460,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           .eq('id', order.id)
           .maybeSingle();
       final currentStatus = latestStatus?['status'] as String?;
-      const rejectableStatuses = ['awaiting_acceptance', 'awaiting_payment', 'pending', 'confirmed', 'preparing'];
+      const rejectableStatuses = [
+        'awaiting_acceptance',
+        'awaiting_payment',
+        'pending',
+        'confirmed',
+        'preparing'
+      ];
       if (currentStatus != null &&
           !rejectableStatuses.contains(currentStatus)) {
         if (mounted) {
-          _showSnack(
-              'Cannot decline at this stage. Contact support.',
+          _showSnack('Cannot decline at this stage. Contact support.',
               isError: true);
         }
         return;
@@ -486,7 +493,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           data: {'order_id': order.id, 'role': 'customer'},
         );
       }
-      
+
       if (mounted && order.deliveryPartnerId != null) {
         context.read<NotificationProvider>().sendBackgroundPush(
           targetUserId: order.deliveryPartnerId!,
@@ -1084,9 +1091,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                     color: AppColors.primary,
                                   ),
                                   children: [
-                                    TextSpan(text: 'Rider delivers in ~${DeliveryCalculator.etaLabel(order.estimatedDistanceKm, 0)} '),
                                     TextSpan(
-                                      text: 'by ${DeliveryCalculator.etaArrivalTime(order.estimatedDistanceKm, 0)}',
+                                        text:
+                                            'Rider delivers in ~${DeliveryCalculator.etaLabel(order.estimatedDistanceKm, 0)} '),
+                                    TextSpan(
+                                      text:
+                                          'by ${DeliveryCalculator.etaArrivalTime(order.estimatedDistanceKm, 0)}',
                                       style: GoogleFonts.outfit(
                                         fontSize: 11,
                                         color: AppColors.textSecondary,

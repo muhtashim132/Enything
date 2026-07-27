@@ -269,7 +269,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         final baseCols = ['fssai_number', 'prep_time_minutes', 'is_veg_only'];
         final metadataObj = <String, dynamic>{};
         final rootExtra = <String, dynamic>{};
-        
+
         for (final entry in categoryExtra.entries) {
           if (baseCols.contains(entry.key)) {
             rootExtra[entry.key] = entry.value;

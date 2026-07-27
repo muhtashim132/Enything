@@ -43,7 +43,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   Timer? _debounceTimer;
   bool _isStatsLoadInProgress = false;
   bool _needsReload = false;
-  
+
   void _debouncedLoadStats() {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 300), () {
@@ -92,7 +92,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     final channelName = 'seller-orders-$shopId';
     // Phase 9: Scale to multiple shops without duplicating subscriptions
     if (_realtimeChannels.containsKey(channelName)) return;
-    
+
     final channel = _supabase
         .channel(channelName)
         .onPostgresChanges(
@@ -155,9 +155,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           verificationStatus == 'unverified') {
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(
-              context, AppRoutes.sellerKycUpload, 
-              (_) => false,
-              arguments: {'shop_id': firstShopData['id']},
+            context,
+            AppRoutes.sellerKycUpload,
+            (_) => false,
+            arguments: {'shop_id': firstShopData['id']},
           );
         }
         return;
@@ -177,15 +178,17 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         if (!mounted) return;
 
         // Call RPC for stats
-        final statsResult = await _supabase.rpc('get_seller_daily_stats', params: {'p_shop_id': shopId});
+        final statsResult = await _supabase
+            .rpc('get_seller_daily_stats', params: {'p_shop_id': shopId});
         if (statsResult != null) {
           totalOrders += (statsResult['total_orders'] ?? 0) as int;
           pendingOrders += (statsResult['pending_orders'] ?? 0) as int;
-          todaysEarning += (statsResult['todays_earning'] as num?)?.toDouble() ?? 0.0;
+          todaysEarning +=
+              (statsResult['todays_earning'] as num?)?.toDouble() ?? 0.0;
           products += (statsResult['products'] ?? 0) as int;
         }
       }
-      
+
       if (activeShopIds.isNotEmpty) {
         _startMultiShopNotifications(activeShopIds);
       }
@@ -211,10 +214,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
             'todays_earning': todaysEarning,
             'products': products,
           };
-          
-          _shopIsActive = (firstShopData['is_active'] ?? true) && (firstShopData['is_accepting_orders'] ?? false);
+
+          _shopIsActive = (firstShopData['is_active'] ?? true) &&
+              (firstShopData['is_accepting_orders'] ?? false);
           final rawRating = firstShopData['average_rating'];
-          _shopRating = rawRating != null ? (rawRating as num).toStringAsFixed(1) : '--';
+          _shopRating =
+              rawRating != null ? (rawRating as num).toStringAsFixed(1) : '--';
           _isLoading = false;
         });
         _entryCtrl.forward();
@@ -259,445 +264,478 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     final size = MediaQuery.of(context).size;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) return;
-          if (_scrollController.hasClients && _scrollController.offset > 0) {
-            _scrollController.animateTo(
-              0,
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-            );
-            return;
-          }
-          final now = DateTime.now();
-          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
-            _lastBackPressTime = now;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Press back again to exit'),
-                duration: Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          } else {
-            // ignore: use_build_context_synchronously
-            SystemNavigator.pop();
-          }
-        },
-        child: Scaffold(
-        backgroundColor:
-            isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
-        body: MaxWidthContainer(
-          child: RefreshIndicator(
-            onRefresh: _loadStats,
-            color: const Color(0xFF4C6EF5),
-            child: CustomScrollView(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                // ── Animated Hero Header ──────────────────────────────────────
-                SliverAppBar(
-                  expandedHeight: 230,
-                  pinned: true,
-                  elevation: 0,
-                  backgroundColor: const Color(0xFF0A1260),
-                  surfaceTintColor: Colors.transparent,
-                  leading: const SizedBox.shrink(),
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: AnimatedBuilder(
-                      animation: _bgCtrl,
-                      builder: (_, __) => Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Color.lerp(const Color(0xFF0A1260),
-                                  const Color(0xFF1A2E9E), _bgAnim.value)!,
-                              Color.lerp(const Color(0xFF050A3A),
-                                  const Color(0xFF0D1870), _bgAnim.value)!,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                        child: Stack(
-                          children: [
-                            // Decorative blobs
-                            Positioned(
-                                top: -40,
-                                right: -40,
-                                child: _blob(200, const Color(0xFF4C6EF5),
-                                    0.15 + _bgAnim.value * 0.08)),
-                            Positioned(
-                                bottom: -60,
-                                left: -30,
-                                child: _blob(180, const Color(0xFFF4C542),
-                                    0.10 + (1 - _bgAnim.value) * 0.06)),
-                            // Stars
-                            CustomPaint(
-                                size: Size(size.width, 200),
-                                painter: _StarPainter(_bgCtrl.value)),
-                            // Content
-                            SafeArea(
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(20, 10, 20, 20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Top bar
-                                    Row(
+        value: SystemUiOverlayStyle.light,
+        child: PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop) return;
+            if (_scrollController.hasClients && _scrollController.offset > 0) {
+              _scrollController.animateTo(
+                0,
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutCubic,
+              );
+              return;
+            }
+            final now = DateTime.now();
+            if (_lastBackPressTime == null ||
+                now.difference(_lastBackPressTime!) >
+                    const Duration(seconds: 2)) {
+              _lastBackPressTime = now;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Press back again to exit'),
+                  duration: Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } else {
+              // ignore: use_build_context_synchronously
+              SystemNavigator.pop();
+            }
+          },
+          child: Scaffold(
+            backgroundColor:
+                isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
+            body: MaxWidthContainer(
+              child: RefreshIndicator(
+                onRefresh: _loadStats,
+                color: const Color(0xFF4C6EF5),
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    // ── Animated Hero Header ──────────────────────────────────────
+                    SliverAppBar(
+                      expandedHeight: 230,
+                      pinned: true,
+                      elevation: 0,
+                      backgroundColor: const Color(0xFF0A1260),
+                      surfaceTintColor: Colors.transparent,
+                      leading: const SizedBox.shrink(),
+                      flexibleSpace: FlexibleSpaceBar(
+                        background: AnimatedBuilder(
+                          animation: _bgCtrl,
+                          builder: (_, __) => Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Color.lerp(const Color(0xFF0A1260),
+                                      const Color(0xFF1A2E9E), _bgAnim.value)!,
+                                  Color.lerp(const Color(0xFF050A3A),
+                                      const Color(0xFF0D1870), _bgAnim.value)!,
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Stack(
+                              children: [
+                                // Decorative blobs
+                                Positioned(
+                                    top: -40,
+                                    right: -40,
+                                    child: _blob(200, const Color(0xFF4C6EF5),
+                                        0.15 + _bgAnim.value * 0.08)),
+                                Positioned(
+                                    bottom: -60,
+                                    left: -30,
+                                    child: _blob(180, const Color(0xFFF4C542),
+                                        0.10 + (1 - _bgAnim.value) * 0.06)),
+                                // Stars
+                                CustomPaint(
+                                    size: Size(size.width, 200),
+                                    painter: _StarPainter(_bgCtrl.value)),
+                                // Content
+                                SafeArea(
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        20, 10, 20, 20),
+                                    child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        _avatar(auth.user?.initials ?? 'S'),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
+                                        // Top bar
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            _avatar(auth.user?.initials ?? 'S'),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                              child: Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                        'Hi, ${auth.user?.fullName.split(' ').first ?? 'Seller'}!',
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style:
-                                                            GoogleFonts.outfit(
+                                                  Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Expanded(
+                                                        child: Text(
+                                                            'Hi, ${auth.user?.fullName.split(' ').first ?? 'Seller'}!',
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style: GoogleFonts.outfit(
                                                                 color: Colors
                                                                     .white,
                                                                 fontSize: 20,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w800)),
+                                                      ),
+                                                      _headerIcon(
+                                                          isDark
+                                                              ? Icons
+                                                                  .light_mode_outlined
+                                                              : Icons
+                                                                  .dark_mode_outlined,
+                                                          () => themeProvider
+                                                              .toggleTheme()),
+                                                      const NotificationBell(
+                                                        iconColor:
+                                                            Colors.white70,
+                                                        containerColor:
+                                                            Colors.transparent,
+                                                        badgeColor:
+                                                            Color(0xFFFF6B6B),
+                                                      ),
+                                                      _headerIcon(
+                                                          Icons
+                                                              .settings_outlined,
+                                                          () => Navigator
+                                                              .pushNamed(
+                                                                  context,
+                                                                  AppRoutes
+                                                                      .settings)),
+                                                    ],
                                                   ),
-                                                  _headerIcon(
-                                                      isDark
-                                                          ? Icons
-                                                              .light_mode_outlined
-                                                          : Icons
-                                                              .dark_mode_outlined,
-                                                      () => themeProvider
-                                                          .toggleTheme()),
-                                                  const NotificationBell(
-                                                    iconColor: Colors.white70,
-                                                    containerColor:
-                                                        Colors.transparent,
-                                                    badgeColor:
-                                                        Color(0xFFFF6B6B),
+                                                  const SizedBox(height: 4),
+                                                  Row(
+                                                    children: [
+                                                      _roleBadge(
+                                                          '$_shopEmoji  $_shopBadgeName',
+                                                          const Color(
+                                                              0xFFF4C542)),
+                                                      const SizedBox(width: 8),
+                                                      _statusBadge(
+                                                          _shopIsActive),
+                                                    ],
                                                   ),
-
-                                                  _headerIcon(
-                                                      Icons.settings_outlined,
-                                                      () => Navigator.pushNamed(
-                                                          context,
-                                                          AppRoutes.settings)),
                                                 ],
                                               ),
-                                              const SizedBox(height: 4),
-                                              Row(
-                                                children: [
-                                                  _roleBadge(
-                                                      '$_shopEmoji  $_shopBadgeName',
-                                                      const Color(0xFFF4C542)),
-                                                  const SizedBox(width: 8),
-                                                  _statusBadge(_shopIsActive),
-                                                ],
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        // Revenue hero number
+                                        if (!_isLoading)
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Expanded(
+                                                child: GestureDetector(
+                                                  onTap: () =>
+                                                      Navigator.pushNamed(
+                                                          context,
+                                                          AppRoutes.analytics),
+                                                  child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text("Today's Earning",
+                                                            style: GoogleFonts.outfit(
+                                                                color: Colors
+                                                                    .white
+                                                                    .withValues(
+                                                                        alpha:
+                                                                            0.65),
+                                                                fontSize: 13)),
+                                                        Row(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .baseline,
+                                                          textBaseline:
+                                                              TextBaseline
+                                                                  .alphabetic,
+                                                          children: [
+                                                            Text(
+                                                                '₹${(_stats['todays_earning'] as double?)?.toStringAsFixed(0) ?? '0'}',
+                                                                style: GoogleFonts.outfit(
+                                                                    color: Colors
+                                                                        .white,
+                                                                    fontSize:
+                                                                        36,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w900,
+                                                                    letterSpacing:
+                                                                        -1)),
+                                                          ],
+                                                        ),
+                                                      ]),
+                                                ),
                                               ),
                                             ],
                                           ),
-                                        ),
                                       ],
                                     ),
-                                    const SizedBox(height: 12),
-                                    // Revenue hero number
-                                    if (!_isLoading)
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          Expanded(
-                                            child: GestureDetector(
-                                              onTap: () => Navigator.pushNamed(
-                                                  context, AppRoutes.analytics),
-                                              child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text("Today's Earning",
-                                                        style: GoogleFonts.outfit(
-                                                            color: Colors.white
-                                                                .withValues(
-                                                                    alpha:
-                                                                        0.65),
-                                                            fontSize: 13)),
-                                                    Row(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .baseline,
-                                                      textBaseline: TextBaseline
-                                                          .alphabetic,
-                                                      children: [
-                                                        Text(
-                                                            '₹${(_stats['todays_earning'] as double?)?.toStringAsFixed(0) ?? '0'}',
-                                                            style: GoogleFonts.outfit(
-                                                                color: Colors
-                                                                    .white,
-                                                                fontSize: 36,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w900,
-                                                                letterSpacing:
-                                                                    -1)),
-                                                      ],
-                                                    ),
-                                                  ]),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                  ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // ── Stat Cards ────────────────────────────────────────────────
-                SliverToBoxAdapter(
-                  child: FadeTransition(
-                    opacity: _fadeAnim,
-                    child: SlideTransition(
-                      position: _slideAnim,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                        child: _isLoading
-                            ? _buildShimmer()
-                            : LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final isWide = constraints.maxWidth > 500;
-                                  if (isWide) {
-                                    return Row(
-                                      children: [
-                                        Expanded(
-                                            child: _statCard(
-                                                'Rating',
-                                                '⭐ $_shopRating',
-                                                Icons.star_rounded,
-                                                const Color(0xFF51CF66),
-                                                const Color(0xFF2F9E44))),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                            child: _statCard(
-                                                'Pending',
-                                                '${_stats['pending_orders']}',
-                                                Icons.pending_actions_rounded,
-                                                const Color(0xFFFF8C42),
-                                                const Color(0xFFE8590C),
-                                                onTap: () =>
-                                                    Navigator.pushNamed(
-                                                        context,
-                                                        AppRoutes
-                                                            .sellerOrders))),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                            child: _statCard(
-                                                'Orders',
-                                                '${_stats['total_orders']}',
-                                                Icons.receipt_long_rounded,
-                                                const Color(0xFF4C6EF5),
-                                                const Color(0xFF364FC7),
-                                                onTap: () =>
-                                                    Navigator.pushNamed(
-                                                        context,
-                                                        AppRoutes
-                                                            .sellerOrders))),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                            child: _statCard(
-                                                'Products',
-                                                '${_stats['products']}',
-                                                Icons.inventory_2_rounded,
-                                                const Color(0xFFCC5DE8),
-                                                const Color(0xFF9C36B5),
-                                                onTap: () =>
-                                                    Navigator.pushNamed(
-                                                        context,
-                                                        AppRoutes
-                                                            .manageProducts))),
-                                      ],
-                                    );
-                                  }
-                                  return Column(
-                                    children: [
-                                      Row(children: [
-                                        Expanded(
-                                            child: _statCard(
-                                                'Rating',
-                                                '⭐ $_shopRating',
-                                                Icons.star_rounded,
-                                                const Color(0xFF51CF66),
-                                                const Color(0xFF2F9E44))),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                            child: _statCard(
-                                                'Pending',
-                                                '${_stats['pending_orders']}',
-                                                Icons.pending_actions_rounded,
-                                                const Color(0xFFFF8C42),
-                                                const Color(0xFFE8590C),
-                                                onTap: () =>
-                                                    Navigator.pushNamed(
-                                                        context,
-                                                        AppRoutes
-                                                            .sellerOrders))),
-                                      ]),
-                                      const SizedBox(height: 14),
-                                      Row(children: [
-                                        Expanded(
-                                            child: _statCard(
-                                                'Orders',
-                                                '${_stats['total_orders']}',
-                                                Icons.receipt_long_rounded,
-                                                const Color(0xFF4C6EF5),
-                                                const Color(0xFF364FC7),
-                                                onTap: () =>
-                                                    Navigator.pushNamed(
-                                                        context,
-                                                        AppRoutes
-                                                            .sellerOrders))),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                            child: _statCard(
-                                                'Products',
-                                                '${_stats['products']}',
-                                                Icons.inventory_2_rounded,
-                                                const Color(0xFFCC5DE8),
-                                                const Color(0xFF9C36B5),
-                                                onTap: () =>
-                                                    Navigator.pushNamed(
-                                                        context,
-                                                        AppRoutes
-                                                            .manageProducts))),
-                                      ]),
-                                    ],
-                                  );
-                                },
-                              ),
+                    // ── Stat Cards ────────────────────────────────────────────────
+                    SliverToBoxAdapter(
+                      child: FadeTransition(
+                        opacity: _fadeAnim,
+                        child: SlideTransition(
+                          position: _slideAnim,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                            child: _isLoading
+                                ? _buildShimmer()
+                                : LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final isWide = constraints.maxWidth > 500;
+                                      if (isWide) {
+                                        return Row(
+                                          children: [
+                                            Expanded(
+                                                child: _statCard(
+                                                    'Rating',
+                                                    '⭐ $_shopRating',
+                                                    Icons.star_rounded,
+                                                    const Color(0xFF51CF66),
+                                                    const Color(0xFF2F9E44))),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                                child: _statCard(
+                                                    'Pending',
+                                                    '${_stats['pending_orders']}',
+                                                    Icons
+                                                        .pending_actions_rounded,
+                                                    const Color(0xFFFF8C42),
+                                                    const Color(0xFFE8590C),
+                                                    onTap: () =>
+                                                        Navigator.pushNamed(
+                                                            context,
+                                                            AppRoutes
+                                                                .sellerOrders))),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                                child: _statCard(
+                                                    'Orders',
+                                                    '${_stats['total_orders']}',
+                                                    Icons.receipt_long_rounded,
+                                                    const Color(0xFF4C6EF5),
+                                                    const Color(0xFF364FC7),
+                                                    onTap: () =>
+                                                        Navigator.pushNamed(
+                                                            context,
+                                                            AppRoutes
+                                                                .sellerOrders))),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                                child: _statCard(
+                                                    'Products',
+                                                    '${_stats['products']}',
+                                                    Icons.inventory_2_rounded,
+                                                    const Color(0xFFCC5DE8),
+                                                    const Color(0xFF9C36B5),
+                                                    onTap: () =>
+                                                        Navigator.pushNamed(
+                                                            context,
+                                                            AppRoutes
+                                                                .manageProducts))),
+                                          ],
+                                        );
+                                      }
+                                      return Column(
+                                        children: [
+                                          Row(children: [
+                                            Expanded(
+                                                child: _statCard(
+                                                    'Rating',
+                                                    '⭐ $_shopRating',
+                                                    Icons.star_rounded,
+                                                    const Color(0xFF51CF66),
+                                                    const Color(0xFF2F9E44))),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                                child: _statCard(
+                                                    'Pending',
+                                                    '${_stats['pending_orders']}',
+                                                    Icons
+                                                        .pending_actions_rounded,
+                                                    const Color(0xFFFF8C42),
+                                                    const Color(0xFFE8590C),
+                                                    onTap: () =>
+                                                        Navigator.pushNamed(
+                                                            context,
+                                                            AppRoutes
+                                                                .sellerOrders))),
+                                          ]),
+                                          const SizedBox(height: 14),
+                                          Row(children: [
+                                            Expanded(
+                                                child: _statCard(
+                                                    'Orders',
+                                                    '${_stats['total_orders']}',
+                                                    Icons.receipt_long_rounded,
+                                                    const Color(0xFF4C6EF5),
+                                                    const Color(0xFF364FC7),
+                                                    onTap: () =>
+                                                        Navigator.pushNamed(
+                                                            context,
+                                                            AppRoutes
+                                                                .sellerOrders))),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                                child: _statCard(
+                                                    'Products',
+                                                    '${_stats['products']}',
+                                                    Icons.inventory_2_rounded,
+                                                    const Color(0xFFCC5DE8),
+                                                    const Color(0xFF9C36B5),
+                                                    onTap: () =>
+                                                        Navigator.pushNamed(
+                                                            context,
+                                                            AppRoutes
+                                                                .manageProducts))),
+                                          ]),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-                // ── Quick Actions ─────────────────────────────────────────────
-                SliverToBoxAdapter(
-                  child: FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-                      child: Text('Quick Actions',
-                          style: GoogleFonts.outfit(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: isDark
-                                  ? Colors.white
-                                  : const Color(0xFF0A0A14))),
+                    // ── Quick Actions ─────────────────────────────────────────────
+                    SliverToBoxAdapter(
+                      child: FadeTransition(
+                        opacity: _fadeAnim,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+                          child: Text('Quick Actions',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF0A0A14))),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
 
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _actionTile(
-                        icon: Icons.add_box_rounded,
-                        gradient: const [Color(0xFF4C6EF5), Color(0xFF364FC7)],
-                        title: 'Add New Product',
-                        subtitle: 'List items in your catalog',
-                        badge: null,
-                        isDark: isDark,
-                        onTap: () async {
-                          final result = await Navigator.pushNamed(
-                              context, AppRoutes.addProduct);
-                          if (result == true) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Product added successfully! 🎉'),
-                                backgroundColor: AppColors.success,
-                              ),
-                            );
-                          }
-                          _loadStats();
-                        },
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          _actionTile(
+                            icon: Icons.add_box_rounded,
+                            gradient: const [
+                              Color(0xFF4C6EF5),
+                              Color(0xFF364FC7)
+                            ],
+                            title: 'Add New Product',
+                            subtitle: 'List items in your catalog',
+                            badge: null,
+                            isDark: isDark,
+                            onTap: () async {
+                              final result = await Navigator.pushNamed(
+                                  context, AppRoutes.addProduct);
+                              if (result == true) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content:
+                                        Text('Product added successfully! 🎉'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                              _loadStats();
+                            },
+                          ),
+                          _actionTile(
+                            icon: Icons.insights_rounded,
+                            gradient: const [
+                              Color(0xFF51CF66),
+                              Color(0xFF2F9E44)
+                            ],
+                            title: 'Store Analytics',
+                            subtitle: 'Sales & customer trends',
+                            badge: null,
+                            isDark: isDark,
+                            onTap: () => Navigator.pushNamed(
+                                context, AppRoutes.analytics),
+                          ),
+                          _actionTile(
+                            icon: Icons.account_balance_outlined,
+                            gradient: const [
+                              Color(0xFFF4C542),
+                              Color(0xFFE8A000)
+                            ],
+                            title: 'CA / Tax Report',
+                            subtitle: 'Monthly GST & payout report for your CA',
+                            badge: null,
+                            isDark: isDark,
+                            onTap: () => Navigator.pushNamed(
+                                context, AppRoutes.caReport),
+                          ),
+                          _actionTile(
+                            icon: Icons.savings_rounded,
+                            gradient: const [
+                              Color(0xFF51CF66),
+                              Color(0xFF1E8449)
+                            ],
+                            title: 'Withdraw Earnings',
+                            subtitle: 'Request payout to your UPI or bank',
+                            badge: null,
+                            isDark: isDark,
+                            onTap: () => Navigator.pushNamed(
+                                context, AppRoutes.sellerWithdrawals),
+                          ),
+                          _actionTile(
+                            icon: Icons.settings_outlined,
+                            gradient: const [
+                              Color(0xFF00B4D8),
+                              Color(0xFF0077A8)
+                            ],
+                            title: 'Manage Shop',
+                            subtitle: _shopIsActive
+                                ? 'Shop is Open — tap to edit settings'
+                                : 'Shop is Closed — tap to open or edit',
+                            badge: _shopIsActive ? null : 'Closed',
+                            isDark: isDark,
+                            onTap: () async {
+                              await Navigator.pushNamed(
+                                  context, AppRoutes.shopManagement);
+                              setState(() => _isLoading = true);
+                              _loadStats(); // refresh after returning
+                            },
+                          ),
+                        ]),
                       ),
-                      _actionTile(
-                        icon: Icons.insights_rounded,
-                        gradient: const [Color(0xFF51CF66), Color(0xFF2F9E44)],
-                        title: 'Store Analytics',
-                        subtitle: 'Sales & customer trends',
-                        badge: null,
-                        isDark: isDark,
-                        onTap: () =>
-                            Navigator.pushNamed(context, AppRoutes.analytics),
-                      ),
-                      _actionTile(
-                        icon: Icons.account_balance_outlined,
-                        gradient: const [Color(0xFFF4C542), Color(0xFFE8A000)],
-                        title: 'CA / Tax Report',
-                        subtitle: 'Monthly GST & payout report for your CA',
-                        badge: null,
-                        isDark: isDark,
-                        onTap: () =>
-                            Navigator.pushNamed(context, AppRoutes.caReport),
-                      ),
-                      _actionTile(
-                        icon: Icons.savings_rounded,
-                        gradient: const [Color(0xFF51CF66), Color(0xFF1E8449)],
-                        title: 'Withdraw Earnings',
-                        subtitle: 'Request payout to your UPI or bank',
-                        badge: null,
-                        isDark: isDark,
-                        onTap: () => Navigator.pushNamed(
-                            context, AppRoutes.sellerWithdrawals),
-                      ),
-                      _actionTile(
-                        icon: Icons.settings_outlined,
-                        gradient: const [Color(0xFF00B4D8), Color(0xFF0077A8)],
-                        title: 'Manage Shop',
-                        subtitle: _shopIsActive
-                            ? 'Shop is Open — tap to edit settings'
-                            : 'Shop is Closed — tap to open or edit',
-                        badge: _shopIsActive ? null : 'Closed',
-                        isDark: isDark,
-                        onTap: () async {
-                          await Navigator.pushNamed(
-                              context, AppRoutes.shopManagement);
-                          setState(() => _isLoading = true);
-                          _loadStats(); // refresh after returning
-                        },
-                      ),
-                    ]),
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    ));
+        ));
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

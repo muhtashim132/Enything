@@ -3,13 +3,13 @@ import 'dart:io';
 void main() {
   final file = File('lib/pages/admin/modules/analytics_admin_page.dart');
   var content = file.readAsStringSync();
-  
+
   const startStr = '  Future<void> _loadAnalytics() async {';
   const endStr = '    if (mounted) setState(() => _loading = false);\n  }';
-  
+
   final startIndex = content.indexOf(startStr);
   final endIndex = content.indexOf(endStr, startIndex);
-  
+
   if (startIndex != -1 && endIndex != -1) {
     const replacement = r'''  Future<void> _loadAnalytics() async {
     try {
@@ -54,7 +54,7 @@ void main() {
 ''';
     final before = content.substring(0, startIndex);
     final after = content.substring(endIndex); // Note: we keep the endStr
-    
+
     file.writeAsStringSync(before + replacement + after);
     stdout.writeln('Analytics patched with index matching.');
   } else {

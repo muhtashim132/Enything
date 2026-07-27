@@ -11,13 +11,15 @@ Future<void> main() async {
     print('.env file not found!');
     exit(1);
   }
-  
+
   final lines = envFile.readAsLinesSync();
   String? supabaseUrl;
   String? supabaseKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL=')) supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY=')) supabaseKey = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_URL='))
+      supabaseUrl = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_ANON_KEY='))
+      supabaseKey = line.split('=')[1].trim();
   }
 
   if (supabaseUrl == null || supabaseKey == null) {
@@ -25,11 +27,9 @@ Future<void> main() async {
     exit(1);
   }
 
-  final client = SupabaseClient(
-    supabaseUrl, 
-    supabaseKey, 
-    authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit)
-  );
+  final client = SupabaseClient(supabaseUrl, supabaseKey,
+      authOptions:
+          const AuthClientOptions(authFlowType: AuthFlowType.implicit));
   print('Connected to Supabase');
 
   try {
@@ -50,12 +50,18 @@ Future<void> runTests(SupabaseClient client) async {
 
   final customerId = await authUser(client, customerPhone, 'customer');
   final sellerId = await authUser(client, sellerPhone, 'seller');
-  
-  final shopRec = await client.from('shops').select('id').eq('seller_id', sellerId).single();
+
+  final shopRec = await client
+      .from('shops')
+      .select('id')
+      .eq('seller_id', sellerId)
+      .single();
   final shopId = shopRec['id'];
-  
+
   final productId = const Uuid().v4();
-  await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(sellerPhone),
+      password: _passwordFromPhone(sellerPhone));
   await client.from('products').insert({
     'id': productId,
     'shop_id': shopId,
@@ -68,20 +74,25 @@ Future<void> runTests(SupabaseClient client) async {
 
   // --- SCENARIO 1: Refund processing on seller rejection ---
   print('\n--- SCENARIO 1: Seller Rejection triggers Refund ---');
-  await client.auth.signInWithPassword(email: _emailFromPhone(customerPhone), password: _passwordFromPhone(customerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(customerPhone),
+      password: _passwordFromPhone(customerPhone));
   final orderId1 = const Uuid().v4();
-  
+
   await _createDummyOrder(client, orderId1, shopId, customerId, productId);
-  
+
   // Mark as awaiting_payment -> confirmed -> (seller rejects)
   await Process.run('supabase', [
-    'db', 'query',
+    'db',
+    'query',
     "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId1'",
     '--linked'
   ]);
 
   // Seller rejects
-  await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(sellerPhone),
+      password: _passwordFromPhone(sellerPhone));
   await client.rpc('reject_order_seller', params: {
     'p_order_id': orderId1,
     'p_reject_reason': 'out_of_stock',
@@ -89,19 +100,27 @@ Future<void> runTests(SupabaseClient client) async {
   });
 
   // Verify refund status
-  final checkOrder1 = await client.from('orders').select('status, refund_status').eq('id', orderId1).single();
+  final checkOrder1 = await client
+      .from('orders')
+      .select('status, refund_status')
+      .eq('id', orderId1)
+      .single();
   if (checkOrder1['status'] != 'seller_rejected') {
-    throw Exception('Order 1 status should be seller_rejected, got ${checkOrder1['status']}');
+    throw Exception(
+        'Order 1 status should be seller_rejected, got ${checkOrder1['status']}');
   }
   if (checkOrder1['refund_status'] != 'processing') {
-    throw Exception('Order 1 refund_status should be processing, got ${checkOrder1['refund_status']}');
+    throw Exception(
+        'Order 1 refund_status should be processing, got ${checkOrder1['refund_status']}');
   }
   print('✅ Refund correctly marked as processing on rejection.');
 
   // --- SCENARIO 2: Ratings and Reviews Edge Cases ---
   print('\n--- SCENARIO 2: Ratings & Reviews Protections ---');
-  await client.auth.signInWithPassword(email: _emailFromPhone(customerPhone), password: _passwordFromPhone(customerPhone));
-  
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(customerPhone),
+      password: _passwordFromPhone(customerPhone));
+
   // Try to review a cancelled order (should fail)
   print('Attempting to review cancelled order (Should Fail)...');
   bool reviewFailed = false;
@@ -117,18 +136,20 @@ Future<void> runTests(SupabaseClient client) async {
     reviewFailed = true;
     print('✅ Review blocked successfully on non-delivered order.');
   }
-  if (!reviewFailed) throw Exception('Review was allowed on a cancelled order!');
+  if (!reviewFailed)
+    throw Exception('Review was allowed on a cancelled order!');
 
   // Create a delivered order
   final orderId2 = const Uuid().v4();
   await _createDummyOrder(client, orderId2, shopId, customerId, productId);
   await Process.run('supabase', [
-    'db', 'query',
+    'db',
+    'query',
     "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId2'; " +
-    "UPDATE orders SET status = 'preparing' WHERE id = '$orderId2'; " +
-    "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId2'; " +
-    "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId2'; " +
-    "UPDATE orders SET status = 'delivered' WHERE id = '$orderId2';",
+        "UPDATE orders SET status = 'preparing' WHERE id = '$orderId2'; " +
+        "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId2'; " +
+        "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId2'; " +
+        "UPDATE orders SET status = 'delivered' WHERE id = '$orderId2';",
     '--linked'
   ]);
 
@@ -156,9 +177,12 @@ Future<void> runTests(SupabaseClient client) async {
     });
   } catch (e) {
     duplicateFailed = true;
-    print('✅ Duplicate review blocked successfully (Review Bombing Protection).');
+    print(
+        '✅ Duplicate review blocked successfully (Review Bombing Protection).');
   }
-  if (!duplicateFailed) throw Exception('Duplicate review was allowed! Review bombing is possible.');
+  if (!duplicateFailed)
+    throw Exception(
+        'Duplicate review was allowed! Review bombing is possible.');
 
   // Try out of bounds rating
   print('Attempting out of bounds rating (Should Fail)...');
@@ -167,12 +191,13 @@ Future<void> runTests(SupabaseClient client) async {
     final orderId3 = const Uuid().v4();
     await _createDummyOrder(client, orderId3, shopId, customerId, productId);
     await Process.run('supabase', [
-      'db', 'query',
+      'db',
+      'query',
       "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId3'; " +
-      "UPDATE orders SET status = 'preparing' WHERE id = '$orderId3'; " +
-      "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId3'; " +
-      "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId3'; " +
-      "UPDATE orders SET status = 'delivered' WHERE id = '$orderId3';",
+          "UPDATE orders SET status = 'preparing' WHERE id = '$orderId3'; " +
+          "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId3'; " +
+          "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId3'; " +
+          "UPDATE orders SET status = 'delivered' WHERE id = '$orderId3';",
       '--linked'
     ]);
 
@@ -192,54 +217,66 @@ Future<void> runTests(SupabaseClient client) async {
   // --- SCENARIO 3: PIXEL OVERLOADING (MASSIVE PAYLOADS) ---
   print('\n--- SCENARIO 3: Pixel Overloading Stress Test ---');
   final massiveString = 'A' * (5 * 1024 * 1024); // 5 MB payload
-  
+
   print('Attempting to reject order with 5MB message (Should truncate)...');
   bool rejectionBloatFailed = false;
   try {
     final orderId4 = const Uuid().v4();
     await _createDummyOrder(client, orderId4, shopId, customerId, productId);
     await Process.run('supabase', [
-      'db', 'query',
+      'db',
+      'query',
       "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId4';",
       '--linked'
     ]);
-    
-    await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
-    
+
+    await client.auth.signInWithPassword(
+        email: _emailFromPhone(sellerPhone),
+        password: _passwordFromPhone(sellerPhone));
+
     await client.rpc('reject_order_seller', params: {
       'p_order_id': orderId4,
       'p_reject_reason': 'other',
       'p_message': massiveString
     });
-    
-    final savedOrder = await client.from('orders').select('rejection_message').eq('id', orderId4).single();
+
+    final savedOrder = await client
+        .from('orders')
+        .select('rejection_message')
+        .eq('id', orderId4)
+        .single();
     final savedMessage = savedOrder['rejection_message'] as String;
     if (savedMessage.length <= 1000) {
       rejectionBloatFailed = true;
-      print('✅ Truncated 5MB rejection message successfully to ${savedMessage.length} chars.');
+      print(
+          '✅ Truncated 5MB rejection message successfully to ${savedMessage.length} chars.');
     }
   } catch (e) {
     print('Caught error for 5MB rejection: $e');
   }
-  if (!rejectionBloatFailed) throw Exception('5MB Rejection message was NOT truncated!');
+  if (!rejectionBloatFailed)
+    throw Exception('5MB Rejection message was NOT truncated!');
 
   print('Attempting to review with 5MB comment (Should Fail)...');
   bool reviewBloatFailed = false;
   try {
-    await client.auth.signInWithPassword(email: _emailFromPhone(customerPhone), password: _passwordFromPhone(customerPhone));
-    
+    await client.auth.signInWithPassword(
+        email: _emailFromPhone(customerPhone),
+        password: _passwordFromPhone(customerPhone));
+
     final orderId5 = const Uuid().v4();
     await _createDummyOrder(client, orderId5, shopId, customerId, productId);
     await Process.run('supabase', [
-      'db', 'query',
+      'db',
+      'query',
       "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId5'; " +
-      "UPDATE orders SET status = 'preparing' WHERE id = '$orderId5'; " +
-      "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId5'; " +
-      "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId5'; " +
-      "UPDATE orders SET status = 'delivered' WHERE id = '$orderId5';",
+          "UPDATE orders SET status = 'preparing' WHERE id = '$orderId5'; " +
+          "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId5'; " +
+          "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId5'; " +
+          "UPDATE orders SET status = 'delivered' WHERE id = '$orderId5';",
       '--linked'
     ]);
-    
+
     await client.from('reviews').insert({
       'shop_id': shopId,
       'user_id': customerId,
@@ -249,20 +286,24 @@ Future<void> runTests(SupabaseClient client) async {
     });
   } catch (e) {
     print('Caught error for 5MB review: $e');
-    if (e.toString().contains('reviews_comment_length') || e.toString().contains('check constraint')) {
+    if (e.toString().contains('reviews_comment_length') ||
+        e.toString().contains('check constraint')) {
       reviewBloatFailed = true;
       print('✅ Blocked 5MB review comment successfully.');
     }
   }
-  if (!reviewBloatFailed) throw Exception('5MB Review comment was NOT blocked properly! (See error above)');
+  if (!reviewBloatFailed)
+    throw Exception(
+        '5MB Review comment was NOT blocked properly! (See error above)');
 
   print('\nAll scenarios completed successfully.');
 }
 
-Future<void> _createDummyOrder(SupabaseClient client, String orderId, String shopId, String customerId, String productId) async {
+Future<void> _createDummyOrder(SupabaseClient client, String orderId,
+    String shopId, String customerId, String productId) async {
   final now = DateTime.now().toUtc();
   final cartGroupId = const Uuid().v4();
-  
+
   final order = {
     'id': orderId,
     'created_at': now.toIso8601String(),
@@ -312,17 +353,22 @@ Future<void> _createDummyOrder(SupabaseClient client, String orderId, String sho
   });
 }
 
-Future<String> authUser(SupabaseClient client, String phone, String role) async {
+Future<String> authUser(
+    SupabaseClient client, String phone, String role) async {
   final email = _emailFromPhone(phone);
   final password = _passwordFromPhone(phone);
-  
+
   String? userId;
   try {
-    final res = await client.auth.signInWithPassword(email: email, password: password);
+    final res =
+        await client.auth.signInWithPassword(email: email, password: password);
     userId = res.user?.id;
   } catch (e) {
     try {
-      final res = await client.auth.signUp(email: email, password: password, data: <String, dynamic>{'phone': phone});
+      final res = await client.auth.signUp(
+          email: email,
+          password: password,
+          data: <String, dynamic>{'phone': phone});
       userId = res.user?.id;
     } catch (e2) {
       throw Exception('Failed to auth user $phone: $e2');
@@ -331,10 +377,10 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
 
   if (userId == null) throw Exception('Failed to get user id for $phone');
 
-  final uniquePhone = phone.contains('9888888') 
-      ? '+9198888${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}' 
+  final uniquePhone = phone.contains('9888888')
+      ? '+9198888${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}'
       : phone;
-      
+
   await client.from('profiles').upsert({
     'id': userId,
     'role': role,
@@ -343,7 +389,11 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
   });
 
   if (role == 'seller') {
-    final existingShop = await client.from('shops').select('id').eq('seller_id', userId).maybeSingle();
+    final existingShop = await client
+        .from('shops')
+        .select('id')
+        .eq('seller_id', userId)
+        .maybeSingle();
     if (existingShop == null) {
       await client.from('shops').insert({
         'seller_id': userId,

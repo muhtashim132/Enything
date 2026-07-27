@@ -105,10 +105,12 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
 
   List<ProductModel> get _filteredProducts => _selectedCategory == 'All'
       ? _products
-      : _products.where((p) => 
-          p.menuCategory != null && 
-          p.menuCategory!.trim().toLowerCase() == _selectedCategory.toLowerCase()
-        ).toList();
+      : _products
+          .where((p) =>
+              p.menuCategory != null &&
+              p.menuCategory!.trim().toLowerCase() ==
+                  _selectedCategory.toLowerCase())
+          .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +326,9 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
               child: Row(
                 children: [
                   _statBox(
-                    label: _shop!.totalOrders > 0 ? _shop!.rating.toStringAsFixed(1) : 'New',
+                    label: _shop!.totalOrders > 0
+                        ? _shop!.rating.toStringAsFixed(1)
+                        : 'New',
                     sub: 'Rating',
                     icon: Icons.star_rounded,
                     iconColor: const Color(0xFF48BB78),
@@ -569,7 +573,6 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(
                   product.name,
                   style: GoogleFonts.outfit(
@@ -621,7 +624,8 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
               product.variants.isNotEmpty
                   ? GestureDetector(
                       onTap: () {
-                        showProductDetailSheet(context, product.id, highlightVariants: true);
+                        showProductDetailSheet(context, product.id,
+                            highlightVariants: true);
                       },
                       child: Container(
                         width: 100,
@@ -633,7 +637,8 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                               Border.all(color: AppColors.primary, width: 1.5),
                           boxShadow: [
                             BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.12),
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.12),
                                 blurRadius: 8),
                           ],
                         ),
@@ -650,69 +655,71 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                     )
                   : quantity == 0
                       ? GestureDetector(
-                      onTap: () {
-                        cart.addItemWithFeedback(context, product, _shop!);
-                        setState(() {});
-                      },
-                      child: Container(
-                        width: 100,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border:
-                              Border.all(color: AppColors.primary, width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.12),
-                                blurRadius: 8),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            'ADD',
-                            style: GoogleFonts.outfit(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13),
+                          onTap: () {
+                            cart.addItemWithFeedback(context, product, _shop!);
+                            setState(() {});
+                          },
+                          child: Container(
+                            width: 100,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: AppColors.primary, width: 1.5),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.12),
+                                    blurRadius: 8),
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                'ADD',
+                                style: GoogleFonts.outfit(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13),
+                              ),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          width: 100,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  cart.updateQuantity(product.id, quantity - 1);
+                                  setState(() {});
+                                },
+                                child: const Icon(Icons.remove,
+                                    color: Colors.white, size: 18),
+                              ),
+                              Text('$quantity',
+                                  style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14)),
+                              GestureDetector(
+                                onTap: () {
+                                  cart.addItemWithFeedback(
+                                      context, product, _shop!);
+                                  setState(() {});
+                                },
+                                child: const Icon(Icons.add,
+                                    color: Colors.white, size: 18),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    )
-                  : Container(
-                      width: 100,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              cart.updateQuantity(product.id, quantity - 1);
-                              setState(() {});
-                            },
-                            child: const Icon(Icons.remove,
-                                color: Colors.white, size: 18),
-                          ),
-                          Text('$quantity',
-                              style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14)),
-                          GestureDetector(
-                            onTap: () {
-                              cart.addItemWithFeedback(context, product, _shop!);
-                              setState(() {});
-                            },
-                            child: const Icon(Icons.add,
-                                color: Colors.white, size: 18),
-                          ),
-                        ],
-                      ),
-                    ),
             ],
           ),
         ],

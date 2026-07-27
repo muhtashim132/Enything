@@ -23,7 +23,13 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
   String _activeFilter = 'All';
   final _searchCtrl = TextEditingController();
 
-  static const _filters = ['All', 'Pending', 'Active', 'Delivered', 'Cancelled'];
+  static const _filters = [
+    'All',
+    'Pending',
+    'Active',
+    'Delivered',
+    'Cancelled'
+  ];
 
   @override
   void initState() {
@@ -43,7 +49,8 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
       final res = await _db
           .from('orders')
           // FIX: 'shop_name' column does not exist on shops table; the actual column is 'name'
-          .select('*, profiles:customer_id(full_name, phone), shops:shop_id(name)')
+          .select(
+              '*, profiles:customer_id(full_name, phone), shops:shop_id(name)')
           .order('created_at', ascending: false)
           .limit(80);
       _orders = List<Map<String, dynamic>>.from(res);
@@ -66,12 +73,22 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
         final matchesSearch = q.isEmpty || id.contains(q) || name.contains(q);
         // FIX: Include new dual-acceptance statuses in the right filter buckets
         final matchesFilter = _activeFilter == 'All' ||
-            (_activeFilter == 'Pending' && (status == 'pending' || status == 'placed' ||
-                status == 'awaiting_acceptance' || status == 'awaiting_payment')) ||
-            (_activeFilter == 'Active' && (status == 'confirmed' || status == 'preparing' ||
-                status == 'ready_for_pickup' || status == 'picked_up' || status == 'out_for_delivery')) ||
+            (_activeFilter == 'Pending' &&
+                (status == 'pending' ||
+                    status == 'placed' ||
+                    status == 'awaiting_acceptance' ||
+                    status == 'awaiting_payment')) ||
+            (_activeFilter == 'Active' &&
+                (status == 'confirmed' ||
+                    status == 'preparing' ||
+                    status == 'ready_for_pickup' ||
+                    status == 'picked_up' ||
+                    status == 'out_for_delivery')) ||
             (_activeFilter == 'Delivered' && status == 'delivered') ||
-            (_activeFilter == 'Cancelled' && (status == 'cancelled' || status == 'seller_rejected' || status == 'partner_rejected'));
+            (_activeFilter == 'Cancelled' &&
+                (status == 'cancelled' ||
+                    status == 'seller_rejected' ||
+                    status == 'partner_rejected'));
 
         return matchesSearch && matchesFilter;
       }).toList();
@@ -138,8 +155,8 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
                 onTap: () => _applyFilter(f),
                 child: AnimatedContainer(
                   duration: 200.ms,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
                     gradient: active ? AdminGradients.primary : null,
                     color: active ? null : AdminColors.cardBg,
@@ -177,8 +194,7 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
                       color: AdminColors.primary,
                       backgroundColor: AdminColors.surface,
                       child: ListView.builder(
-                        padding:
-                            const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                         itemCount: _filtered.length,
                         itemBuilder: (_, i) => _OrderCard(
                           order: _filtered[i],
@@ -189,8 +205,7 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
                           },
                         )
                             .animate()
-                            .fadeIn(
-                                delay: Duration(milliseconds: i * 35))
+                            .fadeIn(delay: Duration(milliseconds: i * 35))
                             .slideY(begin: 0.08),
                       ),
                     ),
@@ -222,19 +237,21 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
             SkeletonBox(width: 60, height: 22, radius: 20),
           ]),
           const SizedBox(height: 14),
-          Row(children: List.generate(
-              4,
-              (j) => Expanded(
-                    child: Row(children: [
-                      const SkeletonBox(width: 10, height: 10, radius: 5),
-                      const SizedBox(width: 4),
-                      if (j < 3)
-                        Expanded(
-                            child: Container(
-                                height: 2,
-                                color: Colors.white.withValues(alpha: 0.06))),
-                    ]),
-                  ))),
+          Row(
+              children: List.generate(
+                  4,
+                  (j) => Expanded(
+                        child: Row(children: [
+                          const SkeletonBox(width: 10, height: 10, radius: 5),
+                          const SizedBox(width: 4),
+                          if (j < 3)
+                            Expanded(
+                                child: Container(
+                                    height: 2,
+                                    color:
+                                        Colors.white.withValues(alpha: 0.06))),
+                        ]),
+                      ))),
         ]),
       ).animate().shimmer(duration: 1500.ms),
     );
@@ -271,8 +288,9 @@ class _OrderCardState extends State<_OrderCard> {
     final status = (o['status'] ?? 'placed') as String;
     final profile = o['profiles'] as Map?;
     final shop = o['shops'] as Map?;
-    final amount =
-        (o['grand_total_collected'] as num?)?.toDouble() ?? (o['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final amount = (o['grand_total_collected'] as num?)?.toDouble() ??
+        (o['total_amount'] as num?)?.toDouble() ??
+        0.0;
     final time = o['created_at'] != null
         ? DateFormat('dd MMM, hh:mm a')
             .format(DateTime.parse(o['created_at'].toString()).toIST())
@@ -344,7 +362,8 @@ class _OrderCardState extends State<_OrderCard> {
           // ── Expandable detail panel ──────────────────────────
           AnimatedCrossFade(
             firstChild: const SizedBox(width: double.infinity),
-            secondChild: _buildDetailPanel(o, timelineStep, statusColor, status),
+            secondChild:
+                _buildDetailPanel(o, timelineStep, statusColor, status),
             crossFadeState: _expanded
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
@@ -355,10 +374,11 @@ class _OrderCardState extends State<_OrderCard> {
     );
   }
 
-  Widget _buildDetailPanel(Map<String, dynamic> o, int step, Color statusColor, String status) {
+  Widget _buildDetailPanel(
+      Map<String, dynamic> o, int step, Color statusColor, String status) {
     final profile = (o['profiles'] is Map) ? o['profiles'] as Map : null;
     final shop = (o['shops'] is Map) ? o['shops'] as Map : null;
-    
+
     double parseNum(dynamic val) {
       if (val == null) return 0.0;
       if (val is num) return val.toDouble();
@@ -372,18 +392,21 @@ class _OrderCardState extends State<_OrderCard> {
     }
 
     final grandTotal = parseNum(o['grand_total_collected']);
-    final amount = (o['grand_total_collected'] != null && grandTotal >= 0) 
-        ? grandTotal 
+    final amount = (o['grand_total_collected'] != null && grandTotal >= 0)
+        ? grandTotal
         : parseNum(o['total_amount']);
     final paymentMethod = parseStr(o['payment_method'], 'COD');
-    
+
     final partnerId = parseStr(o['delivery_partner_id'], 'Not Assigned');
-    final safePartnerId = partnerId.length > 8 ? partnerId.substring(0, 8).toUpperCase() : partnerId.toUpperCase();
+    final safePartnerId = partnerId.length > 8
+        ? partnerId.substring(0, 8).toUpperCase()
+        : partnerId.toUpperCase();
 
     String formatTime(dynamic t) {
       if (t == null) return '—';
       try {
-        return DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t.toString()).toIST());
+        return DateFormat('dd MMM, hh:mm a')
+            .format(DateTime.parse(t.toString()).toIST());
       } catch (_) {
         return '—';
       }
@@ -392,8 +415,7 @@ class _OrderCardState extends State<_OrderCard> {
     return Container(
       decoration: BoxDecoration(
         color: AdminColors.surface.withValues(alpha: 0.5),
-        borderRadius:
-            const BorderRadius.vertical(bottom: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
         border: const Border(top: BorderSide(color: AdminColors.cardBorder)),
       ),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -401,8 +423,7 @@ class _OrderCardState extends State<_OrderCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Status timeline
-          Text('Order Timeline',
-              style: AdminStyles.label()),
+          Text('Order Timeline', style: AdminStyles.label()),
           const SizedBox(height: 12),
           Row(
             children: List.generate(_timeline.length, (i) {
@@ -460,31 +481,43 @@ class _OrderCardState extends State<_OrderCard> {
           const SizedBox(height: 14),
 
           // ── Detailed Info Sections ──────────────────────────
-          
+
           // Customer Section
-          Text('Customer Details', style: AdminStyles.title(color: AdminColors.primary, size: 14)),
+          Text('Customer Details',
+              style: AdminStyles.title(color: AdminColors.primary, size: 14)),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Name', value: parseStr(profile?['full_name'], 'Unknown')),
-            _InfoCell(label: 'Phone', value: parseStr(profile?['phone'] ?? o['customer_phone'])),
+            _InfoCell(
+                label: 'Name',
+                value: parseStr(profile?['full_name'], 'Unknown')),
+            _InfoCell(
+                label: 'Phone',
+                value: parseStr(profile?['phone'] ?? o['customer_phone'])),
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Address', value: parseStr(o['address']), maxLines: null),
+            _InfoCell(
+                label: 'Address',
+                value: parseStr(o['address']),
+                maxLines: null),
           ]),
           if (parseStr(o['delivery_notes'], '') != '') ...[
             const SizedBox(height: 10),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _InfoCell(label: 'Notes', value: parseStr(o['delivery_notes']), maxLines: null),
+              _InfoCell(
+                  label: 'Notes',
+                  value: parseStr(o['delivery_notes']),
+                  maxLines: null),
             ]),
           ],
-          
+
           const SizedBox(height: 16),
           const Divider(color: AdminColors.cardBorder, height: 1),
           const SizedBox(height: 14),
 
           // Shop Section
-          Text('Shop Details', style: AdminStyles.title(color: AdminColors.primary, size: 14)),
+          Text('Shop Details',
+              style: AdminStyles.title(color: AdminColors.primary, size: 14)),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _InfoCell(label: 'Name', value: parseStr(shop?['name'], 'Unknown')),
@@ -492,21 +525,30 @@ class _OrderCardState extends State<_OrderCard> {
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Prep Time', value: '${parseStr(o['shop_prep_time_snapshot'], '30')} mins'),
-            _InfoCell(label: 'Ready At', value: formatTime(o['order_ready_time'])),
+            _InfoCell(
+                label: 'Prep Time',
+                value: '${parseStr(o['shop_prep_time_snapshot'], '30')} mins'),
+            _InfoCell(
+                label: 'Ready At', value: formatTime(o['order_ready_time'])),
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Wait Penalty', value: '₹${parseNum(o['wait_time_penalty']).toStringAsFixed(2)}'),
-            _InfoCell(label: 'Net Payout', value: '₹${parseNum(o['seller_payout']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Wait Penalty',
+                value:
+                    '₹${parseNum(o['wait_time_penalty']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Net Payout',
+                value: '₹${parseNum(o['seller_payout']).toStringAsFixed(2)}'),
           ]),
-          
+
           const SizedBox(height: 16),
           const Divider(color: AdminColors.cardBorder, height: 1),
           const SizedBox(height: 14),
 
           // Rider Section
-          Text('Rider Details', style: AdminStyles.title(color: AdminColors.primary, size: 14)),
+          Text('Rider Details',
+              style: AdminStyles.title(color: AdminColors.primary, size: 14)),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _InfoCell(label: 'Partner ID', value: safePartnerId),
@@ -514,12 +556,19 @@ class _OrderCardState extends State<_OrderCard> {
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Distance', value: '${parseNum(o['estimated_distance_km']).toStringAsFixed(2)} km'),
-            _InfoCell(label: 'Earnings', value: '₹${parseNum(o['rider_earnings']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Distance',
+                value:
+                    '${parseNum(o['estimated_distance_km']).toStringAsFixed(2)} km'),
+            _InfoCell(
+                label: 'Earnings',
+                value: '₹${parseNum(o['rider_earnings']).toStringAsFixed(2)}'),
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Arrived At Shop', value: formatTime(o['arrived_at_shop_time'])),
+            _InfoCell(
+                label: 'Arrived At Shop',
+                value: formatTime(o['arrived_at_shop_time'])),
           ]),
 
           const SizedBox(height: 16),
@@ -527,46 +576,79 @@ class _OrderCardState extends State<_OrderCard> {
           const SizedBox(height: 14),
 
           // Financial Breakdown
-          Text('Financial Breakdown', style: AdminStyles.title(color: AdminColors.primary, size: 14)),
+          Text('Financial Breakdown',
+              style: AdminStyles.title(color: AdminColors.primary, size: 14)),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _InfoCell(label: 'Payment', value: paymentMethod.toUpperCase()),
-            _InfoCell(label: 'Status', value: parseStr(o['payment_status'], 'pending').toUpperCase()),
+            _InfoCell(
+                label: 'Status',
+                value: parseStr(o['payment_status'], 'pending').toUpperCase()),
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Item Total', value: '₹${parseNum(o['total_amount']).toStringAsFixed(2)}'),
-            _InfoCell(label: 'Delivery Charge', value: '₹${parseNum(o['delivery_charges']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Item Total',
+                value: '₹${parseNum(o['total_amount']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Delivery Charge',
+                value:
+                    '₹${parseNum(o['delivery_charges']).toStringAsFixed(2)}'),
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Platform Fee', value: '₹${parseNum(o['platform_fee']).toStringAsFixed(2)}'),
-            _InfoCell(label: 'Surcharges', value: '₹${(parseNum(o['small_cart_fee']) + parseNum(o['heavy_order_fee']) + parseNum(o['multi_shop_surcharge'])).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Platform Fee',
+                value: '₹${parseNum(o['platform_fee']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Surcharges',
+                value:
+                    '₹${(parseNum(o['small_cart_fee']) + parseNum(o['heavy_order_fee']) + parseNum(o['multi_shop_surcharge'])).toStringAsFixed(2)}'),
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'GST (Items)', value: '₹${parseNum(o['gst_item_total']).toStringAsFixed(2)}'),
-            _InfoCell(label: 'GST (Delivery+Plat)', value: '₹${(parseNum(o['gst_delivery']) + parseNum(o['gst_platform'])).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'GST (Items)',
+                value: '₹${parseNum(o['gst_item_total']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'GST (Delivery+Plat)',
+                value:
+                    '₹${(parseNum(o['gst_delivery']) + parseNum(o['gst_platform'])).toStringAsFixed(2)}'),
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Enything Comm.', value: '₹${parseNum(o['enything_commission']).toStringAsFixed(2)}'),
-            _InfoCell(label: 'TCS + TDS', value: '₹${(parseNum(o['tcs_amount']) + parseNum(o['tds_amount'])).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Enything Comm.',
+                value:
+                    '₹${parseNum(o['enything_commission']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'TCS + TDS',
+                value:
+                    '₹${(parseNum(o['tcs_amount']) + parseNum(o['tds_amount'])).toStringAsFixed(2)}'),
           ]),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Discount', value: '-₹${parseNum(o['coupon_discount']).toStringAsFixed(2)}'),
-            _InfoCell(label: 'Grand Total', value: '₹${amount.toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Discount',
+                value:
+                    '-₹${parseNum(o['coupon_discount']).toStringAsFixed(2)}'),
+            _InfoCell(
+                label: 'Grand Total', value: '₹${amount.toStringAsFixed(2)}'),
           ]),
 
           const SizedBox(height: 16),
 
           // Action buttons
           Row(children: [
-            if (status != 'cancelled' && status != 'delivered' && (context.read<RbacProvider>().can('orders.cancel') || context.read<RbacProvider>().isSuperAdmin))
+            if (status != 'cancelled' &&
+                status != 'delivered' &&
+                (context.read<RbacProvider>().can('orders.cancel') ||
+                    context.read<RbacProvider>().isSuperAdmin))
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _actioning ? null : () => _cancelOrder(o['id'].toString()),
+                  onPressed: _actioning
+                      ? null
+                      : () => _cancelOrder(o['id'].toString()),
                   icon: const Icon(Icons.cancel_outlined, size: 16),
                   label: Text('Cancel Order', style: AdminStyles.caption()),
                   style: OutlinedButton.styleFrom(
@@ -582,22 +664,26 @@ class _OrderCardState extends State<_OrderCard> {
             if (status != 'cancelled' && status != 'delivered') ...[
               const SizedBox(width: 10),
             ],
-            if (context.read<RbacProvider>().can('orders.refund') || context.read<RbacProvider>().isSuperAdmin)
+            if (context.read<RbacProvider>().can('orders.refund') ||
+                context.read<RbacProvider>().isSuperAdmin)
               Expanded(
                 child: ElevatedButton.icon(
-                onPressed: _actioning ? null : () => _issueRefund(o['id'].toString(), amount),
-                icon: const Icon(Icons.undo_rounded, size: 16),
-                label: Text('Issue Refund', style: AdminStyles.caption(color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AdminColors.warning,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  onPressed: _actioning
+                      ? null
+                      : () => _issueRefund(o['id'].toString(), amount),
+                  icon: const Icon(Icons.undo_rounded, size: 16),
+                  label: Text('Issue Refund',
+                      style: AdminStyles.caption(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminColors.warning,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
                 ),
               ),
-            ),
           ]),
         ],
       ),
@@ -635,7 +721,8 @@ class _OrderCardState extends State<_OrderCard> {
         title: Text('Issue Refund', style: AdminStyles.title()),
         content: Text(
             'Are you sure you want to issue a refund of ₹${amount.toStringAsFixed(0)} for this order?',
-            style: AdminStyles.body(size: 14, color: AdminColors.textSecondary)),
+            style:
+                AdminStyles.body(size: 14, color: AdminColors.textSecondary)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -647,24 +734,24 @@ class _OrderCardState extends State<_OrderCard> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12))),
               child: Text('Confirm Refund',
-                  style:
-                      AdminStyles.body(size: 13, color: Colors.white))),
+                  style: AdminStyles.body(size: 13, color: Colors.white))),
         ],
       ),
     );
 
     if (confirmed != true) return;
     if (!mounted) return;
-    
+
     setState(() => _actioning = true);
     try {
       await _db.rpc('admin_issue_refund', params: {'p_order_id': orderId});
-      
+
       await widget.onRefresh();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Refund of ₹${amount.toStringAsFixed(0)} queued. Status changed to processing.'),
+          content: Text(
+              'Refund of ₹${amount.toStringAsFixed(0)} queued. Status changed to processing.'),
           backgroundColor: AdminColors.success,
           behavior: SnackBarBehavior.floating,
         ));
@@ -705,7 +792,8 @@ class _InfoCell extends StatelessWidget {
   final String label;
   final String value;
   final int? maxLines;
-  const _InfoCell({required this.label, required this.value, this.maxLines = 1});
+  const _InfoCell(
+      {required this.label, required this.value, this.maxLines = 1});
 
   @override
   Widget build(BuildContext context) {

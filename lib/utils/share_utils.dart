@@ -5,12 +5,17 @@ import '../models/shop_model.dart';
 /// Utility class for sharing product and shop links via the native share sheet.
 class ShareUtils {
   // ── Product share ──────────────────────────────────────────────────────────
-  static Future<void> shareProduct(ProductModel product, {ShopModel? shop}) async {
+  static Future<void> shareProduct(ProductModel product,
+      {ShopModel? shop}) async {
     final shopName = shop?.name ?? 'a shop on Enything';
     // ProductModel uses price (current/discounted) and originalPrice (pre-discount)
-    final hasDiscount = product.originalPrice != null && product.originalPrice! > product.price;
+    final hasDiscount =
+        product.originalPrice != null && product.originalPrice! > product.price;
     final discountPct = hasDiscount
-        ? ((product.originalPrice! - product.price) / product.originalPrice! * 100).round()
+        ? ((product.originalPrice! - product.price) /
+                product.originalPrice! *
+                100)
+            .round()
         : 0;
     final price = hasDiscount
         ? '₹${product.price.toStringAsFixed(0)} ($discountPct% off)'
@@ -22,9 +27,11 @@ class ShareUtils {
       ..writeln('💰 $price')
       ..writeln('🏪 From: $shopName')
       ..writeln()
-      ..writeln('Order instantly on Enything — Everything, Everywhere, Instantly!')
+      ..writeln(
+          'Order instantly on Enything — Everything, Everywhere, Instantly!')
       ..writeln()
-      ..write('📲 Download the app: https://play.google.com/store/apps/details?id=com.enything.app');
+      ..write(
+          '📲 Download the app: https://play.google.com/store/apps/details?id=com.enything.app');
 
     await SharePlus.instance.share(
       ShareParams(
@@ -47,9 +54,11 @@ class ShareUtils {
       ..writeln('⏱️ ${shop.prepTimeMinutes} min prep time')
       ..writeln('📍 ${shop.address}')
       ..writeln()
-      ..writeln('Order from them instantly on Enything — Everything, Everywhere, Instantly!')
+      ..writeln(
+          'Order from them instantly on Enything — Everything, Everywhere, Instantly!')
       ..writeln()
-      ..write('📲 Download the app: https://play.google.com/store/apps/details?id=com.enything.app');
+      ..write(
+          '📲 Download the app: https://play.google.com/store/apps/details?id=com.enything.app');
 
     await SharePlus.instance.share(
       ShareParams(

@@ -140,7 +140,13 @@ class AppCategories {
         return ['250g', '500g', '1kg'];
       case 'Pharmacy':
       case 'Medical Store':
-        return ['1 Strip (10 tabs)', '1 Strip (15 tabs)', '100ml', '200ml', '1 Tube'];
+        return [
+          '1 Strip (10 tabs)',
+          '1 Strip (15 tabs)',
+          '100ml',
+          '200ml',
+          '1 Tube'
+        ];
       case 'Electronics':
       case 'Mobile & Repair':
         return ['64GB', '128GB', '256GB', '512GB'];

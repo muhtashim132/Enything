@@ -52,8 +52,10 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
     if (!rbac.isSuperAdmin) return;
 
     try {
-      await _db.from('coupons').update({'is_active': !currentStatus}).eq('id', id);
-      
+      await _db
+          .from('coupons')
+          .update({'is_active': !currentStatus}).eq('id', id);
+
       // Update local state
       final idx = _coupons.indexWhere((c) => c['id'] == id);
       if (idx != -1) {
@@ -125,20 +127,23 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AdminColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AdminColors.primary))
           : _coupons.isEmpty
               ? _buildEmptyState()
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _coupons.length,
-                  itemBuilder: (context, index) => _buildCouponCard(_coupons[index], rbac),
+                  itemBuilder: (context, index) =>
+                      _buildCouponCard(_coupons[index], rbac),
                 ),
       floatingActionButton: rbac.isSuperAdmin
           ? FloatingActionButton.extended(
               onPressed: _showCreateBottomSheet,
               backgroundColor: AdminColors.primary,
               icon: const Icon(Icons.add_rounded, color: Colors.white),
-              label: Text('Create Coupon', style: AdminStyles.title(color: Colors.white, size: 14)),
+              label: Text('Create Coupon',
+                  style: AdminStyles.title(color: Colors.white, size: 14)),
             )
           : null,
     );
@@ -149,11 +154,14 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.local_offer_rounded, size: 64, color: AdminColors.cardBorder),
+          const Icon(Icons.local_offer_rounded,
+              size: 64, color: AdminColors.cardBorder),
           const SizedBox(height: 16),
-          Text('No coupons yet', style: AdminStyles.title(color: AdminColors.textMuted)),
+          Text('No coupons yet',
+              style: AdminStyles.title(color: AdminColors.textMuted)),
           const SizedBox(height: 8),
-          Text('Create your first discount code', style: AdminStyles.caption(color: AdminColors.textMuted)),
+          Text('Create your first discount code',
+              style: AdminStyles.caption(color: AdminColors.textMuted)),
         ],
       ),
     );
@@ -164,19 +172,22 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
     final isFlat = coupon['discount_type'] == 'flat';
     final val = coupon['discount_value'];
     final valStr = isFlat ? '₹$val OFF' : '$val% OFF';
-    
+
     DateTime? validUntil;
     if (coupon['valid_until'] != null) {
       validUntil = DateTime.parse(coupon['valid_until']).toIST();
     }
     final isExpired = validUntil != null && validUntil.isBefore(DateTime.now());
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: AdminColors.cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isActive ? AdminColors.primary.withValues(alpha: 0.3) : AdminColors.cardBorder),
+        border: Border.all(
+            color: isActive
+                ? AdminColors.primary.withValues(alpha: 0.3)
+                : AdminColors.cardBorder),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -189,48 +200,64 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: AdminColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: AdminColors.primary.withValues(alpha: 0.3)),
+                        border: Border.all(
+                            color: AdminColors.primary.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         coupon['code'].toString().toUpperCase(),
-                        style: AdminStyles.title(color: AdminColors.primary, size: 16),
+                        style: AdminStyles.title(
+                            color: AdminColors.primary, size: 16),
                       ),
                     ),
                     if (isExpired) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: AdminColors.danger.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Text('EXPIRED', style: AdminStyles.caption(color: AdminColors.danger, size: 10)),
+                        child: Text('EXPIRED',
+                            style: AdminStyles.caption(
+                                color: AdminColors.danger, size: 10)),
                       ),
                     ]
                   ],
                 ),
-                Text(valStr, style: AdminStyles.title(color: AdminColors.success, size: 16)),
+                Text(valStr,
+                    style: AdminStyles.title(
+                        color: AdminColors.success, size: 16)),
               ],
             ),
             const SizedBox(height: 12),
-            if (coupon['description'] != null && coupon['description'].toString().isNotEmpty)
+            if (coupon['description'] != null &&
+                coupon['description'].toString().isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Text(coupon['description'], style: AdminStyles.body(size: 13, color: AdminColors.textMuted)),
+                child: Text(coupon['description'],
+                    style: AdminStyles.body(
+                        size: 13, color: AdminColors.textMuted)),
               ),
             Row(
               children: [
-                const Icon(Icons.shopping_bag_outlined, size: 14, color: AdminColors.textMuted),
+                const Icon(Icons.shopping_bag_outlined,
+                    size: 14, color: AdminColors.textMuted),
                 const SizedBox(width: 4),
-                Text('Min: ₹${coupon['min_order_value']}', style: AdminStyles.caption(color: AdminColors.textMuted)),
+                Text('Min: ₹${coupon['min_order_value']}',
+                    style: AdminStyles.caption(color: AdminColors.textMuted)),
                 const SizedBox(width: 16),
-                const Icon(Icons.people_outline, size: 14, color: AdminColors.textMuted),
+                const Icon(Icons.people_outline,
+                    size: 14, color: AdminColors.textMuted),
                 const SizedBox(width: 4),
-                Text('Used: ${coupon['usage_count']}${coupon['usage_limit'] != null ? '/${coupon['usage_limit']}' : ''}', style: AdminStyles.caption(color: AdminColors.textMuted)),
+                Text(
+                    'Used: ${coupon['usage_count']}${coupon['usage_limit'] != null ? '/${coupon['usage_limit']}' : ''}',
+                    style: AdminStyles.caption(color: AdminColors.textMuted)),
               ],
             ),
             const SizedBox(height: 12),
@@ -240,29 +267,40 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  validUntil != null ? 'Ends ${DateFormat('MMM d, yyyy').format(validUntil)}' : 'No Expiry',
+                  validUntil != null
+                      ? 'Ends ${DateFormat('MMM d, yyyy').format(validUntil)}'
+                      : 'No Expiry',
                   style: AdminStyles.caption(color: AdminColors.textMuted),
                 ),
                 Row(
                   children: [
                     if (rbac.isSuperAdmin)
                       IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: AdminColors.danger, size: 20),
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: AdminColors.danger, size: 20),
                         onPressed: () {
                           showDialog(
                             context: context,
                             builder: (c) => AlertDialog(
                               backgroundColor: AdminColors.surface,
-                              title: Text('Delete Coupon?', style: AdminStyles.title()),
-                              content: Text('Are you sure you want to delete ${coupon['code']}?', style: AdminStyles.body()),
+                              title: Text('Delete Coupon?',
+                                  style: AdminStyles.title()),
+                              content: Text(
+                                  'Are you sure you want to delete ${coupon['code']}?',
+                                  style: AdminStyles.body()),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(c), child: Text('Cancel', style: AdminStyles.body())),
+                                TextButton(
+                                    onPressed: () => Navigator.pop(c),
+                                    child: Text('Cancel',
+                                        style: AdminStyles.body())),
                                 TextButton(
                                   onPressed: () {
                                     Navigator.pop(c);
                                     _deleteCoupon(coupon['id']);
                                   },
-                                  child: Text('Delete', style: AdminStyles.title(color: AdminColors.danger)),
+                                  child: Text('Delete',
+                                      style: AdminStyles.title(
+                                          color: AdminColors.danger)),
                                 ),
                               ],
                             ),
@@ -271,9 +309,12 @@ class _CouponManagementPageState extends State<CouponManagementPage> {
                       ),
                     Switch(
                       value: isActive,
-                      onChanged: rbac.isSuperAdmin ? (v) => _toggleStatus(coupon['id'], isActive) : null,
+                      onChanged: rbac.isSuperAdmin
+                          ? (v) => _toggleStatus(coupon['id'], isActive)
+                          : null,
                       activeThumbColor: AdminColors.primary,
-                      activeTrackColor: AdminColors.primary.withValues(alpha: 0.3),
+                      activeTrackColor:
+                          AdminColors.primary.withValues(alpha: 0.3),
                       inactiveThumbColor: AdminColors.textMuted,
                       inactiveTrackColor: AdminColors.surface,
                     ),
@@ -304,7 +345,7 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
   final _valCtrl = TextEditingController();
   final _minOrderCtrl = TextEditingController();
   final _limitCtrl = TextEditingController();
-  
+
   String _type = 'flat';
   DateTime? _validUntil;
   bool _loading = false;
@@ -314,9 +355,9 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
     final val = double.tryParse(_valCtrl.text.trim());
 
     if (code.isEmpty || val == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Code and Value are required'), backgroundColor: AdminColors.warning)
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Code and Value are required'),
+          backgroundColor: AdminColors.warning));
       return;
     }
 
@@ -333,19 +374,18 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
         'valid_until': _validUntil?.toIso8601String(),
         'created_by': widget.adminId,
       });
-      
+
       if (mounted) {
         widget.onCreated();
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Coupon created successfully!'), backgroundColor: AdminColors.success)
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Coupon created successfully!'),
+            backgroundColor: AdminColors.success));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.danger)
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Error: $e'), backgroundColor: AdminColors.danger));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -397,8 +437,13 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
                 Expanded(
                   child: SegmentedButton<String>(
                     segments: [
-                      ButtonSegment(value: 'flat', label: Text('Flat (₹)', style: AdminStyles.body())),
-                      ButtonSegment(value: 'percent', label: Text('Percent (%)', style: AdminStyles.body())),
+                      ButtonSegment(
+                          value: 'flat',
+                          label: Text('Flat (₹)', style: AdminStyles.body())),
+                      ButtonSegment(
+                          value: 'percent',
+                          label:
+                              Text('Percent (%)', style: AdminStyles.body())),
                     ],
                     selected: {_type},
                     onSelectionChanged: (s) => setState(() => _type = s.first),
@@ -455,7 +500,8 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 decoration: BoxDecoration(
                   color: AdminColors.surface,
                   borderRadius: BorderRadius.circular(8),
@@ -464,10 +510,16 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _validUntil == null ? 'Valid Until (Optional)' : 'Ends: ${DateFormat('MMM d, yyyy').format(_validUntil!.toIST())}',
-                      style: AdminStyles.body(color: _validUntil == null ? AdminColors.textMuted : Colors.white),
+                      _validUntil == null
+                          ? 'Valid Until (Optional)'
+                          : 'Ends: ${DateFormat('MMM d, yyyy').format(_validUntil!.toIST())}',
+                      style: AdminStyles.body(
+                          color: _validUntil == null
+                              ? AdminColors.textMuted
+                              : Colors.white),
                     ),
-                    const Icon(Icons.calendar_today_rounded, color: AdminColors.textMuted, size: 20),
+                    const Icon(Icons.calendar_today_rounded,
+                        color: AdminColors.textMuted, size: 20),
                   ],
                 ),
               ),
@@ -480,11 +532,17 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
                 onPressed: _loading ? null : _create,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AdminColors.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _loading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : Text('Create Coupon', style: AdminStyles.title(color: Colors.white)),
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : Text('Create Coupon',
+                        style: AdminStyles.title(color: Colors.white)),
               ),
             ),
             const SizedBox(height: 20),
@@ -500,7 +558,8 @@ class _CreateCouponSheetState extends State<_CreateCouponSheet> {
       hintStyle: AdminStyles.body(color: AdminColors.textMuted),
       filled: true,
       fillColor: AdminColors.surface,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
     );
   }

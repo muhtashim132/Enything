@@ -132,13 +132,13 @@ class _AllListingsPageState extends State<AllListingsPage> {
               p.category.toLowerCase().contains(q))
           .toList();
     }
-    
+
     list.sort((a, b) {
       final sA = widget.productShops[a.id];
       final sB = widget.productShops[b.id];
       final availA = a.isAvailable && (sA?.isOpenRightNow ?? true);
       final availB = b.isAvailable && (sB?.isOpenRightNow ?? true);
-      
+
       if (availA && !availB) return -1;
       if (!availA && availB) return 1;
 
@@ -173,7 +173,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
           'label': 'Nearest',
           'icon': Icons.location_on_rounded,
         },
-        if (_isProducts) ...[ 
+        if (_isProducts) ...[
           {
             'mode': _AllListingsSortMode.priceLow,
             'label': 'Price ↑',
@@ -274,16 +274,16 @@ class _AllListingsPageState extends State<AllListingsPage> {
                         _searchDebounce = Timer(
                           const Duration(milliseconds: 250),
                           () {
-                            if (mounted) setState(() {
-                              _searchQuery = v.trim();
-                              _displayLimit = 20;
-                            });
+                            if (mounted)
+                              setState(() {
+                                _searchQuery = v.trim();
+                                _displayLimit = 20;
+                              });
                           },
                         );
                       },
                       decoration: InputDecoration(
-                        hintText:
-                            'Search within $_pageTitle...',
+                        hintText: 'Search within $_pageTitle...',
                         hintStyle: GoogleFonts.outfit(
                           color: isDark
                               ? Colors.grey.shade500
@@ -294,8 +294,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
                             color: AppColors.primary, size: 20),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
-                                icon:
-                                    const Icon(Icons.close_rounded, size: 18),
+                                icon: const Icon(Icons.close_rounded, size: 18),
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() {
@@ -419,9 +418,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
             ),
           ),
         ],
-        body: _isProducts
-            ? _buildProductsBody(isDark)
-            : _buildShopsBody(isDark),
+        body:
+            _isProducts ? _buildProductsBody(isDark) : _buildShopsBody(isDark),
       ),
     );
   }
@@ -439,16 +437,12 @@ class _AllListingsPageState extends State<AllListingsPage> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           sliver: SliverLayoutBuilder(
             builder: (context, constraints) {
-              final crossAxisCount = Responsive.getGridCrossAxisCount(
-                  context,
-                  mobile: 2,
-                  tablet: 4,
-                  desktop: 5);
+              final crossAxisCount = Responsive.getGridCrossAxisCount(context,
+                  mobile: 2, tablet: 4, desktop: 5);
               const crossAxisSpacing = 16.0;
-              final itemWidth =
-                  (constraints.crossAxisExtent -
-                          crossAxisSpacing * (crossAxisCount - 1)) /
-                      crossAxisCount;
+              final itemWidth = (constraints.crossAxisExtent -
+                      crossAxisSpacing * (crossAxisCount - 1)) /
+                  crossAxisCount;
               final childAspectRatio = itemWidth / (itemWidth + 178);
 
               return SliverGrid.builder(
@@ -476,11 +470,13 @@ class _AllListingsPageState extends State<AllListingsPage> {
                 child: TextButton(
                   onPressed: () => setState(() => _displayLimit += 20),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    backgroundColor: isDark 
-                        ? Colors.white.withValues(alpha: 0.05) 
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    backgroundColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
                         : AppColors.primary.withValues(alpha: 0.05),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                   ),
                   child: Text(
                     'Load more products',
@@ -510,11 +506,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
           sliver: SliverLayoutBuilder(
             builder: (context, constraints) {
-              final crossAxisCount = Responsive.getGridCrossAxisCount(
-                  context,
-                  mobile: 1,
-                  tablet: 2,
-                  desktop: 3);
+              final crossAxisCount = Responsive.getGridCrossAxisCount(context,
+                  mobile: 1, tablet: 2, desktop: 3);
 
               return SliverGrid.builder(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -536,8 +529,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
                         )
                       : ShopCard(
                           shop: shop,
-                          onTap: () =>
-                              showShopDetailSheet(context, shop.id),
+                          onTap: () => showShopDetailSheet(context, shop.id),
                         );
                 },
               );
@@ -552,11 +544,13 @@ class _AllListingsPageState extends State<AllListingsPage> {
                 child: TextButton(
                   onPressed: () => setState(() => _displayLimit += 20),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    backgroundColor: isDark 
-                        ? Colors.white.withValues(alpha: 0.05) 
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    backgroundColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
                         : AppColors.primary.withValues(alpha: 0.05),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                   ),
                   child: Text(
                     'Load more items',
@@ -606,9 +600,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
             ),
             const SizedBox(height: 20),
             Text(
-              hasSearch
-                  ? 'No results for "$_searchQuery"'
-                  : 'Nothing here yet',
+              hasSearch ? 'No results for "$_searchQuery"' : 'Nothing here yet',
               style: GoogleFonts.outfit(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,

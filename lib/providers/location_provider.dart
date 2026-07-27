@@ -19,8 +19,8 @@ class LocationProvider extends ChangeNotifier {
 
   // ─── Saved Addresses (Swiggy/Zomato style) ──────────────────────────────
   List<SavedAddress> _savedAddresses = [];
-  SavedAddress? _matchedAddress;   // Auto-detected saved address near GPS
-  SavedAddress? _selectedAddress;  // Manually selected by user
+  SavedAddress? _matchedAddress; // Auto-detected saved address near GPS
+  SavedAddress? _selectedAddress; // Manually selected by user
   static const double _matchRadiusMeters = 200; // 200m proximity threshold
 
   LatLng? get currentLocation => _currentLocation;
@@ -28,15 +28,17 @@ class LocationProvider extends ChangeNotifier {
     // If a saved address is actively selected, use its full address
     if (_selectedAddress != null) return _selectedAddress!.fullAddress;
     if (_matchedAddress != null) return _matchedAddress!.fullAddress;
-    if (_houseNumber.isEmpty && _landmark.isEmpty && _pincode.isEmpty) return _currentAddress;
+    if (_houseNumber.isEmpty && _landmark.isEmpty && _pincode.isEmpty)
+      return _currentAddress;
     final parts = <String>[];
     if (_houseNumber.isNotEmpty) parts.add(_houseNumber);
-    if (_currentAddress.isNotEmpty && _currentAddress != 'Fetching address...') parts.add(_currentAddress);
+    if (_currentAddress.isNotEmpty && _currentAddress != 'Fetching address...')
+      parts.add(_currentAddress);
     if (_landmark.isNotEmpty) parts.add(_landmark);
     if (_pincode.isNotEmpty) parts.add(_pincode);
     return parts.isNotEmpty ? parts.join(', ') : _currentAddress;
   }
-  
+
   String get rawAddress => _currentAddress;
   String get houseNumber => _houseNumber;
   String get landmark => _landmark;
@@ -86,17 +88,21 @@ class LocationProvider extends ChangeNotifier {
       final user = _supabase.auth.currentUser;
       final phone = user?.phone ?? '';
       final email = user?.email ?? '';
-      if (phone.endsWith('9999999996') || phone.endsWith('9999999997') || phone.endsWith('9999999998') ||
-          email.contains('9999999996') || email.contains('9999999997') || email.contains('9999999998')) {
-          _currentLocation = const LatLng(34.4225, 74.6366);
-          _currentAddress = 'bandipora, jammu and kashmir';
-          _houseNumber = 'Reviewer';
-          _landmark = 'Near Jamia Masjid';
-          _pincode = '193502';
-          _permissionGranted = true;
-          _isLoading = false;
-          notifyListeners();
-          return true;
+      if (phone.endsWith('9999999996') ||
+          phone.endsWith('9999999997') ||
+          phone.endsWith('9999999998') ||
+          email.contains('9999999996') ||
+          email.contains('9999999997') ||
+          email.contains('9999999998')) {
+        _currentLocation = const LatLng(34.4225, 74.6366);
+        _currentAddress = 'bandipora, jammu and kashmir';
+        _houseNumber = 'Reviewer';
+        _landmark = 'Near Jamia Masjid';
+        _pincode = '193502';
+        _permissionGranted = true;
+        _isLoading = false;
+        notifyListeners();
+        return true;
       }
 
       // Bypass location popup for all users
@@ -233,9 +239,8 @@ class LocationProvider extends ChangeNotifier {
           .eq('user_id', userId)
           .order('is_default', ascending: false)
           .order('created_at', ascending: true);
-      _savedAddresses = (response as List)
-          .map((m) => SavedAddress.fromMap(m))
-          .toList();
+      _savedAddresses =
+          (response as List).map((m) => SavedAddress.fromMap(m)).toList();
       _autoMatchSavedAddress();
       notifyListeners();
     } catch (e) {
@@ -249,9 +254,9 @@ class LocationProvider extends ChangeNotifier {
       final db = _supabase;
       // If this is the first address or marked default, clear others' default
       if (addr.isDefault || _savedAddresses.isEmpty) {
-        await db.from('saved_addresses')
-            .update({'is_default': false})
-            .eq('user_id', addr.userId);
+        await db
+            .from('saved_addresses')
+            .update({'is_default': false}).eq('user_id', addr.userId);
       }
       await db.from('saved_addresses').insert(addr.toInsertMap());
       await loadSavedAddresses(addr.userId);
@@ -270,11 +275,12 @@ class LocationProvider extends ChangeNotifier {
     try {
       final db = _supabase;
       if (addr.isDefault) {
-        await db.from('saved_addresses')
-            .update({'is_default': false})
-            .eq('user_id', addr.userId);
+        await db
+            .from('saved_addresses')
+            .update({'is_default': false}).eq('user_id', addr.userId);
       }
-      await db.from('saved_addresses')
+      await db
+          .from('saved_addresses')
           .update(addr.toUpdateMap())
           .eq('id', addr.id);
       await loadSavedAddresses(addr.userId);
@@ -305,19 +311,20 @@ class LocationProvider extends ChangeNotifier {
   Future<void> setDefaultAddress(String addressId, String userId) async {
     try {
       final db = _supabase;
-      await db.from('saved_addresses')
-          .update({'is_default': false})
-          .eq('user_id', userId);
-      await db.from('saved_addresses')
-          .update({'is_default': true})
-          .eq('id', addressId);
+      await db
+          .from('saved_addresses')
+          .update({'is_default': false}).eq('user_id', userId);
+      await db
+          .from('saved_addresses')
+          .update({'is_default': true}).eq('id', addressId);
       await loadSavedAddresses(userId);
     } catch (e) {
       debugPrint('setDefaultAddress error: $e');
     }
   }
 
-  void setManualLocation(LatLng location, String address, {String? house, String? mark}) {
+  void setManualLocation(LatLng location, String address,
+      {String? house, String? mark}) {
     _currentLocation = location;
     _currentAddress = address;
     if (house != null && house.isNotEmpty) _houseNumber = house;
@@ -328,15 +335,18 @@ class LocationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setLocalAddressDetails({String? house, String? mark, String? pin, String? addressText}) {
+  void setLocalAddressDetails(
+      {String? house, String? mark, String? pin, String? addressText}) {
     if (house != null) _houseNumber = house;
     if (mark != null) _landmark = mark;
     if (pin != null) _pincode = pin;
-    if (addressText != null && addressText.isNotEmpty) _currentAddress = addressText;
+    if (addressText != null && addressText.isNotEmpty)
+      _currentAddress = addressText;
     notifyListeners();
   }
 
-  Future<void> updateAddressDetails(String userId, {String? house, String? mark, String? pin}) async {
+  Future<void> updateAddressDetails(String userId,
+      {String? house, String? mark, String? pin}) async {
     if (house != null) _houseNumber = house;
     if (mark != null) _landmark = mark;
     if (pin != null) _pincode = pin;
@@ -344,13 +354,18 @@ class LocationProvider extends ChangeNotifier {
     try {
       final db = _supabase;
       // H5 FIX: Fetch existing address_home to merge rather than overwrite
-      final existing = await db.from('customers').select('address_home').eq('id', userId).maybeSingle();
+      final existing = await db
+          .from('customers')
+          .select('address_home')
+          .eq('id', userId)
+          .maybeSingle();
       Map<String, dynamic> currentAddressHome = {};
       if (existing != null && existing['address_home'] is Map) {
-         currentAddressHome = Map<String, dynamic>.from(existing['address_home']);
+        currentAddressHome =
+            Map<String, dynamic>.from(existing['address_home']);
       }
       if (house != null) {
-         currentAddressHome['house'] = house;
+        currentAddressHome['house'] = house;
       }
 
       await db.from('customers').upsert({
@@ -368,9 +383,14 @@ class LocationProvider extends ChangeNotifier {
   Future<void> loadAddressFromDb(String userId) async {
     try {
       final db = _supabase;
-      final response = await db.from('customers').select('address_home, landmark, pincode').eq('id', userId).maybeSingle();
+      final response = await db
+          .from('customers')
+          .select('address_home, landmark, pincode')
+          .eq('id', userId)
+          .maybeSingle();
       if (response != null) {
-        if (response['address_home'] != null && response['address_home'] is Map) {
+        if (response['address_home'] != null &&
+            response['address_home'] is Map) {
           _houseNumber = response['address_home']['house'] ?? '';
         }
         _landmark = response['landmark'] ?? '';
@@ -468,7 +488,8 @@ class LocationProvider extends ChangeNotifier {
         case 'customer':
           await db.from('customers').update({
             'location': point,
-            if (currentAddress.isNotEmpty && currentAddress != 'Fetching address...')
+            if (currentAddress.isNotEmpty &&
+                currentAddress != 'Fetching address...')
               'address': currentAddress,
           }).eq('id', userId);
           break;

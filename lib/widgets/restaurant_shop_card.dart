@@ -78,7 +78,9 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? PremiumAnimations.pressedScale : PremiumAnimations.normalScale,
+        scale: _isPressed
+            ? PremiumAnimations.pressedScale
+            : PremiumAnimations.normalScale,
         duration: PremiumAnimations.fast,
         curve: PremiumAnimations.defaultCurve,
         child: AnimatedContainer(
@@ -110,7 +112,8 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                               imageUrl: shop.bannerImage!,
                               width: double.infinity,
                               fit: BoxFit.cover,
-                              memCacheHeight: 310, // 2× for crisp rendering, no pixel overload
+                              memCacheHeight:
+                                  310, // 2× for crisp rendering, no pixel overload
                               placeholder: (_, __) => _imgPlaceholder(),
                               errorWidget: (_, __, ___) => _imgPlaceholder(),
                             )
@@ -139,200 +142,205 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                     // CLOSED Overlay
                     if (!shop.isOpenRightNow)
                       ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(24)),
                         child: Container(
                           color: Colors.black.withValues(alpha: 0.65),
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white38),
-                            ),
-                            child: Text(
-                              'CLOSED',
-                              style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 3.0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white38),
+                              ),
+                              child: Text(
+                                'CLOSED',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 3.0,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
 
-                  // ── TOP-LEFT: Bestseller OR Promoted tag ──────────────
-                  if (isBestseller || isPromoted)
+                    // ── TOP-LEFT: Bestseller OR Promoted tag ──────────────
+                    if (isBestseller || isPromoted)
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: isBestseller
+                                  ? [
+                                      const Color(0xFFFF9F43),
+                                      const Color(0xFFEE5A24)
+                                    ]
+                                  : [
+                                      const Color(0xFF6C5CE7),
+                                      const Color(0xFFA29BFE)
+                                    ],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: (isBestseller
+                                          ? const Color(0xFFEE5A24)
+                                          : const Color(0xFF6C5CE7))
+                                      .withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3)),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isBestseller
+                                    ? Icons.local_fire_department_rounded
+                                    : Icons.rocket_launch_rounded,
+                                size: 11,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isBestseller ? 'BESTSELLER' : 'PROMOTED',
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.6),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // ── TOP-RIGHT: Pure Veg + Favorite ───────────────────
                     Positioned(
                       top: 12,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: isBestseller
-                                ? [
-                                    const Color(0xFFFF9F43),
-                                    const Color(0xFFEE5A24)
-                                  ]
-                                : [
-                                    const Color(0xFF6C5CE7),
-                                    const Color(0xFFA29BFE)
-                                  ],
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                                color: (isBestseller
-                                        ? const Color(0xFFEE5A24)
-                                        : const Color(0xFF6C5CE7))
-                                    .withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3)),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isBestseller
-                                  ? Icons.local_fire_department_rounded
-                                  : Icons.rocket_launch_rounded,
-                              size: 11,
-                              color: Colors.white,
+                      right: 12,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (shop.isVegOnly) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade700,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color:
+                                          Colors.green.withValues(alpha: 0.35),
+                                      blurRadius: 8),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.eco,
+                                      color: Colors.white, size: 11),
+                                  const SizedBox(width: 3),
+                                  Text('PURE VEG',
+                                      style: GoogleFonts.outfit(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w800)),
+                                ],
+                              ),
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              isBestseller ? 'BESTSELLER' : 'PROMOTED',
+                            const SizedBox(width: 8),
+                          ],
+                          // Favorite button
+                          GestureDetector(
+                            onTap: () {
+                              if (auth.currentUserId != null) {
+                                favs.toggleShopFavorite(
+                                    auth.currentUserId!, shop.id);
+                              }
+                            },
+                            child: AnimatedContainer(
+                              duration: PremiumAnimations.fast,
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isFav
+                                    ? Colors.red.withValues(alpha: 0.15)
+                                    : Colors.white.withValues(alpha: 0.92),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.18),
+                                      blurRadius: 10)
+                                ],
+                              ),
+                              child: AnimatedSwitcher(
+                                duration: PremiumAnimations.fast,
+                                child: Icon(
+                                  key: ValueKey(isFav),
+                                  isFav
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                  size: 16,
+                                  color: isFav
+                                      ? Colors.red
+                                      : AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ── BOTTOM-LEFT: Rating badge (Zomato-style green) ────
+                    Positioned(
+                      bottom: 12,
+                      left: 12,
+                      child: _ratingBadge(),
+                    ),
+
+                    // ── BOTTOM-RIGHT: Free delivery tag ───────────────────
+                    if (isFreeDelivery)
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00C853),
+                            borderRadius: BorderRadius.circular(9),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: const Color(0xFF00C853)
+                                      .withValues(alpha: 0.4),
+                                  blurRadius: 8),
+                            ],
+                          ),
+                          child: Text('🚴 FREE DELIVERY',
                               style: GoogleFonts.outfit(
                                   color: Colors.white,
                                   fontSize: 9,
                                   fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.6),
-                            ),
-                          ],
+                                  letterSpacing: 0.4)),
                         ),
                       ),
-                    ),
-
-                  // ── TOP-RIGHT: Pure Veg + Favorite ───────────────────
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (shop.isVegOnly) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade700,
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [
-                                BoxShadow(
-                                    color:
-                                        Colors.green.withValues(alpha: 0.35),
-                                    blurRadius: 8),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.eco,
-                                    color: Colors.white, size: 11),
-                                const SizedBox(width: 3),
-                                Text('PURE VEG',
-                                    style: GoogleFonts.outfit(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w800)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        // Favorite button
-                        GestureDetector(
-                          onTap: () {
-                            if (auth.currentUserId != null) {
-                              favs.toggleShopFavorite(
-                                  auth.currentUserId!, shop.id);
-                            }
-                          },
-                          child: AnimatedContainer(
-                            duration: PremiumAnimations.fast,
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: isFav
-                                  ? Colors.red.withValues(alpha: 0.15)
-                                  : Colors.white.withValues(alpha: 0.92),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.18),
-                                    blurRadius: 10)
-                              ],
-                            ),
-                            child: AnimatedSwitcher(
-                              duration: PremiumAnimations.fast,
-                              child: Icon(
-                                key: ValueKey(isFav),
-                                isFav
-                                    ? Icons.favorite_rounded
-                                    : Icons.favorite_border_rounded,
-                                size: 16,
-                                color: isFav ? Colors.red : AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // ── BOTTOM-LEFT: Rating badge (Zomato-style green) ────
-                  Positioned(
-                    bottom: 12,
-                    left: 12,
-                    child: _ratingBadge(),
-                  ),
-
-                  // ── BOTTOM-RIGHT: Free delivery tag ───────────────────
-                  if (isFreeDelivery)
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00C853),
-                          borderRadius: BorderRadius.circular(9),
-                          boxShadow: [
-                            BoxShadow(
-                                color: const Color(0xFF00C853)
-                                    .withValues(alpha: 0.4),
-                                blurRadius: 8),
-                          ],
-                        ),
-                        child: Text('🚴 FREE DELIVERY',
-                            style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.4)),
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
-            // ── Info section ──────────────────────────────────────────
+              // ── Info section ──────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                 child: Column(
@@ -499,7 +507,8 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.28), blurRadius: 10,
+              color: Colors.black.withValues(alpha: 0.28),
+              blurRadius: 10,
               offset: const Offset(0, 3)),
         ],
       ),
@@ -511,16 +520,13 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
           Text(
             hasRating ? shop.rating.toStringAsFixed(1) : 'New',
             style: GoogleFonts.outfit(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: Colors.white),
+                fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
           ),
           if (hasRating) ...[
             Text(
               ' (${shop.totalReviews})',
               style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  color: Colors.white.withValues(alpha: 0.75)),
+                  fontSize: 11, color: Colors.white.withValues(alpha: 0.75)),
             ),
           ],
         ],

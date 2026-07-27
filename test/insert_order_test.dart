@@ -7,17 +7,24 @@ Future<void> main() async {
   final lines = envFile.readAsLinesSync();
   String? supabaseUrl, serviceRoleKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL=')) supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_SERVICE_ROLE=')) serviceRoleKey = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_URL='))
+      supabaseUrl = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_SERVICE_ROLE='))
+      serviceRoleKey = line.split('=')[1].trim();
   }
 
   final client = SupabaseClient(supabaseUrl!, serviceRoleKey!);
-  
+
   // Use the magic reviewer account that definitely exists
   final uid = '00000000-0000-0000-0000-919999999996';
-  
+
   final shop = await client.from('shops').select('id').limit(1).maybeSingle();
-  final product = await client.from('products').select('id, name, price, category').eq('shop_id', shop?['id']).limit(1).maybeSingle();
+  final product = await client
+      .from('products')
+      .select('id, name, price, category')
+      .eq('shop_id', shop?['id'])
+      .limit(1)
+      .maybeSingle();
 
   final orderId = const Uuid().v4();
   final cartGroupId = const Uuid().v4();
@@ -38,7 +45,7 @@ Future<void> main() async {
     'non_food_gst_amount': 14.95,
     'grand_total_collected': price + 15.0 + 14.95,
   };
-  
+
   final item = {
     'id': const Uuid().v4(),
     'order_id': orderId,
@@ -55,6 +62,7 @@ Future<void> main() async {
       'p_cart_group_id': cartGroupId,
       'p_coupon_id': null,
       'p_idempotency_key': cartGroupId,
+      'p_order_id_to_cancel': null,
     });
     print('RPC succeeded!');
   } catch (e) {
@@ -63,9 +71,13 @@ Future<void> main() async {
 
   print('Querying just created order with serviceRole...');
   try {
-    final response = await client.from('orders').select('id, created_at').eq('id', orderId).single();
+    final response = await client
+        .from('orders')
+        .select('id, created_at')
+        .eq('id', orderId)
+        .single();
     print('Order found: $response');
-  } catch(e) {
+  } catch (e) {
     print('ServiceRole fetch failed: $e');
   }
 }

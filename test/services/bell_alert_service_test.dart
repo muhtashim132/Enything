@@ -36,7 +36,7 @@ void main() {
 
   test('BellAlertService race condition on concurrent adds', () async {
     final service = BellAlertService.instance;
-    
+
     // Fire concurrent requests
     await Future.wait<void>([
       service.addPendingOrder('async1'),
@@ -45,7 +45,7 @@ void main() {
     ]);
 
     expect(service.pendingCount, 3);
-    
+
     await service.clearAll();
     expect(service.pendingCount, 0);
   });

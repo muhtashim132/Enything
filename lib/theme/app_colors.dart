@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // ── Primary Brand Colors — Cobalt Blue (2026 premium) ──────────────────────
-  static const Color primary = Color(0xFF1E3FD8);       // Vivid cobalt — energetic & trustworthy
-  static const Color primaryDark = Color(0xFF0F1E80);   // Deep cobalt for dark mode depths
-  static const Color primaryLight = Color(0xFF3D6BFF);  // Electric blue for glows/accents
+  static const Color primary =
+      Color(0xFF1E3FD8); // Vivid cobalt — energetic & trustworthy
+  static const Color primaryDark =
+      Color(0xFF0F1E80); // Deep cobalt for dark mode depths
+  static const Color primaryLight =
+      Color(0xFF3D6BFF); // Electric blue for glows/accents
 
   // ── Secondary — Warm Coral-Orange (CTA) ────────────────────────────────────
-  static const Color secondary = Color(0xFFFF6B35);     // Warm coral — more modern than pure orange
+  static const Color secondary =
+      Color(0xFFFF6B35); // Warm coral — more modern than pure orange
   static const Color secondaryLight = Color(0xFFFF8C42);
 
   // ── Accent — Rich Gold ─────────────────────────────────────────────────────
@@ -31,12 +35,14 @@ class AppColors {
   static const Color nonVegRed = Color(0xFFB71C1C);
 
   // ── Backgrounds ────────────────────────────────────────────────────────────
-  static const Color background = Color(0xFFF5F6FF);     // Slight blue tint — premium light
+  static const Color background =
+      Color(0xFFF5F6FF); // Slight blue tint — premium light
   static const Color surfaceColor = Color(0xFFFFFFFF);
   static const Color cardBg = Color(0xFFFFFFFF);
-  static const Color darkBg = Color(0xFF0C0E1A);         // True near-black with blue undertone
-  static const Color darkSurface = Color(0xFF141626);    // Richer dark surface
-  static const Color darkCard = Color(0xFF1A1D30);       // Dark card background
+  static const Color darkBg =
+      Color(0xFF0C0E1A); // True near-black with blue undertone
+  static const Color darkSurface = Color(0xFF141626); // Richer dark surface
+  static const Color darkCard = Color(0xFF1A1D30); // Dark card background
 
   // ── Premium Surface Elevations ─────────────────────────────────────────────
   static const Color surfaceElevatedLight = Color(0xFFEEF0FF);
@@ -45,7 +51,7 @@ class AppColors {
   static const Color surfaceOverlayDark = Color(0xFF252840);
 
   // ── Text Colors ────────────────────────────────────────────────────────────
-  static const Color textPrimary = Color(0xFF111827);    // Rich near-black, warm
+  static const Color textPrimary = Color(0xFF111827); // Rich near-black, warm
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color textLight = Color(0xFF9CA3AF);
   static const Color textOnPrimary = Color(0xFFFFFFFF);

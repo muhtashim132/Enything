@@ -9,8 +9,8 @@ class BellSettingsService {
   BellSettingsService._();
   static final BellSettingsService instance = BellSettingsService._();
 
-  static const _loopKey   = 'bell_loop_enabled_';
-  static const _soundKey  = 'bell_custom_path_';
+  static const _loopKey = 'bell_loop_enabled_';
+  static const _soundKey = 'bell_custom_path_';
 
   // ── Loop bell preference ─────────────────────────────────────────────────
 
@@ -22,7 +22,8 @@ class BellSettingsService {
     return prefs.getBool('$_loopKey$userId') ?? true;
   }
 
-  Future<void> setLoopBellEnabled(String userId, {required bool enabled}) async {
+  Future<void> setLoopBellEnabled(String userId,
+      {required bool enabled}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('$_loopKey$userId', enabled);
   }

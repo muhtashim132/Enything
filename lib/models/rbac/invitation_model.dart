@@ -27,7 +27,8 @@ class AdminInvitationModel {
 
   bool get isExpired =>
       status == InvitationStatus.expired ||
-      (status == InvitationStatus.pending && expiresAt.isBefore(DateTime.now()));
+      (status == InvitationStatus.pending &&
+          expiresAt.isBefore(DateTime.now()));
 
   factory AdminInvitationModel.fromMap(Map<String, dynamic> map) {
     return AdminInvitationModel(
@@ -52,10 +53,14 @@ class AdminInvitationModel {
 
   static InvitationStatus _parseStatus(String s) {
     switch (s) {
-      case 'accepted': return InvitationStatus.accepted;
-      case 'expired': return InvitationStatus.expired;
-      case 'revoked': return InvitationStatus.revoked;
-      default: return InvitationStatus.pending;
+      case 'accepted':
+        return InvitationStatus.accepted;
+      case 'expired':
+        return InvitationStatus.expired;
+      case 'revoked':
+        return InvitationStatus.revoked;
+      default:
+        return InvitationStatus.pending;
     }
   }
 

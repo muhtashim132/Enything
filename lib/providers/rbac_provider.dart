@@ -25,7 +25,8 @@ class RbacProvider extends ChangeNotifier {
   List<PermissionModel> get allPermissions => _allPermissions;
   bool get loading => _loading;
   String? get error => _error;
-  bool get isSuperAdmin => _currentAdmin?.adminLevel == 'superadmin' ||
+  bool get isSuperAdmin =>
+      _currentAdmin?.adminLevel == 'superadmin' ||
       _currentAdmin?.adminLevel == 'super_admin' ||
       (_currentAdmin?.role?.slug == 'super_admin');
 

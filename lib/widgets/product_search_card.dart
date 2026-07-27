@@ -40,12 +40,15 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     final isLocked = isShopClosed || isProductUnavailable;
 
     return GestureDetector(
-      onTap: isLocked ? null : () => showProductDetailSheet(context, product.id),
+      onTap:
+          isLocked ? null : () => showProductDetailSheet(context, product.id),
       onTapDown: isLocked ? null : (_) => setState(() => _isPressed = true),
       onTapUp: isLocked ? null : (_) => setState(() => _isPressed = false),
       onTapCancel: isLocked ? null : () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? PremiumAnimations.pressedScale : PremiumAnimations.normalScale,
+        scale: _isPressed
+            ? PremiumAnimations.pressedScale
+            : PremiumAnimations.normalScale,
         duration: PremiumAnimations.fast,
         curve: PremiumAnimations.defaultCurve,
         child: AnimatedContainer(
@@ -57,7 +60,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             border: isDark
                 ? Border.all(color: Colors.white.withValues(alpha: 0.07))
                 : null,
-            boxShadow: PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
+            boxShadow:
+                PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
           child: SizedBox(
             height: 140,
@@ -140,12 +144,14 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                       if (isLocked)
                         Positioned.fill(
                           child: ClipRRect(
-                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(22)),
+                            borderRadius: const BorderRadius.horizontal(
+                                left: Radius.circular(22)),
                             child: Container(
                               color: Colors.black.withValues(alpha: 0.65),
                               child: Center(
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: Colors.black.withValues(alpha: 0.8),
                                     borderRadius: BorderRadius.circular(6),
@@ -257,8 +263,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                 height: 18,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: AppColors.primary
-                                      .withValues(alpha: 0.1),
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.1),
                                   border: Border.all(
                                     color: AppColors.primary
                                         .withValues(alpha: 0.3),
@@ -307,30 +313,29 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                     fontSize: 16,
                                   ),
                                 ),
-                                if (hasDiscount) ...
-                                  [
-                                    Text(
-                                      '₹${product.originalPrice!.toStringAsFixed(0)}',
-                                      style: GoogleFonts.outfit(
-                                        color: isDark
-                                            ? Colors.white38
-                                            : AppColors.textLight,
-                                        fontSize: 11,
-                                        decoration: TextDecoration.lineThrough,
-                                        decorationColor: isDark
-                                            ? Colors.white38
-                                            : AppColors.textLight,
-                                      ),
+                                if (hasDiscount) ...[
+                                  Text(
+                                    '₹${product.originalPrice!.toStringAsFixed(0)}',
+                                    style: GoogleFonts.outfit(
+                                      color: isDark
+                                          ? Colors.white38
+                                          : AppColors.textLight,
+                                      fontSize: 11,
+                                      decoration: TextDecoration.lineThrough,
+                                      decorationColor: isDark
+                                          ? Colors.white38
+                                          : AppColors.textLight,
                                     ),
-                                    Text(
-                                      'Save ₹${(product.originalPrice! - product.price).toStringAsFixed(0)}',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.success,
-                                      ),
+                                  ),
+                                  Text(
+                                    'Save ₹${(product.originalPrice! - product.price).toStringAsFixed(0)}',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.success,
                                     ),
-                                  ],
+                                  ),
+                                ],
                               ],
                             ),
 
@@ -340,30 +345,31 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                               switchInCurve: Curves.elasticOut,
                               switchOutCurve: Curves.easeIn,
                               transitionBuilder: (child, animation) =>
-                                ScaleTransition(
-                                  scale: animation,
-                                  child: FadeTransition(opacity: animation, child: child),
-                                ),
+                                  ScaleTransition(
+                                scale: animation,
+                                child: FadeTransition(
+                                    opacity: animation, child: child),
+                              ),
                               child: isLocked
-                                ? _buildUnavailableButton(context, isDark)
-                                : product.variants.isNotEmpty
-                                  ? _buildAddButton(context, isDark)
-                                  : quantity > 0
-                                    ? _buildStepper(context, quantity)
-                                    : _buildAddButton(context, isDark),
+                                  ? _buildUnavailableButton(context, isDark)
+                                  : product.variants.isNotEmpty
+                                      ? _buildAddButton(context, isDark)
+                                      : quantity > 0
+                                          ? _buildStepper(context, quantity)
+                                          : _buildAddButton(context, isDark),
                             ),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
-    ),
-  ),
-);
+    );
   }
 
   Widget _buildStepper(BuildContext context, int quantity) {
@@ -389,8 +395,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             onTap: () => context
                 .read<CartProvider>()
                 .updateQuantity(product.id, quantity - 1),
-            child: const Icon(Icons.remove_rounded,
-                size: 16, color: Colors.white),
+            child:
+                const Icon(Icons.remove_rounded, size: 16, color: Colors.white),
           ),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
@@ -407,11 +413,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             ),
           ),
           GestureDetector(
-            onTap: () => context
-                .read<CartProvider>()
-                .addItem(product, shop),
-            child: const Icon(Icons.add_rounded,
-                size: 16, color: Colors.white),
+            onTap: () => context.read<CartProvider>().addItem(product, shop),
+            child: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
           ),
         ],
       ),
@@ -425,7 +428,9 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
         if (product.variants.isNotEmpty) {
           showProductDetailSheet(context, product.id, highlightVariants: true);
         } else {
-          context.read<CartProvider>().addItemWithFeedback(context, product, shop);
+          context
+              .read<CartProvider>()
+              .addItemWithFeedback(context, product, shop);
         }
       },
       child: Container(

@@ -7,8 +7,10 @@ Future<void> main() async {
   String supabaseUrl = '';
   String supabaseAnonKey = '';
   for (var line in await envFile.readAsLines()) {
-    if (line.startsWith('SUPABASE_URL=')) supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY=')) supabaseAnonKey = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_URL='))
+      supabaseUrl = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_ANON_KEY='))
+      supabaseAnonKey = line.split('=')[1].trim();
   }
 
   final client = SupabaseClient(
@@ -17,7 +19,8 @@ Future<void> main() async {
     authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
   );
   try {
-    final res = await client.auth.signUp(email: 'mock919999999996@enything.com', password: 'Dummy123');
+    final res = await client.auth
+        .signUp(email: 'mock919999999996@enything.com', password: 'Dummy123');
     print('Signed up: ${res.user?.id}');
   } catch (e, st) {
     print('Error: $e');

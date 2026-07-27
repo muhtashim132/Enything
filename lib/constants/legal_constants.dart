@@ -357,7 +357,8 @@ class LegalConstants {
 
   static String getThirdPolicyTitle(String? role) {
     if (role == 'seller') return 'Seller Refund & Cancellation Policy';
-    if (role == 'delivery_partner') return 'Delivery Partner Conduct & Deactivation Policy';
+    if (role == 'delivery_partner')
+      return 'Delivery Partner Conduct & Deactivation Policy';
     return 'Refund & Cancellation Policy';
   }
 }

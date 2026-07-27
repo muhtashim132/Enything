@@ -34,7 +34,8 @@ class CustomerOrderMapPage extends StatefulWidget {
   final OrderModel order;
   final List<OrderModel>? groupOrders;
 
-  const CustomerOrderMapPage({super.key, required this.order, this.groupOrders});
+  const CustomerOrderMapPage(
+      {super.key, required this.order, this.groupOrders});
 
   @override
   State<CustomerOrderMapPage> createState() => _CustomerOrderMapPageState();
@@ -51,8 +52,10 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   double? _deliveryKm;
 
   // Live rider position (updated via Realtime)
-  final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier = ValueNotifier({});
-  final ValueNotifier<Map<String, DateTime>> _riderUpdatedAtsNotifier = ValueNotifier({});
+  final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier =
+      ValueNotifier({});
+  final ValueNotifier<Map<String, DateTime>> _riderUpdatedAtsNotifier =
+      ValueNotifier({});
   RealtimeChannel? _channel;
   bool _isIntentionalDisconnect = false;
   Timer? _updateTimer;
@@ -136,7 +139,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     _isIntentionalDisconnect = false;
 
     final cartGroupId = widget.order.cartGroupId;
-    final channelName = cartGroupId != null ? 'customer-map-group-$cartGroupId' : 'customer-map-${widget.order.id}';
+    final channelName = cartGroupId != null
+        ? 'customer-map-group-$cartGroupId'
+        : 'customer-map-${widget.order.id}';
 
     _channel = _supabase
         .channel(channelName)
@@ -157,20 +162,24 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
             final pid = r['delivery_partner_id'] as String?;
             final orderId = r['id'] as String;
 
-            if (newStatus == 'delivered' || newStatus == 'cancelled' || newStatus == 'rejected') {
+            if (newStatus == 'delivered' ||
+                newStatus == 'cancelled' ||
+                newStatus == 'rejected') {
               if (pid != null) {
                 if (_riderLocationsNotifier.value.containsKey(pid)) {
-                  final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                  final currentLocs =
+                      Map<String, LatLng>.from(_riderLocationsNotifier.value);
                   currentLocs.remove(pid);
                   _riderLocationsNotifier.value = currentLocs;
                 }
                 if (_riderUpdatedAtsNotifier.value.containsKey(pid)) {
-                  final currentAts = Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
+                  final currentAts = Map<String, DateTime>.from(
+                      _riderUpdatedAtsNotifier.value);
                   currentAts.remove(pid);
                   _riderUpdatedAtsNotifier.value = currentAts;
                 }
               }
-              
+
               // If this is a single order tracking map, pop it so user sees the rating modal!
               if (widget.groupOrders == null || widget.groupOrders!.isEmpty) {
                 if (mounted && Navigator.canPop(context)) {
@@ -184,12 +193,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
             final oldPid = _orderToRiderMap[orderId];
             if (oldPid != null && oldPid != pid) {
               if (_riderLocationsNotifier.value.containsKey(oldPid)) {
-                final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                final currentLocs =
+                    Map<String, LatLng>.from(_riderLocationsNotifier.value);
                 currentLocs.remove(oldPid);
                 _riderLocationsNotifier.value = currentLocs;
               }
               if (_riderUpdatedAtsNotifier.value.containsKey(oldPid)) {
-                final currentAts = Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
+                final currentAts =
+                    Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
                 currentAts.remove(oldPid);
                 _riderUpdatedAtsNotifier.value = currentAts;
               }
@@ -203,14 +214,17 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
             final lat = (r['rider_lat'] as num?)?.toDouble();
             final lng = (r['rider_lng'] as num?)?.toDouble();
-            
+
             if (lat != null && lng != null && pid != null) {
               final oldLoc = _riderLocationsNotifier.value[pid];
               final newLoc = LatLng(lat, lng);
-              bool locChanged = oldLoc == null || oldLoc.latitude != newLoc.latitude || oldLoc.longitude != newLoc.longitude;
+              bool locChanged = oldLoc == null ||
+                  oldLoc.latitude != newLoc.latitude ||
+                  oldLoc.longitude != newLoc.longitude;
 
               if (locChanged) {
-                final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                final currentLocs =
+                    Map<String, LatLng>.from(_riderLocationsNotifier.value);
                 currentLocs[pid] = newLoc;
                 _riderLocationsNotifier.value = currentLocs;
               }
@@ -221,7 +235,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                 if (updated != null) {
                   final oldAt = _riderUpdatedAtsNotifier.value[pid];
                   if (oldAt == null || oldAt.isBefore(updated)) {
-                    final currentAts = Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
+                    final currentAts = Map<String, DateTime>.from(
+                        _riderUpdatedAtsNotifier.value);
                     currentAts[pid] = updated;
                     _riderUpdatedAtsNotifier.value = currentAts;
                   }
@@ -231,13 +246,15 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           },
         )
         .subscribe((status, [error]) {
-          if ((status == RealtimeSubscribeStatus.closed || status == RealtimeSubscribeStatus.channelError) && !_isIntentionalDisconnect) {
-            debugPrint('Realtime channel disconnected. Reconnecting in 5s...');
-            Future.delayed(const Duration(seconds: 5), () {
-              if (mounted) _subscribeToRider();
-            });
-          }
+      if ((status == RealtimeSubscribeStatus.closed ||
+              status == RealtimeSubscribeStatus.channelError) &&
+          !_isIntentionalDisconnect) {
+        debugPrint('Realtime channel disconnected. Reconnecting in 5s...');
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted) _subscribeToRider();
         });
+      }
+    });
   }
 
   // ── ORS Route Fetching ───────────────────────────────────────────────────
@@ -245,7 +262,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   Future<List<LatLng>> _fetchORSRoute(LatLng from, LatLng to) async {
     int maxRetries = 3;
     int retryDelaySeconds = 2;
-    
+
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         final key = dotenv.maybeGet('ORS_API_KEY') ?? '';
@@ -263,7 +280,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final features = data['features'] as List?;
-        if (features == null || features.isEmpty) throw Exception('No features');
+        if (features == null || features.isEmpty)
+          throw Exception('No features');
 
         final geometry = features.first['geometry'] as Map<String, dynamic>;
         final coords = geometry['coordinates'] as List;
@@ -277,7 +295,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
       } catch (e) {
         debugPrint('ORS route error (attempt $attempt): $e');
         if (attempt == maxRetries) {
-          debugPrint('Falling back to straight line after $maxRetries attempts');
+          debugPrint(
+              'Falling back to straight line after $maxRetries attempts');
           return [from, to];
         }
         await Future.delayed(Duration(seconds: retryDelaySeconds));
@@ -322,7 +341,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
               ) /
               1000;
         }
-        // Actually, taking max distance is more accurate for a multi-shop ETA than summing them, 
+        // Actually, taking max distance is more accurate for a multi-shop ETA than summing them,
         // since we just draw separate lines to customer.
         if (km > totalKm) totalKm = km;
       }
@@ -340,12 +359,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
   void _fitMapBounds() {
     final pts = <LatLng>[
-      if (widget.order.deliveryLat != null && widget.order.deliveryLng != null && widget.order.deliveryLat != 0.0)
+      if (widget.order.deliveryLat != null &&
+          widget.order.deliveryLng != null &&
+          widget.order.deliveryLat != 0.0)
         LatLng(widget.order.deliveryLat!, widget.order.deliveryLng!),
       for (final loc in _riderLocationsNotifier.value.values)
         if (loc.latitude != 0.0) loc,
     ];
-    
+
     final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
         ? widget.groupOrders!
         : [widget.order];
@@ -551,7 +572,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final order = widget.order;
     final isOutForDelivery = order.status == 'out_for_delivery';
-    final isRiderActiveStatus = ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(order.status);
+    final isRiderActiveStatus = [
+      'awaiting_payment',
+      'confirmed',
+      'preparing',
+      'ready_for_pickup',
+      'picked_up',
+      'out_for_delivery'
+    ].contains(order.status);
 
     final custLat = order.deliveryLat;
     final custLng = order.deliveryLng;
@@ -565,7 +593,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
       double jLat = lat;
       double jLng = lng;
       int attempts = 0;
-      while (seenCoords.contains('${jLat.toStringAsFixed(5)}_${jLng.toStringAsFixed(5)}') && attempts < 5) {
+      while (seenCoords.contains(
+              '${jLat.toStringAsFixed(5)}_${jLng.toStringAsFixed(5)}') &&
+          attempts < 5) {
         jLat += 0.00015;
         jLng += 0.00015;
         attempts++;
@@ -582,7 +612,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
             point: applyJitter(shop.shopLat!, shop.shopLng!),
             width: 80,
             height: 70,
-            child: _mapMarker(_kShopMarkerColor, Icons.storefront_rounded, 'Shop'),
+            child:
+                _mapMarker(_kShopMarkerColor, Icons.storefront_rounded, 'Shop'),
           ),
       // Customer home pin
       if (custLat != null && custLng != null)
@@ -590,15 +621,16 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           point: applyJitter(custLat, custLng),
           width: 80,
           height: 70,
-          child: _mapMarker(
-              _kCustomerMarkerColor, Icons.home_rounded, 'You'),
+          child: _mapMarker(_kCustomerMarkerColor, Icons.home_rounded, 'You'),
         ),
     ];
 
     // Map initial centre — prefer customer address
     final mapCenter = (custLat != null && custLng != null)
         ? LatLng(custLat, custLng)
-        : (shops.isNotEmpty && shops.first.shopLat != null && shops.first.shopLng != null)
+        : (shops.isNotEmpty &&
+                shops.first.shopLat != null &&
+                shops.first.shopLng != null)
             ? LatLng(shops.first.shopLat!, shops.first.shopLng!)
             : const LatLng(28.6139, 77.2090);
 
@@ -621,25 +653,26 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.enything.app',
                 ),
 
                 // Shop → Customer delivery routes (orange)
                 if (_deliveryRoutes.isNotEmpty)
                   PolylineLayer(
-                    polylines: _deliveryRoutes.map((route) => Polyline(
-                      points: route,
-                      color: _kDeliveryColor,
-                      strokeWidth: 5.0,
-                      borderStrokeWidth: 1.5,
-                      borderColor: Colors.white.withValues(alpha: 0.6),
-                    )).toList(),
+                    polylines: _deliveryRoutes
+                        .map((route) => Polyline(
+                              points: route,
+                              color: _kDeliveryColor,
+                              strokeWidth: 5.0,
+                              borderStrokeWidth: 1.5,
+                              borderColor: Colors.white.withValues(alpha: 0.6),
+                            ))
+                        .toList(),
                   ),
 
                 MarkerLayer(markers: markers),
-                
+
                 // STRESS-TEST FIX: Live Rider layer completely isolated from setState
                 if (isRiderActiveStatus)
                   ValueListenableBuilder<Map<String, LatLng>>(
@@ -676,9 +709,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E1E2E)
-                              : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF1E1E2E) : Colors.white,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
@@ -703,9 +735,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E1E2E)
-                              : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF1E1E2E) : Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
@@ -752,9 +783,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E1E2E)
-                              : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF1E1E2E) : Colors.white,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
@@ -787,9 +817,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 20, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF1E1E2E)
-                          : Colors.white,
+                      color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
@@ -872,7 +900,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                               ValueListenableBuilder<Map<String, LatLng>>(
                                 valueListenable: _riderLocationsNotifier,
                                 builder: (context, riderLocs, child) {
-                                  if (riderLocs.isEmpty) return const SizedBox.shrink();
+                                  if (riderLocs.isEmpty)
+                                    return const SizedBox.shrink();
                                   return Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -894,12 +923,17 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      ValueListenableBuilder<Map<String, DateTime>>(
-                                        valueListenable: _riderUpdatedAtsNotifier,
-                                        builder: (context, riderUpdatedAts, child) {
-                                          if (riderUpdatedAts.isEmpty) return const SizedBox.shrink();
+                                      ValueListenableBuilder<
+                                          Map<String, DateTime>>(
+                                        valueListenable:
+                                            _riderUpdatedAtsNotifier,
+                                        builder:
+                                            (context, riderUpdatedAts, child) {
+                                          if (riderUpdatedAts.isEmpty)
+                                            return const SizedBox.shrink();
                                           return Padding(
-                                            padding: const EdgeInsets.only(left: 12),
+                                            padding:
+                                                const EdgeInsets.only(left: 12),
                                             child: ValueListenableBuilder<int>(
                                               valueListenable: _timeTicker,
                                               builder: (context, _, child) {
@@ -952,10 +986,13 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                         const SizedBox(height: 16),
 
                         // Call buttons
-                        if ((order.shopPhone != null && order.shopPhone!.isNotEmpty) ||
-                            (order.riderPhone != null && order.riderPhone!.isNotEmpty)) ...[
+                        if ((order.shopPhone != null &&
+                                order.shopPhone!.isNotEmpty) ||
+                            (order.riderPhone != null &&
+                                order.riderPhone!.isNotEmpty)) ...[
                           Row(children: [
-                            if (order.shopPhone != null && order.shopPhone!.isNotEmpty)
+                            if (order.shopPhone != null &&
+                                order.shopPhone!.isNotEmpty)
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () => _call(order.shopPhone!),
@@ -977,10 +1014,13 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                   ),
                                 ),
                               ),
-                            if ((order.shopPhone != null && order.shopPhone!.isNotEmpty) &&
-                                (order.riderPhone != null && order.riderPhone!.isNotEmpty))
+                            if ((order.shopPhone != null &&
+                                    order.shopPhone!.isNotEmpty) &&
+                                (order.riderPhone != null &&
+                                    order.riderPhone!.isNotEmpty))
                               const SizedBox(width: 10),
-                            if (order.riderPhone != null && order.riderPhone!.isNotEmpty)
+                            if (order.riderPhone != null &&
+                                order.riderPhone!.isNotEmpty)
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () => _call(order.riderPhone!),
@@ -993,8 +1033,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                           fontWeight: FontWeight.w700)),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: AppColors.accent,
-                                    side:
-                                        const BorderSide(color: AppColors.accent),
+                                    side: const BorderSide(
+                                        color: AppColors.accent),
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 12),
                                     shape: RoundedRectangleBorder(
@@ -1017,6 +1057,5 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     );
   }
 
-  int _secondsAgo(DateTime dt) =>
-      DateTime.now().difference(dt).inSeconds.abs();
+  int _secondsAgo(DateTime dt) => DateTime.now().difference(dt).inSeconds.abs();
 }

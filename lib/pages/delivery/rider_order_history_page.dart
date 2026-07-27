@@ -7,7 +7,6 @@ import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/time_utils.dart';
 
-
 class RiderOrderHistoryPage extends StatefulWidget {
   const RiderOrderHistoryPage({super.key});
 
@@ -31,7 +30,8 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
     try {
       final res = await _supabase
           .from('orders')
-          .select('id, created_at, status, rider_earnings, delivery_charges, shops!shop_id(name)')
+          .select(
+              'id, created_at, status, rider_earnings, delivery_charges, shops!shop_id(name)')
           .eq('delivery_partner_id', auth.currentUserId ?? '')
           .inFilter('status', ['delivered', 'cancelled', 'partner_rejected'])
           .order('created_at', ascending: false)
@@ -54,7 +54,8 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFBFBFE),
       appBar: AppBar(
-        title: Text('Order History', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        title: Text('Order History',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
         centerTitle: true,
       ),
       body: _isLoading
@@ -73,8 +74,13 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
                     itemCount: _orders.length,
                     itemBuilder: (context, index) {
                       final order = _orders[index];
-                      final date = (DateTime.tryParse(order['created_at'] ?? '')?.toIST()) ?? DateTime.now();
-                      final amount = (order['rider_earnings'] ?? order['delivery_charges'] ?? 0.0).toDouble();
+                      final date = (DateTime.tryParse(order['created_at'] ?? '')
+                              ?.toIST()) ??
+                          DateTime.now();
+                      final amount = (order['rider_earnings'] ??
+                              order['delivery_charges'] ??
+                              0.0)
+                          .toDouble();
                       final shopName = order['shops']?['name'] ?? 'Shop';
                       final status = order['status'] as String? ?? 'unknown';
 
@@ -115,7 +121,9 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
-                                status == 'delivered' ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                                status == 'delivered'
+                                    ? Icons.check_circle_rounded
+                                    : Icons.cancel_rounded,
                                 color: statusColor,
                               ),
                             ),
@@ -126,18 +134,25 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
                                 children: [
                                   Text(
                                     'Order #${order['id'].toString().substring(0, 8).toUpperCase()}',
-                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15),
+                                    style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15),
                                   ),
                                   Text(
                                     shopName,
-                                    style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+                                    style: GoogleFonts.outfit(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     DateFormat('MMM dd, hh:mm a').format(date),
-                                    style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
+                                    style: GoogleFonts.outfit(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -148,15 +163,20 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
                                 Text(
                                   '+₹${amount.toStringAsFixed(0)}',
                                   style: GoogleFonts.outfit(
-                                    color: status == 'delivered' ? AppColors.success : AppColors.textSecondary,
+                                    color: status == 'delivered'
+                                        ? AppColors.success
+                                        : AppColors.textSecondary,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 16,
-                                    decoration: status != 'delivered' ? TextDecoration.lineThrough : null,
+                                    decoration: status != 'delivered'
+                                        ? TextDecoration.lineThrough
+                                        : null,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: statusColor.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(6),

@@ -50,9 +50,10 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
         _totalUsers = res['total_users'] as int;
         _pendingKyc = res['pending_kyc'] as int;
         _pendingWithdrawals = res['pending_withdrawals'] as int;
-        
+
         // Platform commission (dynamic based on config)
-        _commission = _totalRevenue * (PlatformConfigProvider.instance?.commissionRate ?? 0.05);
+        _commission = _totalRevenue *
+            (PlatformConfigProvider.instance?.commissionRate ?? 0.05);
 
         final spotsRaw = res['revenue_spots'] as List;
         _revenueSpots = spotsRaw.asMap().entries.map((e) {
@@ -86,7 +87,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
             backgroundColor: AdminColors.surface,
             elevation: 0,
             leading: const BackButton(color: Colors.white),
-            title: Text(title, style: AdminStyles.title().copyWith(color: Colors.white)),
+            title: Text(title,
+                style: AdminStyles.title().copyWith(color: Colors.white)),
           ),
           body: child,
         ),
@@ -94,9 +96,11 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
     );
   }
 
-  void _handleNav(BuildContext context, List<String> requiredPermissions, String title, Widget child) {
+  void _handleNav(BuildContext context, List<String> requiredPermissions,
+      String title, Widget child) {
     final rbac = context.read<RbacProvider>();
-    final hasPerm = rbac.isSuperAdmin || requiredPermissions.any((p) => rbac.can(p));
+    final hasPerm =
+        rbac.isSuperAdmin || requiredPermissions.any((p) => rbac.can(p));
     if (hasPerm) {
       _openModule(context, title, child);
     } else {
@@ -140,7 +144,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.currency_rupee_rounded,
                 gradient: AdminGradients.primary,
                 loading: _loading,
-                onTap: () => _handleNav(context, ['finance.view'], 'Finance', const FinanceAdminPage()),
+                onTap: () => _handleNav(context, ['finance.view'], 'Finance',
+                    const FinanceAdminPage()),
               )
                   .animate()
                   .fadeIn(delay: 50.ms)
@@ -152,7 +157,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.shopping_bag_rounded,
                 gradient: AdminGradients.info,
                 loading: _loading,
-                onTap: () => _handleNav(context, ['orders.view'], 'Orders', const OrdersAdminPage()),
+                onTap: () => _handleNav(context, ['orders.view'], 'Orders',
+                    const OrdersAdminPage()),
               )
                   .animate()
                   .fadeIn(delay: 100.ms)
@@ -165,7 +171,12 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 loading: _loading,
                 onTap: () {
                   final rbac = context.read<RbacProvider>();
-                  _handleNav(context, ['customers.view', 'sellers.view', 'riders.view'], 'Users', ChangeNotifierProvider.value(value: rbac, child: const UsersAdminPage()));
+                  _handleNav(
+                      context,
+                      ['customers.view', 'sellers.view', 'riders.view'],
+                      'Users',
+                      ChangeNotifierProvider.value(
+                          value: rbac, child: const UsersAdminPage()));
                 },
               )
                   .animate()
@@ -178,7 +189,11 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.pending_actions_rounded,
                 gradient: AdminGradients.warning,
                 loading: _loading,
-                onTap: () => _handleNav(context, ['sellers.approve', 'riders.approve'], 'KYC Verification', const KycReviewPage()),
+                onTap: () => _handleNav(
+                    context,
+                    ['sellers.approve', 'riders.approve'],
+                    'KYC Verification',
+                    const KycReviewPage()),
               )
                   .animate()
                   .fadeIn(delay: 200.ms)
@@ -190,7 +205,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.account_balance_wallet_rounded,
                 gradient: AdminGradients.danger,
                 loading: _loading,
-                onTap: () => _handleNav(context, ['finance.view'], 'Finance', const FinanceAdminPage()),
+                onTap: () => _handleNav(context, ['finance.view'], 'Finance',
+                    const FinanceAdminPage()),
               )
                   .animate()
                   .fadeIn(delay: 250.ms)
@@ -202,7 +218,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                 icon: Icons.bar_chart_rounded,
                 gradient: AdminGradients.primary,
                 loading: _loading,
-                onTap: () => _handleNav(context, ['finance.view'], 'Finance', const FinanceAdminPage()),
+                onTap: () => _handleNav(context, ['finance.view'], 'Finance',
+                    const FinanceAdminPage()),
               )
                   .animate()
                   .fadeIn(delay: 300.ms)
@@ -331,7 +348,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
         touchTooltipData: LineTouchTooltipData(
           getTooltipColor: (spot) => const Color(0xFF6C2BD9),
           tooltipRoundedRadius: 12,
-          tooltipPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          tooltipPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((spot) {
               final val = spot.y;
@@ -359,7 +377,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
       ),
       titlesData: FlTitlesData(
         leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
@@ -379,7 +398,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                     Text(
                       DateFormat('EEE').format(day.toIST()),
                       style: TextStyle(
-                        color: isToday ? Colors.white : AdminColors.textSecondary,
+                        color:
+                            isToday ? Colors.white : AdminColors.textSecondary,
                         fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
                         fontSize: 12,
                       ),

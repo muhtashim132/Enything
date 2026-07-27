@@ -89,7 +89,8 @@ class _LoginPageState extends State<LoginPage>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF8F9FA),
+      backgroundColor:
+          isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF8F9FA),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -99,9 +100,17 @@ class _LoginPageState extends State<LoginPage>
               width: double.infinity,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: isDark 
-                    ? [const Color(0xFF070B19), const Color(0xFF0A1535), const Color(0xFF101B40)]
-                    : [const Color(0xFF0A2A9E), const Color(0xFF071D6B), const Color(0xFF050F3A)],
+                  colors: isDark
+                      ? [
+                          const Color(0xFF070B19),
+                          const Color(0xFF0A1535),
+                          const Color(0xFF101B40)
+                        ]
+                      : [
+                          const Color(0xFF0A2A9E),
+                          const Color(0xFF071D6B),
+                          const Color(0xFF050F3A)
+                        ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -129,7 +138,8 @@ class _LoginPageState extends State<LoginPage>
                         borderRadius: BorderRadius.circular(22),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFF4C542).withValues(alpha: 0.5),
+                            color:
+                                const Color(0xFFF4C542).withValues(alpha: 0.5),
                             blurRadius: 24,
                             offset: const Offset(0, 8),
                             spreadRadius: 2,
@@ -142,7 +152,8 @@ class _LoginPageState extends State<LoginPage>
                         ],
                       ),
                       child: const Center(
-                        child: Icon(Icons.bolt_rounded, color: Colors.white, size: 50),
+                        child: Icon(Icons.bolt_rounded,
+                            color: Colors.white, size: 50),
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -230,7 +241,9 @@ class _LoginPageState extends State<LoginPage>
                               Text(
                                 "Don't have an account? ",
                                 style: GoogleFonts.outfit(
-                                  color: isDark ? Colors.white54 : Colors.grey[600],
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.grey[600],
                                   fontSize: 14,
                                 ),
                               ),
@@ -252,20 +265,31 @@ class _LoginPageState extends State<LoginPage>
                           // Divider
                           Row(
                             children: [
-                              Expanded(child: Divider(color: isDark ? Colors.white10 : Colors.grey[300])),
+                              Expanded(
+                                  child: Divider(
+                                      color: isDark
+                                          ? Colors.white10
+                                          : Colors.grey[300])),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
                                 child: Text(
                                   'OR',
                                   style: GoogleFonts.outfit(
-                                    color: isDark ? Colors.white38 : Colors.grey[400],
+                                    color: isDark
+                                        ? Colors.white38
+                                        : Colors.grey[400],
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 1,
                                   ),
                                 ),
                               ),
-                              Expanded(child: Divider(color: isDark ? Colors.white10 : Colors.grey[300])),
+                              Expanded(
+                                  child: Divider(
+                                      color: isDark
+                                          ? Colors.white10
+                                          : Colors.grey[300])),
                             ],
                           ),
                           const SizedBox(height: 24),
@@ -275,8 +299,12 @@ class _LoginPageState extends State<LoginPage>
                           // Admin Invite Link
                           Center(
                             child: TextButton.icon(
-                              onPressed: () => Navigator.pushNamed(context, AppRoutes.acceptAdminInvite),
-                              icon: const Icon(Icons.admin_panel_settings_outlined, size: 18, color: AppColors.primary),
+                              onPressed: () => Navigator.pushNamed(
+                                  context, AppRoutes.acceptAdminInvite),
+                              icon: const Icon(
+                                  Icons.admin_panel_settings_outlined,
+                                  size: 18,
+                                  color: AppColors.primary),
                               label: Text(
                                 'Have an Admin Invite Code?',
                                 style: GoogleFonts.outfit(
@@ -286,9 +314,12 @@ class _LoginPageState extends State<LoginPage>
                                 ),
                               ),
                               style: TextButton.styleFrom(
-                                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                backgroundColor:
+                                    AppColors.primary.withValues(alpha: 0.1),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14)),
                               ),
                             ),
                           ),
@@ -330,19 +361,24 @@ class _LoginPageState extends State<LoginPage>
         ),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: GoogleFonts.outfit(color: isDark ? Colors.white60 : Colors.grey.shade600),
+          labelStyle: GoogleFonts.outfit(
+              color: isDark ? Colors.white60 : Colors.grey.shade600),
           hintText: hint,
-          hintStyle: GoogleFonts.outfit(color: isDark ? Colors.white30 : Colors.grey.shade400),
-          prefixIcon: Icon(icon, size: 20, color: isDark ? Colors.white60 : Colors.grey.shade600),
+          hintStyle: GoogleFonts.outfit(
+              color: isDark ? Colors.white30 : Colors.grey.shade400),
+          prefixIcon: Icon(icon,
+              size: 20, color: isDark ? Colors.white60 : Colors.grey.shade600),
           filled: true,
           fillColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
+            borderSide: BorderSide(
+                color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
+            borderSide: BorderSide(
+                color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -356,7 +392,8 @@ class _LoginPageState extends State<LoginPage>
             borderRadius: BorderRadius.circular(16),
             borderSide: const BorderSide(color: AppColors.danger, width: 2),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
         ),
       ),
     );
@@ -379,10 +416,13 @@ class _LoginPageState extends State<LoginPage>
         ),
         decoration: InputDecoration(
           labelText: 'Password',
-          labelStyle: GoogleFonts.outfit(color: isDark ? Colors.white60 : Colors.grey.shade600),
+          labelStyle: GoogleFonts.outfit(
+              color: isDark ? Colors.white60 : Colors.grey.shade600),
           hintText: '••••••••',
-          hintStyle: GoogleFonts.outfit(color: isDark ? Colors.white30 : Colors.grey.shade400),
-          prefixIcon: Icon(Icons.lock_outline, size: 20, color: isDark ? Colors.white60 : Colors.grey.shade600),
+          hintStyle: GoogleFonts.outfit(
+              color: isDark ? Colors.white30 : Colors.grey.shade400),
+          prefixIcon: Icon(Icons.lock_outline,
+              size: 20, color: isDark ? Colors.white60 : Colors.grey.shade600),
           suffixIcon: IconButton(
             icon: Icon(
               _obscurePassword
@@ -398,11 +438,13 @@ class _LoginPageState extends State<LoginPage>
           fillColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
+            borderSide: BorderSide(
+                color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
+            borderSide: BorderSide(
+                color: isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -416,7 +458,8 @@ class _LoginPageState extends State<LoginPage>
             borderRadius: BorderRadius.circular(16),
             borderSide: const BorderSide(color: AppColors.danger, width: 2),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
         ),
       ),
     );
@@ -479,7 +522,9 @@ class _LoginPageState extends State<LoginPage>
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: isDark ? AppColors.primary.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.08),
+                color: isDark
+                    ? AppColors.primary.withValues(alpha: 0.15)
+                    : AppColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(

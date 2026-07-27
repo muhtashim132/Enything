@@ -110,8 +110,8 @@ class _InviteAdminDialogState extends State<InviteAdminDialog> {
                     ),
                     const Spacer(),
                     IconButton(
-                      icon:
-                          const Icon(Icons.close_rounded, color: Colors.white38),
+                      icon: const Icon(Icons.close_rounded,
+                          color: Colors.white38),
                       onPressed: () => Navigator.pop(context),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -122,14 +122,18 @@ class _InviteAdminDialogState extends State<InviteAdminDialog> {
 
                 // Email
                 Text('Email Address',
-                    style:
-                        GoogleFonts.outfit(color: Colors.white60, fontSize: 12)),
+                    style: GoogleFonts.outfit(
+                        color: Colors.white60, fontSize: 12)),
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   maxLength: 100,
-                  buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                  buildCounter: (BuildContext context,
+                          {int? currentLength,
+                          int? maxLength,
+                          bool? isFocused}) =>
+                      null,
                   style: GoogleFonts.outfit(color: Colors.white),
                   decoration: _inputDecoration(
                       'e.g. john@company.com', Icons.email_outlined),
@@ -143,8 +147,8 @@ class _InviteAdminDialogState extends State<InviteAdminDialog> {
 
                 // Role
                 Text('Assign Role',
-                    style:
-                        GoogleFonts.outfit(color: Colors.white60, fontSize: 12)),
+                    style: GoogleFonts.outfit(
+                        color: Colors.white60, fontSize: 12)),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<RoleModel>(
                   isExpanded: true,

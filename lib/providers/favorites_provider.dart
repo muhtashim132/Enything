@@ -22,7 +22,8 @@ class FavoritesProvider extends ChangeNotifier {
   Set<String> get favoriteShopIds => _favoriteShopIds;
   bool get isLoading => _isLoading;
 
-  bool isProductFavorite(String productId) => _favoriteProductIds.contains(productId);
+  bool isProductFavorite(String productId) =>
+      _favoriteProductIds.contains(productId);
   bool isShopFavorite(String shopId) => _favoriteShopIds.contains(shopId);
 
   Future<void> fetchFavorites(String userId) async {
@@ -56,7 +57,7 @@ class FavoritesProvider extends ChangeNotifier {
 
   Future<void> toggleProductFavorite(String userId, String productId) async {
     final prevFuture = _productToggleQueues[productId] ?? Future.value();
-    
+
     _productToggleQueues[productId] = prevFuture.then((_) async {
       final isFav = isProductFavorite(productId);
 
@@ -100,7 +101,7 @@ class FavoritesProvider extends ChangeNotifier {
 
   Future<void> toggleShopFavorite(String userId, String shopId) async {
     final prevFuture = _shopToggleQueues[shopId] ?? Future.value();
-    
+
     _shopToggleQueues[shopId] = prevFuture.then((_) async {
       final isFav = isShopFavorite(shopId);
 
@@ -141,7 +142,7 @@ class FavoritesProvider extends ChangeNotifier {
 
     await _shopToggleQueues[shopId];
   }
-  
+
   void clear() {
     _favoriteProductIds.clear();
     _favoriteShopIds.clear();

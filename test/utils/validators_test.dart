@@ -40,7 +40,8 @@ void main() {
       });
 
       test('rejects non-Indian numbers', () {
-        expect(AppValidators.phone('5123456789'), isNotNull); // Doesn't start with 6-9
+        expect(AppValidators.phone('5123456789'),
+            isNotNull); // Doesn't start with 6-9
       });
 
       test('rejects invalid lengths', () {

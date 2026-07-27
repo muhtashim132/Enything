@@ -137,8 +137,8 @@ class _CouponInputWidgetState extends State<CouponInputWidget>
                   fillColor: isDark
                       ? const Color(0xFF0D0D1A)
                       : const Color(0xFFF8F8FC),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,

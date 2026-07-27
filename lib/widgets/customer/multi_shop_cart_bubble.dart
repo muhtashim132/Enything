@@ -56,21 +56,24 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
       final size = MediaQuery.of(context).size;
       _position = Offset(
         size.width - _bubbleSize - 16, // 16px from right edge
-        size.height / 2,               // Middle of screen
+        size.height / 2, // Middle of screen
       );
     }
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
     if (_position == null) return;
-    
+
     final size = MediaQuery.of(context).size;
     final padding = MediaQuery.of(context).padding;
-    
+
     setState(() {
       _position = Offset(
         max(0, min(_position!.dx + details.delta.dx, size.width - _bubbleSize)),
-        max(padding.top, min(_position!.dy + details.delta.dy, size.height - padding.bottom - _bubbleSize)),
+        max(
+            padding.top,
+            min(_position!.dy + details.delta.dy,
+                size.height - padding.bottom - _bubbleSize)),
       );
     });
   }
@@ -112,12 +115,13 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24.0, vertical: 8.0),
                     child: Text(
                       'Active Shops in Cart',
                       style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                   ),
                   const Padding(
@@ -129,12 +133,17 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
                   ),
                   const SizedBox(height: 16),
                   ...shops.map((shop) => ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 24.0, vertical: 8.0),
                         leading: CircleAvatar(
-                          backgroundColor: Theme.of(ctx).primaryColor.withValues(alpha: 0.1),
-                          child: const Icon(Icons.storefront, color: Colors.green), // Assuming green is primary
+                          backgroundColor:
+                              Theme.of(ctx).primaryColor.withValues(alpha: 0.1),
+                          child: const Icon(Icons.storefront,
+                              color: Colors.green), // Assuming green is primary
                         ),
-                        title: Text(shop.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        title: Text(shop.name,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600)),
                         subtitle: Text(shop.category),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
@@ -171,7 +180,7 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
         return Consumer<CartProvider>(
           builder: (context, cartProvider, _) {
             final shops = cartProvider.shops;
-            
+
             // Only show if there are items in the cart
             if (shops.isEmpty) {
               return const SizedBox.shrink();

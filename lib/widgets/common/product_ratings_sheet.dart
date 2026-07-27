@@ -114,7 +114,7 @@ class _ProductRatingsSheetState extends State<ProductRatingsSheet> {
                 itemBuilder: (context, index) {
                   final item = _uniqueProducts[index];
                   final currentRating = _ratings[item.productId] ?? 0;
-                  
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -129,7 +129,8 @@ class _ProductRatingsSheetState extends State<ProductRatingsSheet> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Center(
-                              child: Icon(Icons.shopping_bag_outlined, color: AppColors.textLight),
+                              child: Icon(Icons.shopping_bag_outlined,
+                                  color: AppColors.textLight),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -146,7 +147,8 @@ class _ProductRatingsSheetState extends State<ProductRatingsSheet> {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                if (item.variantName != null && item.variantName!.isNotEmpty)
+                                if (item.variantName != null &&
+                                    item.variantName!.isNotEmpty)
                                   Text(
                                     item.variantName!,
                                     style: GoogleFonts.outfit(
@@ -170,7 +172,8 @@ class _ProductRatingsSheetState extends State<ProductRatingsSheet> {
                               });
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4.0),
                               child: Icon(
                                 starIndex < currentRating
                                     ? Icons.star_rounded
@@ -190,7 +193,8 @@ class _ProductRatingsSheetState extends State<ProductRatingsSheet> {
                         maxLines: 2,
                         decoration: InputDecoration(
                           hintText: 'Add an optional review...',
-                          hintStyle: GoogleFonts.outfit(color: Colors.grey[400]),
+                          hintStyle:
+                              GoogleFonts.outfit(color: Colors.grey[400]),
                           filled: true,
                           fillColor: Colors.grey[50],
                           border: OutlineInputBorder(
@@ -203,7 +207,8 @@ class _ProductRatingsSheetState extends State<ProductRatingsSheet> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: AppColors.primary),
+                            borderSide:
+                                const BorderSide(color: AppColors.primary),
                           ),
                         ),
                       ),
@@ -227,7 +232,9 @@ class _ProductRatingsSheetState extends State<ProductRatingsSheet> {
                             results.add(ProductRatingData(
                               productId: item.productId,
                               rating: r,
-                              review: _reviewControllers[item.productId]!.text.trim(),
+                              review: _reviewControllers[item.productId]!
+                                  .text
+                                  .trim(),
                             ));
                           }
                         }

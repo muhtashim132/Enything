@@ -62,10 +62,12 @@ class ReferralProvider extends ChangeNotifier {
   /// Generates and saves a referral code for the user (idempotent).
   /// Returns the code on success, null on failure.
   /// BUG-DB4 FIX: Retries with a numeric suffix if code collision occurs.
-  Future<String?> generateReferralCode(String userId, String displayName) async {
+  Future<String?> generateReferralCode(
+      String userId, String displayName) async {
     if (_referralCode != null) return _referralCode;
     try {
-      final namePart = displayName.replaceAll(RegExp(r'[^a-zA-Z]'), '').toUpperCase();
+      final namePart =
+          displayName.replaceAll(RegExp(r'[^a-zA-Z]'), '').toUpperCase();
       final nameCode = namePart.length >= 4
           ? namePart.substring(0, 4)
           : namePart.padRight(4, 'X');

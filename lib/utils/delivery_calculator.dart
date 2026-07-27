@@ -139,13 +139,13 @@ class DeliveryCalculator {
     final mins = etaMinutes(distanceKm, prepTimeMinutes);
     if (mins <= 0) return '< 5 mins';
     if (mins <= 5) return 'Under 5 mins';
-    
+
     // Show a ±5 min range, same as Zomato
     final lo = (mins ~/ 5) * 5;
     final hi = lo + 10;
-    
+
     if (hi > 90) return '90+ mins';
-    
+
     if (hi >= 60) {
       final h = hi ~/ 60;
       final m = hi % 60;
@@ -160,7 +160,9 @@ class DeliveryCalculator {
       {DateTime? fromNow}) {
     final mins = etaMinutes(distanceKm, prepTimeMinutes);
     final arrival = (fromNow ?? DateTime.now()).add(Duration(minutes: mins));
-    final h = arrival.hour > 12 ? arrival.hour - 12 : (arrival.hour == 0 ? 12 : arrival.hour);
+    final h = arrival.hour > 12
+        ? arrival.hour - 12
+        : (arrival.hour == 0 ? 12 : arrival.hour);
     final m = arrival.minute.toString().padLeft(2, '0');
     final ampm = arrival.hour >= 12 ? 'PM' : 'AM';
     return '$h:$m $ampm';

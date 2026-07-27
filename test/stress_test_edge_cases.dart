@@ -11,8 +11,10 @@ Future<void> main() async {
   String? supabaseUrl;
   String? supabaseKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL=')) supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY=')) supabaseKey = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_URL='))
+      supabaseUrl = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_ANON_KEY='))
+      supabaseKey = line.split('=')[1].trim();
   }
 
   if (supabaseUrl == null || supabaseKey == null) {
@@ -20,11 +22,9 @@ Future<void> main() async {
     return;
   }
 
-  final client = SupabaseClient(
-    supabaseUrl, 
-    supabaseKey, 
-    authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit)
-  );
+  final client = SupabaseClient(supabaseUrl, supabaseKey,
+      authOptions:
+          const AuthClientOptions(authFlowType: AuthFlowType.implicit));
   print('Connected to Supabase');
 
   try {
@@ -36,31 +36,36 @@ Future<void> main() async {
   }
 }
 
-Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String supabaseKey) async {
+Future<void> runEdgeCaseTests(
+    SupabaseClient client, String supabaseUrl, String supabaseKey) async {
   // 1. Get test users (Customer, Seller, DP)
   final rand = DateTime.now().millisecondsSinceEpoch.toString().substring(5);
   final customerPhone = '+919999999$rand';
   final sellerPhone = '+919999998$rand';
   final dpPhone = '+919999997$rand';
 
-
-
   final customerId = await authUser(client, customerPhone, 'customer');
-  
+
   final sellerId = await authUser(client, sellerPhone, 'seller');
-  final shopRec = await client.from('shops').select('id').eq('seller_id', sellerId).single();
+  final shopRec = await client
+      .from('shops')
+      .select('id')
+      .eq('seller_id', sellerId)
+      .single();
   final shopId = shopRec['id'];
 
   final dpId = await authUser(client, dpPhone, 'delivery_partner');
 
   // Sign back in as customer to place an order with a LEGACY address (no lat/lng)
   print('\n--- SCENARIO: Legacy Address, Idempotency, and OTP ---');
-  await client.auth.signInWithPassword(email: _emailFromPhone(customerPhone), password: _passwordFromPhone(customerPhone));
-  
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(customerPhone),
+      password: _passwordFromPhone(customerPhone));
+
   final orderId = const Uuid().v4();
   final cartGroupId = const Uuid().v4();
   final now = DateTime.now().toUtc();
-  
+
   final order = {
     'id': orderId,
     'created_at': now.toIso8601String(),
@@ -99,7 +104,9 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
 
   // We must create a real product, as SQL logic validates product existence and availability!
   final productId = const Uuid().v4();
-  await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(sellerPhone),
+      password: _passwordFromPhone(sellerPhone));
   await client.from('products').insert({
     'id': productId,
     'shop_id': shopId,
@@ -110,7 +117,9 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
     'total_quantity': 10
   });
 
-  await client.auth.signInWithPassword(email: _emailFromPhone(customerPhone), password: _passwordFromPhone(customerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(customerPhone),
+      password: _passwordFromPhone(customerPhone));
 
   final item = {
     'id': const Uuid().v4(),
@@ -130,19 +139,22 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
     'p_cart_group_id': cartGroupId,
     'p_coupon_id': null,
     'p_idempotency_key': cartGroupId,
+    'p_order_id_to_cancel': null,
   });
-  
+
   print('Order placed with NO coordinates via RPC. ID: $orderId');
 
   // Mark confirmed
   await Process.run('supabase', [
-    'db', 'query',
+    'db',
+    'query',
     "UPDATE orders SET status = 'confirmed' WHERE id = '$orderId'",
     '--linked'
   ]);
-  
+
   print('DP accepting order...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
   await client.rpc('accept_order_rider', params: {
     'p_order_id': orderId,
     'p_rider_phone': dpPhone,
@@ -151,7 +163,9 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
   });
 
   // Seller preparing
-  await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(sellerPhone),
+      password: _passwordFromPhone(sellerPhone));
   await client.rpc('update_order_status', params: {
     'p_order_id': orderId,
     'p_new_status': 'preparing',
@@ -174,7 +188,8 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
   });
 
   // Rider Arrival
-  await client.auth.signInWithPassword(email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
   print('Rider marking arrived...');
   await client.rpc('set_arrived_at_shop', params: {
     'p_order_id': orderId,
@@ -183,7 +198,11 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
   });
 
   // Get the arrival time
-  final t1Rec = await client.from('orders').select('arrived_at_shop_time').eq('id', orderId).single();
+  final t1Rec = await client
+      .from('orders')
+      .select('arrived_at_shop_time')
+      .eq('id', orderId)
+      .single();
   final t1 = t1Rec['arrived_at_shop_time'];
   print('Initial arrival time: $t1');
 
@@ -196,12 +215,17 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
     'p_rider_lng': 74.6366,
   });
 
-  final t2Rec = await client.from('orders').select('arrived_at_shop_time').eq('id', orderId).single();
+  final t2Rec = await client
+      .from('orders')
+      .select('arrived_at_shop_time')
+      .eq('id', orderId)
+      .single();
   final t2 = t2Rec['arrived_at_shop_time'];
   print('Second arrival time: $t2');
 
   if (t1 != t2) {
-    throw Exception('Idempotency failed! Arrival time was overwritten from $t1 to $t2');
+    throw Exception(
+        'Idempotency failed! Arrival time was overwritten from $t1 to $t2');
   }
   print('✅ Idempotency test passed.');
 
@@ -217,7 +241,8 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
   });
 
   // Switch back to DP
-  await client.auth.signInWithPassword(email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
 
   // Rider trying to deliver
   print('Rider attempting to deliver on legacy address...');
@@ -231,25 +256,35 @@ Future<void> runEdgeCaseTests(SupabaseClient client, String supabaseUrl, String 
     'p_delivery_otp': null,
   });
 
-  final check = await client.from('orders').select('status, wait_time_penalty').eq('id', orderId).single();
+  final check = await client
+      .from('orders')
+      .select('status, wait_time_penalty')
+      .eq('id', orderId)
+      .single();
   if (check['status'] != 'delivered') {
     throw Exception('Status is not delivered! It is ${check['status']}');
   }
-  print('✅ Order delivered successfully on legacy address! Geo-fence bypass works.');
+  print(
+      '✅ Order delivered successfully on legacy address! Geo-fence bypass works.');
   print('Wait time penalty stored as: ${check['wait_time_penalty']}');
 }
 
-Future<String> authUser(SupabaseClient client, String phone, String role) async {
+Future<String> authUser(
+    SupabaseClient client, String phone, String role) async {
   final email = _emailFromPhone(phone);
   final password = _passwordFromPhone(phone);
-  
+
   String? userId;
   try {
-    final res = await client.auth.signInWithPassword(email: email, password: password);
+    final res =
+        await client.auth.signInWithPassword(email: email, password: password);
     userId = res.user?.id;
   } catch (e) {
     try {
-      final res = await client.auth.signUp(email: email, password: password, data: <String, dynamic>{'phone': phone});
+      final res = await client.auth.signUp(
+          email: email,
+          password: password,
+          data: <String, dynamic>{'phone': phone});
       userId = res.user?.id;
     } catch (e2, st2) {
       print('e1: $e, e2: $e2');
@@ -260,10 +295,10 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
 
   if (userId == null) throw Exception('Failed to get user id for $phone');
 
-  final uniquePhone = phone.contains('999999999') 
-      ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}' 
+  final uniquePhone = phone.contains('999999999')
+      ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}'
       : phone;
-      
+
   await client.from('profiles').upsert({
     'id': userId,
     'role': role,
@@ -272,7 +307,11 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
   });
 
   if (role == 'seller') {
-    final existingShop = await client.from('shops').select('id').eq('seller_id', userId).maybeSingle();
+    final existingShop = await client
+        .from('shops')
+        .select('id')
+        .eq('seller_id', userId)
+        .maybeSingle();
     if (existingShop == null) {
       await client.from('shops').insert({
         'seller_id': userId,
@@ -286,7 +325,11 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
       });
     }
   } else if (role == 'delivery_partner') {
-    final existingDp = await client.from('delivery_partners').select('id').eq('id', userId).maybeSingle();
+    final existingDp = await client
+        .from('delivery_partners')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
     if (existingDp == null) {
       await client.from('delivery_partners').insert({
         'id': userId,

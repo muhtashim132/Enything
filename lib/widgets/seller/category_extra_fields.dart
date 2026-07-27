@@ -387,7 +387,9 @@ class _DarkField extends StatelessWidget {
           child: TextField(
             controller: controller,
             maxLength: 500,
-            buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+            buildCounter: (BuildContext context,
+                    {int? currentLength, int? maxLength, bool? isFocused}) =>
+                null,
             keyboardType: number ? TextInputType.number : TextInputType.text,
             textCapitalization:
                 caps ? TextCapitalization.characters : TextCapitalization.words,
@@ -479,7 +481,8 @@ class _DropdownField<T> extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 itemLabel(item),
-                                style: GoogleFonts.outfit(color: Colors.white, fontSize: 14),
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white, fontSize: 14),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),

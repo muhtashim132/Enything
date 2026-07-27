@@ -139,8 +139,8 @@ class _AuditLogsPageState extends State<AuditLogsPage> {
                       fillColor: Colors.white.withValues(alpha: 0.05),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                          borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.1))),
                       enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
@@ -441,7 +441,8 @@ class _LogCardState extends State<_LogCard> {
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.06)),
                 ),
                 child: Text(
                   const JsonEncoder.withIndent('  ').convert(log.metadata),

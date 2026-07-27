@@ -155,7 +155,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   // Debounce timer for GPS listener to prevent race conditions
   Timer? _locationDebounceTimer;
 
-  int _compareAvailability(ProductModel a, ProductModel b, Map<String, ShopModel> shops) {
+  int _compareAvailability(
+      ProductModel a, ProductModel b, Map<String, ShopModel> shops) {
     final sA = shops[a.id];
     final sB = shops[b.id];
     final availA = a.isAvailable && (sA?.isOpenRightNow ?? true);
@@ -215,7 +216,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           return (sA?.distanceKm ?? double.infinity)
               .compareTo(sB?.distanceKm ?? double.infinity);
         case _SortMode.relevant:
-          return b.rating.compareTo(a.rating); // Default rating sort for relevant
+          return b.rating
+              .compareTo(a.rating); // Default rating sort for relevant
       }
     });
     return list;
@@ -3020,13 +3022,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             boxShadow: [
               if (_locationGlowAnim.value > 0)
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.3 * _locationGlowAnim.value),
+                  color: AppColors.primary
+                      .withValues(alpha: 0.3 * _locationGlowAnim.value),
                   blurRadius: 15 * _locationGlowAnim.value,
                   spreadRadius: 5 * _locationGlowAnim.value,
                 )
             ],
             border: Border.all(
-              color: AppColors.primary.withValues(alpha: _locationGlowAnim.value),
+              color:
+                  AppColors.primary.withValues(alpha: _locationGlowAnim.value),
               width: 2 * _locationGlowAnim.value,
             ),
           ),
@@ -3043,17 +3047,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               const SizedBox(height: 20),
               Text(
                 'Location Required',
-                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w700),
+                style: GoogleFonts.outfit(
+                    fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
               Text(
                 'We need your location to show nearby shops and ensure delivery is available.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(color: AppColors.textSecondary, height: 1.5),
+                style: GoogleFonts.outfit(
+                    color: AppColors.textSecondary, height: 1.5),
               ),
               const SizedBox(height: 28),
               ElevatedButton.icon(
-                onPressed: () => context.read<LocationProvider>().requestLocation(),
+                onPressed: () =>
+                    context.read<LocationProvider>().requestLocation(),
                 icon: const Icon(Icons.my_location),
                 label: const Text('Enable Location'),
               ),

@@ -202,7 +202,8 @@ void main() {
         ],
       ),''';
 
-  final pattern = RegExp(r"      child: ListView\([\s\S]*?\]\),\n        \],\n      \),");
+  final pattern =
+      RegExp(r"      child: ListView\([\s\S]*?\]\),\n        \],\n      \),");
   code = code.replaceFirst(pattern, builderCode);
 
   file.writeAsStringSync(code);

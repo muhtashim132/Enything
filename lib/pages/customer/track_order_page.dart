@@ -46,7 +46,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
   RealtimeChannel? _channel;
-  final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier = ValueNotifier({});
+  final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier =
+      ValueNotifier({});
   bool _razorpayOpened = false;
   bool _isMapOpening = false;
 
@@ -290,28 +291,34 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               final updatedOrder = OrderModel.fromMap(payload.newRecord);
 
               // STRESS-TEST FIX (Pixel Overloading): Delta comparison to prevent full widget tree rebuilds for GPS updates
-              final oldOrder = _groupOrders.firstWhereOrNull((o) => o.id == updatedOrder.id);
+              final oldOrder =
+                  _groupOrders.firstWhereOrNull((o) => o.id == updatedOrder.id);
               bool needsSetState = true;
-              
+
               if (oldOrder != null) {
                 // If only location or timestamp changed, these fields will remain identical
                 if (oldOrder.status == updatedOrder.status &&
                     oldOrder.paymentMethod == updatedOrder.paymentMethod &&
                     oldOrder.sellerAccepted == updatedOrder.sellerAccepted &&
                     oldOrder.partnerAccepted == updatedOrder.partnerAccepted &&
-                    oldOrder.deliveryPartnerId == updatedOrder.deliveryPartnerId &&
+                    oldOrder.deliveryPartnerId ==
+                        updatedOrder.deliveryPartnerId &&
                     oldOrder.cancelledReason == updatedOrder.cancelledReason &&
                     oldOrder.riderPhone == updatedOrder.riderPhone &&
-                    oldOrder.rejectionMessage == updatedOrder.rejectionMessage &&
-                    oldOrder.hasCustomerRated == updatedOrder.hasCustomerRated &&
+                    oldOrder.rejectionMessage ==
+                        updatedOrder.rejectionMessage &&
+                    oldOrder.hasCustomerRated ==
+                        updatedOrder.hasCustomerRated &&
                     oldOrder.hasSellerRated == updatedOrder.hasSellerRated &&
-                    oldOrder.hasDeliveryRated == updatedOrder.hasDeliveryRated) {
+                    oldOrder.hasDeliveryRated ==
+                        updatedOrder.hasDeliveryRated) {
                   needsSetState = false;
                 }
               }
 
               void updateLocalModels() {
-                final idx = _groupOrders.indexWhere((o) => o.id == updatedOrder.id);
+                final idx =
+                    _groupOrders.indexWhere((o) => o.id == updatedOrder.id);
                 if (idx != -1) {
                   updatedOrder.items = _groupOrders[idx].items;
                   _groupOrders[idx] = updatedOrder;
@@ -332,29 +339,40 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               if (updatedOrder.deliveryPartnerId != null &&
                   updatedOrder.riderLat != null &&
                   updatedOrder.riderLng != null) {
-                final oldLoc = _riderLocationsNotifier.value[updatedOrder.deliveryPartnerId!];
-                final newLoc = LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
-                
-                if (oldLoc == null || oldLoc.latitude != newLoc.latitude || oldLoc.longitude != newLoc.longitude) {
-                  final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                final oldLoc = _riderLocationsNotifier
+                    .value[updatedOrder.deliveryPartnerId!];
+                final newLoc =
+                    LatLng(updatedOrder.riderLat!, updatedOrder.riderLng!);
+
+                if (oldLoc == null ||
+                    oldLoc.latitude != newLoc.latitude ||
+                    oldLoc.longitude != newLoc.longitude) {
+                  final currentLocs =
+                      Map<String, LatLng>.from(_riderLocationsNotifier.value);
                   currentLocs[updatedOrder.deliveryPartnerId!] = newLoc;
                   _riderLocationsNotifier.value = currentLocs;
                 }
               }
               // Handle Reassignment (Ghost Rider) logic
               if (oldOrder?.deliveryPartnerId != null &&
-                  oldOrder!.deliveryPartnerId != updatedOrder.deliveryPartnerId) {
-                if (_riderLocationsNotifier.value.containsKey(oldOrder.deliveryPartnerId!)) {
-                  final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                  oldOrder!.deliveryPartnerId !=
+                      updatedOrder.deliveryPartnerId) {
+                if (_riderLocationsNotifier.value
+                    .containsKey(oldOrder.deliveryPartnerId!)) {
+                  final currentLocs =
+                      Map<String, LatLng>.from(_riderLocationsNotifier.value);
                   currentLocs.remove(oldOrder.deliveryPartnerId);
                   _riderLocationsNotifier.value = currentLocs;
                 }
               }
 
-              if (['delivered', 'cancelled', 'rejected'].contains(updatedOrder.status) &&
+              if (['delivered', 'cancelled', 'rejected']
+                      .contains(updatedOrder.status) &&
                   updatedOrder.deliveryPartnerId != null) {
-                if (_riderLocationsNotifier.value.containsKey(updatedOrder.deliveryPartnerId!)) {
-                  final currentLocs = Map<String, LatLng>.from(_riderLocationsNotifier.value);
+                if (_riderLocationsNotifier.value
+                    .containsKey(updatedOrder.deliveryPartnerId!)) {
+                  final currentLocs =
+                      Map<String, LatLng>.from(_riderLocationsNotifier.value);
                   currentLocs.remove(updatedOrder.deliveryPartnerId);
                   _riderLocationsNotifier.value = currentLocs;
                 }
@@ -408,8 +426,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
 
     // Priority 7b: Mix of preparing and ready_for_pickup
-    if (activeOrders
-        .any((o) => o.status == 'preparing' || o.status == 'ready_for_pickup')) {
+    if (activeOrders.any(
+        (o) => o.status == 'preparing' || o.status == 'ready_for_pickup')) {
       return 'preparing';
     }
 
@@ -529,11 +547,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             .where(
                 (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
             .toList();
-    return active.fold(
-        0.0,
-        (sum, o) =>
-            sum +
-            o.grandTotal);
+    return active.fold(0.0, (sum, o) => sum + o.grandTotal);
   }
 
   bool get _allSellersAccepted {
@@ -588,8 +602,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           if (isMagicUser) {
             _magicAutoAcceptFired = true;
             _magicAutoAcceptTimer?.cancel();
-            _magicAutoAcceptTimer =
-                Timer(const Duration(seconds: 2), () => _performMagicAutoAccept());
+            _magicAutoAcceptTimer = Timer(
+                const Duration(seconds: 2), () => _performMagicAutoAccept());
           }
         }
         // ─────────────────────────────────────────────────────────────────────
@@ -672,7 +686,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-
   void _startDecisionCountdown() {
     _decisionCountdownTimer?.cancel();
     _decisionCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -694,14 +707,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Future<void> _notifyPartnersOfHolding() async {
     try {
       final notifProv = context.read<NotificationProvider>();
-      final activeOrders = _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
+      final activeOrders =
+          _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
       for (final order in activeOrders) {
         // Notify shop
         if (order.shopId != null) {
           await notifProv.sendBackgroundPush(
             targetUserId: order.shopId!,
             title: '⏳ Order on Hold',
-            body: 'A shop in the group declined. Waiting 5m for customer decision.',
+            body:
+                'A shop in the group declined. Waiting 5m for customer decision.',
             data: {'route': '/seller/orders', 'orderId': order.id},
           );
         }
@@ -710,7 +725,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           await notifProv.sendBackgroundPush(
             targetUserId: order.deliveryPartnerId!,
             title: '⏳ Order on Hold',
-            body: 'A shop in the group declined. Waiting 5m for customer decision.',
+            body:
+                'A shop in the group declined. Waiting 5m for customer decision.',
             data: {'route': '/delivery/orders', 'orderId': order.id},
           );
         }
@@ -765,7 +781,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               .select('status')
               .eq('id', order.id)
               .maybeSingle();
-              
+
           if (fresh != null && fresh['status'] == expectedStatus) {
             await _supabase.rpc('cancel_order',
                 params: {'p_order_id': order.id, 'p_reason': 'timeout'});
@@ -782,7 +798,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         await _fetchOrder();
         if (mounted && targetOrders.length == 1) {
           setState(() {
-            _order = _order!.copyWith(status: 'cancelled', cancelledReason: 'timeout');
+            _order = _order!
+                .copyWith(status: 'cancelled', cancelledReason: 'timeout');
           });
         }
       }
@@ -923,7 +940,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'non_food_gst_amount': order.nonFoodGstAmount,
           'tcs_amount': order.tcsAmount,
           'tds_amount': order.tdsAmount,
-          'grand_total_collected': order.grandTotalCollected >= 0 ? order.grandTotalCollected : null,
+          'grand_total_collected':
+              order.grandTotalCollected >= 0 ? order.grandTotalCollected : null,
           'gst_rate_snapshot': order.gstRateSnapshot,
           'estimated_distance_km': order.estimatedDistanceKm,
           'shop_prep_time_snapshot': order.shopPrepTimeSnapshot,
@@ -945,6 +963,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         'p_items': allItems,
         'p_coupon_id': couponIdToPass,
         'p_idempotency_key': newCartGroupId,
+        'p_cart_group_id': newCartGroupId,
+        'p_order_id_to_cancel': null,
       });
 
       // BUG-6 FIX: Capture notifProv and navigate FIRST, then fire notifications
@@ -1184,6 +1204,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   bool _isRatingFlowOpen = false;
+
   /// Step 1: Rate the Shop. Step 2 (if partner assigned): Rate the Rider.
   void _showRatingFlow() {
     if (!mounted || _order == null || _isRatingFlowOpen) return;
@@ -1617,23 +1638,27 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     try {
       if (_order!.cartGroupId != null) {
         try {
-          await _supabase.rpc('restart_payment_timer', params: {'p_cart_group_id': _order!.cartGroupId});
+          await _supabase.rpc('restart_payment_timer',
+              params: {'p_cart_group_id': _order!.cartGroupId});
         } catch (e) {
           debugPrint('Error restarting timer for Razorpay: $e');
           setState(() => _isProcessingPayment = false);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error. Please try again.')));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Network error. Please try again.')));
           }
           return;
         }
       } else {
         try {
-          await _supabase.rpc('restart_payment_timer_single', params: {'p_order_id': widget.orderId});
+          await _supabase.rpc('restart_payment_timer_single',
+              params: {'p_order_id': widget.orderId});
         } catch (e) {
           debugPrint('Error restarting timer for Razorpay: $e');
           setState(() => _isProcessingPayment = false);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error. Please try again.')));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Network error. Please try again.')));
           }
           return;
         }
@@ -1778,7 +1803,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       final razorpayOrderId =
           'order_mock_${DateTime.now().millisecondsSinceEpoch}';
 
-      await _supabase.rpc('client_confirm_payment', params: {
+      await _supabase.rpc('dev_client_confirm_payment', params: {
         'p_order_id': widget.orderId,
         'p_cart_group_id': _order?.cartGroupId,
         'p_razorpay_payment_id': paymentId,
@@ -2784,18 +2809,28 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               setState(() => _isProcessingPayment = true);
               try {
                 // 100x Edge Case: Cancel all rejected orders so they are cleaned up and no longer hold up _hasPartialRejection
-                final rejected = _groupOrders.where((o) => o.status == 'seller_rejected' || o.status == 'rider_rejected').toList();
-                await Future.wait(rejected.map((o) => _supabase.rpc('cancel_order', params: {'p_order_id': o.id, 'p_reason': 'customer_proceed_partial'})));
-                
+                final rejected = _groupOrders
+                    .where((o) =>
+                        o.status == 'seller_rejected' ||
+                        o.status == 'rider_rejected')
+                    .toList();
+                await Future.wait(rejected.map((o) => _supabase
+                        .rpc('cancel_order', params: {
+                      'p_order_id': o.id,
+                      'p_reason': 'customer_proceed_partial'
+                    })));
+
                 if (_order?.cartGroupId != null) {
-                  await _supabase.rpc('restart_payment_timer', params: {'p_cart_group_id': _order!.cartGroupId});
+                  await _supabase.rpc('restart_payment_timer',
+                      params: {'p_cart_group_id': _order!.cartGroupId});
                 }
-                
+
                 if (mounted) _openRazorpay();
               } catch (e) {
                 debugPrint('Error proceeding with remaining: $e');
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error. Please try again.')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Network error. Please try again.')));
                 }
               } finally {
                 if (mounted) setState(() => _isProcessingPayment = false);
@@ -2903,8 +2938,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       ),
                       trailing: ElevatedButton.icon(
                         onPressed: () {
-                          Navigator.pop(context); // Close the missing items sheet
-                          _showAlternativesDialog(item, rejectedOrders.firstWhere((o) => o.items.contains(item)));
+                          Navigator.pop(
+                              context); // Close the missing items sheet
+                          _showAlternativesDialog(
+                              item,
+                              rejectedOrders
+                                  .firstWhere((o) => o.items.contains(item)));
                         },
                         icon: const Icon(Icons.search,
                             size: 16, color: Colors.white),
@@ -2936,12 +2975,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   // ── Smart Cancellation Recovery Panel ───────────────────────────────────
   Widget _buildCancellationRecoveryPanel(bool isDark) {
-    final rejectedOrder = _groupOrders.firstWhereOrNull((o) => o.status == 'seller_rejected') ??
+    final rejectedOrder = _groupOrders
+            .firstWhereOrNull((o) => o.status == 'seller_rejected') ??
         _groupOrders.firstWhereOrNull((o) => o.status == 'partner_rejected') ??
         _groupOrders.firstWhereOrNull((o) => o.status == 'cancelled') ??
         _order;
     final reason = rejectedOrder?.cancelledReason ??
-        (rejectedOrder?.status == 'seller_rejected' ? 'shop_rejected' : 'customer');
+        (rejectedOrder?.status == 'seller_rejected'
+            ? 'shop_rejected'
+            : 'customer');
 
     String title;
     String body;
@@ -3267,17 +3309,23 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       builder: (context, riderLocs, child) {
         double distanceKm =
             _order!.estimatedDistanceKm > 0 ? _order!.estimatedDistanceKm : 3.0;
-        int prepMins =
-            _order!.shopPrepTimeSnapshot > 0 ? _order!.shopPrepTimeSnapshot : 30;
+        int prepMins = _order!.shopPrepTimeSnapshot > 0
+            ? _order!.shopPrepTimeSnapshot
+            : 30;
 
         if (_groupOrders.length > 1) {
-          final activeGroup = _groupOrders.where((o) => o.status != 'seller_rejected' && o.status != 'cancelled').toList();
+          final activeGroup = _groupOrders
+              .where((o) =>
+                  o.status != 'seller_rejected' && o.status != 'cancelled')
+              .toList();
           if (activeGroup.isNotEmpty) {
             double maxDist = 0.0;
             int maxPrep = 0;
             for (final o in activeGroup) {
-              double currentDist = o.estimatedDistanceKm > 0 ? o.estimatedDistanceKm : 3.0;
-              int currentPrep = o.shopPrepTimeSnapshot > 0 ? o.shopPrepTimeSnapshot : 30;
+              double currentDist =
+                  o.estimatedDistanceKm > 0 ? o.estimatedDistanceKm : 3.0;
+              int currentPrep =
+                  o.shopPrepTimeSnapshot > 0 ? o.shopPrepTimeSnapshot : 30;
               if (currentDist > maxDist) maxDist = currentDist;
               if (currentPrep > maxPrep) maxPrep = currentPrep;
             }
@@ -3308,7 +3356,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         }
 
         final etaStr = DeliveryCalculator.etaLabel(distanceKm, prepMins);
-        final arrivalStr = DeliveryCalculator.etaArrivalTime(distanceKm, prepMins);
+        final arrivalStr =
+            DeliveryCalculator.etaArrivalTime(distanceKm, prepMins);
 
         return Container(
           margin: const EdgeInsets.only(top: 16),
@@ -3322,7 +3371,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.access_time_rounded, color: Colors.white, size: 16),
+              const Icon(Icons.access_time_rounded,
+                  color: Colors.white, size: 16),
               const SizedBox(width: 6),
               Text(
                 etaStr,
@@ -3475,16 +3525,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: Text(label,
-              style: GoogleFonts.outfit(
-                color: isBold
-                    ? (isDark ? Colors.white : AppColors.textPrimary)
-                    : (isDark ? Colors.white54 : AppColors.textSecondary),
-                fontSize: isBold ? 15 : 13,
-                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          child: Text(
+            label,
+            style: GoogleFonts.outfit(
+              color: isBold
+                  ? (isDark ? Colors.white : AppColors.textPrimary)
+                  : (isDark ? Colors.white54 : AppColors.textSecondary),
+              fontSize: isBold ? 15 : 13,
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         const SizedBox(width: 8),
@@ -3555,7 +3606,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 builder: (context, riderLocs, child) {
                   return EnythingMap(
                     center: _mapCenter(riderLocs),
-                    zoom: _aggregateStatus == 'awaiting_acceptance' ? 15.5 : 16.5,
+                    zoom:
+                        _aggregateStatus == 'awaiting_acceptance' ? 15.5 : 16.5,
                     interactive: false,
                     markers: _buildMapMarkers(riderLocs),
                   );
@@ -3638,8 +3690,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         'out_for_delivery'
                       ].contains(_aggregateStatus)) {
                     return Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: AppColors.success,
                         borderRadius: BorderRadius.circular(20),
@@ -3653,7 +3705,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.circle, color: Colors.white, size: 6),
+                          const Icon(Icons.circle,
+                              color: Colors.white, size: 6),
                           const SizedBox(width: 5),
                           Text(
                             'Rider Live',
@@ -3759,65 +3812,81 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _showAlternativesDialog(OrderItem item, OrderModel rejectedOrder) {
     showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text('Find Alternative', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-          content: FutureBuilder(
-            future: _supabase.from('products').select('*, shops(*)')
-                .ilike('name', '%${item.productName.split(' ').take(2).join(' ')}%')
-                .eq('is_available', true)
-                .neq('shop_id', rejectedOrder.shopId ?? '')
-                .limit(5),
-            builder: (ctx, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
-              if (snapshot.hasError) return Text('Error: ${snapshot.error}');
-              final List<dynamic> products = snapshot.data as List<dynamic>? ?? [];
-              if (products.isEmpty) return const Text('No alternatives found nearby.');
-              return SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: products.length,
-                  itemBuilder: (ctx, i) {
-                    final p = products[i];
-                    return ListTile(
-                      title: Text(p['name'], maxLines: 2, overflow: TextOverflow.ellipsis),
-                      subtitle: Text('${p['shops']['name']} • ₹${p['price']}', maxLines: 2, overflow: TextOverflow.ellipsis),
-                      trailing: ElevatedButton(
-                        child: const Text('Add'),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _replaceRejectedOrderWithAlternative(p, item, rejectedOrder);
-                        },
-                      ),
-                    );
-                  }
-                )
-              );
-            },
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))
-          ],
-        );
-      }
-    );
+        context: context,
+        builder: (ctx) {
+          return AlertDialog(
+            title: Text('Find Alternative',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            content: FutureBuilder(
+              future: _supabase
+                  .from('products')
+                  .select('*, shops(*)')
+                  .ilike('name',
+                      '%${item.productName.split(' ').take(2).join(' ')}%')
+                  .eq('is_available', true)
+                  .neq('shop_id', rejectedOrder.shopId ?? '')
+                  .limit(5),
+              builder: (ctx, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting)
+                  return const SizedBox(
+                      height: 100,
+                      child: Center(child: CircularProgressIndicator()));
+                if (snapshot.hasError) return Text('Error: ${snapshot.error}');
+                final List<dynamic> products =
+                    snapshot.data as List<dynamic>? ?? [];
+                if (products.isEmpty)
+                  return const Text('No alternatives found nearby.');
+                return SizedBox(
+                    width: double.maxFinite,
+                    child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: products.length,
+                        itemBuilder: (ctx, i) {
+                          final p = products[i];
+                          return ListTile(
+                            title: Text(p['name'],
+                                maxLines: 2, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(
+                                '${p['shops']['name']} • ₹${p['price']}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                            trailing: ElevatedButton(
+                              child: const Text('Add'),
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _replaceRejectedOrderWithAlternative(
+                                    p, item, rejectedOrder);
+                              },
+                            ),
+                          );
+                        }));
+              },
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'))
+            ],
+          );
+        });
   }
 
-  void _replaceRejectedOrderWithAlternative(Map<String, dynamic> newProduct, OrderItem oldItem, OrderModel rejectedOrder) async {
+  void _replaceRejectedOrderWithAlternative(Map<String, dynamic> newProduct,
+      OrderItem oldItem, OrderModel rejectedOrder) async {
     final cart = context.read<CartProvider>();
     final productModel = ProductModel.fromMap(newProduct);
     final shopModel = ShopModel.fromMap(newProduct['shops']);
-    
-    // 100x Logic: Bump the payment deadline of the remaining orders so they don't expire 
+
+    // 100x Logic: Bump the payment deadline of the remaining orders so they don't expire
     if (_order?.cartGroupId != null) {
       try {
-        await _supabase.rpc('restart_payment_timer', params: {'p_cart_group_id': _order!.cartGroupId});
+        await _supabase.rpc('restart_payment_timer',
+            params: {'p_cart_group_id': _order!.cartGroupId});
       } catch (e) {
         debugPrint('Error restarting timer for replacement: $e');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error. Please try again.')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Network error. Please try again.')));
         }
         return; // Abort
       }
@@ -3827,14 +3896,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (mounted) {
       cart.clear(); // Ensure cart only has the replacement items
       cart.addItem(productModel, shopModel, quantity: oldItem.quantity);
-      
+
       Navigator.push(
-        context,
-        MaterialPageRoute(builder: (ctx) => CheckoutPage(
-          existingCartGroupId: _order!.cartGroupId,
-          orderIdToCancelOnSuccess: rejectedOrder.id,
-        ))
-      ).then((_) {
+          context,
+          MaterialPageRoute(
+              builder: (ctx) => CheckoutPage(
+                    existingCartGroupId: _order!.cartGroupId,
+                    orderIdToCancelOnSuccess: rejectedOrder.id,
+                  ))).then((_) {
         // Upon returning from checkout, refetch order group
         _fetchOrder();
       });

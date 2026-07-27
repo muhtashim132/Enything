@@ -3,8 +3,8 @@ import 'package:latlong2/latlong.dart';
 class SavedAddress {
   final String id;
   final String userId;
-  final String label;         // Home, Office, Hotel, Hospital, Other
-  final String? customLabel;  // User-defined name when label == 'Other'
+  final String label; // Home, Office, Hotel, Hospital, Other
+  final String? customLabel; // User-defined name when label == 'Other'
   final String? flatNumber;
   final String address;
   final String? landmark;
@@ -44,11 +44,16 @@ class SavedAddress {
   /// Emoji icon for each label type
   String get icon {
     switch (label) {
-      case 'Home':     return '🏠';
-      case 'Office':   return '💼';
-      case 'Hotel':    return '🏨';
-      case 'Hospital': return '🏥';
-      default:         return '📍';
+      case 'Home':
+        return '🏠';
+      case 'Office':
+        return '💼';
+      case 'Hotel':
+        return '🏨';
+      case 'Hospital':
+        return '🏥';
+      default:
+        return '📍';
     }
   }
 
@@ -84,30 +89,30 @@ class SavedAddress {
   }
 
   Map<String, dynamic> toInsertMap() => {
-    'user_id': userId,
-    'label': label,
-    'custom_label': customLabel,
-    'flat_number': flatNumber,
-    'address': address,
-    'landmark': landmark,
-    'pincode': pincode,
-    'latitude': latitude,
-    'longitude': longitude,
-    'is_default': isDefault,
-  };
+        'user_id': userId,
+        'label': label,
+        'custom_label': customLabel,
+        'flat_number': flatNumber,
+        'address': address,
+        'landmark': landmark,
+        'pincode': pincode,
+        'latitude': latitude,
+        'longitude': longitude,
+        'is_default': isDefault,
+      };
 
   Map<String, dynamic> toUpdateMap() => {
-    'label': label,
-    'custom_label': customLabel,
-    'flat_number': flatNumber,
-    'address': address,
-    'landmark': landmark,
-    'pincode': pincode,
-    'latitude': latitude,
-    'longitude': longitude,
-    'is_default': isDefault,
-    'updated_at': DateTime.now().toIso8601String(),
-  };
+        'label': label,
+        'custom_label': customLabel,
+        'flat_number': flatNumber,
+        'address': address,
+        'landmark': landmark,
+        'pincode': pincode,
+        'latitude': latitude,
+        'longitude': longitude,
+        'is_default': isDefault,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
 
   SavedAddress copyWith({
     String? label,

@@ -44,14 +44,16 @@ class NotificationProvider extends ChangeNotifier {
   RealtimeChannel? _channel;
   String? _listeningUserId;
   String? _listeningRole;
-  
+
   StreamSubscription<String>? _fcmTokenSub;
   StreamSubscription<RemoteMessage>? _fcmMessageSub;
   Timer? _debounceTimer;
 
   // Stream for broadcasting cancelled/rejected orders to trigger auto-readd to cart
-  final StreamController<String> _orderCancelledStreamController = StreamController<String>.broadcast();
-  Stream<String> get onOrderCancelledStream => _orderCancelledStreamController.stream;
+  final StreamController<String> _orderCancelledStreamController =
+      StreamController<String>.broadcast();
+  Stream<String> get onOrderCancelledStream =>
+      _orderCancelledStreamController.stream;
 
   void _debouncedNotifyListeners() {
     _debounceTimer?.cancel();
@@ -74,7 +76,8 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   List<AppNotification> get notifications {
-    _cachedNotifications ??= List.unmodifiable(_notifications.reversed.toList());
+    _cachedNotifications ??=
+        List.unmodifiable(_notifications.reversed.toList());
     return _cachedNotifications!;
   }
 
@@ -93,12 +96,15 @@ class NotificationProvider extends ChangeNotifier {
 
       // Request permission (required for iOS; no-op on Android)
       final settings = await messaging.requestPermission(
-        alert: true, badge: true, sound: true,
+        alert: true,
+        badge: true,
+        sound: true,
       );
       debugPrint('FCM permission: ${settings.authorizationStatus}');
 
       final token = await messaging.getToken();
-      debugPrint('FCM token obtained: ${token == null ? "NULL - FAILED" : "${token.substring(0, 20)}..."}');
+      debugPrint(
+          'FCM token obtained: ${token == null ? "NULL - FAILED" : "${token.substring(0, 20)}..."}');
       if (token == null) return;
 
       final prefs = await SharedPreferences.getInstance();
@@ -120,7 +126,8 @@ class NotificationProvider extends ChangeNotifier {
               .delete()
               .eq('token', token)
               .neq('user_id', userId);
-          debugPrint('Purged stale cross-user tokens for FCM token on this device.');
+          debugPrint(
+              'Purged stale cross-user tokens for FCM token on this device.');
         } catch (e) {
           debugPrint('Non-fatal: could not purge stale device tokens: $e');
         }
@@ -131,7 +138,8 @@ class NotificationProvider extends ChangeNotifier {
         // (FCM tokens can change on uninstall/reinstall; device_id does not).
         String? deviceId = prefs.getString('stable_device_id');
         if (deviceId == null) {
-          deviceId = 'dev_${DateTime.now().millisecondsSinceEpoch}_${userId.substring(0, 8)}';
+          deviceId =
+              'dev_${DateTime.now().millisecondsSinceEpoch}_${userId.substring(0, 8)}';
           await prefs.setString('stable_device_id', deviceId);
         }
 
@@ -156,7 +164,8 @@ class NotificationProvider extends ChangeNotifier {
             .maybeSingle();
         if (check == null) {
           // Upsert silently failed — try plain insert
-          debugPrint('FCM token NOT found after upsert - trying plain INSERT...');
+          debugPrint(
+              'FCM token NOT found after upsert - trying plain INSERT...');
           final insertRes = await _supabase.from('device_tokens').insert({
             'user_id': userId,
             'token': token,
@@ -201,12 +210,14 @@ class NotificationProvider extends ChangeNotifier {
       //   1. notification+data message  → use notif.title/body for the buzz
       //   2. data-only message          → use message.data['title'/'body']
       _fcmMessageSub?.cancel();
-      _fcmMessageSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      _fcmMessageSub =
+          FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         final notif = message.notification;
 
         // Resolve title/body from whichever field is present
-        final title = notif?.title ?? message.data['title'] as String? ?? 'Enything';
-        final body  = notif?.body  ?? message.data['body']  as String? ?? '';
+        final title =
+            notif?.title ?? message.data['title'] as String? ?? 'Enything';
+        final body = notif?.body ?? message.data['body'] as String? ?? '';
         final orderId = message.data['order_id'] as String?;
 
         // Skip empty messages
@@ -261,18 +272,23 @@ class NotificationProvider extends ChangeNotifier {
             if (payload.newRecord.isEmpty) return;
             final newStatus = payload.newRecord['status'] as String?;
             final orderId = payload.newRecord['id'] as String?;
-            
-            final sellerAcceptedNow = payload.newRecord['seller_accepted'] == true;
-            final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
+
+            final sellerAcceptedNow =
+                payload.newRecord['seller_accepted'] == true;
+            final sellerAcceptedBefore =
+                payload.oldRecord['seller_accepted'] == true;
 
             final cartGroupId = payload.newRecord['cart_group_id'] as String?;
 
             // Notify customer when the shop accepts (one down, rider still needed)
-            if (sellerAcceptedNow && !sellerAcceptedBefore && newStatus == 'awaiting_acceptance') {
+            if (sellerAcceptedNow &&
+                !sellerAcceptedBefore &&
+                newStatus == 'awaiting_acceptance') {
               _add(AppNotification(
                 id: '${orderId}_shop_accepted', // Keep per-order
                 title: '🏪 Shop Accepted!',
-                body: 'The shop accepted your order. Waiting for a rider now...',
+                body:
+                    'The shop accepted your order. Waiting for a rider now...',
                 orderId: orderId,
               ));
             }
@@ -286,12 +302,12 @@ class NotificationProvider extends ChangeNotifier {
             final (title, body) = _customerStatusMessage(newStatus, orderId);
             if (title != null) {
               // For statuses that happen to the whole group at once, deduplicate using cart_group_id
-              final isGroupStatus = newStatus == 'confirmed' || 
-                                    newStatus == 'out_for_delivery' || 
-                                    newStatus == 'delivered' || 
-                                    newStatus == 'cancelled';
-              final notifId = (isGroupStatus && cartGroupId != null) 
-                  ? '${cartGroupId}_$newStatus' 
+              final isGroupStatus = newStatus == 'confirmed' ||
+                  newStatus == 'out_for_delivery' ||
+                  newStatus == 'delivered' ||
+                  newStatus == 'cancelled';
+              final notifId = (isGroupStatus && cartGroupId != null)
+                  ? '${cartGroupId}_$newStatus'
                   : '${orderId}_$newStatus';
 
               _add(AppNotification(
@@ -320,11 +336,14 @@ class NotificationProvider extends ChangeNotifier {
           callback: (payload) {
             final orderId = payload.newRecord['id'] as String?;
             final cartGroupId = payload.newRecord['cart_group_id'] as String?;
-            
+
             _add(AppNotification(
-              id: cartGroupId != null ? '${cartGroupId}_placed' : '${orderId}_placed',
+              id: cartGroupId != null
+                  ? '${cartGroupId}_placed'
+                  : '${orderId}_placed',
               title: '🛍️ Order Sent!',
-              body: 'Waiting for the shop & rider to accept. No charge yet — you pay only after both confirm.',
+              body:
+                  'Waiting for the shop & rider to accept. No charge yet — you pay only after both confirm.',
               orderId: orderId,
             ));
           },
@@ -356,7 +375,7 @@ class NotificationProvider extends ChangeNotifier {
           callback: (payload) {
             final orderId = payload.newRecord['id'] as String?;
             final status = payload.newRecord['status'] as String?;
-            
+
             if (status == 'awaiting_acceptance') {
               final amount =
                   (payload.newRecord['total_amount'] ?? 0.0).toDouble();
@@ -368,7 +387,8 @@ class NotificationProvider extends ChangeNotifier {
                 orderId: orderId,
               ));
               // [BELL] Ring alert bell for new pending order
-              if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+              if (orderId != null)
+                BellAlertService.instance.addPendingOrder(orderId);
             }
           },
         )
@@ -389,12 +409,15 @@ class NotificationProvider extends ChangeNotifier {
             if (orderId == null || newStatus == null) return;
 
             // [BELL] Handle status progression (e.g., pending_verification -> awaiting_acceptance)
-            if (newStatus == 'awaiting_acceptance' && oldStatus != 'awaiting_acceptance') {
-              final amount = (payload.newRecord['total_amount'] ?? 0.0).toDouble();
+            if (newStatus == 'awaiting_acceptance' &&
+                oldStatus != 'awaiting_acceptance') {
+              final amount =
+                  (payload.newRecord['total_amount'] ?? 0.0).toDouble();
               _add(AppNotification(
                 id: '${orderId}_new',
                 title: '🔔 New Order!',
-                body: 'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
+                body:
+                    'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
                 orderId: orderId,
               ));
               BellAlertService.instance.addPendingOrder(orderId);
@@ -403,12 +426,19 @@ class NotificationProvider extends ChangeNotifier {
             // [BELL] Remove order from bell when seller accepts or order is resolved.
             // Checked BEFORE the status-dedup guard so seller_accepted change is caught
             // even when the status field itself hasn’t changed yet.
-            final sellerAcceptedNow    = payload.newRecord['seller_accepted'] == true;
-            final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
+            final sellerAcceptedNow =
+                payload.newRecord['seller_accepted'] == true;
+            final sellerAcceptedBefore =
+                payload.oldRecord['seller_accepted'] == true;
             if ((sellerAcceptedNow && !sellerAcceptedBefore) ||
                 const [
-                  'verification_failed', 'payment_failed', 'awaiting_payment', 
-                  'confirmed', 'cancelled', 'seller_rejected', 'delivered'
+                  'verification_failed',
+                  'payment_failed',
+                  'awaiting_payment',
+                  'confirmed',
+                  'cancelled',
+                  'seller_rejected',
+                  'delivered'
                 ].contains(newStatus)) {
               BellAlertService.instance.removePendingOrder(orderId);
             }
@@ -439,102 +469,115 @@ class NotificationProvider extends ChangeNotifier {
   /// Seller: watches orders for MULTIPLE shops at once.
   void listenAsSellerMultiShop(List<String> shopIds) {
     if (shopIds.isEmpty) return;
-    
+
     // Create a deterministic key for the channel and checking if already listening
     final sortedIds = List<String>.from(shopIds)..sort();
     final listeningKey = sortedIds.join('-');
-    
+
     if (_listeningUserId == listeningKey && _listeningRole == 'seller') return;
     stopListening();
     _listeningUserId = listeningKey;
     _listeningRole = 'seller';
 
     var chan = _supabase.channel('notif-seller-$listeningKey');
-    
+
     for (final shopId in shopIds) {
-      chan = chan.onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'orders',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'shop_id',
-          value: shopId,
-        ),
-        callback: (payload) {
-          final orderId = payload.newRecord['id'] as String?;
-          final status = payload.newRecord['status'] as String?;
+      chan = chan
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'orders',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'shop_id',
+              value: shopId,
+            ),
+            callback: (payload) {
+              final orderId = payload.newRecord['id'] as String?;
+              final status = payload.newRecord['status'] as String?;
 
-          if (status == 'awaiting_acceptance') {
-            final amount =
-                (payload.newRecord['total_amount'] ?? 0.0).toDouble();
-            _add(AppNotification(
-              id: '${orderId}_new',
-              title: '🔔 New Order!',
-              body:
-                  'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
-              orderId: orderId,
-            ));
-            // [BELL] Ring alert bell for new pending order
-            if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
-          }
-        },
-      ).onPostgresChanges(
-        event: PostgresChangeEvent.update,
-        schema: 'public',
-        table: 'orders',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'shop_id',
-          value: shopId,
-        ),
-        callback: (payload) {
-          if (payload.newRecord.isEmpty) return;
-          final newStatus = payload.newRecord['status'] as String?;
-          final oldStatus = payload.oldRecord['status'] as String?;
-          final orderId = payload.newRecord['id'] as String?;
-          if (orderId == null || newStatus == null) return;
+              if (status == 'awaiting_acceptance') {
+                final amount =
+                    (payload.newRecord['total_amount'] ?? 0.0).toDouble();
+                _add(AppNotification(
+                  id: '${orderId}_new',
+                  title: '🔔 New Order!',
+                  body:
+                      'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
+                  orderId: orderId,
+                ));
+                // [BELL] Ring alert bell for new pending order
+                if (orderId != null)
+                  BellAlertService.instance.addPendingOrder(orderId);
+              }
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'orders',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'shop_id',
+              value: shopId,
+            ),
+            callback: (payload) {
+              if (payload.newRecord.isEmpty) return;
+              final newStatus = payload.newRecord['status'] as String?;
+              final oldStatus = payload.oldRecord['status'] as String?;
+              final orderId = payload.newRecord['id'] as String?;
+              if (orderId == null || newStatus == null) return;
 
-          // [BELL] Handle status progression (e.g., pending_verification -> awaiting_acceptance)
-          if (newStatus == 'awaiting_acceptance' && oldStatus != 'awaiting_acceptance') {
-            final amount = (payload.newRecord['total_amount'] ?? 0.0).toDouble();
-            _add(AppNotification(
-              id: '${orderId}_new',
-              title: '🔔 New Order!',
-              body: 'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
-              orderId: orderId,
-            ));
-            BellAlertService.instance.addPendingOrder(orderId);
-          }
+              // [BELL] Handle status progression (e.g., pending_verification -> awaiting_acceptance)
+              if (newStatus == 'awaiting_acceptance' &&
+                  oldStatus != 'awaiting_acceptance') {
+                final amount =
+                    (payload.newRecord['total_amount'] ?? 0.0).toDouble();
+                _add(AppNotification(
+                  id: '${orderId}_new',
+                  title: '🔔 New Order!',
+                  body:
+                      'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
+                  orderId: orderId,
+                ));
+                BellAlertService.instance.addPendingOrder(orderId);
+              }
 
-          // [BELL] Remove order from bell when seller accepts or order is resolved.
-          final sellerAcceptedNow    = payload.newRecord['seller_accepted'] == true;
-          final sellerAcceptedBefore = payload.oldRecord['seller_accepted'] == true;
-          if ((sellerAcceptedNow && !sellerAcceptedBefore) ||
-              const [
-                'verification_failed', 'payment_failed', 'awaiting_payment', 
-                'confirmed', 'cancelled', 'seller_rejected', 'delivered'
-              ].contains(newStatus)) {
-            BellAlertService.instance.removePendingOrder(orderId);
-          }
+              // [BELL] Remove order from bell when seller accepts or order is resolved.
+              final sellerAcceptedNow =
+                  payload.newRecord['seller_accepted'] == true;
+              final sellerAcceptedBefore =
+                  payload.oldRecord['seller_accepted'] == true;
+              if ((sellerAcceptedNow && !sellerAcceptedBefore) ||
+                  const [
+                    'verification_failed',
+                    'payment_failed',
+                    'awaiting_payment',
+                    'confirmed',
+                    'cancelled',
+                    'seller_rejected',
+                    'delivered'
+                  ].contains(newStatus)) {
+                BellAlertService.instance.removePendingOrder(orderId);
+              }
 
-          final lastStatus = _lastProcessedStatus[orderId];
-          if (newStatus == lastStatus) return;
-          _lastProcessedStatus[orderId] = newStatus;
+              final lastStatus = _lastProcessedStatus[orderId];
+              if (newStatus == lastStatus) return;
+              _lastProcessedStatus[orderId] = newStatus;
 
-          final (title, body) = _sellerStatusMessage(newStatus, orderId);
-          if (title != null) {
-            _add(AppNotification(
-              id: '${orderId}_$newStatus',
-              title: title,
-              body: body!,
-              orderId: orderId,
-            ));
-          }
-        },
-      );
+              final (title, body) = _sellerStatusMessage(newStatus, orderId);
+              if (title != null) {
+                _add(AppNotification(
+                  id: '${orderId}_$newStatus',
+                  title: title,
+                  body: body!,
+                  orderId: orderId,
+                ));
+              }
+            },
+          );
     }
-    
+
     _channel = chan.subscribe();
 
     // Restore persisted notification history for this user
@@ -542,7 +585,6 @@ class NotificationProvider extends ChangeNotifier {
     // [BELL] Re-ring bell if there are already pending orders (e.g. app restart)
     _initBellForPendingSellerMulti(shopIds);
   }
-
 
   /// Delivery partner: watches for new available orders and their active ones.
   void listenAsDelivery(String partnerId) {
@@ -571,7 +613,7 @@ class NotificationProvider extends ChangeNotifier {
             final newPartnerId = newRecord['delivery_partner_id'] as String?;
 
             if (orderId == null || newStatus == null) return;
-            
+
             // Check if the order was reassigned to someone else
             if (newPartnerId != null && newPartnerId != partnerId) {
               BellAlertService.instance.removePendingOrder(orderId);
@@ -582,7 +624,8 @@ class NotificationProvider extends ChangeNotifier {
             // Stop when rider picks up, order is cancelled, delivered, or any other terminal/waiting state.
             if (newStatus == 'confirmed') {
               BellAlertService.instance.addPendingOrder(orderId);
-            } else if (!const ['confirmed', 'preparing', 'ready_for_pickup'].contains(newStatus)) {
+            } else if (!const ['confirmed', 'preparing', 'ready_for_pickup']
+                .contains(newStatus)) {
               BellAlertService.instance.removePendingOrder(orderId);
             }
 
@@ -624,7 +667,8 @@ class NotificationProvider extends ChangeNotifier {
           table: 'shops',
           callback: (payload) {
             final shopId = payload.newRecord['id'] as String?;
-            final shopName = payload.newRecord['shop_name'] as String? ?? 'A new shop';
+            final shopName =
+                payload.newRecord['shop_name'] as String? ?? 'A new shop';
             _add(AppNotification(
               id: 'shop_kyc_$shopId',
               title: '🏪 New Shop KYC!',
@@ -641,7 +685,8 @@ class NotificationProvider extends ChangeNotifier {
             _add(AppNotification(
               id: 'rider_kyc_$partnerId',
               title: '🛵 New Rider KYC!',
-              body: 'A new delivery partner has registered and is pending verification.',
+              body:
+                  'A new delivery partner has registered and is pending verification.',
             ));
           },
         )
@@ -651,7 +696,9 @@ class NotificationProvider extends ChangeNotifier {
           table: 'support_tickets',
           callback: (payload) {
             final id = payload.newRecord['id'] as String?;
-            final reason = payload.newRecord['subject'] as String? ?? payload.newRecord['title'] as String? ?? 'A new support ticket';
+            final reason = payload.newRecord['subject'] as String? ??
+                payload.newRecord['title'] as String? ??
+                'A new support ticket';
             _add(AppNotification(
               id: 'ticket_$id',
               title: '🚨 New Support Ticket!',
@@ -664,8 +711,6 @@ class NotificationProvider extends ChangeNotifier {
     // Restore persisted notification history for this user
     _loadFromDb();
   }
-
-
 
   // ── Stop listening ────────────────────────────────────────────────────────
 
@@ -695,7 +740,7 @@ class NotificationProvider extends ChangeNotifier {
     _fcmTokenSub = null;
     _fcmMessageSub?.cancel();
     _fcmMessageSub = null;
-    
+
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
 
@@ -752,8 +797,8 @@ class NotificationProvider extends ChangeNotifier {
 
   void _add(AppNotification notification) {
     // STRESS-TEST FIX: Bounded Scan (O(1) instead of O(N)) to prevent Pixel Overloading / UI Jank
-    final recentItems = _notifications.length > 20 
-        ? _notifications.sublist(_notifications.length - 20) 
+    final recentItems = _notifications.length > 20
+        ? _notifications.sublist(_notifications.length - 20)
         : _notifications;
 
     // Deduplicate by id using bounded scan
@@ -761,23 +806,24 @@ class NotificationProvider extends ChangeNotifier {
 
     // Additive deduplication for FCM vs Realtime (bounded)
     if (notification.orderId != null) {
-      final isDuplicate = recentItems.any((n) => 
-          n.orderId == notification.orderId && 
-          n.title == notification.title && 
+      final isDuplicate = recentItems.any((n) =>
+          n.orderId == notification.orderId &&
+          n.title == notification.title &&
           DateTime.now().difference(n.createdAt).inSeconds < 5);
       if (isDuplicate) {
-        debugPrint('Skipping duplicate notification for order ${notification.orderId}');
+        debugPrint(
+            'Skipping duplicate notification for order ${notification.orderId}');
         return;
       }
     }
 
     _notifications.add(notification);
-    
+
     // STRESS-TEST FIX: Cap memory usage to prevent OOM crashes if app is left open for days
     if (_notifications.length > 500) {
       _notifications.removeRange(0, _notifications.length - 500);
     }
-    
+
     // Buzz notification in the foreground!
     NotificationService().showNotification(
       title: notification.title,
@@ -862,9 +908,9 @@ class NotificationProvider extends ChangeNotifier {
 
     try {
       await _supabase.from('notifications').upsert(
-        deduped.values.toList(),
-        onConflict: 'user_id,notif_key',
-      );
+            deduped.values.toList(),
+            onConflict: 'user_id,notif_key',
+          );
     } catch (e) {
       debugPrint('Failed to batch persist notifications to DB: $e');
     }
@@ -905,10 +951,7 @@ class NotificationProvider extends ChangeNotifier {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
     try {
-      await _supabase
-          .from('notifications')
-          .delete()
-          .eq('user_id', userId);
+      await _supabase.from('notifications').delete().eq('user_id', userId);
     } catch (e) {
       debugPrint('Failed to clear notifications from DB: $e');
     }
@@ -1006,9 +1049,15 @@ class NotificationProvider extends ChangeNotifier {
       case 'delivered':
         return ('🎉 Order Delivered!', 'Your order has been delivered. Enjoy!');
       case 'cancelled':
-        return ('❌ Order Cancelled', 'Your order has been cancelled. No payment was taken.');
+        return (
+          '❌ Order Cancelled',
+          'Your order has been cancelled. No payment was taken.'
+        );
       case 'seller_rejected':
-        return ('😔 Order Rejected', 'The shop could not accept your order. No payment was taken.');
+        return (
+          '😔 Order Rejected',
+          'The shop could not accept your order. No payment was taken.'
+        );
       case 'verification_failed':
         return (
           '🚫 Prescription Rejected',
@@ -1083,7 +1132,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Edge Function Push Notification Helper ────────────────────────────────
-  
+
   /// Invokes the `send-push` Edge Function to deliver a Firebase Cloud Message
   /// to the target user, so they get notified even when the app is closed.
   Future<String?> sendBackgroundPush({

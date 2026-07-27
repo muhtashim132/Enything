@@ -14,7 +14,7 @@ class AppValidators {
 
   static String? phone(String? value) {
     if (value == null || value.isEmpty) return 'Phone number is required';
-    
+
     // Sanitize input: remove spaces, dashes, and +91/91 prefix
     String sanitized = value.replaceAll(RegExp(r'[\s\-]'), '');
     if (sanitized.startsWith('+91')) {
@@ -24,7 +24,8 @@ class AppValidators {
     }
 
     if (sanitized.length != 10) return 'Enter valid 10-digit number';
-    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(sanitized)) return 'Enter valid Indian mobile number';
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(sanitized))
+      return 'Enter valid Indian mobile number';
     return null;
   }
 
@@ -35,7 +36,8 @@ class AppValidators {
 
   static String? pinCode(String? value) {
     if (value == null || value.isEmpty) return 'Pin code is required';
-    if (!RegExp(r'^\d{6}$').hasMatch(value)) return 'Enter valid 6-digit pin code';
+    if (!RegExp(r'^\d{6}$').hasMatch(value))
+      return 'Enter valid 6-digit pin code';
     return null;
   }
 

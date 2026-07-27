@@ -63,14 +63,17 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
         ),
         backgroundColor: cardColor,
         elevation: 0,
-        automaticallyImplyLeading: false, // We use custom cancel button at bottom
+        automaticallyImplyLeading:
+            false, // We use custom cancel button at bottom
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: _imageData == null
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                  ? const Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary))
                   : Crop(
                       image: _imageData!,
                       controller: _controller,
@@ -81,7 +84,8 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
                         if (result is CropSuccess) {
                           try {
                             final dir = await getTemporaryDirectory();
-                            final tempPath = '${dir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.jpg';
+                            final tempPath =
+                                '${dir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.jpg';
                             final file = File(tempPath);
                             await file.writeAsBytes(result.croppedImage);
                             if (mounted) {
@@ -90,7 +94,9 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
                           } catch (e) {
                             if (mounted) {
                               messenger.showSnackBar(
-                                const SnackBar(content: Text('Error saving cropped image.')),
+                                const SnackBar(
+                                    content:
+                                        Text('Error saving cropped image.')),
                               );
                               navigator.pop();
                             }
@@ -98,7 +104,8 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
                         } else {
                           if (mounted) {
                             messenger.showSnackBar(
-                              const SnackBar(content: Text('Error cropping image.')),
+                              const SnackBar(
+                                  content: Text('Error cropping image.')),
                             );
                             setState(() => _isProcessing = false);
                           }
@@ -118,7 +125,9 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
                   // Cancel Button
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _isProcessing ? null : () => Navigator.of(context).pop(),
+                      onPressed: _isProcessing
+                          ? null
+                          : () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.close_rounded, size: 20),
                       label: Text(
                         'Cancel',
@@ -129,7 +138,8 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.textSecondary,
-                        side: const BorderSide(color: AppColors.border, width: 1.5),
+                        side: const BorderSide(
+                            color: AppColors.border, width: 1.5),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -141,16 +151,18 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
                   // Done Button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _isProcessing ? null : () {
-                        setState(() => _isProcessing = true);
-                        _controller.crop();
-                      },
-                      icon: _isProcessing 
+                      onPressed: _isProcessing
+                          ? null
+                          : () {
+                              setState(() => _isProcessing = true);
+                              _controller.crop();
+                            },
+                      icon: _isProcessing
                           ? const SizedBox(
-                              width: 20, 
-                              height: 20, 
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
-                            )
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.check_rounded, size: 20),
                       label: Text(
                         _isProcessing ? 'Processing' : 'Done',

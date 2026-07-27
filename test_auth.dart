@@ -10,13 +10,14 @@ void main() async {
 
   try {
     print('Attempting to login with new password...');
-    final res1 = await client.auth.signInWithPassword(email: 'mock919999999997@enything.com', password: 'Dummy123');
+    final res1 = await client.auth.signInWithPassword(
+        email: 'mock919999999997@enything.com', password: 'Dummy123');
     print('Success! ID: ${res1.user?.id}');
   } catch (e) {
     print('Failed with new password: $e');
     try {
       print('Attempting to login with legacy password...');
-      // compute new password from _passwordFromPhone 
+      // compute new password from _passwordFromPhone
       // wait, I don't have the logic here, but let's test if signIn fails.
     } catch (e2) {
       print('Failed legacy: $e2');

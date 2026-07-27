@@ -405,86 +405,88 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       // ── Sept 2025 GST Reform Banner ─────────────────────────────
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: AdminColors.warning.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: AdminColors.warning.withValues(alpha: 0.4)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.new_releases_rounded,
-                          color: AdminColors.warning, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: AdminColors.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color:
+                                  AdminColors.warning.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Sept 2025 GST Reform Applied',
-                              style: AdminStyles.body(
-                                  size: 13, color: AdminColors.warning),
+                            const Icon(Icons.new_releases_rounded,
+                                color: AdminColors.warning, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Sept 2025 GST Reform Applied',
+                                    style: AdminStyles.body(
+                                        size: 13, color: AdminColors.warning),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'India\'s GST simplification (Notification 9/2025-CT Rate, Sep 22 2025) '
+                                    'removed the 12% & 28% slabs for most goods. '
+                                    'Clothing/Footwear threshold raised to ₹2,500 per item/pair. '
+                                    'Beverages, Stationery, Toys & Games, Sports raised to 18%. '
+                                    'Use this page to update rates when the government issues new notifications.',
+                                    style: AdminStyles.caption(
+                                        color: AdminColors.warning),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'India\'s GST simplification (Notification 9/2025-CT Rate, Sep 22 2025) '
-                              'removed the 12% & 28% slabs for most goods. '
-                              'Clothing/Footwear threshold raised to ₹2,500 per item/pair. '
-                              'Beverages, Stationery, Toys & Games, Sports raised to 18%. '
-                              'Use this page to update rates when the government issues new notifications.',
-                              style: AdminStyles.caption(
-                                  color: AdminColors.warning),
+                          ],
+                        ),
+                      ).animate().fadeIn(delay: 30.ms),
+
+                      // ── Add-On GST Info Banner ──────────────────────────────────
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: AdminColors.info.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: AdminColors.info.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded,
+                                color: AdminColors.info, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'GST rates are added ON TOP of the seller\'s base price (add-on model). '
+                                'Custom overrides apply to all new orders immediately.',
+                                style: AdminStyles.caption(
+                                    color: AdminColors.info),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ).animate().fadeIn(delay: 30.ms),
 
-                // ── Add-On GST Info Banner ──────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  margin: const EdgeInsets.only(bottom: 20),
-                  decoration: BoxDecoration(
-                    color: AdminColors.info.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: AdminColors.info.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline_rounded,
-                          color: AdminColors.info, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'GST rates are added ON TOP of the seller\'s base price (add-on model). '
-                          'Custom overrides apply to all new orders immediately.',
-                          style: AdminStyles.caption(color: AdminColors.info),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                      // ── Service Tax Overrides ───────────────────────────────────
+                      _buildServiceTaxSection(config, rbac, canEdit),
+                      const SizedBox(height: 8),
 
-                // ── Service Tax Overrides ───────────────────────────────────
-                _buildServiceTaxSection(config, rbac, canEdit),
-                const SizedBox(height: 8),
+                      // ── Per-Category Sections ───────────────────────────────────
+                      ..._sections.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final section = entry.value;
+                        return _buildSection(section, rbac, canEdit,
+                            delay: (i + 1) * 80);
+                      }),
 
-                // ── Per-Category Sections ───────────────────────────────────
-                ..._sections.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final section = entry.value;
-                  return _buildSection(section, rbac, canEdit,
-                      delay: (i + 1) * 80);
-                }),
-
-                const SizedBox(height: 16),
+                      const SizedBox(height: 16),
                     ]),
                   ),
                 ),
@@ -633,7 +635,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF7C4DFF).withValues(alpha: 0.15),
+                          color:
+                              const Color(0xFF7C4DFF).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(Icons.auto_awesome_rounded,
@@ -649,8 +652,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                             Text(
                               'Auto-recommend correct GST rate when seller types a product name. '
                               'Matched case-insensitively. Category hint narrows match to that category only.',
-                              style:
-                                  AdminStyles.caption(color: AdminColors.textMuted),
+                              style: AdminStyles.caption(
+                                  color: AdminColors.textMuted),
                             ),
                           ],
                         ),
@@ -683,7 +686,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                     rateColor: rateColor,
                     slabOptions: slabOptions,
                     onSave: () async {
-                      final rate = double.tryParse(_overrideRateCtrl.text) ?? 0.18;
+                      final rate =
+                          double.tryParse(_overrideRateCtrl.text) ?? 0.18;
                       final kw = _overrideKeywordCtrl.text.trim();
                       if (kw.isEmpty) {
                         _showSnack('Keyword cannot be empty', error: true);
@@ -711,7 +715,8 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                       child: Text(
                         'No custom keyword rules.\nThe engine uses 200+ built-in rules from the migration seed.',
                         textAlign: TextAlign.center,
-                        style: AdminStyles.caption(color: AdminColors.textMuted),
+                        style:
+                            AdminStyles.caption(color: AdminColors.textMuted),
                       ),
                     ),
                   ),
@@ -847,12 +852,15 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                   border: Border(
                     left: const BorderSide(color: AdminColors.cardBorder),
                     right: const BorderSide(color: AdminColors.cardBorder),
-                    bottom: isLast ? const BorderSide(color: AdminColors.cardBorder) : BorderSide.none,
+                    bottom: isLast
+                        ? const BorderSide(color: AdminColors.cardBorder)
+                        : BorderSide.none,
                   ),
                 ),
                 child: Column(
                   children: [
-                    if (i != 0) const Divider(height: 1, color: AdminColors.cardBorder),
+                    if (i != 0)
+                      const Divider(height: 1, color: AdminColors.cardBorder),
                     child,
                   ],
                 ),

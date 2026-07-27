@@ -63,7 +63,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       double payout = 0;
       double commission = 0;
       int delivered = 0;
-      
+
       final Map<DateTime, double> dailyRevenue = {};
       final List<DateTime> dates = [];
       for (int i = 6; i >= 0; i--) {
@@ -83,11 +83,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           payout += sp;
           commission += zc;
           delivered++;
-          
+
           final createdAtStr = order['created_at'];
           if (createdAtStr != null) {
             final createdAt = DateTime.tryParse(createdAtStr)?.toIST() ?? now;
-            final orderDate = DateTime(createdAt.year, createdAt.month, createdAt.day);
+            final orderDate =
+                DateTime(createdAt.year, createdAt.month, createdAt.day);
             if (dailyRevenue.containsKey(orderDate)) {
               dailyRevenue[orderDate] = dailyRevenue[orderDate]! + amount;
             }
@@ -123,196 +124,202 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       appBar: AppBar(title: const Text('Analytics')),
       body: MaxWidthContainer(
         child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header Stats
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _statCard(
-                          'Gross Revenue',
-                          '₹${_totalRevenue.toStringAsFixed(0)}',
-                          Icons.currency_rupee,
-                          AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _statCard(
-                          'Net Payout',
-                          '₹${_totalPayout.toStringAsFixed(0)}',
-                          Icons.account_balance_wallet_outlined,
-                          AppColors.success,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _statCard(
-                          'Platform Comm.',
-                          '₹${_totalCommission.toStringAsFixed(0)}',
-                          Icons.pie_chart_outline,
-                          AppColors.danger,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _statCard(
-                          'Total Orders',
-                          '$_totalOrders',
-                          Icons.receipt_long_outlined,
-                          AppColors.info,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _statCard(
-                          'Delivered',
-                          '$_deliveredOrders',
-                          Icons.check_circle_outline,
-                          AppColors.success,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _statCard(
-                          'Success Rate',
-                          _totalOrders > 0
-                              ? '${(_deliveredOrders / _totalOrders * 100).toStringAsFixed(0)}%'
-                              : '0%',
-                          Icons.trending_up,
-                          AppColors.info,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Chart
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Stats
+                    Row(
                       children: [
-                        const Text(
-                          'Revenue Trend',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'Poppins',
+                        Expanded(
+                          child: _statCard(
+                            'Gross Revenue',
+                            '₹${_totalRevenue.toStringAsFixed(0)}',
+                            Icons.currency_rupee,
+                            AppColors.primary,
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          height: 200,
-                          child: _revenueSpots.isEmpty
-                              ? const Center(
-                                  child: Text('No data yet',
-                                      style: TextStyle(
-                                          color: AppColors.textSecondary)))
-                              : LineChart(
-                                  LineChartData(
-                                    gridData: FlGridData(
-                                      show: true,
-                                      drawVerticalLine: false,
-                                      getDrawingHorizontalLine: (v) =>
-                                          const FlLine(
-                                        color: AppColors.divider,
-                                        strokeWidth: 1,
-                                      ),
-                                    ),
-                                    titlesData: FlTitlesData(
-                                      bottomTitles: AxisTitles(
-                                        sideTitles: SideTitles(
-                                          showTitles: true,
-                                          reservedSize: 22,
-                                          getTitlesWidget: (v, meta) {
-                                            final int index = v.toInt();
-                                            if (index < 0 || index >= _last7DaysDates.length) return const SizedBox.shrink();
-                                            final date = _last7DaysDates[index];
-                                            return Padding(
-                                              padding: const EdgeInsets.only(top: 8.0),
-                                              child: Text(
-                                                '${date.day}/${date.month}',
-                                                style: const TextStyle(
-                                                    fontSize: 10,
-                                                    color: AppColors.textSecondary),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      leftTitles: const AxisTitles(
-                                        sideTitles:
-                                            SideTitles(showTitles: false),
-                                      ),
-                                      topTitles: const AxisTitles(
-                                        sideTitles:
-                                            SideTitles(showTitles: false),
-                                      ),
-                                      rightTitles: const AxisTitles(
-                                        sideTitles:
-                                            SideTitles(showTitles: false),
-                                      ),
-                                    ),
-                                    borderData: FlBorderData(show: false),
-                                    lineBarsData: [
-                                      LineChartBarData(
-                                        spots: _revenueSpots.isEmpty
-                                            ? [const FlSpot(0, 0)]
-                                            : _revenueSpots,
-                                        isCurved: true,
-                                        color: AppColors.primary,
-                                        barWidth: 3,
-                                        belowBarData: BarAreaData(
-                                          show: true,
-                                          color: AppColors.primary
-                                              .withValues(alpha: 0.1),
-                                        ),
-                                        dotData: FlDotData(
-                                          show: true,
-                                          getDotPainter:
-                                              (spot, percent, bar, index) =>
-                                                  FlDotCirclePainter(
-                                            radius: 4,
-                                            color: AppColors.primary,
-                                            strokeWidth: 2,
-                                            strokeColor: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _statCard(
+                            'Net Payout',
+                            '₹${_totalPayout.toStringAsFixed(0)}',
+                            Icons.account_balance_wallet_outlined,
+                            AppColors.success,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _statCard(
+                            'Platform Comm.',
+                            '₹${_totalCommission.toStringAsFixed(0)}',
+                            Icons.pie_chart_outline,
+                            AppColors.danger,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _statCard(
+                            'Total Orders',
+                            '$_totalOrders',
+                            Icons.receipt_long_outlined,
+                            AppColors.info,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _statCard(
+                            'Delivered',
+                            '$_deliveredOrders',
+                            Icons.check_circle_outline,
+                            AppColors.success,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _statCard(
+                            'Success Rate',
+                            _totalOrders > 0
+                                ? '${(_deliveredOrders / _totalOrders * 100).toStringAsFixed(0)}%'
+                                : '0%',
+                            Icons.trending_up,
+                            AppColors.info,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Chart
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Revenue Trend',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            height: 200,
+                            child: _revenueSpots.isEmpty
+                                ? const Center(
+                                    child: Text('No data yet',
+                                        style: TextStyle(
+                                            color: AppColors.textSecondary)))
+                                : LineChart(
+                                    LineChartData(
+                                      gridData: FlGridData(
+                                        show: true,
+                                        drawVerticalLine: false,
+                                        getDrawingHorizontalLine: (v) =>
+                                            const FlLine(
+                                          color: AppColors.divider,
+                                          strokeWidth: 1,
+                                        ),
+                                      ),
+                                      titlesData: FlTitlesData(
+                                        bottomTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            reservedSize: 22,
+                                            getTitlesWidget: (v, meta) {
+                                              final int index = v.toInt();
+                                              if (index < 0 ||
+                                                  index >=
+                                                      _last7DaysDates.length)
+                                                return const SizedBox.shrink();
+                                              final date =
+                                                  _last7DaysDates[index];
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 8.0),
+                                                child: Text(
+                                                  '${date.day}/${date.month}',
+                                                  style: const TextStyle(
+                                                      fontSize: 10,
+                                                      color: AppColors
+                                                          .textSecondary),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        leftTitles: const AxisTitles(
+                                          sideTitles:
+                                              SideTitles(showTitles: false),
+                                        ),
+                                        topTitles: const AxisTitles(
+                                          sideTitles:
+                                              SideTitles(showTitles: false),
+                                        ),
+                                        rightTitles: const AxisTitles(
+                                          sideTitles:
+                                              SideTitles(showTitles: false),
+                                        ),
+                                      ),
+                                      borderData: FlBorderData(show: false),
+                                      lineBarsData: [
+                                        LineChartBarData(
+                                          spots: _revenueSpots.isEmpty
+                                              ? [const FlSpot(0, 0)]
+                                              : _revenueSpots,
+                                          isCurved: true,
+                                          color: AppColors.primary,
+                                          barWidth: 3,
+                                          belowBarData: BarAreaData(
+                                            show: true,
+                                            color: AppColors.primary
+                                                .withValues(alpha: 0.1),
+                                          ),
+                                          dotData: FlDotData(
+                                            show: true,
+                                            getDotPainter:
+                                                (spot, percent, bar, index) =>
+                                                    FlDotCirclePainter(
+                                              radius: 4,
+                                              color: AppColors.primary,
+                                              strokeWidth: 2,
+                                              strokeColor: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ),
+      ),
     );
   }
 
@@ -357,4 +364,3 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     );
   }
 }
-

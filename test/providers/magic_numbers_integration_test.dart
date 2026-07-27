@@ -7,6 +7,7 @@ import 'package:enythingmobilenew/models/product_model.dart';
 import 'package:enythingmobilenew/models/shop_model.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -89,30 +90,42 @@ void main() {
       final product = createProduct(id: 'p1', price: 10.0, weightPerUnit: 0.1);
 
       // Adding up to max items should succeed
-      var err = cartProvider.addItem(product, shop, quantity: PaymentConfig.maxItemsPerOrder);
-      expect(err, isNull, reason: 'Adding exactly ${PaymentConfig.maxItemsPerOrder} items should succeed');
+      var err = cartProvider.addItem(product, shop,
+          quantity: PaymentConfig.maxItemsPerOrder);
+      expect(err, isNull,
+          reason:
+              'Adding exactly ${PaymentConfig.maxItemsPerOrder} items should succeed');
       expect(cartProvider.totalItemCount, PaymentConfig.maxItemsPerOrder);
 
       // Adding one more should fail
       err = cartProvider.addItem(product, shop, quantity: 1);
-      expect(err, isNotNull, reason: 'Adding ${PaymentConfig.maxItemsPerOrder + 1} items should fail');
+      expect(err, isNotNull,
+          reason:
+              'Adding ${PaymentConfig.maxItemsPerOrder + 1} items should fail');
       expect(cartProvider.totalItemCount, PaymentConfig.maxItemsPerOrder);
     });
 
     test('Max Weight Limit (${PaymentConfig.maxWeightKg} kg)', () {
       final shop = createShop('s1');
       // Product exactly at max weight
-      final heavyProduct = createProduct(id: 'p2', price: 100.0, weightPerUnit: PaymentConfig.maxWeightKg);
-      
+      final heavyProduct = createProduct(
+          id: 'p2', price: 100.0, weightPerUnit: PaymentConfig.maxWeightKg);
+
       var err = cartProvider.addItem(heavyProduct, shop, quantity: 1);
-      expect(err, isNull, reason: 'Adding exactly ${PaymentConfig.maxWeightKg} kg should succeed');
+      expect(err, isNull,
+          reason:
+              'Adding exactly ${PaymentConfig.maxWeightKg} kg should succeed');
       expect(cartProvider.totalWeight, PaymentConfig.maxWeightKg);
 
       // Adding slight excess weight should fail
       cartProvider.clear();
-      final extraHeavyProduct = createProduct(id: 'p3', price: 100.0, weightPerUnit: PaymentConfig.maxWeightKg + 0.1);
+      final extraHeavyProduct = createProduct(
+          id: 'p3',
+          price: 100.0,
+          weightPerUnit: PaymentConfig.maxWeightKg + 0.1);
       err = cartProvider.addItem(extraHeavyProduct, shop, quantity: 1);
-      expect(err, isNotNull, reason: 'Adding >${PaymentConfig.maxWeightKg} kg should fail');
+      expect(err, isNotNull,
+          reason: 'Adding >${PaymentConfig.maxWeightKg} kg should fail');
       expect(cartProvider.totalItemCount, 0);
     });
 
@@ -131,64 +144,96 @@ void main() {
       final shop4 = createShop('s4');
       final p4 = createProduct(id: 'p4', price: 10.0, weightPerUnit: 0.1);
       final err = cartProvider.addItem(p4, shop4, quantity: 1);
-      expect(err, isNotNull, reason: 'Should not allow adding from a 4th distinct shop');
+      expect(err, isNotNull,
+          reason: 'Should not allow adding from a 4th distinct shop');
       expect(cartProvider.shops.length, 3);
     });
 
     test('Small Cart Fee Threshold (₹${PaymentConfig.smallCartThreshold})', () {
       final shop = createShop('s1');
-      
+
       // Edge case: Just below threshold
-      final productBelow = createProduct(id: 'p_below', price: PaymentConfig.smallCartThreshold - 1, weightPerUnit: 1.0);
+      final productBelow = createProduct(
+          id: 'p_below',
+          price: PaymentConfig.smallCartThreshold - 1,
+          weightPerUnit: 1.0);
       cartProvider.addItem(productBelow, shop, quantity: 1);
       expect(cartProvider.subtotal, PaymentConfig.smallCartThreshold - 1);
-      expect(cartProvider.smallCartFee, PaymentConfig.smallCartFee, reason: 'Small cart fee should apply when subtotal is < ${PaymentConfig.smallCartThreshold}');
+      expect(cartProvider.smallCartFee, PaymentConfig.smallCartFee,
+          reason:
+              'Small cart fee should apply when subtotal is < ${PaymentConfig.smallCartThreshold}');
 
       // Edge case: Exactly at threshold
       cartProvider.clear();
-      final productAt = createProduct(id: 'p_at', price: PaymentConfig.smallCartThreshold, weightPerUnit: 1.0);
+      final productAt = createProduct(
+          id: 'p_at',
+          price: PaymentConfig.smallCartThreshold,
+          weightPerUnit: 1.0);
       cartProvider.addItem(productAt, shop, quantity: 1);
       expect(cartProvider.subtotal, PaymentConfig.smallCartThreshold);
-      expect(cartProvider.smallCartFee, 0.0, reason: 'Small cart fee should NOT apply when subtotal is >= ${PaymentConfig.smallCartThreshold}');
+      expect(cartProvider.smallCartFee, 0.0,
+          reason:
+              'Small cart fee should NOT apply when subtotal is >= ${PaymentConfig.smallCartThreshold}');
     });
 
-    test('Heavy Order Fee Threshold (${PaymentConfig.heavyOrderThreshold} kg)', () {
+    test('Heavy Order Fee Threshold (${PaymentConfig.heavyOrderThreshold} kg)',
+        () {
       final shop = createShop('s1');
-      
+
       // Edge case: Exactly at threshold
-      final productAt = createProduct(id: 'h1', price: 100.0, weightPerUnit: PaymentConfig.heavyOrderThreshold);
+      final productAt = createProduct(
+          id: 'h1',
+          price: 100.0,
+          weightPerUnit: PaymentConfig.heavyOrderThreshold);
       cartProvider.addItem(productAt, shop, quantity: 1);
       expect(cartProvider.totalWeight, PaymentConfig.heavyOrderThreshold);
-      expect(cartProvider.heavyOrderFee, 0.0, reason: 'Heavy order fee should NOT apply at exactly threshold');
+      expect(cartProvider.heavyOrderFee, 0.0,
+          reason: 'Heavy order fee should NOT apply at exactly threshold');
 
       // Edge case: Just above threshold (e.g. 10.1kg). Extra weight is 0.1 -> ceil to 1kg
       cartProvider.clear();
-      final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
-      final productAbove = createProduct(id: 'h2', price: 100.0, weightPerUnit: PaymentConfig.heavyOrderThreshold + 0.1);
+      final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ??
+          PaymentConfig.heavyOrderFee;
+      final productAbove = createProduct(
+          id: 'h2',
+          price: 100.0,
+          weightPerUnit: PaymentConfig.heavyOrderThreshold + 0.1);
       cartProvider.addItem(productAbove, shop, quantity: 1);
-      expect(cartProvider.heavyOrderFee, feePerKg, reason: 'Heavy order fee should apply strictly > threshold (1 extra kg)');
+      expect(cartProvider.heavyOrderFee, feePerKg,
+          reason:
+              'Heavy order fee should apply strictly > threshold (1 extra kg)');
 
       // Edge case: 5kg above threshold (e.g. 15.0kg). Extra weight is 5kg.
       cartProvider.clear();
-      final productExtraHeavy = createProduct(id: 'h3', price: 100.0, weightPerUnit: PaymentConfig.heavyOrderThreshold + 5.0);
+      final productExtraHeavy = createProduct(
+          id: 'h3',
+          price: 100.0,
+          weightPerUnit: PaymentConfig.heavyOrderThreshold + 5.0);
       cartProvider.addItem(productExtraHeavy, shop, quantity: 1);
-      expect(cartProvider.heavyOrderFee, feePerKg * 5.0, reason: 'Heavy order fee should scale per extra kg');
+      expect(cartProvider.heavyOrderFee, feePerKg * 5.0,
+          reason: 'Heavy order fee should scale per extra kg');
     });
 
     test('Platform Fee is consistently applied', () {
       final shop = createShop('s1');
-      final product = createProduct(id: 'p1', price: 200.0, weightPerUnit: 1.0); // Subtotal 200, so no small cart fee
+      final product = createProduct(
+          id: 'p1',
+          price: 200.0,
+          weightPerUnit: 1.0); // Subtotal 200, so no small cart fee
       cartProvider.addItem(product, shop, quantity: 1);
-      
+
       expect(cartProvider.platformFee, PaymentConfig.platformFee);
     });
 
     test('Minimum Order Value (₹${PaymentConfig.minimumOrderValue})', () {
       final shop = createShop('s1');
       // Adding item below minimum order value
-      final product = createProduct(id: 'p1', price: PaymentConfig.minimumOrderValue - 0.5, weightPerUnit: 0.1);
+      final product = createProduct(
+          id: 'p1',
+          price: PaymentConfig.minimumOrderValue - 0.5,
+          weightPerUnit: 0.1);
       cartProvider.addItem(product, shop, quantity: 1);
-      
+
       expect(cartProvider.meetsMinimumOrder, isFalse);
 
       // Now adding more to meet it

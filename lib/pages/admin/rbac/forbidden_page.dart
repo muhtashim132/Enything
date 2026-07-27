@@ -162,8 +162,8 @@ class _ForbiddenPageState extends State<ForbiddenPage>
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: RadialGradient(
-                colors: [color, color.withValues(alpha: 0.0)]),
+            gradient:
+                RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
           ),
         ),
       );

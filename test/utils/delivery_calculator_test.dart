@@ -9,13 +9,13 @@ void main() {
         // Default rate is 10.0
         expect(DeliveryCalculator.calculateDeliveryCharges(0.5, 500), 10.0);
       });
-      
+
       test('clamps correctly', () {
         // Assume maxRadiusKm is 15.0 and ratePerKm is 10.0
         // Distance 15.0 -> ceil is 15.
         expect(DeliveryCalculator.calculateDeliveryCharges(15.0, 500), 150.0);
       });
-      
+
       test('returns -1 for out of bounds', () {
         expect(DeliveryCalculator.calculateDeliveryCharges(16.0, 500), -1.0);
       });

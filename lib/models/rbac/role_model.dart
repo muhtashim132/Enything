@@ -31,8 +31,7 @@ class RoleModel {
   RoleType get type => isSystem ? RoleType.system : RoleType.custom;
   int get permissionCount => permissions.length;
 
-  bool hasPermission(String code) =>
-      permissions.any((p) => p.code == code);
+  bool hasPermission(String code) => permissions.any((p) => p.code == code);
 
   Color get badgeColor {
     try {

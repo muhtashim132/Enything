@@ -43,22 +43,36 @@ class _KycReviewPageState extends State<KycReviewPage>
   // ── Data Loading ─────────────────────────────────────────────────────────
 
   Future<void> _loadSellers() async {
-    setState(() { _loadingSellers = true; _sellerError = null; });
+    setState(() {
+      _loadingSellers = true;
+      _sellerError = null;
+    });
     try {
       final rows = await _supabase.rpc('admin_get_all_shops');
       final allShops = List<Map<String, dynamic>>.from(rows);
       final pending = allShops
           .where((s) => (s['verification_status'] as String?) == 'pending')
           .toList();
-      if (mounted) setState(() { _sellerPending = pending; _loadingSellers = false; });
+      if (mounted)
+        setState(() {
+          _sellerPending = pending;
+          _loadingSellers = false;
+        });
     } catch (e) {
       debugPrint('Error loading seller KYC: $e');
-      if (mounted) setState(() { _loadingSellers = false; _sellerError = e.toString(); });
+      if (mounted)
+        setState(() {
+          _loadingSellers = false;
+          _sellerError = e.toString();
+        });
     }
   }
 
   Future<void> _loadRiders() async {
-    setState(() { _loadingRiders = true; _riderError = null; });
+    setState(() {
+      _loadingRiders = true;
+      _riderError = null;
+    });
     try {
       // Use the admin RPC which bypasses column-level RLS restrictions.
       final rows = await _supabase.rpc('admin_get_all_riders');
@@ -66,10 +80,18 @@ class _KycReviewPageState extends State<KycReviewPage>
       final pending = allRiders
           .where((r) => (r['verification_status'] as String?) == 'pending')
           .toList();
-      if (mounted) setState(() { _riderPending = pending; _loadingRiders = false; });
+      if (mounted)
+        setState(() {
+          _riderPending = pending;
+          _loadingRiders = false;
+        });
     } catch (e) {
       debugPrint('Error loading rider KYC: $e');
-      if (mounted) setState(() { _loadingRiders = false; _riderError = e.toString(); });
+      if (mounted)
+        setState(() {
+          _loadingRiders = false;
+          _riderError = e.toString();
+        });
     }
   }
 
@@ -93,10 +115,11 @@ class _KycReviewPageState extends State<KycReviewPage>
       // Push seller: KYC approved
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: sellerId,
-          title: '✅ KYC Approved!',
-          body: 'Congratulations! Your shop KYC has been verified. You can now start accepting orders.',
-        );
+              targetUserId: sellerId,
+              title: '✅ KYC Approved!',
+              body:
+                  'Congratulations! Your shop KYC has been verified. You can now start accepting orders.',
+            );
       }
 
       _showSnack('✅ Seller approved!', isError: false);
@@ -126,10 +149,11 @@ class _KycReviewPageState extends State<KycReviewPage>
       // Push seller: KYC rejected with reason
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: sellerId,
-          title: '❌ KYC Application Rejected',
-          body: 'Reason: $reason. Please re-upload your documents and reapply.',
-        );
+              targetUserId: sellerId,
+              title: '❌ KYC Application Rejected',
+              body:
+                  'Reason: $reason. Please re-upload your documents and reapply.',
+            );
       }
 
       _showSnack('Seller rejected.', isError: true);
@@ -147,7 +171,11 @@ class _KycReviewPageState extends State<KycReviewPage>
         'p_type': 'rider',
         'p_status': 'approved'
       });
-      final userId = rider['user_id'] as String? ?? (rider['profiles'] is Map ? rider['profiles']['id'] as String? : null) ?? riderId;
+      final userId = rider['user_id'] as String? ??
+          (rider['profiles'] is Map
+              ? rider['profiles']['id'] as String?
+              : null) ??
+          riderId;
       await _supabase.rpc('admin_update_kyc', params: {
         'p_target_id': userId,
         'p_type': 'customer',
@@ -157,10 +185,11 @@ class _KycReviewPageState extends State<KycReviewPage>
       // Push rider: KYC approved
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: userId,
-          title: '✅ KYC Approved!',
-          body: 'Congratulations! Your rider KYC has been verified. You can now go online and start earning.',
-        );
+              targetUserId: userId,
+              title: '✅ KYC Approved!',
+              body:
+                  'Congratulations! Your rider KYC has been verified. You can now go online and start earning.',
+            );
       }
 
       _showSnack('✅ Rider approved!', isError: false);
@@ -180,7 +209,11 @@ class _KycReviewPageState extends State<KycReviewPage>
         'p_type': 'rider',
         'p_status': 'rejected'
       });
-      final userId = rider['user_id'] as String? ?? (rider['profiles'] is Map ? rider['profiles']['id'] as String? : null) ?? riderId;
+      final userId = rider['user_id'] as String? ??
+          (rider['profiles'] is Map
+              ? rider['profiles']['id'] as String?
+              : null) ??
+          riderId;
       await _supabase.rpc('admin_update_kyc', params: {
         'p_target_id': userId,
         'p_type': 'customer',
@@ -190,10 +223,11 @@ class _KycReviewPageState extends State<KycReviewPage>
       // Push rider: KYC rejected with reason
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: userId,
-          title: '❌ KYC Application Rejected',
-          body: 'Reason: $reason. Please re-upload your documents and reapply.',
-        );
+              targetUserId: userId,
+              title: '❌ KYC Application Rejected',
+              body:
+                  'Reason: $reason. Please re-upload your documents and reapply.',
+            );
       }
 
       _showSnack('Rider rejected.', isError: true);
@@ -227,11 +261,19 @@ class _KycReviewPageState extends State<KycReviewPage>
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: AdminStyles.body())),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: AdminStyles.body())),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim().isEmpty ? 'Documents unclear or invalid.' : ctrl.text.trim()),
-            style: ElevatedButton.styleFrom(backgroundColor: AdminColors.danger),
-            child: const Text('Confirm Reject', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(
+                ctx,
+                ctrl.text.trim().isEmpty
+                    ? 'Documents unclear or invalid.'
+                    : ctrl.text.trim()),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AdminColors.danger),
+            child: const Text('Confirm Reject',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -253,7 +295,9 @@ class _KycReviewPageState extends State<KycReviewPage>
   @override
   Widget build(BuildContext context) {
     final rbac = context.watch<RbacProvider>();
-    if (!rbac.isSuperAdmin && !rbac.can('sellers.approve') && !rbac.can('riders.approve')) {
+    if (!rbac.isSuperAdmin &&
+        !rbac.can('sellers.approve') &&
+        !rbac.can('riders.approve')) {
       return const ForbiddenPage(fullPage: false);
     }
     return Scaffold(
@@ -317,10 +361,16 @@ class _KycReviewPageState extends State<KycReviewPage>
   }
 
   Widget _badge(int count) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    decoration: BoxDecoration(color: AdminColors.warning, borderRadius: BorderRadius.circular(10)),
-    child: Text('$count', style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.w800)),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+            color: AdminColors.warning,
+            borderRadius: BorderRadius.circular(10)),
+        child: Text('$count',
+            style: const TextStyle(
+                color: Colors.black,
+                fontSize: 10,
+                fontWeight: FontWeight.w800)),
+      );
 
   Widget _buildList({
     required bool loading,
@@ -329,19 +379,24 @@ class _KycReviewPageState extends State<KycReviewPage>
     required bool isRider,
     String? error,
   }) {
-    if (loading) return const Center(child: CircularProgressIndicator(color: AdminColors.primary));
+    if (loading)
+      return const Center(
+          child: CircularProgressIndicator(color: AdminColors.primary));
     if (error != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.error_outline_rounded, size: 64, color: AdminColors.danger),
+            const Icon(Icons.error_outline_rounded,
+                size: 64, color: AdminColors.danger),
             const SizedBox(height: 16),
-            Text('Failed to load KYC data', style: AdminStyles.title(color: AdminColors.danger)),
+            Text('Failed to load KYC data',
+                style: AdminStyles.title(color: AdminColors.danger)),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: AdminDecorations.glassCard(borderColor: AdminColors.danger.withValues(alpha: 0.4)),
+              decoration: AdminDecorations.glassCard(
+                  borderColor: AdminColors.danger.withValues(alpha: 0.4)),
               child: SelectableText(
                 error,
                 style: AdminStyles.caption(color: AdminColors.warning),
@@ -353,7 +408,8 @@ class _KycReviewPageState extends State<KycReviewPage>
               onPressed: onRefresh,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Retry'),
-              style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primary),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminColors.primary),
             ),
           ]),
         ),
@@ -362,11 +418,13 @@ class _KycReviewPageState extends State<KycReviewPage>
     if (items.isEmpty) {
       return Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.verified_outlined, size: 64, color: AdminColors.success),
+          const Icon(Icons.verified_outlined,
+              size: 64, color: AdminColors.success),
           const SizedBox(height: 16),
           Text('All caught up!', style: AdminStyles.title()),
           const SizedBox(height: 8),
-          Text('No pending KYC applications.', style: AdminStyles.body(color: AdminColors.textMuted)),
+          Text('No pending KYC applications.',
+              style: AdminStyles.body(color: AdminColors.textMuted)),
         ]),
       );
     }
@@ -376,9 +434,8 @@ class _KycReviewPageState extends State<KycReviewPage>
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: items.length,
-        itemBuilder: (_, i) => isRider
-            ? _buildRiderCard(items[i])
-            : _buildSellerCard(items[i]),
+        itemBuilder: (_, i) =>
+            isRider ? _buildRiderCard(items[i]) : _buildSellerCard(items[i]),
       ),
     );
   }
@@ -388,8 +445,11 @@ class _KycReviewPageState extends State<KycReviewPage>
   Widget _buildSellerCard(Map<String, dynamic> shop) {
     // RPC returns profiles as a JSONB object (already a Map)
     final profileData = shop['profiles'];
-    final profile = (profileData is Map<String, dynamic>) ? profileData : <String, dynamic>{};
-    final name = profile['full_name'] as String? ?? (shop['shop_name'] as String? ?? 'Unknown');
+    final profile = (profileData is Map<String, dynamic>)
+        ? profileData
+        : <String, dynamic>{};
+    final name = profile['full_name'] as String? ??
+        (shop['shop_name'] as String? ?? 'Unknown');
     final phone = profile['phone'] as String? ?? '';
     // kyc_documents comes as Map from JSONB
     final docs = (shop['kyc_documents'] as Map<String, dynamic>?) ?? {};
@@ -407,15 +467,27 @@ class _KycReviewPageState extends State<KycReviewPage>
         _DetailRow('PAN', shop['pan_number']?.toString() ?? '-'),
         if ((shop['gst_number']?.toString() ?? '').isNotEmpty)
           _DetailRow('GSTIN', shop['gst_number'].toString()),
-        _DetailRow('Bank Holder', shop['bank_account_holder']?.toString() ?? '-'),
-        _DetailRow('Account No.', shop['bank_account_number']?.toString() ?? '-'),
+        _DetailRow(
+            'Bank Holder', shop['bank_account_holder']?.toString() ?? '-'),
+        _DetailRow(
+            'Account No.', shop['bank_account_number']?.toString() ?? '-'),
         _DetailRow('IFSC', shop['bank_ifsc']?.toString() ?? '-'),
       ],
-      docImages: _extractDocImages(docs, ['aadhar_front', 'aadhar_back', 'pan_front', 'pan_back', 'shop_proof_1', 'shop_proof_2', 'bank_proof']),
+      docImages: _extractDocImages(docs, [
+        'aadhar_front',
+        'aadhar_back',
+        'pan_front',
+        'pan_back',
+        'shop_proof_1',
+        'shop_proof_2',
+        'bank_proof'
+      ]),
       onApprove: () => _approveSeller(shop),
       onReject: () => _rejectSeller(shop),
-      canApprove: context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('sellers.approve'),
-      canReject: context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('sellers.approve'),
+      canApprove: context.read<RbacProvider>().isSuperAdmin ||
+          context.read<RbacProvider>().can('sellers.approve'),
+      canReject: context.read<RbacProvider>().isSuperAdmin ||
+          context.read<RbacProvider>().can('sellers.approve'),
     );
   }
 
@@ -424,11 +496,14 @@ class _KycReviewPageState extends State<KycReviewPage>
   Widget _buildRiderCard(Map<String, dynamic> rider) {
     // RPC returns profiles as a JSONB object (already a Map)
     final profileData = rider['profiles'];
-    final profile = (profileData is Map<String, dynamic>) ? profileData : <String, dynamic>{};
+    final profile = (profileData is Map<String, dynamic>)
+        ? profileData
+        : <String, dynamic>{};
     final name = profile['full_name'] as String? ?? 'Unknown';
     final phone = profile['phone'] as String? ?? '';
     final docs = (rider['kyc_documents'] as Map<String, dynamic>?) ?? {};
-    final submittedAt = DateTime.tryParse(rider['created_at']?.toString() ?? '');
+    final submittedAt =
+        DateTime.tryParse(rider['created_at']?.toString() ?? '');
 
     return _KycCard(
       emoji: '🏍️',
@@ -439,25 +514,42 @@ class _KycReviewPageState extends State<KycReviewPage>
       details: [
         _DetailRow('Aadhaar', rider['aadhar_number']?.toString() ?? '-'),
         _DetailRow('PAN', rider['pan_number']?.toString() ?? '-'),
-        _DetailRow('Driving License', rider['driving_license']?.toString() ?? '-'),
+        _DetailRow(
+            'Driving License', rider['driving_license']?.toString() ?? '-'),
         _DetailRow('Vehicle Type', rider['vehicle_type']?.toString() ?? '-'),
         _DetailRow('Reg. No.', rider['vehicle_reg_number']?.toString() ?? '-'),
-        _DetailRow('Bank Holder', rider['bank_account_holder']?.toString() ?? '-'),
-        _DetailRow('Account No.', rider['bank_account_number']?.toString() ?? '-'),
+        _DetailRow(
+            'Bank Holder', rider['bank_account_holder']?.toString() ?? '-'),
+        _DetailRow(
+            'Account No.', rider['bank_account_number']?.toString() ?? '-'),
         _DetailRow('IFSC', rider['bank_ifsc']?.toString() ?? '-'),
       ],
-      docImages: _extractDocImages(docs, ['aadhar_front', 'aadhar_back', 'pan_front', 'pan_back', 'dl_front', 'dl_back', 'rc_front', 'rc_back']),
+      docImages: _extractDocImages(docs, [
+        'aadhar_front',
+        'aadhar_back',
+        'pan_front',
+        'pan_back',
+        'dl_front',
+        'dl_back',
+        'rc_front',
+        'rc_back'
+      ]),
       onApprove: () => _approveRider(rider),
       onReject: () => _rejectRider(rider),
-      canApprove: context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('riders.approve'),
-      canReject: context.read<RbacProvider>().isSuperAdmin || context.read<RbacProvider>().can('riders.approve'),
+      canApprove: context.read<RbacProvider>().isSuperAdmin ||
+          context.read<RbacProvider>().can('riders.approve'),
+      canReject: context.read<RbacProvider>().isSuperAdmin ||
+          context.read<RbacProvider>().can('riders.approve'),
     );
   }
 
-  List<_DocImage> _extractDocImages(Map<String, dynamic> docs, List<String> keys) {
+  List<_DocImage> _extractDocImages(
+      Map<String, dynamic> docs, List<String> keys) {
     return keys
         .where((k) => docs[k] != null && (docs[k] as String).isNotEmpty)
-        .map((k) => _DocImage(label: k.replaceAll('_', ' ').toUpperCase(), url: docs[k] as String))
+        .map((k) => _DocImage(
+            label: k.replaceAll('_', ' ').toUpperCase(),
+            url: docs[k] as String))
         .toList();
   }
 }
@@ -508,7 +600,9 @@ class _KycCardState extends State<_KycCard> {
         color: AdminColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: widget.accentColor.withValues(alpha: 0.3)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10)
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // ── Header ────────────────────────────────────────────────────────
@@ -516,33 +610,47 @@ class _KycCardState extends State<_KycCard> {
           padding: const EdgeInsets.all(16),
           child: Row(children: [
             Container(
-              width: 52, height: 52,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
                 color: widget.accentColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: widget.accentColor.withValues(alpha: 0.3)),
+                border: Border.all(
+                    color: widget.accentColor.withValues(alpha: 0.3)),
               ),
-              child: Center(child: Text(widget.emoji, style: const TextStyle(fontSize: 26))),
+              child: Center(
+                  child:
+                      Text(widget.emoji, style: const TextStyle(fontSize: 26))),
             ),
             const SizedBox(width: 14),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.name, style: AdminStyles.title(size: 15)),
-              const SizedBox(height: 2),
-              Text(widget.phone, style: AdminStyles.body(color: AdminColors.textMuted, size: 12)),
-              if (widget.submittedAt != null)
-                Text('Submitted ${_timeAgo(widget.submittedAt!)}',
-                    style: AdminStyles.body(color: AdminColors.textMuted, size: 11)),
-            ])),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(widget.name, style: AdminStyles.title(size: 15)),
+                  const SizedBox(height: 2),
+                  Text(widget.phone,
+                      style: AdminStyles.body(
+                          color: AdminColors.textMuted, size: 12)),
+                  if (widget.submittedAt != null)
+                    Text('Submitted ${_timeAgo(widget.submittedAt!)}',
+                        style: AdminStyles.body(
+                            color: AdminColors.textMuted, size: 11)),
+                ])),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: AdminColors.warning.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AdminColors.warning.withValues(alpha: 0.4)),
+                border: Border.all(
+                    color: AdminColors.warning.withValues(alpha: 0.4)),
               ),
-              child: Text('PENDING', style: GoogleFonts.poppins(
-                color: AdminColors.warning, fontSize: 10, fontWeight: FontWeight.w800,
-              )),
+              child: Text('PENDING',
+                  style: GoogleFonts.poppins(
+                    color: AdminColors.warning,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  )),
             ),
           ]),
         ),
@@ -550,13 +658,15 @@ class _KycCardState extends State<_KycCard> {
         // ── Details (collapsible) ──────────────────────────────────────────
         InkWell(
           onTap: () => setState(() => _expanded = !_expanded),
-          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+          borderRadius:
+              const BorderRadius.vertical(bottom: Radius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(children: [
               Icon(
                 _expanded ? Icons.expand_less : Icons.expand_more,
-                color: AdminColors.textMuted, size: 18,
+                color: AdminColors.textMuted,
+                size: 18,
               ),
               const SizedBox(width: 6),
               Text(_expanded ? 'Hide Documents' : 'View Documents & Details',
@@ -576,15 +686,19 @@ class _KycCardState extends State<_KycCard> {
                 Text('Identity & Bank Details', style: AdminStyles.label()),
                 const SizedBox(height: 8),
                 ...widget.details.map((d) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(children: [
-                    SizedBox(
-                      width: 120,
-                      child: Text(d.label, style: AdminStyles.body(color: AdminColors.textMuted, size: 12)),
-                    ),
-                    Expanded(child: Text(d.value, style: AdminStyles.body(size: 12))),
-                  ]),
-                )),
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(children: [
+                        SizedBox(
+                          width: 120,
+                          child: Text(d.label,
+                              style: AdminStyles.body(
+                                  color: AdminColors.textMuted, size: 12)),
+                        ),
+                        Expanded(
+                            child: Text(d.value,
+                                style: AdminStyles.body(size: 12))),
+                      ]),
+                    )),
               ],
             ),
           ),
@@ -593,58 +707,66 @@ class _KycCardState extends State<_KycCard> {
             const Divider(color: AdminColors.cardBorder, height: 1),
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Document Images', style: AdminStyles.label()),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 120,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: widget.docImages.length,
-                    itemBuilder: (_, i) {
-                      final doc = widget.docImages[i];
-                      return GestureDetector(
-                        onTap: () => _showFullImage(doc),
-                        child: Container(
-                          width: 110,
-                          margin: const EdgeInsets.only(right: 10),
-                          decoration: BoxDecoration(
-                            color: AdminColors.bg,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AdminColors.cardBorder),
-                          ),
-                          child: Column(children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                                child: CachedNetworkImage(
-                                  imageUrl: doc.url,
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  placeholder: (_, __) => const Center(
-                                    child: CircularProgressIndicator(
-                                      color: AdminColors.primary, strokeWidth: 2,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Document Images', style: AdminStyles.label()),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 120,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: widget.docImages.length,
+                        itemBuilder: (_, i) {
+                          final doc = widget.docImages[i];
+                          return GestureDetector(
+                            onTap: () => _showFullImage(doc),
+                            child: Container(
+                              width: 110,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                color: AdminColors.bg,
+                                borderRadius: BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: AdminColors.cardBorder),
+                              ),
+                              child: Column(children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(12)),
+                                    child: CachedNetworkImage(
+                                      imageUrl: doc.url,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      placeholder: (_, __) => const Center(
+                                        child: CircularProgressIndicator(
+                                          color: AdminColors.primary,
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                      errorWidget: (_, __, ___) => const Center(
+                                        child: Icon(Icons.broken_image,
+                                            color: AdminColors.textMuted),
+                                      ),
                                     ),
                                   ),
-                                  errorWidget: (_, __, ___) => const Center(
-                                    child: Icon(Icons.broken_image, color: AdminColors.textMuted),
-                                  ),
                                 ),
-                              ),
+                                Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Text(doc.label,
+                                      style: AdminStyles.body(
+                                          color: AdminColors.textMuted,
+                                          size: 9),
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                              ]),
                             ),
-                            Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: Text(doc.label,
-                                  style: AdminStyles.body(color: AdminColors.textMuted, size: 9),
-                                  overflow: TextOverflow.ellipsis),
-                            ),
-                          ]),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ]),
+                          );
+                        },
+                      ),
+                    ),
+                  ]),
             ),
           ],
         ],
@@ -657,20 +779,29 @@ class _KycCardState extends State<_KycCard> {
             if (widget.canReject)
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _rejecting ? null : () async {
-                    setState(() => _rejecting = true);
-                    await widget.onReject();
-                    if (mounted) setState(() => _rejecting = false);
-                  },
+                  onPressed: _rejecting
+                      ? null
+                      : () async {
+                          setState(() => _rejecting = true);
+                          await widget.onReject();
+                          if (mounted) setState(() => _rejecting = false);
+                        },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AdminColors.danger,
                     side: const BorderSide(color: AdminColors.danger),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   child: _rejecting
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: AdminColors.danger, strokeWidth: 2))
-                      : Text('Reject', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              color: AdminColors.danger, strokeWidth: 2))
+                      : Text('Reject',
+                          style:
+                              GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                 ),
               ),
             if (widget.canReject && widget.canApprove)
@@ -678,19 +809,29 @@ class _KycCardState extends State<_KycCard> {
             if (widget.canApprove)
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _approving ? null : () async {
-                    setState(() => _approving = true);
-                    await widget.onApprove();
-                    if (mounted) setState(() => _approving = false);
-                  },
+                  onPressed: _approving
+                      ? null
+                      : () async {
+                          setState(() => _approving = true);
+                          await widget.onApprove();
+                          if (mounted) setState(() => _approving = false);
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AdminColors.success,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   child: _approving
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text('Approve', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700)),
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : Text('Approve',
+                          style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700)),
                 ),
               ),
           ]),
@@ -709,13 +850,18 @@ class _KycCardState extends State<_KycCard> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text(doc.label, style: AdminStyles.body()),
-              IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(ctx)),
-            ]),
+            child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(doc.label, style: AdminStyles.body()),
+                  IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white54),
+                      onPressed: () => Navigator.pop(ctx)),
+                ]),
           ),
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+            borderRadius:
+                const BorderRadius.vertical(bottom: Radius.circular(16)),
             child: CachedNetworkImage(
               imageUrl: doc.url,
               fit: BoxFit.contain,

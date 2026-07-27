@@ -20,14 +20,14 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
 
   // Form fields
   final _amountCtrl = TextEditingController();
-  final _upiCtrl    = TextEditingController();
-  final _formKey    = GlobalKey<FormState>();
-  bool _useUpi      = true;
-  bool _submitting  = false;
+  final _upiCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _useUpi = true;
+  bool _submitting = false;
 
   // Bank details
-  final _bankAccCtrl    = TextEditingController();
-  final _bankIfscCtrl   = TextEditingController();
+  final _bankAccCtrl = TextEditingController();
+  final _bankIfscCtrl = TextEditingController();
   final _bankHolderCtrl = TextEditingController();
 
   // History
@@ -90,7 +90,9 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
 
     final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     if (amount > _availableBalance) {
-      _showSnack('Amount exceeds available balance (₹${_availableBalance.toStringAsFixed(2)})', isError: true);
+      _showSnack(
+          'Amount exceeds available balance (₹${_availableBalance.toStringAsFixed(2)})',
+          isError: true);
       return;
     }
 
@@ -105,7 +107,9 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
         'p_bank_account_holder': !_useUpi ? _bankHolderCtrl.text.trim() : null,
       });
 
-      _showSnack('Withdrawal request submitted! Admin will process it within 2 business days.', isError: false);
+      _showSnack(
+          'Withdrawal request submitted! Admin will process it within 2 business days.',
+          isError: false);
       _amountCtrl.clear();
       if (_useUpi) _upiCtrl.clear();
       await _loadData();
@@ -129,14 +133,16 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+    final rupee =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1A2E),
         foregroundColor: Colors.white,
-        title: const Text('Withdraw Earnings', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text('Withdraw Earnings',
+            style: TextStyle(fontWeight: FontWeight.w700)),
         elevation: 0,
       ),
       body: _loadingHistory
@@ -144,153 +150,212 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
           : MaxWidthContainer(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Balance card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4C6EF5), Color(0xFF845EF7)],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Available Balance', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                        const SizedBox(height: 6),
-                        Text(
-                          rupee.format(_availableBalance),
-                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text('From delivered orders (minus requested withdrawals)',
-                            style: TextStyle(color: Colors.white54, fontSize: 11)),
-                      ],
-                    ),
-                  ).animate().fadeIn().slideY(begin: -0.1),
-
-                  const SizedBox(height: 24),
-
-                  // Request form
-                  const Text('Request Withdrawal', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 12),
-
-                  Form(
-                    key: _formKey,
-                    child: Container(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Balance card
+                    Container(
+                      width: double.infinity,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A2E),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white12),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4C6EF5), Color(0xFF845EF7)],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          TextFormField(
-                            controller: _amountCtrl,
-                            keyboardType: TextInputType.number,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: _inputDec('Amount (₹)', Icons.currency_rupee_rounded),
-                            validator: (v) {
-                              final d = double.tryParse(v ?? '');
-                              if (d == null || d <= 0) return 'Enter a valid amount';
-                              if (d < 100) return 'Minimum withdrawal is ₹100';
-                              return null;
-                            },
+                          const Text('Available Balance',
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 13)),
+                          const SizedBox(height: 6),
+                          Text(
+                            rupee.format(_availableBalance),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.w800),
                           ),
-                          const SizedBox(height: 16),
-
-                          // Toggle UPI / Bank
-                          Row(
-                            children: [
-                              _TabBtn('UPI',        _useUpi,  () => setState(() => _useUpi = true)),
-                              const SizedBox(width: 8),
-                              _TabBtn('Bank Account', !_useUpi, () => setState(() => _useUpi = false)),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          if (_useUpi)
-                            TextFormField(
-                              controller: _upiCtrl,
-                              maxLength: 100,
-                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: _inputDec('UPI ID (e.g. name@upi)', Icons.account_balance_wallet_rounded),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Enter UPI ID' : null,
-                            )
-                          else ...[
-                            TextFormField(
-                              controller: _bankHolderCtrl,
-                              maxLength: 100,
-                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: _inputDec('Account Holder Name', Icons.person_rounded),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _bankAccCtrl,
-                              maxLength: 50,
-                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: _inputDec('Account Number', Icons.account_balance_rounded),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _bankIfscCtrl,
-                              maxLength: 20,
-                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: _inputDec('IFSC Code', Icons.tag_rounded),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                            ),
-                          ],
-
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _submitting ? null : _submitRequest,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4C6EF5),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              child: _submitting
-                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                            ),
-                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                              'From delivered orders (minus requested withdrawals)',
+                              style: TextStyle(
+                                  color: Colors.white54, fontSize: 11)),
                         ],
                       ),
-                    ),
-                  ).animate().fadeIn(delay: 100.ms),
+                    ).animate().fadeIn().slideY(begin: -0.1),
 
-                  const SizedBox(height: 28),
+                    const SizedBox(height: 24),
 
-                  // History
-                  const Text('Past Requests', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 12),
+                    // Request form
+                    const Text('Request Withdrawal',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 12),
 
-                  if (_history.isEmpty)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('No withdrawal requests yet.', style: TextStyle(color: Colors.white38)),
+                    Form(
+                      key: _formKey,
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A2E),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Column(
+                          children: [
+                            TextFormField(
+                              controller: _amountCtrl,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: _inputDec(
+                                  'Amount (₹)', Icons.currency_rupee_rounded),
+                              validator: (v) {
+                                final d = double.tryParse(v ?? '');
+                                if (d == null || d <= 0)
+                                  return 'Enter a valid amount';
+                                if (d < 100)
+                                  return 'Minimum withdrawal is ₹100';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Toggle UPI / Bank
+                            Row(
+                              children: [
+                                _TabBtn('UPI', _useUpi,
+                                    () => setState(() => _useUpi = true)),
+                                const SizedBox(width: 8),
+                                _TabBtn('Bank Account', !_useUpi,
+                                    () => setState(() => _useUpi = false)),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            if (_useUpi)
+                              TextFormField(
+                                controller: _upiCtrl,
+                                maxLength: 100,
+                                buildCounter: (BuildContext context,
+                                        {int? currentLength,
+                                        int? maxLength,
+                                        bool? isFocused}) =>
+                                    null,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: _inputDec('UPI ID (e.g. name@upi)',
+                                    Icons.account_balance_wallet_rounded),
+                                validator: (v) => (v == null || v.isEmpty)
+                                    ? 'Enter UPI ID'
+                                    : null,
+                              )
+                            else ...[
+                              TextFormField(
+                                controller: _bankHolderCtrl,
+                                maxLength: 100,
+                                buildCounter: (BuildContext context,
+                                        {int? currentLength,
+                                        int? maxLength,
+                                        bool? isFocused}) =>
+                                    null,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: _inputDec('Account Holder Name',
+                                    Icons.person_rounded),
+                                validator: (v) => (v == null || v.isEmpty)
+                                    ? 'Required'
+                                    : null,
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _bankAccCtrl,
+                                maxLength: 50,
+                                buildCounter: (BuildContext context,
+                                        {int? currentLength,
+                                        int? maxLength,
+                                        bool? isFocused}) =>
+                                    null,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: _inputDec('Account Number',
+                                    Icons.account_balance_rounded),
+                                validator: (v) => (v == null || v.isEmpty)
+                                    ? 'Required'
+                                    : null,
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _bankIfscCtrl,
+                                maxLength: 20,
+                                buildCounter: (BuildContext context,
+                                        {int? currentLength,
+                                        int? maxLength,
+                                        bool? isFocused}) =>
+                                    null,
+                                style: const TextStyle(color: Colors.white),
+                                decoration:
+                                    _inputDec('IFSC Code', Icons.tag_rounded),
+                                validator: (v) => (v == null || v.isEmpty)
+                                    ? 'Required'
+                                    : null,
+                              ),
+                            ],
+
+                            const SizedBox(height: 20),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _submitting ? null : _submitRequest,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF4C6EF5),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: _submitting
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white))
+                                    : const Text('Submit Request',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 16)),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    )
-                  else
-                    ..._history.map((w) => _WithdrawalCard(w)),
-                ],
+                    ).animate().fadeIn(delay: 100.ms),
+
+                    const SizedBox(height: 28),
+
+                    // History
+                    const Text('Past Requests',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 12),
+
+                    if (_history.isEmpty)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text('No withdrawal requests yet.',
+                              style: TextStyle(color: Colors.white38)),
+                        ),
+                      )
+                    else
+                      ..._history.map((w) => _WithdrawalCard(w)),
+                  ],
+                ),
               ),
             ),
-          ),
     );
   }
 
@@ -324,10 +389,16 @@ class _TabBtn extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFF4C6EF5) : Colors.white.withValues(alpha: 0.07),
+            color: active
+                ? const Color(0xFF4C6EF5)
+                : Colors.white.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Text(label, style: TextStyle(color: active ? Colors.white : Colors.white54, fontWeight: FontWeight.w600, fontSize: 13)),
+          child: Text(label,
+              style: TextStyle(
+                  color: active ? Colors.white : Colors.white54,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13)),
         ),
       );
 }
@@ -338,16 +409,18 @@ class _WithdrawalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+    final rupee =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
     final status = w['status'] as String;
     final statusColor = switch (status) {
       'processed' => Colors.greenAccent,
-      'rejected'  => Colors.redAccent,
-      'approved'  => Colors.blueAccent,
-      _           => Colors.orangeAccent,
+      'rejected' => Colors.redAccent,
+      'approved' => Colors.blueAccent,
+      _ => Colors.orangeAccent,
     };
     final date = w['requested_at'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(w['requested_at'].toString()).toIST())
+        ? DateFormat('dd MMM yyyy')
+            .format(DateTime.parse(w['requested_at'].toString()).toIST())
         : '';
 
     return Container(
@@ -360,25 +433,43 @@ class _WithdrawalCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(w['upi_id'] != null ? Icons.account_balance_wallet_rounded : Icons.account_balance_rounded,
-              color: Colors.white38, size: 28),
+          Icon(
+              w['upi_id'] != null
+                  ? Icons.account_balance_wallet_rounded
+                  : Icons.account_balance_rounded,
+              color: Colors.white38,
+              size: 28),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(rupee.format((w['amount'] as num).toDouble()),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16)),
                 const SizedBox(height: 2),
                 Text(w['upi_id'] ?? w['bank_account_number'] ?? '',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                Text(date, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                if (w['transaction_id'] != null && w['transaction_id'].toString().isNotEmpty) ...[
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 12)),
+                Text(date,
+                    style:
+                        const TextStyle(color: Colors.white38, fontSize: 11)),
+                if (w['transaction_id'] != null &&
+                    w['transaction_id'].toString().isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                    child: Text('Txn: ${w['transaction_id']}', style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace')),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4)),
+                    child: Text('Txn: ${w['transaction_id']}',
+                        style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 10,
+                            fontFamily: 'monospace')),
                   ),
                 ],
               ],
@@ -391,11 +482,13 @@ class _WithdrawalCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(status.toUpperCase(),
-                style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    color: statusColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
   }
 }
-

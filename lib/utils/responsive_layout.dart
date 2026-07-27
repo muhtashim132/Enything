@@ -22,7 +22,8 @@ class Responsive {
       MediaQuery.of(context).size.width >= tabletBreakpoint;
 
   /// Calculate a responsive cross axis count for grid layouts.
-  static int getGridCrossAxisCount(BuildContext context, {int mobile = 1, int tablet = 2, int desktop = 3}) {
+  static int getGridCrossAxisCount(BuildContext context,
+      {int mobile = 1, int tablet = 2, int desktop = 3}) {
     final width = MediaQuery.of(context).size.width;
     if (width >= desktopBreakpoint) return desktop;
     if (width >= tabletBreakpoint) return tablet;
@@ -50,7 +51,9 @@ class ResponsiveBuilder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (Responsive.isDesktop(context)) {
-      return desktopBuilder?.call(context) ?? tabletBuilder?.call(context) ?? builder(context);
+      return desktopBuilder?.call(context) ??
+          tabletBuilder?.call(context) ??
+          builder(context);
     }
     if (Responsive.isTablet(context)) {
       return tabletBuilder?.call(context) ?? builder(context);

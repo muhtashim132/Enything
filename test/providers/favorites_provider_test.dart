@@ -15,7 +15,9 @@ class FakeQueryBuilder implements SupabaseQueryBuilder {
   @override
   PostgrestFilterBuilder<dynamic> delete() => FakeFilterBuilder();
   @override
-  PostgrestFilterBuilder<dynamic> insert(Object values, {bool defaultToNull = true}) => FakeFilterBuilder();
+  PostgrestFilterBuilder<dynamic> insert(Object values,
+          {bool defaultToNull = true}) =>
+      FakeFilterBuilder();
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -24,16 +26,18 @@ class FakeFilterBuilder implements PostgrestFilterBuilder<dynamic> {
   @override
   PostgrestFilterBuilder<dynamic> eq(String column, Object value) => this;
   @override
-  Future<U> then<U>(FutureOr<U> Function(dynamic value) onValue, {Function? onError}) async {
+  Future<U> then<U>(FutureOr<U> Function(dynamic value) onValue,
+      {Function? onError}) async {
     return onValue([]);
   }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  
+
   group('FavoritesProvider Tests', () {
     late FavoritesProvider favoritesProvider;
     late FakeSupabaseClient fakeClient;
@@ -53,7 +57,7 @@ void main() {
       // Toggle ON
       await favoritesProvider.toggleShopFavorite('user_1', 'shop_1');
       expect(favoritesProvider.isShopFavorite('shop_1'), true);
-      
+
       // Toggle OFF
       await favoritesProvider.toggleShopFavorite('user_1', 'shop_1');
       expect(favoritesProvider.isShopFavorite('shop_1'), false);
@@ -63,7 +67,7 @@ void main() {
       // Toggle ON
       await favoritesProvider.toggleProductFavorite('user_1', 'prod_1');
       expect(favoritesProvider.isProductFavorite('prod_1'), true);
-      
+
       // Toggle OFF
       await favoritesProvider.toggleProductFavorite('user_1', 'prod_1');
       expect(favoritesProvider.isProductFavorite('prod_1'), false);

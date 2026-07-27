@@ -24,7 +24,8 @@ class CartPage extends StatelessWidget {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
+      backgroundColor:
+          isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -34,7 +35,9 @@ class CartPage extends StatelessWidget {
           child: Container(
             margin: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFF0F0F8),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : const Color(0xFFF0F0F8),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.arrow_back_ios_new_rounded,
@@ -67,9 +70,11 @@ class CartPage extends StatelessWidget {
           if (!cart.isEmpty)
             TextButton.icon(
               onPressed: () => _showClearDialog(context, cart),
-              icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.danger),
+              icon: const Icon(Icons.delete_outline_rounded,
+                  size: 16, color: AppColors.danger),
               label: Text('Clear',
-                  style: GoogleFonts.outfit(color: AppColors.danger, fontWeight: FontWeight.w600)),
+                  style: GoogleFonts.outfit(
+                      color: AppColors.danger, fontWeight: FontWeight.w600)),
             ),
           const SizedBox(width: 8),
         ],
@@ -96,7 +101,8 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _buildCartItem(BuildContext context, item, CartProvider cart, bool isDark) {
+  Widget _buildCartItem(
+      BuildContext context, item, CartProvider cart, bool isDark) {
     return GestureDetector(
       onTap: () => Navigator.pushNamed(
         context,
@@ -192,7 +198,8 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _buildQtyControl(BuildContext context, CartProvider cart, item, bool isDark) {
+  Widget _buildQtyControl(
+      BuildContext context, CartProvider cart, item, bool isDark) {
     return Container(
       decoration: BoxDecoration(
         color: isDark
@@ -209,7 +216,8 @@ class CartPage extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _qtyBtn(Icons.remove, () {
-            cart.updateQuantity(item.product.id, item.quantity - 1, variantName: item.selectedVariant?.name);
+            cart.updateQuantity(item.product.id, item.quantity - 1,
+                variantName: item.selectedVariant?.name);
           }, isDark),
           AnimatedSwitcher(
             duration: PremiumAnimations.fast,
@@ -229,13 +237,15 @@ class CartPage extends StatelessWidget {
             ),
           ),
           _qtyBtn(Icons.add, () {
-            final err = cart.addItem(item.product, item.shop, selectedVariant: item.selectedVariant);
+            final err = cart.addItem(item.product, item.shop,
+                selectedVariant: item.selectedVariant);
             if (err != null) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(err),
                 backgroundColor: AppColors.danger,
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
               ));
             }
           }, isDark),
@@ -269,7 +279,8 @@ class CartPage extends StatelessWidget {
               gradient: LinearGradient(
                 colors: [
                   AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.1),
-                  AppColors.primaryLight.withValues(alpha: isDark ? 0.12 : 0.06),
+                  AppColors.primaryLight
+                      .withValues(alpha: isDark ? 0.12 : 0.06),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -301,7 +312,8 @@ class CartPage extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           GestureDetector(
-            onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.customerHome),
+            onTap: () =>
+                Navigator.pushReplacementNamed(context, AppRoutes.customerHome),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               decoration: BoxDecoration(
@@ -312,7 +324,8 @@ class CartPage extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
+                  const Icon(Icons.shopping_bag_outlined,
+                      color: Colors.white, size: 18),
                   const SizedBox(width: 8),
                   Text(
                     'Explore Shops',
@@ -331,7 +344,8 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSummary(BuildContext context, CartProvider cart, LocationProvider location, bool isDark) {
+  Widget _buildSummary(BuildContext context, CartProvider cart,
+      LocationProvider location, bool isDark) {
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
       distanceKm = 0.0;
@@ -399,7 +413,8 @@ class CartPage extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Price breakdown
-            _summaryRow('Subtotal', '₹${cart.subtotal.toStringAsFixed(0)}', isDark: isDark),
+            _summaryRow('Subtotal', '₹${cart.subtotal.toStringAsFixed(0)}',
+                isDark: isDark),
             const SizedBox(height: 6),
             _summaryRow(
               'Delivery Charges',
@@ -415,7 +430,8 @@ class CartPage extends StatelessWidget {
               _summaryRow(
                 'Small Cart Fee',
                 '+₹${cart.smallCartFee.toStringAsFixed(0)}',
-                hint: 'For orders under ₹${(PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold).toInt()}',
+                hint:
+                    'For orders under ₹${(PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold).toInt()}',
                 valueColor: Colors.orange.shade700,
                 isDark: isDark,
               ),
@@ -425,7 +441,8 @@ class CartPage extends StatelessWidget {
               _summaryRow(
                 'Heavy Order Fee',
                 '+₹${heavyFee.toStringAsFixed(0)}',
-                hint: 'For orders over ${(PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold).toInt()} kg',
+                hint:
+                    'For orders over ${(PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold).toInt()} kg',
                 valueColor: Colors.orange.shade700,
                 isDark: isDark,
               ),
@@ -436,7 +453,8 @@ class CartPage extends StatelessWidget {
                 'Multi-shop fee (${cart.shops.length} shops)',
                 '+₹${surcharge.toStringAsFixed(0)}',
                 valueColor: Colors.orange.shade700,
-                hint: '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10).toInt()}/km between shops',
+                hint:
+                    '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10).toInt()}/km between shops',
                 isDark: isDark,
               ),
             ],
@@ -460,7 +478,9 @@ class CartPage extends StatelessWidget {
 
             Divider(
               height: 20,
-              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade200,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.grey.shade200,
             ),
 
             _summaryRow(
@@ -477,20 +497,25 @@ class CartPage extends StatelessWidget {
               onTap: canCheckout
                   ? () {
                       final auth = context.read<AuthProvider>();
-                      final uniqueShops = cart.items.map((i) => i.shop.id).toSet();
+                      final uniqueShops =
+                          cart.items.map((i) => i.shop.id).toSet();
                       if (uniqueShops.length > 3) {
                         showDialog(
                           context: context,
                           builder: (ctx) => AlertDialog(
                             backgroundColor: const Color(0xFF1E1E2C),
-                            title: const Text('Maximum Shops Exceeded', style: TextStyle(color: Colors.white)),
+                            title: const Text('Maximum Shops Exceeded',
+                                style: TextStyle(color: Colors.white)),
                             content: const SingleChildScrollView(
-                              child: Text('To ensure fast and reliable delivery, you can order from a maximum of 3 shops at a time. Please remove items from other shops to proceed.', style: TextStyle(color: Colors.white70)),
+                              child: Text(
+                                  'To ensure fast and reliable delivery, you can order from a maximum of 3 shops at a time. Please remove items from other shops to proceed.',
+                                  style: TextStyle(color: Colors.white70)),
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx),
-                                child: const Text('OK', style: TextStyle(color: Color(0xFFF4C542))),
+                                child: const Text('OK',
+                                    style: TextStyle(color: Color(0xFFF4C542))),
                               )
                             ],
                           ),
@@ -502,10 +527,12 @@ class CartPage extends StatelessWidget {
                         Navigator.pushNamed(context, AppRoutes.login);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Please login to continue checkout.', style: GoogleFonts.outfit(color: Colors.white)),
+                            content: Text('Please login to continue checkout.',
+                                style: GoogleFonts.outfit(color: Colors.white)),
                             backgroundColor: AppColors.primary,
                             behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                           ),
                         );
                       } else {
@@ -521,7 +548,8 @@ class CartPage extends StatelessWidget {
                   gradient: canCheckout ? AppColors.ctaGradient : null,
                   color: canCheckout ? null : Colors.grey.shade300,
                   borderRadius: PremiumRadius.mediumBorder,
-                  boxShadow: canCheckout ? PremiumShadows.floatingButtonLight : [],
+                  boxShadow:
+                      canCheckout ? PremiumShadows.floatingButtonLight : [],
                 ),
                 child: Center(
                   child: Text(
@@ -547,7 +575,10 @@ class CartPage extends StatelessWidget {
   }
 
   Widget _summaryRow(String label, String value,
-      {bool isBold = false, Color? valueColor, String? hint, required bool isDark}) {
+      {bool isBold = false,
+      Color? valueColor,
+      String? hint,
+      required bool isDark}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -578,7 +609,8 @@ class CartPage extends StatelessWidget {
         Text(
           value,
           style: GoogleFonts.outfit(
-            color: valueColor ?? (isDark ? Colors.white : AppColors.textPrimary),
+            color:
+                valueColor ?? (isDark ? Colors.white : AppColors.textPrimary),
             fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
             fontSize: isBold ? 18 : 14,
           ),
@@ -599,7 +631,8 @@ class CartPage extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
+            child: Text('Cancel',
+                style: GoogleFonts.outfit(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -608,9 +641,12 @@ class CartPage extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
-            child: Text('Clear', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.white)),
+            child: Text('Clear',
+                style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w700, color: Colors.white)),
           ),
         ],
       ),

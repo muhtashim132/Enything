@@ -67,25 +67,26 @@ class PremiumProductImage extends StatelessWidget {
             placeholder: (c, url) => _buildPlaceholder(c, url),
             errorWidget: (c, e, s) => _buildFallback(isDark),
           ),
-          
+
           // 2. Heavy Blur Filter & Overlay Tint
           ClipRect(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
               child: Container(
-                color: isDark 
-                    ? Colors.black.withValues(alpha: 0.6) 
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.6)
                     : Colors.white.withValues(alpha: 0.4),
               ),
             ),
           ),
-          
+
           // 3. Foreground Image (Uncropped)
           CachedNetworkImage(
             imageUrl: imageUrl,
             fit: foregroundFit,
             fadeInDuration: const Duration(milliseconds: 300),
-            errorWidget: (c, e, s) => const SizedBox(), // Fallback already handled by bg
+            errorWidget: (c, e, s) =>
+                const SizedBox(), // Fallback already handled by bg
           ),
         ],
       ),

@@ -42,16 +42,20 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Profile $status successfully!'),
-            backgroundColor: status == 'verified' ? const Color(0xFF51CF66) : Colors.redAccent,
+            backgroundColor: status == 'verified'
+                ? const Color(0xFF51CF66)
+                : Colors.redAccent,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(
+              content: Text('Error: $e'), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -76,9 +80,13 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
           decoration: BoxDecoration(
             color: const Color(0xFF131524).withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1.5),
+            border: Border.all(
+                color: Colors.white.withValues(alpha: 0.1), width: 1.5),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 40, spreadRadius: -10),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 40,
+                  spreadRadius: -10),
             ],
           ),
           child: Column(
@@ -88,8 +96,11 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.02),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                  border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(28)),
+                  border: Border(
+                      bottom: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.05))),
                 ),
                 child: Row(
                   children: [
@@ -99,7 +110,8 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                         color: const Color(0xFFF4C542).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.shield_rounded, color: Color(0xFFF4C542), size: 24),
+                      child: const Icon(Icons.shield_rounded,
+                          color: Color(0xFFF4C542), size: 24),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -108,18 +120,23 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                         children: [
                           Text(
                             widget.title,
-                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                            style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold),
                           ),
                           Text(
                             'Review documents carefully before approval',
-                            style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13),
+                            style: GoogleFonts.outfit(
+                                color: Colors.white54, fontSize: 13),
                           ),
                         ],
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                      icon: const Icon(Icons.close_rounded,
+                          color: Colors.white54),
                       splashRadius: 24,
                     ),
                   ],
@@ -135,14 +152,20 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                     children: [
                       _buildDataCard(
                         isShop ? 'Shop Details' : 'Rider Details',
-                        isShop ? Icons.storefront_rounded : Icons.delivery_dining_rounded,
+                        isShop
+                            ? Icons.storefront_rounded
+                            : Icons.delivery_dining_rounded,
                         {
-                          if (isShop) 'Shop Name': widget.data['shop_name'] ?? widget.data['name'],
+                          if (isShop)
+                            'Shop Name':
+                                widget.data['shop_name'] ?? widget.data['name'],
                           if (isShop) 'Category': widget.data['category'],
                           'Owner/Name': profile?['full_name'],
                           'Phone': profile?['phone'],
                           if (!isShop) 'Vehicle': widget.data['vehicle_type'],
-                          if (!isShop) 'Vehicle No.': widget.data['vehicle_number'] ?? widget.data['vehicle_reg_number'],
+                          if (!isShop)
+                            'Vehicle No.': widget.data['vehicle_number'] ??
+                                widget.data['vehicle_reg_number'],
                         },
                       ),
                       const SizedBox(height: 16),
@@ -150,7 +173,8 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: _buildDataCard('Identity Info', Icons.person_outline_rounded, {
+                            child: _buildDataCard(
+                                'Identity Info', Icons.person_outline_rounded, {
                               'Aadhaar': widget.data['aadhar_number'],
                               'PAN': widget.data['pan_number'],
                               'DL': widget.data['driving_license'],
@@ -159,7 +183,8 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: _buildDataCard('Bank Details', Icons.account_balance_rounded, {
+                            child: _buildDataCard(
+                                'Bank Details', Icons.account_balance_rounded, {
                               'Holder': widget.data['bank_account_holder'],
                               'Account': widget.data['bank_account_number'],
                               'IFSC': widget.data['bank_ifsc'],
@@ -170,11 +195,15 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                       const SizedBox(height: 32),
                       Row(
                         children: [
-                          const Icon(Icons.file_copy_rounded, color: Colors.white70, size: 20),
+                          const Icon(Icons.file_copy_rounded,
+                              color: Colors.white70, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             'Uploaded Documents',
-                            style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -186,13 +215,17 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.02),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.05)),
                           ),
                           child: Column(
                             children: [
-                              const Icon(Icons.folder_off_rounded, color: Colors.white24, size: 48),
+                              const Icon(Icons.folder_off_rounded,
+                                  color: Colors.white24, size: 48),
                               const SizedBox(height: 12),
-                              Text('No documents uploaded', style: GoogleFonts.outfit(color: Colors.white54, fontSize: 15)),
+                              Text('No documents uploaded',
+                                  style: GoogleFonts.outfit(
+                                      color: Colors.white54, fontSize: 15)),
                             ],
                           ),
                         )
@@ -200,7 +233,10 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                         Wrap(
                           spacing: 16,
                           runSpacing: 16,
-                          children: kycDocs.entries.map((e) => _buildImageThumbnail(e.key, e.value.toString())).toList(),
+                          children: kycDocs.entries
+                              .map((e) => _buildImageThumbnail(
+                                  e.key, e.value.toString()))
+                              .toList(),
                         ),
                     ],
                   ),
@@ -212,43 +248,64 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.02),
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
-                  border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(28)),
+                  border: Border(
+                      top: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.05))),
                 ),
                 child: Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _isProcessing ? null : () => _updateStatus('rejected'),
+                        onPressed: _isProcessing
+                            ? null
+                            : () => _updateStatus('rejected'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.redAccent,
-                          side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5), width: 1.5),
+                          side: BorderSide(
+                              color: Colors.redAccent.withValues(alpha: 0.5),
+                              width: 1.5),
                           padding: const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
-                        child: Text('Reject', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                        child: Text('Reject',
+                            style: GoogleFonts.outfit(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       flex: 2,
                       child: ElevatedButton(
-                        onPressed: _isProcessing ? null : () => _updateStatus('verified'),
+                        onPressed: _isProcessing
+                            ? null
+                            : () => _updateStatus('verified'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF51CF66),
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                           elevation: 0,
                         ),
                         child: _isProcessing
-                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    color: Colors.black, strokeWidth: 2))
                             : Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.check_circle_rounded, size: 20),
+                                  const Icon(Icons.check_circle_rounded,
+                                      size: 20),
                                   const SizedBox(width: 8),
-                                  Text('Approve & Verify', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                                  Text('Approve & Verify',
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold)),
                                 ],
                               ),
                       ),
@@ -263,8 +320,11 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
     );
   }
 
-  Widget _buildDataCard(String title, IconData icon, Map<String, dynamic> fields) {
-    final activeFields = fields.entries.where((e) => e.value != null && e.value.toString().trim().isNotEmpty).toList();
+  Widget _buildDataCard(
+      String title, IconData icon, Map<String, dynamic> fields) {
+    final activeFields = fields.entries
+        .where((e) => e.value != null && e.value.toString().trim().isNotEmpty)
+        .toList();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -280,21 +340,32 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
             children: [
               Icon(icon, color: const Color(0xFFF4C542), size: 20),
               const SizedBox(width: 8),
-              Text(title, style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(title,
+                  style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 16),
           if (activeFields.isEmpty)
-            Text('No data provided', style: GoogleFonts.outfit(color: Colors.white38, fontSize: 13))
+            Text('No data provided',
+                style: GoogleFonts.outfit(color: Colors.white38, fontSize: 13))
           else
             ...activeFields.map((e) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(e.key, style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12)),
+                      Text(e.key,
+                          style: GoogleFonts.outfit(
+                              color: Colors.white54, fontSize: 12)),
                       const SizedBox(height: 2),
-                      Text(e.value.toString(), style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                      Text(e.value.toString(),
+                          style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600)),
                     ],
                   ),
                 )),
@@ -320,7 +391,8 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
             Hero(
               tag: url,
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(15)),
                 child: CachedNetworkImage(
                   imageUrl: url,
                   height: 100,
@@ -329,9 +401,11 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                   placeholder: (context, url) => Container(
                     height: 100,
                     color: Colors.white.withValues(alpha: 0.02),
-                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
-                  errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.white24),
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.error, color: Colors.white24),
                 ),
               ),
             ),
@@ -340,12 +414,16 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.zoom_in_rounded, color: Colors.white54, size: 14),
+                  const Icon(Icons.zoom_in_rounded,
+                      color: Colors.white54, size: 14),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       cleanLabel,
-                      style: GoogleFonts.outfit(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.outfit(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -391,19 +469,28 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1)),
                       ),
-                      child: Text(label, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                      child: Text(label,
+                          style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1)),
                     ),
                     IconButton(
                       icon: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.5), shape: BoxShape.circle),
-                        child: const Icon(Icons.close_rounded, color: Colors.white),
+                        decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            shape: BoxShape.circle),
+                        child: const Icon(Icons.close_rounded,
+                            color: Colors.white),
                       ),
                       onPressed: () => Navigator.pop(context),
                     ),

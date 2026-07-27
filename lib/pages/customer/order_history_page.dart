@@ -103,11 +103,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     product.variants.firstWhere((v) => v.name == variantName);
               } catch (_) {}
             }
-            
+
             // Phase 18 Fix: Safely capture business logic rejections
             final err = cart.addItem(product, shop,
                 quantity: quantity, selectedVariant: selectedVariant);
-            
+
             if (err == null) {
               added++;
             } else {
@@ -219,10 +219,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   Future<void> _loadMoreOrders() async {
     if (_isLoadingMore || !_hasMoreOrders) return;
-    
+
     setState(() => _isLoadingMore = true);
     final auth = context.read<AuthProvider>();
-    
+
     try {
       final response = await _supabase
           .from('orders')
@@ -324,16 +324,16 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     setState(() => _cancellingIds.add(order.id));
     List<OrderModel> ordersToCancel = [order];
     try {
-      
       if (isGroup && order.cartGroupId != null) {
-        // Phase 19 Fix: Unpaginated fetch to guarantee ALL sellers in the group 
+        // Phase 19 Fix: Unpaginated fetch to guarantee ALL sellers in the group
         // receive the cancellation push notification, avoiding Ghost Kitchen Orders
         final groupResponse = await _supabase
             .from('orders')
             .select()
             .eq('cart_group_id', order.cartGroupId as Object);
-        ordersToCancel = (groupResponse as List).map((o) => OrderModel.fromMap(o)).toList();
-        
+        ordersToCancel =
+            (groupResponse as List).map((o) => OrderModel.fromMap(o)).toList();
+
         if (mounted) {
           setState(() {
             for (final o in ordersToCancel) {

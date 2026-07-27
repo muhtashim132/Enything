@@ -19,14 +19,14 @@ class RiderWithdrawalsPage extends StatefulWidget {
 class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
   SupabaseClient get _db => Supabase.instance.client;
 
-  final _amountCtrl     = TextEditingController();
-  final _upiCtrl        = TextEditingController();
-  final _bankAccCtrl    = TextEditingController();
-  final _bankIfscCtrl   = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  final _upiCtrl = TextEditingController();
+  final _bankAccCtrl = TextEditingController();
+  final _bankIfscCtrl = TextEditingController();
   final _bankHolderCtrl = TextEditingController();
-  final _formKey        = GlobalKey<FormState>();
-  bool _useUpi          = true;
-  bool _submitting      = false;
+  final _formKey = GlobalKey<FormState>();
+  bool _useUpi = true;
+  bool _submitting = false;
 
   List<Map<String, dynamic>> _history = [];
   bool _loadingHistory = true;
@@ -84,7 +84,9 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
 
     final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     if (amount > _availableBalance) {
-      _showSnack('Amount exceeds available balance (₹${_availableBalance.toStringAsFixed(2)})', isError: true);
+      _showSnack(
+          'Amount exceeds available balance (₹${_availableBalance.toStringAsFixed(2)})',
+          isError: true);
       return;
     }
 
@@ -99,7 +101,9 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
         'p_bank_account_holder': !_useUpi ? _bankHolderCtrl.text.trim() : null,
       });
 
-      _showSnack('Withdrawal request submitted! Admin will process it within 2 business days.', isError: false);
+      _showSnack(
+          'Withdrawal request submitted! Admin will process it within 2 business days.',
+          isError: false);
       _amountCtrl.clear();
       _upiCtrl.clear();
       await _loadData();
@@ -122,14 +126,16 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+    final rupee =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1A2E),
         foregroundColor: Colors.white,
-        title: const Text('Withdraw Earnings', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text('Withdraw Earnings',
+            style: TextStyle(fontWeight: FontWeight.w700)),
         elevation: 0,
       ),
       body: _loadingHistory
@@ -152,21 +158,32 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Available Balance', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        const Text('Available Balance',
+                            style:
+                                TextStyle(color: Colors.white70, fontSize: 13)),
                         const SizedBox(height: 6),
                         Text(
                           rupee.format(_availableBalance),
-                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
-                        const Text('From delivered orders (minus requested withdrawals)',
-                            style: TextStyle(color: Colors.white54, fontSize: 11)),
+                        const Text(
+                            'From delivered orders (minus requested withdrawals)',
+                            style:
+                                TextStyle(color: Colors.white54, fontSize: 11)),
                       ],
                     ),
                   ).animate().fadeIn().slideY(begin: -0.1),
 
                   const SizedBox(height: 24),
-                  const Text('Request Withdrawal', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                  const Text('Request Withdrawal',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
 
                   Form(
@@ -184,10 +201,12 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                             controller: _amountCtrl,
                             keyboardType: TextInputType.number,
                             style: const TextStyle(color: Colors.white),
-                            decoration: _inputDec('Amount (₹)', Icons.currency_rupee_rounded),
+                            decoration: _inputDec(
+                                'Amount (₹)', Icons.currency_rupee_rounded),
                             validator: (v) {
                               final d = double.tryParse(v ?? '');
-                              if (d == null || d <= 0) return 'Enter a valid amount';
+                              if (d == null || d <= 0)
+                                return 'Enter a valid amount';
                               if (d < 100) return 'Minimum withdrawal is ₹100';
                               return null;
                             },
@@ -195,9 +214,11 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                           const SizedBox(height: 16),
                           Row(
                             children: [
-                              _TabBtn('UPI',          _useUpi,  () => setState(() => _useUpi = true)),
+                              _TabBtn('UPI', _useUpi,
+                                  () => setState(() => _useUpi = true)),
                               const SizedBox(width: 8),
-                              _TabBtn('Bank Account', !_useUpi, () => setState(() => _useUpi = false)),
+                              _TabBtn('Bank Account', !_useUpi,
+                                  () => setState(() => _useUpi = false)),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -205,37 +226,62 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                             TextFormField(
                               controller: _upiCtrl,
                               maxLength: 100,
-                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                              buildCounter: (BuildContext context,
+                                      {int? currentLength,
+                                      int? maxLength,
+                                      bool? isFocused}) =>
+                                  null,
                               style: const TextStyle(color: Colors.white),
-                              decoration: _inputDec('UPI ID (e.g. name@upi)', Icons.account_balance_wallet_rounded),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Enter UPI ID' : null,
+                              decoration: _inputDec('UPI ID (e.g. name@upi)',
+                                  Icons.account_balance_wallet_rounded),
+                              validator: (v) => (v == null || v.isEmpty)
+                                  ? 'Enter UPI ID'
+                                  : null,
                             )
                           else ...[
                             TextFormField(
                               controller: _bankHolderCtrl,
                               maxLength: 100,
-                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                              buildCounter: (BuildContext context,
+                                      {int? currentLength,
+                                      int? maxLength,
+                                      bool? isFocused}) =>
+                                  null,
                               style: const TextStyle(color: Colors.white),
-                              decoration: _inputDec('Account Holder Name', Icons.person_rounded),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                              decoration: _inputDec(
+                                  'Account Holder Name', Icons.person_rounded),
+                              validator: (v) =>
+                                  (v == null || v.isEmpty) ? 'Required' : null,
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _bankAccCtrl,
                               maxLength: 50,
-                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                              buildCounter: (BuildContext context,
+                                      {int? currentLength,
+                                      int? maxLength,
+                                      bool? isFocused}) =>
+                                  null,
                               style: const TextStyle(color: Colors.white),
-                              decoration: _inputDec('Account Number', Icons.account_balance_rounded),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                              decoration: _inputDec('Account Number',
+                                  Icons.account_balance_rounded),
+                              validator: (v) =>
+                                  (v == null || v.isEmpty) ? 'Required' : null,
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _bankIfscCtrl,
                               maxLength: 20,
-                              buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                              buildCounter: (BuildContext context,
+                                      {int? currentLength,
+                                      int? maxLength,
+                                      bool? isFocused}) =>
+                                  null,
                               style: const TextStyle(color: Colors.white),
-                              decoration: _inputDec('IFSC Code', Icons.tag_rounded),
-                              validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                              decoration:
+                                  _inputDec('IFSC Code', Icons.tag_rounded),
+                              validator: (v) =>
+                                  (v == null || v.isEmpty) ? 'Required' : null,
                             ),
                           ],
                           const SizedBox(height: 20),
@@ -246,12 +292,21 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF2ECC71),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
                               ),
                               child: _submitting
-                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white))
+                                  : const Text('Submit Request',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16)),
                             ),
                           ),
                         ],
@@ -260,14 +315,19 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
                   ).animate().fadeIn(delay: 100.ms),
 
                   const SizedBox(height: 28),
-                  const Text('Past Requests', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                  const Text('Past Requests',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
 
                   if (_history.isEmpty)
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.all(24),
-                        child: Text('No withdrawal requests yet.', style: TextStyle(color: Colors.white38)),
+                        child: Text('No withdrawal requests yet.',
+                            style: TextStyle(color: Colors.white38)),
                       ),
                     )
                   else
@@ -307,11 +367,16 @@ class _TabBtn extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFF2ECC71) : Colors.white.withValues(alpha: 0.07),
+            color: active
+                ? const Color(0xFF2ECC71)
+                : Colors.white.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(label,
-              style: TextStyle(color: active ? Colors.white : Colors.white54, fontWeight: FontWeight.w600, fontSize: 13)),
+              style: TextStyle(
+                  color: active ? Colors.white : Colors.white54,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13)),
         ),
       );
 }
@@ -321,16 +386,18 @@ class _WithdrawalCard extends StatelessWidget {
   const _WithdrawalCard(this.w);
   @override
   Widget build(BuildContext context) {
-    final rupee  = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+    final rupee =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
     final status = w['status'] as String;
     final statusColor = switch (status) {
       'processed' => Colors.greenAccent,
-      'rejected'  => Colors.redAccent,
-      'approved'  => Colors.blueAccent,
-      _           => Colors.orangeAccent,
+      'rejected' => Colors.redAccent,
+      'approved' => Colors.blueAccent,
+      _ => Colors.orangeAccent,
     };
     final date = w['requested_at'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(w['requested_at'].toString()).toIST())
+        ? DateFormat('dd MMM yyyy')
+            .format(DateTime.parse(w['requested_at'].toString()).toIST())
         : '';
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -342,23 +409,40 @@ class _WithdrawalCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(w['upi_id'] != null ? Icons.account_balance_wallet_rounded : Icons.account_balance_rounded,
-              color: Colors.white38, size: 28),
+          Icon(
+              w['upi_id'] != null
+                  ? Icons.account_balance_wallet_rounded
+                  : Icons.account_balance_rounded,
+              color: Colors.white38,
+              size: 28),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(rupee.format((w['amount'] as num).toDouble()),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
               const SizedBox(height: 2),
               Text(w['upi_id'] ?? w['bank_account_number'] ?? '',
                   style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              Text(date, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-              if (w['transaction_id'] != null && w['transaction_id'].toString().isNotEmpty) ...[
+              Text(date,
+                  style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              if (w['transaction_id'] != null &&
+                  w['transaction_id'].toString().isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                  child: Text('Txn: ${w['transaction_id']}', style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace')),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4)),
+                  child: Text('Txn: ${w['transaction_id']}',
+                      style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontFamily: 'monospace')),
                 ),
               ],
             ]),
@@ -370,7 +454,10 @@ class _WithdrawalCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(status.toUpperCase(),
-                style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    color: statusColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),

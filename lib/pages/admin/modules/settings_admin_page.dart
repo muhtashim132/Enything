@@ -13,6 +13,7 @@ import '../platform/coupon_management_page.dart';
 import '../platform/referral_settings_page.dart';
 import '../platform/tax_settings_page.dart';
 import '../platform/active_sessions_page.dart';
+
 class SettingsAdminPage extends StatelessWidget {
   const SettingsAdminPage({super.key});
 
@@ -30,8 +31,7 @@ class SettingsAdminPage extends StatelessWidget {
             iconColor: AdminColors.primary,
             title: 'Roles & Permissions',
             subtitle: '${rbac.allRoles.length} roles configured',
-            onTap: () => Navigator.push(
-                context, _route(const RolesListPage())),
+            onTap: () => Navigator.push(context, _route(const RolesListPage())),
           ).animate().fadeIn(delay: 50.ms).slideX(begin: -0.1),
           _SettingsTile(
             icon: Icons.group_rounded,
@@ -41,7 +41,9 @@ class SettingsAdminPage extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               _route(MultiProvider(
-                providers: [ChangeNotifierProvider(create: (_) => TeamProvider())],
+                providers: [
+                  ChangeNotifierProvider(create: (_) => TeamProvider())
+                ],
                 child: const TeamMembersPage(),
               )),
             ),
@@ -52,8 +54,8 @@ class SettingsAdminPage extends StatelessWidget {
               iconColor: const Color(0xFF8B5CF6),
               title: 'Audit Logs',
               subtitle: 'Track every admin action',
-              onTap: () => Navigator.push(
-                  context, _route(const AuditLogsPage())),
+              onTap: () =>
+                  Navigator.push(context, _route(const AuditLogsPage())),
             ).animate().fadeIn(delay: 150.ms).slideX(begin: -0.1),
         ],
 
@@ -64,21 +66,24 @@ class SettingsAdminPage extends StatelessWidget {
           iconColor: AdminColors.success,
           title: 'Commission & Fees',
           subtitle: 'Platform %, delivery fee, surge pricing',
-          onTap: () => Navigator.push(context, _route(const CommissionFeesPage())),
+          onTap: () =>
+              Navigator.push(context, _route(const CommissionFeesPage())),
         ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.1),
         _SettingsTile(
           icon: Icons.local_offer_rounded,
           iconColor: AdminColors.warning,
           title: 'Coupon Management',
           subtitle: 'Create and manage discount codes',
-          onTap: () => Navigator.push(context, _route(const CouponManagementPage())),
+          onTap: () =>
+              Navigator.push(context, _route(const CouponManagementPage())),
         ).animate().fadeIn(delay: 250.ms).slideX(begin: -0.1),
         _SettingsTile(
           icon: Icons.people_alt_rounded,
           iconColor: const Color(0xFFEC4899),
           title: 'Referral Rewards',
           subtitle: 'Referral bonus configuration',
-          onTap: () => Navigator.push(context, _route(const ReferralSettingsPage())),
+          onTap: () =>
+              Navigator.push(context, _route(const ReferralSettingsPage())),
         ).animate().fadeIn(delay: 300.ms).slideX(begin: -0.1),
 
         // ── Notifications ────────────────────────────────────────
@@ -116,7 +121,8 @@ class SettingsAdminPage extends StatelessWidget {
             iconColor: AdminColors.danger,
             title: 'Active Sessions',
             subtitle: 'View and revoke admin sessions',
-            onTap: () => Navigator.push(context, _route(const ActiveSessionsPage())),
+            onTap: () =>
+                Navigator.push(context, _route(const ActiveSessionsPage())),
           ).animate().fadeIn(delay: 500.ms).slideX(begin: -0.1),
         ],
 
@@ -133,8 +139,8 @@ class SettingsAdminPage extends StatelessWidget {
 
   void _showComingSoon(BuildContext context, String feature) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('$feature — Coming Soon',
-          style: AdminStyles.body(size: 13)),
+      content:
+          Text('$feature — Coming Soon', style: AdminStyles.body(size: 13)),
       backgroundColor: AdminColors.surface,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -254,7 +260,8 @@ class _NotificationSheetState extends State<_NotificationSheet> {
     final body = _msgCtrl.text.trim();
     if (title.isEmpty || body.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please enter a title and message', style: AdminStyles.body(size: 13)),
+        content: Text('Please enter a title and message',
+            style: AdminStyles.body(size: 13)),
         backgroundColor: AdminColors.danger,
       ));
       return;
@@ -262,7 +269,8 @@ class _NotificationSheetState extends State<_NotificationSheet> {
 
     setState(() => _sending = true);
     try {
-      final res = await Supabase.instance.client.functions.invoke('send-broadcast', body: {
+      final res = await Supabase.instance.client.functions
+          .invoke('send-broadcast', body: {
         'audience': _audience,
         'title': title,
         'body': body,
@@ -272,13 +280,15 @@ class _NotificationSheetState extends State<_NotificationSheet> {
       Navigator.pop(context); // close sheet
       final sent = res.data['sent'] ?? 0;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Successfully sent to $sent devices!', style: AdminStyles.body(size: 13, color: Colors.white)),
+        content: Text('Successfully sent to $sent devices!',
+            style: AdminStyles.body(size: 13, color: Colors.white)),
         backgroundColor: AdminColors.success,
       ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Failed to send: $e', style: AdminStyles.body(size: 13, color: Colors.white)),
+        content: Text('Failed to send: $e',
+            style: AdminStyles.body(size: 13, color: Colors.white)),
         backgroundColor: AdminColors.danger,
       ));
     } finally {
@@ -287,7 +297,10 @@ class _NotificationSheetState extends State<_NotificationSheet> {
   }
 
   final List<String> _audiences = [
-    'All Users', 'Customers', 'Sellers', 'Riders'
+    'All Users',
+    'Customers',
+    'Sellers',
+    'Riders'
   ];
 
   @override
@@ -324,7 +337,8 @@ class _NotificationSheetState extends State<_NotificationSheet> {
               ),
             ),
             const SizedBox(height: 20),
-            Text('Send Push Notification', style: AdminStyles.heading(size: 20)),
+            Text('Send Push Notification',
+                style: AdminStyles.heading(size: 20)),
             const SizedBox(height: 4),
             const SizedBox(height: 20),
             Text('Audience', style: AdminStyles.caption()),
@@ -337,7 +351,8 @@ class _NotificationSheetState extends State<_NotificationSheet> {
                   onTap: () => setState(() => _audience = a),
                   child: AnimatedContainer(
                     duration: 200.ms,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       gradient: selected ? AdminGradients.primary : null,
                       color: selected ? null : AdminColors.cardBg,
@@ -363,7 +378,8 @@ class _NotificationSheetState extends State<_NotificationSheet> {
             const SizedBox(height: 16),
             Text('Message', style: AdminStyles.caption()),
             const SizedBox(height: 8),
-            _field(_msgCtrl, 'e.g. Get 20% off on all orders today only.', maxLines: 3),
+            _field(_msgCtrl, 'e.g. Get 20% off on all orders today only.',
+                maxLines: 3),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -389,7 +405,8 @@ class _NotificationSheetState extends State<_NotificationSheet> {
                               color: Colors.white, strokeWidth: 2),
                         )
                       : Text('Send to $_audience',
-                          style: AdminStyles.body(size: 15, color: Colors.white)),
+                          style:
+                              AdminStyles.body(size: 15, color: Colors.white)),
                 ),
               ),
             ),
@@ -421,7 +438,8 @@ class _NotificationSheetState extends State<_NotificationSheet> {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AdminColors.primary),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );
   }

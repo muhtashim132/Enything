@@ -24,7 +24,8 @@ class CustomerMainPage extends StatefulWidget {
   State<CustomerMainPage> createState() => _CustomerMainPageState();
 }
 
-class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBindingObserver {
+class _CustomerMainPageState extends State<CustomerMainPage>
+    with WidgetsBindingObserver {
   int _navIndex = 0;
   DateTime? _lastBackPressTime;
   final GlobalKey<CustomerHomeViewState> _homeKey = GlobalKey();
@@ -40,9 +41,13 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
     _checkMissedCancellations();
 
     // Listen to order cancellation to auto-readd items to cart
-    _orderCancelledSub = context.read<NotificationProvider>().onOrderCancelledStream.listen((orderId) async {
+    _orderCancelledSub = context
+        .read<NotificationProvider>()
+        .onOrderCancelledStream
+        .listen((orderId) async {
       if (mounted) {
-        final result = await context.read<CartProvider>().restoreOrderToCart(orderId);
+        final result =
+            await context.read<CartProvider>().restoreOrderToCart(orderId);
         if (!mounted) return; // Prevent Unmounted Context crash!
         if (result.added > 0) {
           _showReaddSnackbar(result.added, warningMsg: result.error);
@@ -62,7 +67,8 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
       if (userId == null) return;
 
       // Fetch orders from the last 48 hours that were cancelled or rejected
-      final fortyEightHoursAgo = DateTime.now().subtract(const Duration(hours: 48)).toIso8601String();
+      final fortyEightHoursAgo =
+          DateTime.now().subtract(const Duration(hours: 48)).toIso8601String();
       final missedOrders = await supabase
           .from('orders')
           .select('id')
@@ -77,7 +83,7 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
       List<String> fatalErrors = [];
       String? lastWarning;
       final cart = context.read<CartProvider>();
-      
+
       for (final order in missedOrders) {
         if (!mounted) break;
         final result = await cart.restoreOrderToCart(order['id'] as String);
@@ -91,13 +97,13 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
           }
         }
       }
-      
+
       if (!mounted) return;
 
       if (totalAdded > 0) {
         if (fatalErrors.isNotEmpty) {
-          lastWarning = (lastWarning != null) 
-              ? '$lastWarning Also: ${fatalErrors.first}' 
+          lastWarning = (lastWarning != null)
+              ? '$lastWarning Also: ${fatalErrors.first}'
               : fatalErrors.first;
         }
         _showReaddSnackbar(totalAdded, warningMsg: lastWarning);
@@ -124,20 +130,19 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
     );
   }
 
-
-
   void _showReaddSnackbar(int added, {String? warningMsg}) {
     _pendingAddedCount += added;
     _snackbarDebounceTimer?.cancel();
     _snackbarDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       if (!mounted || _pendingAddedCount == 0) return;
-      
+
       ScaffoldMessenger.of(context).clearSnackBars();
-      
+
       if (warningMsg != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$_pendingAddedCount item(s) restored. Warning: $warningMsg'),
+            content: Text(
+                '$_pendingAddedCount item(s) restored. Warning: $warningMsg'),
             backgroundColor: const Color(0xFFF59E0B), // Orange
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
@@ -146,7 +151,8 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Order cancelled. $_pendingAddedCount item(s) have been restored to your cart.'),
+            content: Text(
+                'Order cancelled. $_pendingAddedCount item(s) have been restored to your cart.'),
             backgroundColor: const Color(0xFF10B981), // Green
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
@@ -189,11 +195,14 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
             _homeKey.currentState?.resetToHome();
             return;
           }
-          final scrolled = _homeKey.currentState?.scrollToTopIfNeeded() ?? false;
+          final scrolled =
+              _homeKey.currentState?.scrollToTopIfNeeded() ?? false;
           if (scrolled) return;
 
           final now = DateTime.now();
-          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          if (_lastBackPressTime == null ||
+              now.difference(_lastBackPressTime!) >
+                  const Duration(seconds: 2)) {
             _lastBackPressTime = now;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -261,11 +270,14 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
                 ValueListenableBuilder<bool>(
                   valueListenable: CustomerHomeViewState.globalIsFiltering,
                   builder: (context, isFiltering, _) {
-                    return _buildNavItem(0, Icons.home_rounded, Icons.home_outlined, 'Home', overrideSelected: isFiltering ? false : null);
+                    return _buildNavItem(
+                        0, Icons.home_rounded, Icons.home_outlined, 'Home',
+                        overrideSelected: isFiltering ? false : null);
                   },
                 ),
-                _buildNavItem(1, Icons.favorite_rounded, Icons.favorite_border_rounded, 'Favs'),
-                
+                _buildNavItem(1, Icons.favorite_rounded,
+                    Icons.favorite_border_rounded, 'Favs'),
+
                 // Prominent Cart inside the pill
                 GestureDetector(
                   onTap: () => Navigator.pushNamed(context, AppRoutes.cart),
@@ -287,7 +299,9 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
                       alignment: Alignment.center,
                       clipBehavior: Clip.none,
                       children: [
-                        const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 28), // Increased icon size
+                        const Icon(Icons.shopping_cart_outlined,
+                            color: Colors.white,
+                            size: 28), // Increased icon size
                         if (cart.totalItemCount > 0)
                           Positioned(
                             right: -2,
@@ -297,13 +311,16 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
                                 minWidth: 18,
                                 minHeight: 18,
                               ),
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4, vertical: 2),
                               decoration: BoxDecoration(
                                 color: AppColors.danger,
                                 borderRadius: BorderRadius.circular(9),
                               ),
                               child: Text(
-                                cart.totalItemCount > 99 ? '99+' : '${cart.totalItemCount}',
+                                cart.totalItemCount > 99
+                                    ? '99+'
+                                    : '${cart.totalItemCount}',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
@@ -318,8 +335,10 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
                   ),
                 ),
 
-                _buildNavItem(2, Icons.receipt_long_rounded, Icons.receipt_long_outlined, 'Orders'),
-                _buildNavItem(3, Icons.person_rounded, Icons.person_outline_rounded, 'Profile'),
+                _buildNavItem(2, Icons.receipt_long_rounded,
+                    Icons.receipt_long_outlined, 'Orders'),
+                _buildNavItem(3, Icons.person_rounded,
+                    Icons.person_outline_rounded, 'Profile'),
               ],
             ),
           ),
@@ -329,7 +348,8 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
   }
 
   Widget _buildNavItem(
-      int index, IconData activeIcon, IconData inactiveIcon, String label, {bool? overrideSelected}) {
+      int index, IconData activeIcon, IconData inactiveIcon, String label,
+      {bool? overrideSelected}) {
     final isSelected = overrideSelected ?? _navIndex == index;
     return GestureDetector(
       onTap: () {
@@ -357,8 +377,7 @@ class _CustomerMainPageState extends State<CustomerMainPage> with WidgetsBinding
               scale: isSelected ? 1.0 : 0.95,
               duration: const Duration(milliseconds: 200),
               child: Icon(isSelected ? activeIcon : inactiveIcon,
-                      color: isSelected ? Colors.white : Colors.white54,
-                      size: 22),
+                  color: isSelected ? Colors.white : Colors.white54, size: 22),
             ),
             const SizedBox(height: 2),
             Text(label,

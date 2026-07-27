@@ -33,8 +33,8 @@ class ContactUsPage extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Please email us at $_email',
-                style: GoogleFonts.outfit()),
+            content:
+                Text('Please email us at $_email', style: GoogleFonts.outfit()),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -63,7 +63,8 @@ class ContactUsPage extends StatelessWidget {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$label copied to clipboard', style: GoogleFonts.outfit()),
+        content:
+            Text('$label copied to clipboard', style: GoogleFonts.outfit()),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
       ),
@@ -76,8 +77,7 @@ class ContactUsPage extends StatelessWidget {
     final bg = isDark ? const Color(0xFF02061A) : AppColors.background;
     final cardBg = isDark ? const Color(0xFF1E1E2E) : Colors.white;
     final textPrimary = isDark ? Colors.white : AppColors.textPrimary;
-    final textSecondary =
-        isDark ? Colors.white70 : AppColors.textSecondary;
+    final textSecondary = isDark ? Colors.white70 : AppColors.textSecondary;
 
     return Scaffold(
       backgroundColor: bg,
@@ -88,8 +88,7 @@ class ContactUsPage extends StatelessWidget {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new,
-              color: textPrimary, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new, color: textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -254,8 +253,7 @@ class ContactUsPage extends StatelessWidget {
               isDark: isDark,
               cardBg: cardBg,
               onTap: () => _copyToClipboard(context, _address, 'Address'),
-              onLongPress: () =>
-                  _copyToClipboard(context, _address, 'Address'),
+              onLongPress: () => _copyToClipboard(context, _address, 'Address'),
             ),
 
             const SizedBox(height: 32),
@@ -285,8 +283,8 @@ class ContactUsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.2)),
+                border:
+                    Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
@@ -338,8 +336,8 @@ class ContactUsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.2)),
+                border:
+                    Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
@@ -541,8 +539,7 @@ class _ContactCard extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(10),

@@ -7,14 +7,20 @@ Future<void> main() async {
   final lines = envFile.readAsLinesSync();
   String? supabaseUrl, serviceRoleKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL=')) supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_SERVICE_ROLE=')) serviceRoleKey = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_URL='))
+      supabaseUrl = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_SERVICE_ROLE='))
+      serviceRoleKey = line.split('=')[1].trim();
   }
 
   final client = SupabaseClient(supabaseUrl!, serviceRoleKey!);
-  
+
   try {
-    final response = await client.from('orders').select('*, order_items(*)').order('created_at', ascending: false).limit(10);
+    final response = await client
+        .from('orders')
+        .select('*, order_items(*)')
+        .order('created_at', ascending: false)
+        .limit(10);
     print('Fetched ${response.length} orders');
     for (var o in response) {
       try {

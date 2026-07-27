@@ -461,7 +461,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       // appear in the available list with no way to accept (RPC blocks it).
       // BUG-8 FIX: Fetch configurable notification radius synchronously from platform_config_provider.
       try {
-        final rawRadius = PlatformConfigProvider.instance?.riderNotificationRadiusKm ?? 15.0;
+        final rawRadius =
+            PlatformConfigProvider.instance?.riderNotificationRadiusKm ?? 15.0;
         _maxRadiusKm = rawRadius.clamp(1.0, 50.0);
       } catch (_) {
         _maxRadiusKm = 15.0; // safe default
@@ -1578,7 +1579,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       // Location Required Alert
-                      if (_locationUnavailable || !context.read<LocationProvider>().hasLocation) ...[
+                      if (_locationUnavailable ||
+                          !context.read<LocationProvider>().hasLocation) ...[
                         _buildLocationRequired(),
                         const SizedBox(height: 24),
                       ],
@@ -2145,16 +2147,20 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             ),
                             if (o.items.isNotEmpty)
                               Padding(
-                                padding: const EdgeInsets.only(left: 14, top: 4),
+                                padding:
+                                    const EdgeInsets.only(left: 14, top: 4),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: o.items.map((item) => Text(
-                                    '${item.quantity}x ${item.productName}',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 12,
-                                      color: isDark ? Colors.white54 : Colors.black54,
-                                    )
-                                  )).toList(),
+                                  children: o.items
+                                      .map((item) => Text(
+                                          '${item.quantity}x ${item.productName}',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12,
+                                            color: isDark
+                                                ? Colors.white54
+                                                : Colors.black54,
+                                          )))
+                                      .toList(),
                                 ),
                               ),
                           ],
@@ -2204,18 +2210,22 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           onPressed: () {
                             setState(() {
                               _ignoredAvailableGroups.add(group.groupId);
-                              _availableGroups.removeWhere((g) => g.groupId == group.groupId);
+                              _availableGroups.removeWhere(
+                                  (g) => g.groupId == group.groupId);
                             });
                           },
                           icon: const Icon(Icons.close_rounded, size: 22),
                           color: AppColors.danger,
                           tooltip: 'Ignore Order',
                           style: IconButton.styleFrom(
-                            backgroundColor: AppColors.danger.withValues(alpha: 0.1),
+                            backgroundColor:
+                                AppColors.danger.withValues(alpha: 0.1),
                             padding: const EdgeInsets.all(12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
-                              side: BorderSide(color: AppColors.danger.withValues(alpha: 0.3)),
+                              side: BorderSide(
+                                  color:
+                                      AppColors.danger.withValues(alpha: 0.3)),
                             ),
                           ),
                         ),
@@ -3149,13 +3159,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             boxShadow: [
               if (_locationGlowAnim.value > 0)
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.3 * _locationGlowAnim.value),
+                  color: AppColors.primary
+                      .withValues(alpha: 0.3 * _locationGlowAnim.value),
                   blurRadius: 15 * _locationGlowAnim.value,
                   spreadRadius: 5 * _locationGlowAnim.value,
                 )
             ],
             border: Border.all(
-              color: AppColors.primary.withValues(alpha: _locationGlowAnim.value),
+              color:
+                  AppColors.primary.withValues(alpha: _locationGlowAnim.value),
               width: 2 * _locationGlowAnim.value,
             ),
           ),
@@ -3172,17 +3184,20 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               const SizedBox(height: 20),
               Text(
                 'Location Required',
-                style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w700),
+                style: GoogleFonts.outfit(
+                    fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
               Text(
                 'We need your location to find nearby orders and calculate delivery distances.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(color: AppColors.textSecondary, height: 1.5),
+                style: GoogleFonts.outfit(
+                    color: AppColors.textSecondary, height: 1.5),
               ),
               const SizedBox(height: 28),
               ElevatedButton.icon(
-                onPressed: () => context.read<LocationProvider>().requestLocation(),
+                onPressed: () =>
+                    context.read<LocationProvider>().requestLocation(),
                 icon: const Icon(Icons.my_location),
                 label: const Text('Enable Location'),
               ),

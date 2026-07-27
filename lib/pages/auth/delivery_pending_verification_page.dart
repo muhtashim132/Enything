@@ -10,10 +10,13 @@ class DeliveryPendingVerificationPage extends StatefulWidget {
   const DeliveryPendingVerificationPage({super.key});
 
   @override
-  State<DeliveryPendingVerificationPage> createState() => _DeliveryPendingVerificationPageState();
+  State<DeliveryPendingVerificationPage> createState() =>
+      _DeliveryPendingVerificationPageState();
 }
 
-class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerificationPage> with SingleTickerProviderStateMixin {
+class _DeliveryPendingVerificationPageState
+    extends State<DeliveryPendingVerificationPage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animCtrl;
   late Animation<double> _pulseAnim;
   RealtimeChannel? _channel;
@@ -21,36 +24,47 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(duration: const Duration(seconds: 2), vsync: this)..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 1.0, end: 1.08).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut));
-    
+    _animCtrl =
+        AnimationController(duration: const Duration(seconds: 2), vsync: this)
+          ..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 1.0, end: 1.08)
+        .animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut));
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
       final userId = auth.currentUserId;
       if (userId != null) {
         // Register Push Notification Token
-        context.read<NotificationProvider>().registerFcmToken(userId, 'delivery_partner');
+        context
+            .read<NotificationProvider>()
+            .registerFcmToken(userId, 'delivery_partner');
 
         // Listen for live approval
-        _channel = Supabase.instance.client.channel('public:delivery_partners:id=eq.$userId')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'delivery_partners',
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'id', value: userId),
-            callback: (payload) async {
-              final newStatus = payload.newRecord['verification_status'];
-              if (newStatus != null && newStatus != 'pending') {
-                auth.retryProfileFetch();
-                if (mounted && (newStatus == 'approved' || newStatus == 'verified')) {
-                  Navigator.pushNamedAndRemoveUntil(context, AppRoutes.deliveryDashboard, (_) => false);
-                } else if (mounted && newStatus == 'rejected') {
-                  setState(() {}); 
-                }
-              }
-            }
-          ).subscribe();
+        _channel = Supabase.instance.client
+            .channel('public:delivery_partners:id=eq.$userId')
+            .onPostgresChanges(
+                event: PostgresChangeEvent.update,
+                schema: 'public',
+                table: 'delivery_partners',
+                filter: PostgresChangeFilter(
+                    type: PostgresChangeFilterType.eq,
+                    column: 'id',
+                    value: userId),
+                callback: (payload) async {
+                  final newStatus = payload.newRecord['verification_status'];
+                  if (newStatus != null && newStatus != 'pending') {
+                    auth.retryProfileFetch();
+                    if (mounted &&
+                        (newStatus == 'approved' || newStatus == 'verified')) {
+                      Navigator.pushNamedAndRemoveUntil(
+                          context, AppRoutes.deliveryDashboard, (_) => false);
+                    } else if (mounted && newStatus == 'rejected') {
+                      setState(() {});
+                    }
+                  }
+                })
+            .subscribe();
       }
     });
   }
@@ -68,7 +82,8 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final isRejected = auth.user?.verificationStatus == 'rejected';
-    final primaryColor = isRejected ? Colors.redAccent : const Color(0xFF51CF66);
+    final primaryColor =
+        isRejected ? Colors.redAccent : const Color(0xFF51CF66);
 
     return Scaffold(
       backgroundColor: const Color(0xFF02061A),
@@ -93,13 +108,17 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     ScaleTransition(
-                      scale: isRejected ? const AlwaysStoppedAnimation(1.0) : _pulseAnim,
+                      scale: isRejected
+                          ? const AlwaysStoppedAnimation(1.0)
+                          : _pulseAnim,
                       child: Container(
                         padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
                           color: primaryColor.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
-                          border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 2),
+                          border: Border.all(
+                              color: primaryColor.withValues(alpha: 0.3),
+                              width: 2),
                           boxShadow: [
                             BoxShadow(
                               color: primaryColor.withValues(alpha: 0.2),
@@ -109,7 +128,9 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
                           ],
                         ),
                         child: Icon(
-                          isRejected ? Icons.gpp_bad_rounded : Icons.admin_panel_settings_rounded,
+                          isRejected
+                              ? Icons.gpp_bad_rounded
+                              : Icons.admin_panel_settings_rounded,
                           size: 80,
                           color: primaryColor,
                         ),
@@ -117,7 +138,9 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
                     ),
                     const SizedBox(height: 48),
                     Text(
-                      isRejected ? 'Application Rejected' : 'Verification in Progress',
+                      isRejected
+                          ? 'Application Rejected'
+                          : 'Verification in Progress',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         color: Colors.white,
@@ -132,7 +155,8 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.03),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.05)),
                       ),
                       child: Text(
                         isRejected
@@ -151,7 +175,8 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
                       _buildButton(
                         label: 'Re-upload Documents',
                         color: primaryColor,
-                        onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.deliveryKycUpload),
+                        onTap: () => Navigator.pushReplacementNamed(
+                            context, AppRoutes.deliveryKycUpload),
                         icon: Icons.upload_file_rounded,
                       )
                     else
@@ -159,7 +184,8 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
                         label: 'Return Home',
                         color: Colors.white.withValues(alpha: 0.1),
                         textColor: Colors.white,
-                        onTap: () => Navigator.pushNamedAndRemoveUntil(context, AppRoutes.roleSelect, (_) => false),
+                        onTap: () => Navigator.pushNamedAndRemoveUntil(
+                            context, AppRoutes.roleSelect, (_) => false),
                         icon: Icons.home_rounded,
                       ),
                   ],
@@ -189,7 +215,12 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
     );
   }
 
-  Widget _buildButton({required String label, required Color color, required VoidCallback onTap, required IconData icon, Color? textColor}) {
+  Widget _buildButton(
+      {required String label,
+      required Color color,
+      required VoidCallback onTap,
+      required IconData icon,
+      Color? textColor}) {
     return SizedBox(
       width: double.infinity,
       height: 60,
@@ -199,7 +230,8 @@ class _DeliveryPendingVerificationPageState extends State<DeliveryPendingVerific
           backgroundColor: color,
           foregroundColor: textColor ?? Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

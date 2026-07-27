@@ -24,12 +24,12 @@ class ProductVariant {
   }
 
   Map<String, dynamic> toMap() => {
-    'id': id,
-    'name': name,
-    'price': price,
-    'original_price': originalPrice,
-    'is_available': isAvailable,
-  };
+        'id': id,
+        'name': name,
+        'price': price,
+        'original_price': originalPrice,
+        'is_available': isAvailable,
+      };
 
   double? get discountPercent {
     if (originalPrice != null && originalPrice! > price) {
@@ -63,6 +63,7 @@ class ProductModel {
   final bool requiresPrescription;
   final String medicineType;
   final List<ProductVariant> variants;
+
   /// Product-level GST override rate (e.g. 0.05 = 5%).
   /// If null, the checkout falls back to the category-level rate from tax_config.
   final double? gstRateOverride;
@@ -138,28 +139,28 @@ class ProductModel {
   }
 
   Map<String, dynamic> toMap() => {
-    'shop_id': shopId,
-    'name': name,
-    'category': category,
-    'sub_category': subCategory,
-    'brand': brand,
-    'price': price,
-    'original_price': originalPrice,
-    'total_quantity': totalQuantity,
-    'weight_per_unit': weightPerUnit,
-    'unit_type': unitType,
-    'description': description,
-    'images': images,
-    'is_veg': isVeg,
-    'menu_category': menuCategory,
-    'prep_time_minutes': prepTimeMinutes,
-    'special_tags': specialTags,
-    'is_available': isAvailable,
-    'requires_prescription': requiresPrescription,
-    'medicine_type': medicineType,
-    'variants': variants.map((v) => v.toMap()).toList(),
-    'gst_rate_override': gstRateOverride,
-  };
+        'shop_id': shopId,
+        'name': name,
+        'category': category,
+        'sub_category': subCategory,
+        'brand': brand,
+        'price': price,
+        'original_price': originalPrice,
+        'total_quantity': totalQuantity,
+        'weight_per_unit': weightPerUnit,
+        'unit_type': unitType,
+        'description': description,
+        'images': images,
+        'is_veg': isVeg,
+        'menu_category': menuCategory,
+        'prep_time_minutes': prepTimeMinutes,
+        'special_tags': specialTags,
+        'is_available': isAvailable,
+        'requires_prescription': requiresPrescription,
+        'medicine_type': medicineType,
+        'variants': variants.map((v) => v.toMap()).toList(),
+        'gst_rate_override': gstRateOverride,
+      };
 
   String get firstImage => images.isNotEmpty ? images.first : '';
 

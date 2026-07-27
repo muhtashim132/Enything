@@ -105,7 +105,9 @@ class _ShopCardState extends State<ShopCard> {
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? PremiumAnimations.pressedScale : PremiumAnimations.normalScale,
+        scale: _isPressed
+            ? PremiumAnimations.pressedScale
+            : PremiumAnimations.normalScale,
         duration: PremiumAnimations.fast,
         curve: PremiumAnimations.defaultCurve,
         child: AnimatedContainer(
@@ -117,7 +119,8 @@ class _ShopCardState extends State<ShopCard> {
             border: isDark
                 ? Border.all(color: Colors.white.withValues(alpha: 0.07))
                 : null,
-            boxShadow: PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
+            boxShadow:
+                PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,182 +128,186 @@ class _ShopCardState extends State<ShopCard> {
               // ── Header image strip ─────────────────────────────────────
               Expanded(
                 child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(PremiumRadius.large)),
-                    child: shop.bannerImage != null
-                        ? CachedNetworkImage(
-                            imageUrl: shop.bannerImage!,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            memCacheHeight: 240, // 2× for crisp rendering, no pixel overload
-                            placeholder: (c, i) => _headerPlaceholder(colors),
-                            errorWidget: (c, e, s) =>
-                                _headerPlaceholder(colors),
-                          )
-                        : _headerPlaceholder(colors),
-                  ),
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(PremiumRadius.large)),
+                      child: shop.bannerImage != null
+                          ? CachedNetworkImage(
+                              imageUrl: shop.bannerImage!,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              memCacheHeight:
+                                  240, // 2× for crisp rendering, no pixel overload
+                              placeholder: (c, i) => _headerPlaceholder(colors),
+                              errorWidget: (c, e, s) =>
+                                  _headerPlaceholder(colors),
+                            )
+                          : _headerPlaceholder(colors),
+                    ),
 
-                  // Premium 3-stop gradient overlay
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(PremiumRadius.large)),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.15),
-                            Colors.black.withValues(alpha: 0.50),
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          stops: const [0.0, 0.55, 1.0],
+                    // Premium 3-stop gradient overlay
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(PremiumRadius.large)),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.15),
+                              Colors.black.withValues(alpha: 0.50),
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.0, 0.55, 1.0],
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  // Category badge (top-left) — glassmorphism style
-                  if (!shop.isOpenRightNow)
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(PremiumRadius.large)),
-                      child: Container(
-                        color: Colors.black.withValues(alpha: 0.65),
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.white38),
-                            ),
-                            child: Text(
-                              'CLOSED',
-                              style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 3.0,
+                    // Category badge (top-left) — glassmorphism style
+                    if (!shop.isOpenRightNow)
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(PremiumRadius.large)),
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white38),
+                              ),
+                              child: Text(
+                                'CLOSED',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 3.0,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
 
-                  // Category badge (top-left) — glassmorphism style
-                  Positioned(
-                    top: 10,
-                    left: 12,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 5),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: colors),
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                                color: colors.first.withValues(alpha: 0.45),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3)),
-                          ],
-                        ),
-                        child: Text(
-                          '$_emoji ${shop.category}',
-                          style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Free delivery badge (top-right)
-                  if (isFreeDelivery)
+                    // Category badge (top-left) — glassmorphism style
                     Positioned(
                       top: 10,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00C853),
-                          borderRadius: BorderRadius.circular(9),
-                          boxShadow: [
-                            BoxShadow(
-                                color: const Color(0xFF00C853)
-                                    .withValues(alpha: 0.45),
-                                blurRadius: 8),
-                          ],
-                        ),
-                        child: Text(
-                          'FREE DELIVERY',
-                          style: GoogleFonts.outfit(
+                      left: 12,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 5),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: colors),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: colors.first.withValues(alpha: 0.45),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3)),
+                            ],
+                          ),
+                          child: Text(
+                            '$_emoji ${shop.category}',
+                            style: GoogleFonts.outfit(
                               color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3),
-                        ),
-                      ),
-                    ),
-
-                  // Rating badge (bottom-left)
-                  Positioned(
-                    bottom: 10,
-                    left: 12,
-                    child: _ratingBadge(),
-                  ),
-
-                  // Favorite button (bottom-right)
-                  Positioned(
-                    bottom: 10,
-                    right: 12,
-                    child: GestureDetector(
-                      onTap: () {
-                        if (auth.currentUserId != null) {
-                          favs.toggleShopFavorite(
-                              auth.currentUserId!, shop.id);
-                        }
-                      },
-                      child: AnimatedContainer(
-                        duration: PremiumAnimations.fast,
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: isFav
-                              ? Colors.red.withValues(alpha: 0.15)
-                              : Colors.white.withValues(alpha: 0.92),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.18),
-                                blurRadius: 8)
-                          ],
-                        ),
-                        child: AnimatedSwitcher(
-                          duration: PremiumAnimations.fast,
-                          child: Icon(
-                            key: ValueKey(isFav),
-                            isFav
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            size: 14,
-                            color: isFav ? Colors.red : AppColors.textSecondary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+
+                    // Free delivery badge (top-right)
+                    if (isFreeDelivery)
+                      Positioned(
+                        top: 10,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00C853),
+                            borderRadius: BorderRadius.circular(9),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: const Color(0xFF00C853)
+                                      .withValues(alpha: 0.45),
+                                  blurRadius: 8),
+                            ],
+                          ),
+                          child: Text(
+                            'FREE DELIVERY',
+                            style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.3),
+                          ),
+                        ),
+                      ),
+
+                    // Rating badge (bottom-left)
+                    Positioned(
+                      bottom: 10,
+                      left: 12,
+                      child: _ratingBadge(),
+                    ),
+
+                    // Favorite button (bottom-right)
+                    Positioned(
+                      bottom: 10,
+                      right: 12,
+                      child: GestureDetector(
+                        onTap: () {
+                          if (auth.currentUserId != null) {
+                            favs.toggleShopFavorite(
+                                auth.currentUserId!, shop.id);
+                          }
+                        },
+                        child: AnimatedContainer(
+                          duration: PremiumAnimations.fast,
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: isFav
+                                ? Colors.red.withValues(alpha: 0.15)
+                                : Colors.white.withValues(alpha: 0.92),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.18),
+                                  blurRadius: 8)
+                            ],
+                          ),
+                          child: AnimatedSwitcher(
+                            duration: PremiumAnimations.fast,
+                            child: Icon(
+                              key: ValueKey(isFav),
+                              isFav
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 14,
+                              color:
+                                  isFav ? Colors.red : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
 
               // ── Info section ──────────────────────────────────────────
@@ -330,9 +337,7 @@ class _ShopCardState extends State<ShopCard> {
                         Icon(
                           Icons.arrow_forward_ios_rounded,
                           size: 13,
-                          color: isDark
-                              ? Colors.white24
-                              : Colors.grey.shade400,
+                          color: isDark ? Colors.white24 : Colors.grey.shade400,
                         ),
                       ],
                     ),
@@ -341,9 +346,8 @@ class _ShopCardState extends State<ShopCard> {
                     Text(
                       shop.cuisineType ?? 'Various items',
                       style: GoogleFonts.outfit(
-                        color: isDark
-                            ? Colors.white54
-                            : AppColors.textSecondary,
+                        color:
+                            isDark ? Colors.white54 : AppColors.textSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -374,8 +378,8 @@ class _ShopCardState extends State<ShopCard> {
                           textColor: const Color(0xFFDD6B20),
                           isDark: isDark,
                         ),
-                        _buildDeliveryChip(shop.distanceKm ?? 0.0,
-                            isOutOfRange, isFreeDelivery, deliveryCharge,
+                        _buildDeliveryChip(shop.distanceKm ?? 0.0, isOutOfRange,
+                            isFreeDelivery, deliveryCharge,
                             isDark: isDark),
                       ],
                     ),
@@ -422,8 +426,7 @@ class _ShopCardState extends State<ShopCard> {
         ),
         borderRadius: BorderRadius.circular(9),
         boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25), blurRadius: 8),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 8),
         ],
       ),
       child: Row(
@@ -434,16 +437,13 @@ class _ShopCardState extends State<ShopCard> {
           Text(
             hasRating ? shop.rating.toStringAsFixed(1) : 'New',
             style: GoogleFonts.outfit(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                color: Colors.white),
+                fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white),
           ),
           if (hasRating)
             Text(
               ' (${shop.totalReviews})',
               style: GoogleFonts.outfit(
-                  fontSize: 10,
-                  color: Colors.white.withValues(alpha: 0.75)),
+                  fontSize: 10, color: Colors.white.withValues(alpha: 0.75)),
             ),
         ],
       ),
@@ -496,8 +496,7 @@ class _ShopCardState extends State<ShopCard> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon,
-              size: 12, color: isDark ? Colors.white54 : textColor),
+          Icon(icon, size: 12, color: isDark ? Colors.white54 : textColor),
           const SizedBox(width: 4),
           Text(
             label,

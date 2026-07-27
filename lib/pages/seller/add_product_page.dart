@@ -294,54 +294,57 @@ class _AddProductPageState extends State<AddProductPage> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration:
-                  const InputDecoration(labelText: 'Name (e.g., Large, Full)'),
-            ),
-            if (AppCategories.getSuggestedVariants(_productCategory)
-                .isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Suggestions:',
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Name (e.g., Large, Full)'),
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: AppCategories.getSuggestedVariants(_productCategory)
-                    .map((s) => ActionChip(
-                          label: Text(s, style: const TextStyle(fontSize: 12)),
-                          onPressed: () => nameCtrl.text = s,
-                          backgroundColor:
-                              AppColors.primary.withValues(alpha: 0.05),
-                          side: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2)),
-                        ))
-                    .toList(),
+              if (AppCategories.getSuggestedVariants(_productCategory)
+                  .isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Suggestions:',
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: AppCategories.getSuggestedVariants(_productCategory)
+                      .map((s) => ActionChip(
+                            label:
+                                Text(s, style: const TextStyle(fontSize: 12)),
+                            onPressed: () => nameCtrl.text = s,
+                            backgroundColor:
+                                AppColors.primary.withValues(alpha: 0.05),
+                            side: BorderSide(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.2)),
+                          ))
+                      .toList(),
+                ),
+              ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration:
+                    const InputDecoration(labelText: 'Selling Price (₹)'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: originalPriceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Original Price (MRP) (₹)',
+                  hintText: 'Optional',
+                ),
               ),
             ],
-            const SizedBox(height: 16),
-            TextField(
-              controller: priceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Selling Price (₹)'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: originalPriceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Original Price (MRP) (₹)',
-                hintText: 'Optional',
-              ),
-            ),
-          ],
-        ),
+          ),
         ),
         actions: [
           TextButton(
@@ -385,13 +388,15 @@ class _AddProductPageState extends State<AddProductPage> {
     double? finalOriginalPrice;
 
     if (_variants.isNotEmpty) {
-      final minVariant = _variants.reduce((curr, next) => curr.price < next.price ? curr : next);
+      final minVariant = _variants
+          .reduce((curr, next) => curr.price < next.price ? curr : next);
       finalPrice = minVariant.price;
       finalOriginalPrice = minVariant.originalPrice;
     } else {
       finalPrice = double.tryParse(_priceController.text) ?? 0.0;
       if (_hasDiscount) {
-        final originalPrice = double.tryParse(_originalPriceController.text) ?? 0.0;
+        final originalPrice =
+            double.tryParse(_originalPriceController.text) ?? 0.0;
         if (originalPrice <= finalPrice) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -401,8 +406,8 @@ class _AddProductPageState extends State<AddProductPage> {
           return;
         }
         finalOriginalPrice = _originalPriceController.text.trim().isNotEmpty
-                ? originalPrice
-                : null;
+            ? originalPrice
+            : null;
       }
     }
 
@@ -455,16 +460,14 @@ class _AddProductPageState extends State<AddProductPage> {
             ? null
             : int.tryParse(_inventoryController.text.trim()),
         'images': uploadedUrls,
-        'requires_prescription':
-            (_productCategory == 'Pharmacy' ||
-                    _productCategory == 'Medical Store')
-                ? _requiresPrescription
-                : false,
-        'medicine_type':
-            (_productCategory == 'Pharmacy' ||
-                    _productCategory == 'Medical Store')
-                ? _medicineType
-                : 'General',
+        'requires_prescription': (_productCategory == 'Pharmacy' ||
+                _productCategory == 'Medical Store')
+            ? _requiresPrescription
+            : false,
+        'medicine_type': (_productCategory == 'Pharmacy' ||
+                _productCategory == 'Medical Store')
+            ? _medicineType
+            : 'General',
         'variants': _variants.map((v) => v.toMap()).toList(),
         // Product-level GST override (null = use category default)
         'gst_rate_override': _gstRateOverride,

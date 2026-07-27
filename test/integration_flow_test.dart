@@ -29,7 +29,9 @@ Future<void> main() async {
     exit(1);
   }
 
-  final client = SupabaseClient(supabaseUrl, supabaseAnonKey, authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit));
+  final client = SupabaseClient(supabaseUrl, supabaseAnonKey,
+      authOptions:
+          const AuthClientOptions(authFlowType: AuthFlowType.implicit));
   print('Connected to Supabase');
 
   try {
@@ -59,17 +61,22 @@ String _passwordFromPhone(String phone) {
   return 'EnY\$${digest.toString().substring(0, 16)}';
 }
 
-Future<String> authUser(SupabaseClient client, String phone, String role) async {
+Future<String> authUser(
+    SupabaseClient client, String phone, String role) async {
   final email = _emailFromPhone(phone);
   final password = _passwordFromPhone(phone);
-  
+
   String? userId;
   try {
-    final res = await client.auth.signInWithPassword(email: email, password: password);
+    final res =
+        await client.auth.signInWithPassword(email: email, password: password);
     userId = res.user?.id;
   } catch (e) {
     try {
-      final res = await client.auth.signUp(email: email, password: password, data: <String, dynamic>{'phone': phone});
+      final res = await client.auth.signUp(
+          email: email,
+          password: password,
+          data: <String, dynamic>{'phone': phone});
       userId = res.user?.id;
     } catch (e2, st2) {
       print('e1: $e, e2: $e2');
@@ -80,10 +87,10 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
 
   if (userId == null) throw Exception('Failed to get user id for $phone');
 
-  final uniquePhone = phone.contains('999999999') 
-      ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}' 
+  final uniquePhone = phone.contains('999999999')
+      ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}'
       : phone;
-      
+
   await client.from('profiles').upsert({
     'id': userId,
     'role': role,
@@ -92,10 +99,11 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
   });
 
   const location = 'POINT(74.6366 34.4225)';
-  
+
   if (role == 'customer') {
     await client.from('customers').upsert({'id': userId, 'location': location});
-    final addrs = await client.from('saved_addresses').select().eq('user_id', userId);
+    final addrs =
+        await client.from('saved_addresses').select().eq('user_id', userId);
     if (addrs.isEmpty) {
       await client.from('saved_addresses').insert({
         'user_id': userId,
@@ -130,8 +138,9 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
 
 Future<void> runTests(SupabaseClient client) async {
   print('\n--- SCENARIO A: Single Customer, Single Seller, Single DP ---');
-  
-  final randomPrefix = DateTime.now().millisecondsSinceEpoch.toString().substring(5, 12);
+
+  final randomPrefix =
+      DateTime.now().millisecondsSinceEpoch.toString().substring(5, 12);
   final customerPhone = '999$randomPrefix';
   final sellerPhone = '998$randomPrefix';
   final dpPhone = '997$randomPrefix';
@@ -145,15 +154,25 @@ Future<void> runTests(SupabaseClient client) async {
   print('Seller: $sellerId');
   print('DP: $dpId');
 
-  final shop = await client.from('shops').select('id').eq('seller_id', sellerId).single();
+  final shop = await client
+      .from('shops')
+      .select('id')
+      .eq('seller_id', sellerId)
+      .single();
   final shopId = shop['id'];
 
-  final products = await client.from('products').select('id, price').eq('shop_id', shopId).limit(1);
+  final products = await client
+      .from('products')
+      .select('id, price')
+      .eq('shop_id', shopId)
+      .limit(1);
   String productId;
   double price = 100.0;
   if (products.isEmpty) {
     print('Signing in as seller to create product...');
-    await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
+    await client.auth.signInWithPassword(
+        email: _emailFromPhone(sellerPhone),
+        password: _passwordFromPhone(sellerPhone));
     productId = const Uuid().v4();
     await client.from('products').insert({
       'id': productId,
@@ -170,12 +189,14 @@ Future<void> runTests(SupabaseClient client) async {
   }
 
   print('Placing order...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(customerPhone), password: _passwordFromPhone(customerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(customerPhone),
+      password: _passwordFromPhone(customerPhone));
 
   final cartGroupId = const Uuid().v4();
   final orderId = const Uuid().v4();
   final now = DateTime.now().toUtc();
-  
+
   final order = {
     'id': orderId,
     'created_at': now.toIso8601String(),
@@ -186,7 +207,8 @@ Future<void> runTests(SupabaseClient client) async {
     'status': 'awaiting_acceptance',
     'seller_accepted': false,
     'partner_accepted': false,
-    'acceptance_deadline': now.add(const Duration(minutes: 3)).toIso8601String(),
+    'acceptance_deadline':
+        now.add(const Duration(minutes: 3)).toIso8601String(),
     'total_amount': price,
     'delivery_charges': 15.0,
     'rider_earnings': 15.0,
@@ -230,15 +252,20 @@ Future<void> runTests(SupabaseClient client) async {
     'p_items': [item],
     'p_coupon_id': null,
     'p_idempotency_key': cartGroupId,
+    'p_cart_group_id': cartGroupId,
+    'p_order_id_to_cancel': null,
   });
   print('Order placed successfully. ID: $orderId');
 
   print('Seller accepting order...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(sellerPhone),
+      password: _passwordFromPhone(sellerPhone));
   await client.rpc('accept_order_seller', params: {'p_order_id': orderId});
-  
+
   print('DP accepting order...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
   await client.rpc('accept_order_rider', params: {
     'p_order_id': orderId,
     'p_rider_phone': dpPhone,
@@ -246,17 +273,25 @@ Future<void> runTests(SupabaseClient client) async {
     'p_shop_lng': 74.6366,
   });
 
-  var check = await client.from('orders').select('status, seller_accepted, partner_accepted').eq('id', orderId).single();
+  var check = await client
+      .from('orders')
+      .select('status, seller_accepted, partner_accepted')
+      .eq('id', orderId)
+      .single();
   print('Status after accept: ${check['status']}');
   if (check['status'] != 'awaiting_payment') {
     throw Exception('Status is not awaiting_payment! It is ${check['status']}');
   }
 
   print('Customer paying...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(customerPhone), password: _passwordFromPhone(customerPhone));
-  print('Simulating payment confirmation via direct DB query (bypassing HMAC)...');
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(customerPhone),
+      password: _passwordFromPhone(customerPhone));
+  print(
+      'Simulating payment confirmation via direct DB query (bypassing HMAC)...');
   final updateResult = await Process.run('supabase', [
-    'db', 'query',
+    'db',
+    'query',
     "UPDATE orders SET status = 'confirmed', payment_status = 'captured', payment_method = 'upi' WHERE id = '$orderId'",
     '--linked'
   ]);
@@ -264,18 +299,25 @@ Future<void> runTests(SupabaseClient client) async {
   if (updateResult.stderr.toString().isNotEmpty) {
     print('Supabase CLI stderr: ${updateResult.stderr}');
   }
-  
+
   // Wait a moment for DB to settle
   await Future.delayed(const Duration(seconds: 2));
 
-  check = await client.from('orders').select('status, payment_status').eq('id', orderId).single();
-  print('Status after payment: ${check['status']}, Payment: ${check['payment_status']}');
+  check = await client
+      .from('orders')
+      .select('status, payment_status')
+      .eq('id', orderId)
+      .single();
+  print(
+      'Status after payment: ${check['status']}, Payment: ${check['payment_status']}');
   if (check['status'] != 'confirmed') {
     throw Exception('Status is not confirmed! It is ${check['status']}');
   }
 
   print('Seller marking preparing...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(sellerPhone),
+      password: _passwordFromPhone(sellerPhone));
   await client.rpc('update_order_status', params: {
     'p_order_id': orderId,
     'p_new_status': 'preparing',
@@ -287,13 +329,16 @@ Future<void> runTests(SupabaseClient client) async {
   });
 
   await Future.delayed(const Duration(seconds: 1));
-  check = await client.from('orders').select('status').eq('id', orderId).single();
+  check =
+      await client.from('orders').select('status').eq('id', orderId).single();
   if (check['status'] != 'preparing') {
     throw Exception('Status is not preparing! It is ${check['status']}');
   }
 
   print('Seller marking ready_for_pickup...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(sellerPhone), password: _passwordFromPhone(sellerPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(sellerPhone),
+      password: _passwordFromPhone(sellerPhone));
   await client.rpc('update_order_status', params: {
     'p_order_id': orderId,
     'p_new_status': 'ready_for_pickup',
@@ -305,7 +350,8 @@ Future<void> runTests(SupabaseClient client) async {
   });
 
   print('DP marking arrived at shop...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
   await client.rpc('set_arrived_at_shop', params: {
     'p_order_id': orderId,
     'p_rider_lat': 34.4225,
@@ -314,20 +360,22 @@ Future<void> runTests(SupabaseClient client) async {
   await Future.delayed(const Duration(seconds: 1));
 
   print('DP signing in to mark picked_up...');
-  await client.auth.signInWithPassword(email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
 
-    await client.rpc('update_order_status', params: {
-      'p_order_id': orderId,
-      'p_new_status': 'picked_up',
-      'p_ready_time': null,
-      'p_wait_penalty': 0.0,
-      'p_rider_lat': null,
-      'p_rider_lng': null,
-      'p_delivery_otp': null,
-    });
-  
-  await client.auth.signInWithPassword(email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
-  
+  await client.rpc('update_order_status', params: {
+    'p_order_id': orderId,
+    'p_new_status': 'picked_up',
+    'p_ready_time': null,
+    'p_wait_penalty': 0.0,
+    'p_rider_lat': null,
+    'p_rider_lng': null,
+    'p_delivery_otp': null,
+  });
+
+  await client.auth.signInWithPassword(
+      email: _emailFromPhone(dpPhone), password: _passwordFromPhone(dpPhone));
+
   print('DP marking delivered...');
   await client.rpc('update_order_status', params: {
     'p_order_id': orderId,
@@ -339,7 +387,8 @@ Future<void> runTests(SupabaseClient client) async {
     'p_delivery_otp': null,
   });
 
-  check = await client.from('orders').select('status').eq('id', orderId).single();
+  check =
+      await client.from('orders').select('status').eq('id', orderId).single();
   print('Final status: ${check['status']}');
   if (check['status'] != 'delivered') {
     throw Exception('Failed to reach delivered status!');

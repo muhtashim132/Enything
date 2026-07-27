@@ -29,7 +29,6 @@ import 'services/notification_service.dart';
 import 'config/route_observer.dart';
 import 'widgets/customer/multi_shop_cart_bubble.dart';
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -281,14 +280,14 @@ class EnythingApp extends StatelessWidget {
         ChangeNotifierProvider<RecentlyViewedProvider>.value(
             value: recentlyViewedProvider),
         ChangeNotifierProvider(create: (_) => ReferralProvider()),
-
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
           return MaterialApp(
             navigatorKey: navigatorKey,
             navigatorObservers: [GlobalRouteObserver()],
-            builder: (context, child) => MultiShopCartBubbleOverlay(child: child!),
+            builder: (context, child) =>
+                MultiShopCartBubbleOverlay(child: child!),
             title: 'Enything',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,

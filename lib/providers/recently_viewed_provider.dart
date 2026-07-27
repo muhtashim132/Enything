@@ -9,7 +9,7 @@ class RecentlyViewedProvider extends ChangeNotifier {
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
-  List<String> _ids = [];         // ordered list of product IDs (most recent first)
+  List<String> _ids = []; // ordered list of product IDs (most recent first)
   List<ProductModel> _products = [];
   bool _isLoading = false;
   bool _loadedAll = false;
@@ -79,9 +79,8 @@ class RecentlyViewedProvider extends ChangeNotifier {
           .eq('is_available', true)
           .limit(loadAll ? 50 : 6);
 
-      final fetched = (data as List)
-          .map((p) => ProductModel.fromMap(p))
-          .toList();
+      final fetched =
+          (data as List).map((p) => ProductModel.fromMap(p)).toList();
 
       // Preserve the order matching idsToFetch
       final productMap = {for (final p in fetched) p.id: p};
@@ -89,7 +88,7 @@ class RecentlyViewedProvider extends ChangeNotifier {
           .map((id) => productMap[id])
           .whereType<ProductModel>()
           .toList();
-          
+
       _loadedAll = loadAll;
 
       // Prune IDs that were not found in the database ONLY if we loaded all
@@ -102,10 +101,11 @@ class RecentlyViewedProvider extends ChangeNotifier {
         }
       }
 
-      // Self-healing fallback: If we fetched a subset and all were invalid, 
+      // Self-healing fallback: If we fetched a subset and all were invalid,
       // escalate to full fetch to find remaining valid items (prevent pixel blindness).
       if (_products.isEmpty && !loadAll && _ids.isNotEmpty) {
-        _isLoading = false; // Prevent infinite loop of loading state if calling again
+        _isLoading =
+            false; // Prevent infinite loop of loading state if calling again
         await _fetchProducts(loadAll: true);
         return;
       }

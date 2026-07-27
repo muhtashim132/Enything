@@ -118,11 +118,13 @@ class _TeamMembersPageState extends State<TeamMembersPage>
                 fillColor: Colors.white.withValues(alpha: 0.05),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                  borderSide:
+                      BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                  borderSide:
+                      BorderSide(color: Colors.white.withValues(alpha: 0.08)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -175,7 +177,8 @@ class _TeamMembersPageState extends State<TeamMembersPage>
                                   color: Colors.white.withValues(alpha: 0.04),
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.07)),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.07)),
                                 ),
                                 child: Row(children: [
                                   const Icon(Icons.mail_outline_rounded,
@@ -206,12 +209,17 @@ class _TeamMembersPageState extends State<TeamMembersPage>
                                       icon: const Icon(Icons.copy_rounded,
                                           color: Colors.white70, size: 18),
                                       onPressed: () {
-                                        Clipboard.setData(ClipboardData(text: inv.token));
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Invite code copied!')),
+                                        Clipboard.setData(
+                                            ClipboardData(text: inv.token));
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                              content:
+                                                  Text('Invite code copied!')),
                                         );
                                       },
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8),
                                       constraints: const BoxConstraints(),
                                     ),
                                     IconButton(
@@ -374,7 +382,8 @@ class _MemberCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('Enter new password for ${member.fullName}:',
-                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13)),
+                  style:
+                      GoogleFonts.outfit(color: Colors.white70, fontSize: 13)),
               const SizedBox(height: 16),
               TextField(
                 controller: ctrl,
@@ -385,8 +394,8 @@ class _MemberCard extends StatelessWidget {
                   hintStyle: const TextStyle(color: Colors.white24),
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.05),
-                  border:
-                      OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ],

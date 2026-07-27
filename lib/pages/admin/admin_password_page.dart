@@ -35,16 +35,16 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
     super.initState();
 
     // Slow pulsing background
-    _bgCtrl = AnimationController(
-        duration: const Duration(seconds: 8), vsync: this)
-      ..repeat(reverse: true);
+    _bgCtrl =
+        AnimationController(duration: const Duration(seconds: 8), vsync: this)
+          ..repeat(reverse: true);
     _bgAnim = CurvedAnimation(parent: _bgCtrl, curve: Curves.easeInOut);
 
     // Shake on error
     _shakeCtrl = AnimationController(
         duration: const Duration(milliseconds: 500), vsync: this);
-    _shakeAnim = Tween<double>(begin: 0, end: 1).animate(
-        CurvedAnimation(parent: _shakeCtrl, curve: Curves.elasticIn));
+    _shakeAnim = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.elasticIn));
   }
 
   @override
@@ -187,8 +187,8 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
                   AnimatedBuilder(
                     animation: _shakeAnim,
                     builder: (context, child) {
-                      final offset =
-                          (_shakeAnim.value * 8) * (_shakeCtrl.value < 0.5 ? -1 : 1);
+                      final offset = (_shakeAnim.value * 8) *
+                          (_shakeCtrl.value < 0.5 ? -1 : 1);
                       return Transform.translate(
                         offset: Offset(offset, 0),
                         child: child,
@@ -327,8 +327,8 @@ class _AdminPasswordPageState extends State<AdminPasswordPage>
                 letterSpacing: _obscure ? 4 : 0),
             decoration: InputDecoration(
               hintText: '* * * * * * * *',
-              hintStyle: AdminStyles.body(
-                  size: 16, color: AdminColors.textMuted),
+              hintStyle:
+                  AdminStyles.body(size: 16, color: AdminColors.textMuted),
               border: InputBorder.none,
               filled: false,
             ),
@@ -412,8 +412,8 @@ class _Aura extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: RadialGradient(
-                colors: [color, color.withValues(alpha: 0.0)]),
+            gradient:
+                RadialGradient(colors: [color, color.withValues(alpha: 0.0)]),
           ),
         ),
       );

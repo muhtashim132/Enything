@@ -37,17 +37,18 @@ class _EarningsPageState extends State<EarningsPage> {
     final auth = context.read<AuthProvider>();
     try {
       // A1: Use the highly optimized get_rider_stats RPC to prevent Payload DDOS
-      final stats = await _supabase.rpc('get_rider_stats', params: {'p_rider_id': auth.currentUserId ?? ''});
-      
+      final stats = await _supabase.rpc('get_rider_stats',
+          params: {'p_rider_id': auth.currentUserId ?? ''});
+
       double today = 0, total = 0;
       int deliveriesCount = 0;
       List<double> weeklyMap = List.filled(7, 0.0);
-      
+
       if (stats != null) {
         today = (stats['today_earnings'] as num?)?.toDouble() ?? 0.0;
         total = (stats['total_earnings'] as num?)?.toDouble() ?? 0.0;
         deliveriesCount = (stats['total_deliveries'] as num?)?.toInt() ?? 0;
-        
+
         final rawWeekly = stats['weekly_earnings'] as List<dynamic>?;
         if (rawWeekly != null && rawWeekly.length == 7) {
           weeklyMap = rawWeekly.map((e) => (e as num).toDouble()).toList();
@@ -64,7 +65,6 @@ class _EarningsPageState extends State<EarningsPage> {
           .limit(20);
 
       final deliveries = recentDeliveriesRaw as List;
-
 
       double avgRating = 0.0;
       try {
@@ -88,7 +88,10 @@ class _EarningsPageState extends State<EarningsPage> {
           _recentDeliveries = deliveries.take(20).map((d) {
             return {
               'id': d['id'],
-              'amount': ((d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0) as num).toDouble() + ((d['wait_time_penalty'] ?? 0.0) as num).toDouble(),
+              'amount':
+                  ((d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0) as num)
+                          .toDouble() +
+                      ((d['wait_time_penalty'] ?? 0.0) as num).toDouble(),
               'date': d['created_at'],
             };
           }).toList();
@@ -274,8 +277,7 @@ class _EarningsPageState extends State<EarningsPage> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final item = _recentDeliveries[index];
-                              final date =
-                                  DateTime.tryParse(item['date'] ?? '')
+                              final date = DateTime.tryParse(item['date'] ?? '')
                                       ?.toIST() ??
                                   DateTime.now();
                               return Container(
@@ -468,9 +470,8 @@ class _EarningsPageState extends State<EarningsPage> {
                               dayLabels[i],
                               style: GoogleFonts.outfit(
                                 fontSize: 11,
-                                fontWeight: isToday
-                                    ? FontWeight.w800
-                                    : FontWeight.w500,
+                                fontWeight:
+                                    isToday ? FontWeight.w800 : FontWeight.w500,
                                 color: isToday
                                     ? AppColors.primary
                                     : AppColors.textSecondary,
@@ -551,9 +552,7 @@ class _EarningsPageState extends State<EarningsPage> {
             const SizedBox(height: 8),
             Text(label,
                 style: GoogleFonts.outfit(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14)),
+                    color: color, fontWeight: FontWeight.w700, fontSize: 14)),
           ],
         ),
       ),

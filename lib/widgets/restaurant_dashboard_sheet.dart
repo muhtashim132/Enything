@@ -122,8 +122,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF7F8FC),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: _isLoading
               ? SheetSkeletonLoader(isDark: isDark)
@@ -138,8 +137,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                             SliverToBoxAdapter(
                               child: Center(
                                 child: Container(
-                                  margin: const EdgeInsets.only(
-                                      top: 12, bottom: 4),
+                                  margin:
+                                      const EdgeInsets.only(top: 12, bottom: 4),
                                   width: 44,
                                   height: 4,
                                   decoration: BoxDecoration(
@@ -219,14 +218,11 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                   : null,
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 10)
+                    color: Colors.black.withValues(alpha: 0.15), blurRadius: 10)
               ],
             ),
             child: Icon(
-              isFav
-                  ? Icons.favorite_rounded
-                  : Icons.favorite_border_rounded,
+              isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
               color: isFav ? Colors.red : AppColors.textSecondary,
               size: 20,
             ),
@@ -432,9 +428,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                       _shop!.address,
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color: isDark
-                            ? Colors.white60
-                            : AppColors.textSecondary,
+                        color:
+                            isDark ? Colors.white60 : AppColors.textSecondary,
                         height: 1.4,
                       ),
                     ),
@@ -451,14 +446,11 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
               runSpacing: 8,
               children: [
                 if (_shop!.isVegOnly)
-                  _modernBadge('Pure Veg', Icons.eco, Colors.green.shade600,
-                      isDark),
-                if (_shop!.fssaiNumber != null)
                   _modernBadge(
-                      'FSSAI: ${_shop!.fssaiNumber}',
-                      Icons.verified_outlined,
-                      Colors.blue.shade600,
-                      isDark),
+                      'Pure Veg', Icons.eco, Colors.green.shade600, isDark),
+                if (_shop!.fssaiNumber != null)
+                  _modernBadge('FSSAI: ${_shop!.fssaiNumber}',
+                      Icons.verified_outlined, Colors.blue.shade600, isDark),
                 if (_shop!.openingHours != null)
                   _modernBadge(_shop!.openingHours!, Icons.access_time_rounded,
                       Colors.grey.shade600, isDark),
@@ -519,24 +511,22 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                     style: GoogleFonts.outfit(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
+                        color:
+                            isDark ? Colors.white : const Color(0xFF1A1A2E))),
               ],
             ),
             const SizedBox(height: 3),
             Text(sub,
                 style: GoogleFonts.outfit(
                     fontSize: 11,
-                    color: isDark
-                        ? Colors.white54
-                        : AppColors.textSecondary)),
+                    color: isDark ? Colors.white54 : AppColors.textSecondary)),
           ],
         ),
       ),
     );
   }
 
-  Widget _modernBadge(
-      String label, IconData icon, Color color, bool isDark) {
+  Widget _modernBadge(String label, IconData icon, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -595,8 +585,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                   itemBuilder: (_, i) {
                     final isSelected = _selectedCategory == cats[i];
                     return GestureDetector(
-                      onTap: () =>
-                          setState(() => _selectedCategory = cats[i]),
+                      onTap: () => setState(() => _selectedCategory = cats[i]),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 220),
                         padding: const EdgeInsets.symmetric(
@@ -706,10 +695,9 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
   Widget _buildMenuItem(ProductModel product, bool isDark) {
     final cart = context.read<CartProvider>();
     final quantity = cart.getItemQuantity(product.id);
-    final isBestseller =
-        product.rating >= 4.2 && product.totalReviews > 10;
-    final hasDiscount = product.discountPercent != null &&
-        product.discountPercent! > 0;
+    final isBestseller = product.rating >= 4.2 && product.totalReviews > 10;
+    final hasDiscount =
+        product.discountPercent != null && product.discountPercent! > 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -738,8 +726,6 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-
                   // Bestseller tag
                   if (isBestseller) ...[
                     Container(
@@ -783,9 +769,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                       product.description!,
                       style: GoogleFonts.outfit(
                           fontSize: 12,
-                          color: isDark
-                              ? Colors.white54
-                              : AppColors.textSecondary,
+                          color:
+                              isDark ? Colors.white54 : AppColors.textSecondary,
                           height: 1.4),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -799,7 +784,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                         style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
-                          color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A1A2E),
                         ),
                       ),
                       if (hasDiscount) ...[
@@ -807,9 +793,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                         Text(
                           '₹${product.originalPrice!.toStringAsFixed(0)}',
                           style: GoogleFonts.outfit(
-                            color: isDark
-                                ? Colors.white38
-                                : AppColors.textLight,
+                            color:
+                                isDark ? Colors.white38 : AppColors.textLight,
                             fontSize: 12,
                             decoration: TextDecoration.lineThrough,
                           ),
@@ -819,8 +804,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF3366)
-                                .withValues(alpha: 0.1),
+                            color:
+                                const Color(0xFFFF3366).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -860,7 +845,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                     ? GestureDetector(
                         onTap: () {
                           Navigator.pop(context); // close sheet
-                          showProductDetailSheet(context, product.id, highlightVariants: true);
+                          showProductDetailSheet(context, product.id,
+                              highlightVariants: true);
                         },
                         child: Container(
                           width: 100,
@@ -874,7 +860,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                             ),
                             borderRadius: BorderRadius.circular(11),
                             border: Border.all(
-                                color: AppColors.secondary.withValues(alpha: 0.5),
+                                color:
+                                    AppColors.secondary.withValues(alpha: 0.5),
                                 width: 1.3),
                           ),
                           child: Row(
@@ -897,82 +884,86 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                     : quantity == 0
                         ? GestureDetector(
                             onTap: () {
-                          cart.addItemWithFeedback(context, product, _shop!);
-                          setState(() {});
-                        },
-                        child: Container(
-                          width: 100,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.secondary.withValues(alpha: 0.07),
-                                AppColors.secondary.withValues(alpha: 0.12),
+                              cart.addItemWithFeedback(
+                                  context, product, _shop!);
+                              setState(() {});
+                            },
+                            child: Container(
+                              width: 100,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppColors.secondary.withValues(alpha: 0.07),
+                                    AppColors.secondary.withValues(alpha: 0.12),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(11),
+                                border: Border.all(
+                                    color: AppColors.secondary
+                                        .withValues(alpha: 0.5),
+                                    width: 1.3),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.add_rounded,
+                                      size: 14, color: AppColors.secondary),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'ADD',
+                                    style: GoogleFonts.outfit(
+                                        color: AppColors.secondary,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : Container(
+                            width: 100,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              gradient: AppColors.ctaGradient,
+                              borderRadius: BorderRadius.circular(11),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: AppColors.secondary
+                                        .withValues(alpha: 0.35),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4)),
                               ],
                             ),
-                            borderRadius: BorderRadius.circular(11),
-                            border: Border.all(
-                                color: AppColors.secondary.withValues(alpha: 0.5),
-                                width: 1.3),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.add_rounded,
-                                  size: 14, color: AppColors.secondary),
-                              const SizedBox(width: 3),
-                              Text(
-                                'ADD',
-                                style: GoogleFonts.outfit(
-                                    color: AppColors.secondary,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : Container(
-                        width: 100,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.ctaGradient,
-                          borderRadius: BorderRadius.circular(11),
-                          boxShadow: [
-                            BoxShadow(
-                                color: AppColors.secondary
-                                    .withValues(alpha: 0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4)),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                cart.updateQuantity(product.id, quantity - 1);
-                                setState(() {});
-                              },
-                              child: const Icon(Icons.remove_rounded,
-                                  color: Colors.white, size: 18),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                GestureDetector(
+                                  onTap: () {
+                                    cart.updateQuantity(
+                                        product.id, quantity - 1);
+                                    setState(() {});
+                                  },
+                                  child: const Icon(Icons.remove_rounded,
+                                      color: Colors.white, size: 18),
+                                ),
+                                Text('$quantity',
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14)),
+                                GestureDetector(
+                                  onTap: () {
+                                    cart.addItemWithFeedback(
+                                        context, product, _shop!);
+                                    setState(() {});
+                                  },
+                                  child: const Icon(Icons.add_rounded,
+                                      color: Colors.white, size: 18),
+                                ),
+                              ],
                             ),
-                            Text('$quantity',
-                                style: GoogleFonts.outfit(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 14)),
-                            GestureDetector(
-                              onTap: () {
-                                cart.addItemWithFeedback(context, product, _shop!);
-                                setState(() {});
-                              },
-                              child: const Icon(Icons.add_rounded,
-                                  color: Colors.white, size: 18),
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
               ],
             ),
           ],
@@ -1030,13 +1021,13 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.2)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: Text(
                   '${cart.totalItemCount} item${cart.totalItemCount > 1 ? 's' : ''}',

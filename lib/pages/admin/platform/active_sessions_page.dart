@@ -61,11 +61,11 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
   Future<void> _revokeSession(String sessionId, String adminId) async {
     final authProvider = context.read<AuthProvider>();
     final currentAdminId = authProvider.currentUserId;
-    
+
     // Prevent revoking current session (checked in UI too)
     if (sessionId == authProvider.currentSessionId) {
-       _showSnack('You cannot revoke your current active session.', error: true);
-       return;
+      _showSnack('You cannot revoke your current active session.', error: true);
+      return;
     }
 
     try {
@@ -118,7 +118,7 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
         'revoked_at': DateTime.now().toIso8601String(),
         'revoked_by': currentAdminId,
       }).inFilter('id', toRevoke);
-      
+
       // Audit Log
       try {
         await _db.from('audit_logs').insert({
@@ -133,7 +133,7 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
       setState(() {
         _sessions.removeWhere((s) => s['id'] != currentSessionId);
       });
-      
+
       _showSnack('Successfully revoked ${toRevoke.length} other session(s).');
     } catch (e) {
       _showSnack('Failed to revoke sessions: $e', error: true);
@@ -167,14 +167,16 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AdminColors.textMuted),
+            icon:
+                const Icon(Icons.refresh_rounded, color: AdminColors.textMuted),
             onPressed: _fetchSessions,
             tooltip: 'Refresh',
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AdminColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AdminColors.primary))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -184,11 +186,13 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
                   decoration: BoxDecoration(
                     color: AdminColors.danger.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AdminColors.danger.withValues(alpha: 0.3)),
+                    border: Border.all(
+                        color: AdminColors.danger.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.security_rounded, color: AdminColors.danger, size: 20),
+                      const Icon(Icons.security_rounded,
+                          color: AdminColors.danger, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -199,23 +203,27 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
                     ],
                   ),
                 ),
-                
+
                 if (rbac.isSuperAdmin && _sessions.length > 1) ...[
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
                       onPressed: _revokeAllOtherSessions,
-                      icon: const Icon(Icons.logout_rounded, size: 16, color: AdminColors.danger),
-                      label: Text('Revoke All Others', style: AdminStyles.label(color: AdminColors.danger)),
+                      icon: const Icon(Icons.logout_rounded,
+                          size: 16, color: AdminColors.danger),
+                      label: Text('Revoke All Others',
+                          style: AdminStyles.label(color: AdminColors.danger)),
                       style: TextButton.styleFrom(
-                        backgroundColor: AdminColors.danger.withValues(alpha: 0.1),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        backgroundColor:
+                            AdminColors.danger.withValues(alpha: 0.1),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ),
                 ],
-                
+
                 const SizedBox(height: 16),
 
                 if (_sessions.isEmpty)
@@ -226,7 +234,10 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
                 else
                   ..._sessions.map((session) {
                     final isCurrent = session['id'] == currentSessionId;
-                    return _buildSessionCard(session, isCurrent).animate().fadeIn(delay: 50.ms).slideX(begin: -0.05);
+                    return _buildSessionCard(session, isCurrent)
+                        .animate()
+                        .fadeIn(delay: 50.ms)
+                        .slideX(begin: -0.05);
                   }),
               ],
             ),
@@ -237,7 +248,7 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
     final adminUser = session['admin_users'] as Map<String, dynamic>?;
     final fullName = adminUser?['full_name'] ?? 'Unknown Admin';
     final roleName = adminUser?['role']?['name'] ?? 'No Role';
-    
+
     final loggedInAt = DateTime.parse(session['logged_in_at']);
     final lastSeenAt = DateTime.parse(session['last_seen_at']);
     final deviceInfo = session['device_info'] ?? 'Unknown Device';
@@ -248,10 +259,14 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isCurrent ? AdminColors.primary.withValues(alpha: 0.05) : AdminColors.cardBg,
+        color: isCurrent
+            ? AdminColors.primary.withValues(alpha: 0.05)
+            : AdminColors.cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isCurrent ? AdminColors.primary.withValues(alpha: 0.3) : AdminColors.cardBorder,
+          color: isCurrent
+              ? AdminColors.primary.withValues(alpha: 0.3)
+              : AdminColors.cardBorder,
         ),
       ),
       child: Column(
@@ -261,7 +276,8 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: isCurrent ? AdminColors.primary : AdminColors.surfaceHigh,
+                backgroundColor:
+                    isCurrent ? AdminColors.primary : AdminColors.surfaceHigh,
                 child: Text(
                   fullName.substring(0, 1).toUpperCase(),
                   style: AdminStyles.title(color: Colors.white),
@@ -277,19 +293,26 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
                         Text(fullName, style: AdminStyles.body(size: 15)),
                         if (isCurrent) ...[
                           const SizedBox(width: 8),
-                          const AdminBadge(label: 'CURRENT', color: AdminColors.success, fontSize: 9),
+                          const AdminBadge(
+                              label: 'CURRENT',
+                              color: AdminColors.success,
+                              fontSize: 9),
                         ],
                       ],
                     ),
-                    Text(roleName, style: AdminStyles.caption(color: AdminColors.textMuted)),
+                    Text(roleName,
+                        style:
+                            AdminStyles.caption(color: AdminColors.textMuted)),
                   ],
                 ),
               ),
               if (!isCurrent)
                 IconButton(
-                  icon: const Icon(Icons.cancel_rounded, color: AdminColors.textMuted, size: 20),
+                  icon: const Icon(Icons.cancel_rounded,
+                      color: AdminColors.textMuted, size: 20),
                   tooltip: 'Revoke Session',
-                  onPressed: () => _showRevokeDialog(sessionId, adminId, fullName),
+                  onPressed: () =>
+                      _showRevokeDialog(sessionId, adminId, fullName),
                 ),
             ],
           ),
@@ -299,10 +322,13 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.devices_rounded, size: 16, color: AdminColors.textMuted),
+              const Icon(Icons.devices_rounded,
+                  size: 16, color: AdminColors.textMuted),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(deviceInfo, style: AdminStyles.caption(color: AdminColors.textSecondary)),
+                child: Text(deviceInfo,
+                    style:
+                        AdminStyles.caption(color: AdminColors.textSecondary)),
               ),
             ],
           ),
@@ -314,7 +340,8 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Logged In', style: AdminStyles.label()),
-                    Text(timeago.format(loggedInAt), style: AdminStyles.caption()),
+                    Text(timeago.format(loggedInAt),
+                        style: AdminStyles.caption()),
                   ],
                 ),
               ),
@@ -323,7 +350,8 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Last Seen', style: AdminStyles.label()),
-                    Text(timeago.format(lastSeenAt), style: AdminStyles.caption()),
+                    Text(timeago.format(lastSeenAt),
+                        style: AdminStyles.caption()),
                   ],
                 ),
               ),
@@ -348,14 +376,16 @@ class _ActiveSessionsPageState extends State<ActiveSessionsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: AdminStyles.body(color: AdminColors.textMuted)),
+            child: Text('Cancel',
+                style: AdminStyles.body(color: AdminColors.textMuted)),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               _revokeSession(sessionId, adminId);
             },
-            child: Text('Revoke', style: AdminStyles.body(color: AdminColors.danger)),
+            child: Text('Revoke',
+                style: AdminStyles.body(color: AdminColors.danger)),
           ),
         ],
       ),

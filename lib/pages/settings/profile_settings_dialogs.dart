@@ -37,8 +37,8 @@ void showAddEditAddressDialog(BuildContext context,
   final seedLocation = existingAddress?.hasValidCoordinates == true
       ? existingAddress!.location
       : locProv.currentLocation;
-  final seedAddress =
-      existingAddress?.address ?? (locProv.rawAddress != 'Fetching address...' ? locProv.rawAddress : null);
+  final seedAddress = existingAddress?.address ??
+      (locProv.rawAddress != 'Fetching address...' ? locProv.rawAddress : null);
 
   final result = await Navigator.push<MapPickResult?>(
     context,
@@ -78,8 +78,10 @@ void _showAddressDetailSheet(
   required LocationProvider locProv,
   required dynamic pickedLocation,
   required String pickedAddress,
+
   /// House/Building name captured on the map page (takes priority over locProv)
   String houseFromMap = '',
+
   /// Landmark captured on the map page (takes priority over locProv)
   String landmarkFromMap = '',
   SavedAddress? existingAddress,
@@ -95,8 +97,8 @@ void _showAddressDetailSheet(
       text: landmarkFromMap.isNotEmpty
           ? landmarkFromMap
           : (existingAddress?.landmark ?? locProv.landmark));
-  final pincodeCtrl = TextEditingController(
-      text: existingAddress?.pincode ?? locProv.pincode);
+  final pincodeCtrl =
+      TextEditingController(text: existingAddress?.pincode ?? locProv.pincode);
   final customLabelCtrl =
       TextEditingController(text: existingAddress?.customLabel ?? '');
 
@@ -155,8 +157,7 @@ void _showAddressDetailSheet(
                         IconButton(
                           onPressed: () => Navigator.pop(ctx),
                           icon: Icon(Icons.close_rounded,
-                              color:
-                                  isDark ? Colors.white54 : Colors.grey),
+                              color: isDark ? Colors.white54 : Colors.grey),
                         ),
                       ],
                     ),
@@ -172,16 +173,14 @@ void _showAddressDetailSheet(
                             : Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                            color: isDark
-                                ? Colors.white12
-                                : Colors.grey.shade200),
+                            color:
+                                isDark ? Colors.white12 : Colors.grey.shade200),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(Icons.location_on_rounded,
-                              color: Theme.of(context).primaryColor,
-                              size: 18),
+                              color: Theme.of(context).primaryColor, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
@@ -192,9 +191,8 @@ void _showAddressDetailSheet(
                                   style: GoogleFonts.outfit(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: isDark
-                                        ? Colors.white
-                                        : Colors.black87,
+                                    color:
+                                        isDark ? Colors.white : Colors.black87,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -203,8 +201,7 @@ void _showAddressDetailSheet(
                                 Row(
                                   children: [
                                     Icon(Icons.check_circle_outline,
-                                        size: 12,
-                                        color: Colors.green.shade600),
+                                        size: 12, color: Colors.green.shade600),
                                     const SizedBox(width: 4),
                                     Text(
                                       'Location pinned on map',
@@ -238,8 +235,7 @@ void _showAddressDetailSheet(
                       children: labels.map((label) {
                         final isSelected = selectedLabel == label;
                         return GestureDetector(
-                          onTap: () =>
-                              setState(() => selectedLabel = label),
+                          onTap: () => setState(() => selectedLabel = label),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             padding: const EdgeInsets.symmetric(
@@ -264,8 +260,7 @@ void _showAddressDetailSheet(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(labelIcons[label] ?? '📍',
-                                    style:
-                                        const TextStyle(fontSize: 16)),
+                                    style: const TextStyle(fontSize: 16)),
                                 const SizedBox(width: 6),
                                 Text(
                                   label,
@@ -294,7 +289,11 @@ void _showAddressDetailSheet(
                       TextField(
                         controller: customLabelCtrl,
                         maxLength: 50,
-                        buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                        buildCounter: (BuildContext context,
+                                {int? currentLength,
+                                int? maxLength,
+                                bool? isFocused}) =>
+                            null,
                         decoration: InputDecoration(
                           labelText: 'Custom label name',
                           hintText: 'e.g. Gym, College, Friend\'s place',
@@ -309,7 +308,11 @@ void _showAddressDetailSheet(
                     TextField(
                       controller: flatCtrl,
                       maxLength: 100,
-                      buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                      buildCounter: (BuildContext context,
+                              {int? currentLength,
+                              int? maxLength,
+                              bool? isFocused}) =>
+                          null,
                       decoration: InputDecoration(
                         labelText: 'House No. / Building Name *',
                         hintText: 'e.g. A-404, Green Valley Apartments',
@@ -323,7 +326,11 @@ void _showAddressDetailSheet(
                     TextField(
                       controller: landmarkCtrl,
                       maxLength: 150,
-                      buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                      buildCounter: (BuildContext context,
+                              {int? currentLength,
+                              int? maxLength,
+                              bool? isFocused}) =>
+                          null,
                       decoration: InputDecoration(
                         labelText: 'Landmark *',
                         hintText: 'e.g. Near City Mall, Opp. Police Station',
@@ -338,7 +345,11 @@ void _showAddressDetailSheet(
                       controller: pincodeCtrl,
                       keyboardType: TextInputType.number,
                       maxLength: 10,
-                      buildCounter: (BuildContext context, { int? currentLength, int? maxLength, bool? isFocused }) => null,
+                      buildCounter: (BuildContext context,
+                              {int? currentLength,
+                              int? maxLength,
+                              bool? isFocused}) =>
+                          null,
                       decoration: InputDecoration(
                         labelText: 'Pincode',
                         hintText: 'e.g. 400001',
@@ -370,8 +381,7 @@ void _showAddressDetailSheet(
 
                           String? error;
                           if (existingAddress != null) {
-                            error =
-                                await locProv.updateSavedAddress(addr);
+                            error = await locProv.updateSavedAddress(addr);
                           } else {
                             error = await locProv.addSavedAddress(addr);
                           }
@@ -393,23 +403,28 @@ void _showAddressDetailSheet(
                               );
                               final messenger = ScaffoldMessenger.of(ctx);
                               Navigator.pop(ctx);
-                              
+
                               messenger.showSnackBar(
                                 SnackBar(
                                   behavior: SnackBarBehavior.floating,
-                                  margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+                                  margin: const EdgeInsets.only(
+                                      bottom: 24, left: 16, right: 16),
                                   backgroundColor: Colors.green.shade700,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
                                   content: Row(
                                     children: [
-                                      const Icon(Icons.check_circle_outline, color: Colors.white),
+                                      const Icon(Icons.check_circle_outline,
+                                          color: Colors.white),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          existingAddress != null 
-                                            ? 'Address updated successfully!' 
-                                            : 'Address saved successfully!',
-                                          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
+                                          existingAddress != null
+                                              ? 'Address updated successfully!'
+                                              : 'Address saved successfully!',
+                                          style: GoogleFonts.outfit(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w500),
                                         ),
                                       ),
                                     ],
@@ -421,8 +436,7 @@ void _showAddressDetailSheet(
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 56),
-                          backgroundColor:
-                              Theme.of(context).primaryColor,
+                          backgroundColor: Theme.of(context).primaryColor,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -468,34 +482,34 @@ void showBusinessHoursDialog(BuildContext context) {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          Text('Business Hours',
-              style: GoogleFonts.outfit(
-                  fontSize: 20, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
-          TextField(
-              controller: openCtrl,
-              decoration: const InputDecoration(
-                  labelText: 'Opening Time', hintText: 'e.g. 09:00 AM')),
-          const SizedBox(height: 16),
-          TextField(
-              controller: closeCtrl,
-              decoration: const InputDecoration(
-                  labelText: 'Closing Time', hintText: 'e.g. 10:00 PM')),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () async {
-              await Supabase.instance.client.from('shops').update({
-                // BUG-17 FIX: Schema expects a single 'opening_hours' string
-                'opening_hours':
-                    '${openCtrl.text.trim()} - ${closeCtrl.text.trim()}'
-              }).eq('seller_id', auth.currentUserId!);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 56)),
-            child: const Text('Save Hours'),
-          ),
-        ],
+            Text('Business Hours',
+                style: GoogleFonts.outfit(
+                    fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 20),
+            TextField(
+                controller: openCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Opening Time', hintText: 'e.g. 09:00 AM')),
+            const SizedBox(height: 16),
+            TextField(
+                controller: closeCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Closing Time', hintText: 'e.g. 10:00 PM')),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () async {
+                await Supabase.instance.client.from('shops').update({
+                  // BUG-17 FIX: Schema expects a single 'opening_hours' string
+                  'opening_hours':
+                      '${openCtrl.text.trim()} - ${closeCtrl.text.trim()}'
+                }).eq('seller_id', auth.currentUserId!);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 56)),
+              child: const Text('Save Hours'),
+            ),
+          ],
         ),
       ),
     ),
@@ -515,12 +529,8 @@ void showPayoutSettingsDialog(
     builder: (ctx) {
       return FutureBuilder(
           future: table == 'shops'
-              ? Supabase.instance.client
-                  .rpc('get_my_shop_kyc')
-                  .maybeSingle()
-              : Supabase.instance.client
-                  .rpc('get_my_rider_kyc')
-                  .maybeSingle(),
+              ? Supabase.instance.client.rpc('get_my_shop_kyc').maybeSingle()
+              : Supabase.instance.client.rpc('get_my_rider_kyc').maybeSingle(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(
@@ -541,66 +551,65 @@ void showPayoutSettingsDialog(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                  Text('Bank Details (Payouts)',
-                      style: GoogleFonts.outfit(
-                          fontSize: 20, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline,
-                            color: Colors.blue, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'These details were verified during signup and cannot be edited. Please contact support to change your payout settings.',
-                            style: GoogleFonts.outfit(
-                                fontSize: 12,
-                                color: Colors.blue.shade800),
+                    Text('Bank Details (Payouts)',
+                        style: GoogleFonts.outfit(
+                            fontSize: 20, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline,
+                              color: Colors.blue, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'These details were verified during signup and cannot be edited. Please contact support to change your payout settings.',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 12, color: Colors.blue.shade800),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                      controller: TextEditingController(text: holder),
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                          labelText: 'Account Holder Name',
-                          filled: true,
-                          fillColor: Color(0xFFF5F5F5))),
-                  const SizedBox(height: 16),
-                  TextField(
-                      controller: TextEditingController(text: acc),
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                          labelText: 'Account Number',
-                          filled: true,
-                          fillColor: Color(0xFFF5F5F5))),
-                  const SizedBox(height: 16),
-                  TextField(
-                      controller: TextEditingController(text: ifsc),
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                          labelText: 'IFSC Code',
-                          filled: true,
-                          fillColor: Color(0xFFF5F5F5))),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 56),
-                        backgroundColor: Colors.grey.shade200,
-                        foregroundColor: Colors.black87),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 20),
+                    TextField(
+                        controller: TextEditingController(text: holder),
+                        readOnly: true,
+                        decoration: const InputDecoration(
+                            labelText: 'Account Holder Name',
+                            filled: true,
+                            fillColor: Color(0xFFF5F5F5))),
+                    const SizedBox(height: 16),
+                    TextField(
+                        controller: TextEditingController(text: acc),
+                        readOnly: true,
+                        decoration: const InputDecoration(
+                            labelText: 'Account Number',
+                            filled: true,
+                            fillColor: Color(0xFFF5F5F5))),
+                    const SizedBox(height: 16),
+                    TextField(
+                        controller: TextEditingController(text: ifsc),
+                        readOnly: true,
+                        decoration: const InputDecoration(
+                            labelText: 'IFSC Code',
+                            filled: true,
+                            fillColor: Color(0xFFF5F5F5))),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 56),
+                          backgroundColor: Colors.grey.shade200,
+                          foregroundColor: Colors.black87),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
               ),
             );
           });
@@ -615,8 +624,7 @@ void showDocumentsDialog(BuildContext context) {
   showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) =>
-          const Center(child: CircularProgressIndicator()));
+      builder: (_) => const Center(child: CircularProgressIndicator()));
 
   Supabase.instance.client
       .from('delivery_partners')
@@ -630,8 +638,7 @@ void showDocumentsDialog(BuildContext context) {
         context: context,
         isScrollControlled: true,
         shape: const RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.vertical(top: Radius.circular(24))),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
         builder: (ctx) {
           final isDark = Theme.of(ctx).brightness == Brightness.dark;
           return Padding(
@@ -645,43 +652,34 @@ void showDocumentsDialog(BuildContext context) {
                   Text('KYC Documents',
                       style: GoogleFonts.outfit(
                           fontSize: 20, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 24),
-                _buildReadOnlyFieldDialog(
-                    'Aadhaar Number',
-                    res['aadhar_number'] ?? 'Not provided',
-                    isDark),
-                const SizedBox(height: 16),
-                _buildReadOnlyFieldDialog(
-                    'PAN Number',
-                    res['pan_number'] ?? 'Not provided',
-                    isDark),
-                const SizedBox(height: 16),
-                _buildReadOnlyFieldDialog(
-                    'Driving License',
-                    res['driving_license'] ?? 'Not provided',
-                    isDark),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          Theme.of(context).primaryColor,
-                      foregroundColor: Colors.white,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
+                  const SizedBox(height: 24),
+                  _buildReadOnlyFieldDialog('Aadhaar Number',
+                      res['aadhar_number'] ?? 'Not provided', isDark),
+                  const SizedBox(height: 16),
+                  _buildReadOnlyFieldDialog('PAN Number',
+                      res['pan_number'] ?? 'Not provided', isDark),
+                  const SizedBox(height: 16),
+                  _buildReadOnlyFieldDialog('Driving License',
+                      res['driving_license'] ?? 'Not provided', isDark),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: Text('Close',
+                          style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700, fontSize: 16)),
                     ),
-                    child: Text('Close',
-                        style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16)),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             ),
           );
         },
@@ -689,8 +687,7 @@ void showDocumentsDialog(BuildContext context) {
     } else {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Document details not found.')));
+            const SnackBar(content: Text('Document details not found.')));
       }
     }
   }).catchError((_) {
@@ -701,7 +698,8 @@ void showDocumentsDialog(BuildContext context) {
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
           backgroundColor: Colors.redAccent.shade700,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           content: Row(
             children: [
               const Icon(Icons.error_outline, color: Colors.white),
@@ -709,7 +707,8 @@ void showDocumentsDialog(BuildContext context) {
               Expanded(
                 child: Text(
                   'Permission denied: Ask admin to grant SELECT on KYC columns.',
-                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.outfit(
+                      color: Colors.white, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -720,8 +719,7 @@ void showDocumentsDialog(BuildContext context) {
   });
 }
 
-Widget _buildReadOnlyFieldDialog(
-    String label, String value, bool isDark) {
+Widget _buildReadOnlyFieldDialog(String label, String value, bool isDark) {
   return Container(
     width: double.infinity,
     padding: const EdgeInsets.all(16),
@@ -730,8 +728,7 @@ Widget _buildReadOnlyFieldDialog(
           ? Colors.white.withValues(alpha: 0.05)
           : Colors.black.withValues(alpha: 0.03),
       borderRadius: BorderRadius.circular(12),
-      border:
-          Border.all(color: isDark ? Colors.white12 : Colors.black12),
+      border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -752,8 +749,7 @@ Widget _buildReadOnlyFieldDialog(
   );
 }
 
-void showGenericInfoDialog(
-    BuildContext context, String title, String content) {
+void showGenericInfoDialog(BuildContext context, String title, String content) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -761,9 +757,7 @@ void showGenericInfoDialog(
           Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
       content: Text(content),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'))
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))
       ],
     ),
   );
@@ -827,14 +821,15 @@ class _BellNotifSettingsSheet extends StatefulWidget {
   });
 
   @override
-  State<_BellNotifSettingsSheet> createState() => _BellNotifSettingsSheetState();
+  State<_BellNotifSettingsSheet> createState() =>
+      _BellNotifSettingsSheetState();
 }
 
 class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
-  bool _isLoading   = true;
+  bool _isLoading = true;
   bool _orderUpdates = true;
-  bool _promoOffers  = true;
-  bool _sysAlerts    = true;
+  bool _promoOffers = true;
+  bool _sysAlerts = true;
   bool _loopBellEnabled = true;
   String? _customBellPath;
   bool _isPickingFile = false;
@@ -865,12 +860,12 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
         setState(() {
           if (res != null) {
             _orderUpdates = res['notif_orders'] as bool? ?? true;
-            _promoOffers  = res['notif_promos'] as bool? ?? true;
-            _sysAlerts    = res['notif_system'] as bool? ?? true;
+            _promoOffers = res['notif_promos'] as bool? ?? true;
+            _sysAlerts = res['notif_system'] as bool? ?? true;
           }
           _loopBellEnabled = loopEnabled;
-          _customBellPath  = customPath;
-          _isLoading       = false;
+          _customBellPath = customPath;
+          _isLoading = false;
         });
       }
     } catch (e) {
@@ -878,15 +873,14 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
     }
   }
 
-  static const _audioPicker =
-      MethodChannel('com.enything/audio_picker');
+  static const _audioPicker = MethodChannel('com.enything/audio_picker');
 
   Future<void> _pickBellSound() async {
     setState(() => _isPickingFile = true);
     try {
       // Invoke native audio picker (MainActivity MethodChannel)
-      final uriString = await _audioPicker
-          .invokeMethod<String?>('pickAudioFile');
+      final uriString =
+          await _audioPicker.invokeMethod<String?>('pickAudioFile');
 
       if (uriString != null && uriString.isNotEmpty && mounted) {
         await BellSettingsService.instance
@@ -909,7 +903,7 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).primaryColor;
 
     return ListView(
@@ -953,7 +947,7 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
               ),
               const SizedBox(height: 24),
 
-              if (_isLoading) ...[       
+              if (_isLoading) ...[
                 const Center(
                   heightFactor: 3,
                   child: CircularProgressIndicator(),
@@ -972,8 +966,7 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
                     setState(() => _orderUpdates = val);
                     await Supabase.instance.client
                         .from('profiles')
-                        .update({'notif_orders': val})
-                        .eq('id', widget.userId);
+                        .update({'notif_orders': val}).eq('id', widget.userId);
                   },
                 ),
                 _switchTile(
@@ -986,8 +979,7 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
                     setState(() => _promoOffers = val);
                     await Supabase.instance.client
                         .from('profiles')
-                        .update({'notif_promos': val})
-                        .eq('id', widget.userId);
+                        .update({'notif_promos': val}).eq('id', widget.userId);
                   },
                 ),
                 _switchTile(
@@ -1000,8 +992,7 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
                     setState(() => _sysAlerts = val);
                     await Supabase.instance.client
                         .from('profiles')
-                        .update({'notif_system': val})
-                        .eq('id', widget.userId);
+                        .update({'notif_system': val}).eq('id', widget.userId);
                   },
                 ),
 
@@ -1013,7 +1004,7 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
                 _sectionLabel('Alert Bell', isDark),
                 const SizedBox(height: 8),
 
-                if (_isSellerOrRider) ...[        
+                if (_isSellerOrRider) ...[
                   // Continuous bell toggle (sellers & riders only)
                   _switchTile(
                     context: context,
@@ -1051,7 +1042,8 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
                     ),
                     elevation: 0,
                   ),
-                  child: Text('Done', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                  child: Text('Done',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1162,7 +1154,8 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
               Expanded(
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.play_arrow_rounded, size: 16),
-                  label: Text('Preview', style: GoogleFonts.outfit(fontSize: 13)),
+                  label:
+                      Text('Preview', style: GoogleFonts.outfit(fontSize: 13)),
                   onPressed: () => BellAlertService.instance.previewBell(),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: primary,
@@ -1185,7 +1178,8 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.folder_open_rounded, size: 16),
-                  label: Text('Change', style: GoogleFonts.outfit(fontSize: 13)),
+                  label:
+                      Text('Change', style: GoogleFonts.outfit(fontSize: 13)),
                   onPressed: _isPickingFile ? null : _pickBellSound,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: primary,
@@ -1219,8 +1213,8 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
             const SizedBox(height: 6),
             Text(
               '\u24D8  This sound plays when a new order needs your attention.',
-              style: GoogleFonts.outfit(
-                  fontSize: 11, color: Colors.grey.shade500),
+              style:
+                  GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500),
             ),
           ],
         ],
@@ -1228,4 +1222,3 @@ class _BellNotifSettingsSheetState extends State<_BellNotifSettingsSheet> {
     );
   }
 }
-

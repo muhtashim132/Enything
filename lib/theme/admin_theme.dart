@@ -75,20 +75,33 @@ class AdminGradients {
 class AdminStyles {
   AdminStyles._();
 
-  static TextStyle heading({double size = 26, Color color = AdminColors.textPrimary}) =>
-      GoogleFonts.poppins(fontSize: size, fontWeight: FontWeight.w700, color: color);
+  static TextStyle heading(
+          {double size = 26, Color color = AdminColors.textPrimary}) =>
+      GoogleFonts.poppins(
+          fontSize: size, fontWeight: FontWeight.w700, color: color);
 
-  static TextStyle title({double size = 18, Color color = AdminColors.textPrimary}) =>
-      GoogleFonts.poppins(fontSize: size, fontWeight: FontWeight.w600, color: color);
+  static TextStyle title(
+          {double size = 18, Color color = AdminColors.textPrimary}) =>
+      GoogleFonts.poppins(
+          fontSize: size, fontWeight: FontWeight.w600, color: color);
 
-  static TextStyle body({double size = 14, Color color = AdminColors.textPrimary}) =>
-      GoogleFonts.poppins(fontSize: size, fontWeight: FontWeight.w400, color: color);
+  static TextStyle body(
+          {double size = 14, Color color = AdminColors.textPrimary}) =>
+      GoogleFonts.poppins(
+          fontSize: size, fontWeight: FontWeight.w400, color: color);
 
-  static TextStyle caption({double size = 12, Color color = AdminColors.textSecondary}) =>
-      GoogleFonts.poppins(fontSize: size, fontWeight: FontWeight.w400, color: color);
+  static TextStyle caption(
+          {double size = 12, Color color = AdminColors.textSecondary}) =>
+      GoogleFonts.poppins(
+          fontSize: size, fontWeight: FontWeight.w400, color: color);
 
-  static TextStyle label({double size = 11, Color color = AdminColors.textMuted}) =>
-      GoogleFonts.poppins(fontSize: size, fontWeight: FontWeight.w500, color: color, letterSpacing: 0.5);
+  static TextStyle label(
+          {double size = 11, Color color = AdminColors.textMuted}) =>
+      GoogleFonts.poppins(
+          fontSize: size,
+          fontWeight: FontWeight.w500,
+          color: color,
+          letterSpacing: 0.5);
 }
 
 // ── Reusable Decoration ──────────────────────────────────────────
@@ -104,17 +117,20 @@ class AdminDecorations {
       BoxDecoration(
         color: bgColor ?? AdminColors.cardBg,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? AdminColors.cardBorder, width: 1),
-        boxShadow: shadows ?? [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border:
+            Border.all(color: borderColor ?? AdminColors.cardBorder, width: 1),
+        boxShadow: shadows ??
+            [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
       );
 
-  static BoxDecoration gradientCard(LinearGradient gradient, {double radius = 20}) =>
+  static BoxDecoration gradientCard(LinearGradient gradient,
+          {double radius = 20}) =>
       BoxDecoration(
         gradient: gradient,
         borderRadius: BorderRadius.circular(radius),
@@ -157,7 +173,8 @@ class AdminCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: padding ?? const EdgeInsets.all(16),
-      decoration: AdminDecorations.glassCard(radius: radius, bgColor: bgColor, borderColor: borderColor),
+      decoration: AdminDecorations.glassCard(
+          radius: radius, bgColor: bgColor, borderColor: borderColor),
       child: child,
     );
   }
@@ -194,7 +211,11 @@ class AdminBadge extends StatelessWidget {
   final Color color;
   final double fontSize;
 
-  const AdminBadge({super.key, required this.label, required this.color, this.fontSize = 10});
+  const AdminBadge(
+      {super.key,
+      required this.label,
+      required this.color,
+      this.fontSize = 10});
 
   @override
   Widget build(BuildContext context) {
@@ -304,9 +325,11 @@ class _KpiSkeleton extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-            width: 36, height: 36,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-                color: Colors.white12, borderRadius: BorderRadius.circular(12))),
+                color: Colors.white12,
+                borderRadius: BorderRadius.circular(12))),
         const Spacer(),
         Container(width: 80, height: 20, color: Colors.white12),
         const SizedBox(height: 6),

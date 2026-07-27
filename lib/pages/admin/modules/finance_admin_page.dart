@@ -36,7 +36,8 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this, initialIndex: widget.initialTabIndex);
+    _tabs = TabController(
+        length: 4, vsync: this, initialIndex: widget.initialTabIndex);
     _fetch();
   }
 
@@ -57,14 +58,20 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
         _pendingSettlements = res['pending_settlements'] as int;
       }
 
-      final orders = await _db.from('orders').select(
-          'id, grand_total_collected, created_at, status, payment_status, refund_id, refund_status')
+      final orders = await _db
+          .from('orders')
+          .select(
+              'id, grand_total_collected, created_at, status, payment_status, refund_id, refund_status')
           .order('created_at', ascending: false)
           .limit(100);
       _transactions = List<Map<String, dynamic>>.from(orders);
 
       try {
-        final wList = await _db.from('withdrawals').select('*, profiles:user_id(full_name)').order('requested_at', ascending: false).limit(100);
+        final wList = await _db
+            .from('withdrawals')
+            .select('*, profiles:user_id(full_name)')
+            .order('requested_at', ascending: false)
+            .limit(100);
         _withdrawals = List<Map<String, dynamic>>.from(wList);
       } catch (e) {
         debugPrint('Withdrawals error: $e');
@@ -82,7 +89,8 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
     if (!rbac.isSuperAdmin && !rbac.can('finance.view')) {
       return const ForbiddenPage(fullPage: false);
     }
-    final rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final rupee =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final fmt = NumberFormat.compact(locale: 'en_IN');
 
     return Column(
@@ -96,19 +104,33 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
             children: [
               _FinanceKpi('Total GMV', _loading ? '—' : rupee.format(_gmv),
                   Icons.trending_up_rounded, AdminGradients.primary),
-              _FinanceKpi('Pure Profit', _loading ? '—' : rupee.format(_pureProfit),
-                  Icons.account_balance_wallet_rounded, AdminGradients.success),
-              _FinanceKpi('Seller Payouts', _loading ? '—' : rupee.format(_sellerPayouts),
-                  Icons.store_rounded, AdminGradients.warning),
-              _FinanceKpi('Rider Earnings', _loading ? '—' : rupee.format(_riderEarnings),
-                  Icons.delivery_dining_rounded, AdminGradients.info),
-              _FinanceKpi('Settlements', _loading ? '—' : fmt.format(_pendingSettlements),
-                  Icons.account_balance_rounded, AdminGradients.danger),
+              _FinanceKpi(
+                  'Pure Profit',
+                  _loading ? '—' : rupee.format(_pureProfit),
+                  Icons.account_balance_wallet_rounded,
+                  AdminGradients.success),
+              _FinanceKpi(
+                  'Seller Payouts',
+                  _loading ? '—' : rupee.format(_sellerPayouts),
+                  Icons.store_rounded,
+                  AdminGradients.warning),
+              _FinanceKpi(
+                  'Rider Earnings',
+                  _loading ? '—' : rupee.format(_riderEarnings),
+                  Icons.delivery_dining_rounded,
+                  AdminGradients.info),
+              _FinanceKpi(
+                  'Settlements',
+                  _loading ? '—' : fmt.format(_pendingSettlements),
+                  Icons.account_balance_rounded,
+                  AdminGradients.danger),
             ]
                 .asMap()
                 .entries
-                .map((e) =>
-                    e.value.animate().fadeIn(delay: Duration(milliseconds: e.key * 70)).slideX(begin: 0.2))
+                .map((e) => e.value
+                    .animate()
+                    .fadeIn(delay: Duration(milliseconds: e.key * 70))
+                    .slideX(begin: 0.2))
                 .toList(),
           ),
         ),
@@ -148,7 +170,10 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
             controller: _tabs,
             children: [
               _TransactionsTab(transactions: _transactions, loading: _loading),
-              _WithdrawalsTab(withdrawals: _withdrawals, loading: _loading, onRefresh: _fetch),
+              _WithdrawalsTab(
+                  withdrawals: _withdrawals,
+                  loading: _loading,
+                  onRefresh: _fetch),
               _RefundsTab(transactions: _transactions, loading: _loading),
               const _GstStatementTab(),
             ],
@@ -194,7 +219,8 @@ class _FinanceKpi extends StatelessWidget {
                   style: AdminStyles.title(size: 16),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
-              Text(title, style: AdminStyles.caption(color: AdminColors.textMuted)),
+              Text(title,
+                  style: AdminStyles.caption(color: AdminColors.textMuted)),
             ],
           ),
         ],
@@ -223,11 +249,14 @@ class _TransactionsTab extends StatelessWidget {
           child: const Row(children: [
             SkeletonBox(width: 38, height: 38, radius: 12),
             SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SkeletonBox(width: 100, height: 13),
-              SizedBox(height: 6),
-              SkeletonBox(width: 70, height: 11),
-            ])),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  SkeletonBox(width: 100, height: 13),
+                  SizedBox(height: 6),
+                  SkeletonBox(width: 70, height: 11),
+                ])),
             SkeletonBox(width: 55, height: 20, radius: 10),
           ]),
         ).animate().shimmer(duration: 1500.ms),
@@ -235,7 +264,8 @@ class _TransactionsTab extends StatelessWidget {
     }
 
     if (transactions.isEmpty) {
-      return const AdminEmptyState(icon: Icons.receipt_long_rounded, message: 'No transactions yet');
+      return const AdminEmptyState(
+          icon: Icons.receipt_long_rounded, message: 'No transactions yet');
     }
 
     return ListView.builder(
@@ -260,7 +290,8 @@ class _TransactionsTab extends StatelessWidget {
           decoration: AdminDecorations.glassCard(),
           child: Row(children: [
             Container(
-              width: 38, height: 38,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12)),
@@ -268,20 +299,26 @@ class _TransactionsTab extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('#${t['id'].toString().substring(0, 8).toUpperCase()}',
-                    style: AdminStyles.body(size: 13)),
-                Text(time, style: AdminStyles.caption()),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('#${t['id'].toString().substring(0, 8).toUpperCase()}',
+                        style: AdminStyles.body(size: 13)),
+                    Text(time, style: AdminStyles.caption()),
+                  ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('₹${amount.toStringAsFixed(0)}',
-                  style: AdminStyles.body(size: 14, color: AdminColors.success)),
+                  style:
+                      AdminStyles.body(size: 14, color: AdminColors.success)),
               const SizedBox(height: 4),
               AdminBadge(label: statusLabel, color: statusColor),
             ]),
           ]),
-        ).animate().fadeIn(delay: Duration(milliseconds: i * 30)).slideY(begin: 0.08);
+        )
+            .animate()
+            .fadeIn(delay: Duration(milliseconds: i * 30))
+            .slideY(begin: 0.08);
       },
     );
   }
@@ -292,7 +329,10 @@ class _WithdrawalsTab extends StatelessWidget {
   final bool loading;
   final VoidCallback onRefresh;
 
-  const _WithdrawalsTab({required this.withdrawals, required this.loading, required this.onRefresh});
+  const _WithdrawalsTab(
+      {required this.withdrawals,
+      required this.loading,
+      required this.onRefresh});
 
   static bool _isSheetOpen = false;
 
@@ -301,7 +341,9 @@ class _WithdrawalsTab extends StatelessWidget {
     if (loading) return _loadingSkeleton();
 
     if (withdrawals.isEmpty) {
-      return const AdminEmptyState(icon: Icons.account_balance_wallet_rounded, message: 'No withdrawals yet');
+      return const AdminEmptyState(
+          icon: Icons.account_balance_wallet_rounded,
+          message: 'No withdrawals yet');
     }
 
     return ListView.builder(
@@ -314,9 +356,10 @@ class _WithdrawalsTab extends StatelessWidget {
         final role = (w['user_role'] ?? 'user') as String;
         final name = (w['profiles']?['full_name'] ?? 'Unknown');
         final time = w['requested_at'] != null
-            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(w['requested_at'].toString()).toIST())
+            ? DateFormat('dd MMM, hh:mm a')
+                .format(DateTime.parse(w['requested_at'].toString()).toIST())
             : '';
-        
+
         final (statusColor, statusLabel) = switch (status) {
           'approved' || 'processed' => (AdminColors.success, 'Processed'),
           'rejected' => (AdminColors.danger, 'Rejected'),
@@ -345,26 +388,36 @@ class _WithdrawalsTab extends StatelessWidget {
               decoration: AdminDecorations.glassCard(),
               child: Row(children: [
                 Container(
-                  width: 38, height: 38,
-                  decoration: BoxDecoration(color: AdminColors.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.money_rounded, color: AdminColors.primary, size: 18),
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                      color: AdminColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.money_rounded,
+                      color: AdminColors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(name, style: AdminStyles.body(size: 13)),
-                    Text('$role • $time', style: AdminStyles.caption()),
-                  ]),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: AdminStyles.body(size: 13)),
+                        Text('$role • $time', style: AdminStyles.caption()),
+                      ]),
                 ),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('₹${amount.toStringAsFixed(0)}', style: AdminStyles.body(size: 14)),
+                  Text('₹${amount.toStringAsFixed(0)}',
+                      style: AdminStyles.body(size: 14)),
                   const SizedBox(height: 4),
                   AdminBadge(label: statusLabel, color: statusColor),
                 ]),
               ]),
             ),
           ),
-        ).animate().fadeIn(delay: Duration(milliseconds: i * 30)).slideY(begin: 0.08);
+        )
+            .animate()
+            .fadeIn(delay: Duration(milliseconds: i * 30))
+            .slideY(begin: 0.08);
       },
     );
   }
@@ -381,12 +434,16 @@ class _RefundsTab extends StatelessWidget {
     if (loading) return _loadingSkeleton();
 
     final refunds = transactions.where((t) {
-      final isCancelledAfterPayment = t['status'] == 'cancelled' && t['payment_status'] == 'captured';
-      return t['refund_id'] != null || t['refund_status'] != null || isCancelledAfterPayment;
+      final isCancelledAfterPayment =
+          t['status'] == 'cancelled' && t['payment_status'] == 'captured';
+      return t['refund_id'] != null ||
+          t['refund_status'] != null ||
+          isCancelledAfterPayment;
     }).toList();
 
     if (refunds.isEmpty) {
-      return const AdminEmptyState(icon: Icons.undo_rounded, message: 'No refunds yet');
+      return const AdminEmptyState(
+          icon: Icons.undo_rounded, message: 'No refunds yet');
     }
 
     return ListView.builder(
@@ -397,9 +454,10 @@ class _RefundsTab extends StatelessWidget {
         final amount = (t['grand_total_collected'] as num?)?.toDouble() ?? 0;
         final status = (t['refund_status'] ?? 'processing') as String;
         final time = t['created_at'] != null
-            ? DateFormat('dd MMM, hh:mm a').format(DateTime.parse(t['created_at'].toString()).toIST())
+            ? DateFormat('dd MMM, hh:mm a')
+                .format(DateTime.parse(t['created_at'].toString()).toIST())
             : '';
-        
+
         final (statusColor, statusLabel) = switch (status) {
           'processed' => (AdminColors.success, 'Processed'),
           'failed' => (AdminColors.danger, 'Failed'),
@@ -412,24 +470,36 @@ class _RefundsTab extends StatelessWidget {
           decoration: AdminDecorations.glassCard(),
           child: Row(children: [
             Container(
-              width: 38, height: 38,
-              decoration: BoxDecoration(color: AdminColors.danger.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.undo_rounded, color: AdminColors.danger, size: 18),
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                  color: AdminColors.danger.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.undo_rounded,
+                  color: AdminColors.danger, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Order #${t['id'].toString().substring(0, 8).toUpperCase()}', style: AdminStyles.body(size: 13)),
-                Text(time, style: AdminStyles.caption()),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        'Order #${t['id'].toString().substring(0, 8).toUpperCase()}',
+                        style: AdminStyles.body(size: 13)),
+                    Text(time, style: AdminStyles.caption()),
+                  ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('₹${amount.toStringAsFixed(0)}', style: AdminStyles.body(size: 14)),
+              Text('₹${amount.toStringAsFixed(0)}',
+                  style: AdminStyles.body(size: 14)),
               const SizedBox(height: 4),
               AdminBadge(label: statusLabel, color: statusColor),
             ]),
           ]),
-        ).animate().fadeIn(delay: Duration(milliseconds: i * 30)).slideY(begin: 0.08);
+        )
+            .animate()
+            .fadeIn(delay: Duration(milliseconds: i * 30))
+            .slideY(begin: 0.08);
       },
     );
   }
@@ -486,19 +556,19 @@ class _GstStatementTabState extends State<_GstStatementTab> {
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   // ── Enything's GST payable to govt ──
-  double _s9_5Gst       = 0; // S.9(5) food deemed-supplier GST
-  double _deliveryGst   = 0; // 18% embedded in delivery charge
-  double _platformGst   = 0; // 18% embedded in platform fee
+  double _s9_5Gst = 0; // S.9(5) food deemed-supplier GST
+  double _deliveryGst = 0; // 18% embedded in delivery charge
+  double _platformGst = 0; // 18% embedded in platform fee
   double _commissionGst = 0; // 18% on Enything's commission
 
   // ── Seller-owned (not Enything's liability) ──
-  double _nonFoodGst    = 0; // Passed through to seller; seller remits
+  double _nonFoodGst = 0; // Passed through to seller; seller remits
   // GST TCS §52: 1% ONLY on taxable non-food supplies. 0 for §9(5) food &
   // 0% GST categories (Fruits/Vegs, Butcher, Fish/Seafood). Enything files GSTR-8.
-  double _tcsCollected  = 0;
+  double _tcsCollected = 0;
   // IT TDS §194-O: 0.1% on ALL gross sales. Finance Act 2024 (eff. Oct 1 2024).
   // Enything files Form 26QE by 7th of next month. Seller claims via Form 26AS.
-  double _tdsCollected  = 0;
+  double _tdsCollected = 0;
 
   int _deliveredOrders = 0;
 
@@ -512,13 +582,13 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
   // ── Colors per slab ─────────────────────────────────────────
   static Color _slabColor(String slab) => switch (slab) {
-    '0%'  => const Color(0xFF868E96),
-    '3%'  => const Color(0xFF51CF66),
-    '5%'  => const Color(0xFF4DABF7),
-    '18%' => const Color(0xFFF4C542),
-    '28%' => const Color(0xFFFF6B6B),
-    _     => AdminColors.primary,
-  };
+        '0%' => const Color(0xFF868E96),
+        '3%' => const Color(0xFF51CF66),
+        '5%' => const Color(0xFF4DABF7),
+        '18%' => const Color(0xFFF4C542),
+        '28%' => const Color(0xFFFF6B6B),
+        _ => AdminColors.primary,
+      };
 
   @override
   void initState() {
@@ -528,8 +598,18 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
   String get _monthLabel {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${months[_selectedMonth.month - 1]} ${_selectedMonth.year}';
   }
@@ -543,7 +623,8 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
   void _nextMonth() {
     final now = DateTime.now();
-    if (_selectedMonth.year == now.year && _selectedMonth.month == now.month) return;
+    if (_selectedMonth.year == now.year && _selectedMonth.month == now.month)
+      return;
     setState(() {
       _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
     });
@@ -574,8 +655,9 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           final price = (item['price'] as num).toDouble();
           final qty = item['quantity'] as int;
           final lineBase = price * qty;
-          
-          final gstRate = TaxConfig.gstRateForCategory(category, itemPrice: price);
+
+          final gstRate =
+              TaxConfig.gstRateForCategory(category, itemPrice: price);
           final lineGst = lineBase * gstRate;
           final isDeemedSupplier = TaxConfig.isEnythingDeemedSupplier(category);
           final slab = '${(gstRate * 100).toStringAsFixed(0)}%';
@@ -609,7 +691,8 @@ class _GstStatementTabState extends State<_GstStatementTab> {
   double get _enythingTotalPayable =>
       _s9_5Gst + _deliveryGst + _platformGst + _commissionGst;
 
-  String _f(double v) => NumberFormat.currency(locale: 'en_IN', symbol: '₹').format(v);
+  String _f(double v) =>
+      NumberFormat.currency(locale: 'en_IN', symbol: '₹').format(v);
   String _fraw(double v) => v.toStringAsFixed(2);
 
   // ── Copy full GST report to clipboard ─────────────────────────────────────
@@ -622,7 +705,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
     for (final s in sortedSlabs) {
       for (final r in _slabMap[s]!.values) {
         grandTaxable += r.taxableAmount;
-        grandGst     += r.gstAmount;
+        grandGst += r.gstAmount;
       }
     }
 
@@ -636,19 +719,26 @@ class _GstStatementTabState extends State<_GstStatementTab> {
     sb.writeln("ENYTHING'S GST PAYABLE TO GOVERNMENT");
     sb.writeln('════════════════════════════════════════════════');
     sb.writeln('S.9(5) Food GST (Deemed Supplier)    : ₹${_fraw(_s9_5Gst)}');
-    sb.writeln('Delivery Service GST (SAC 9965/9967) : ₹${_fraw(_deliveryGst)}');
-    sb.writeln('Platform Fee GST    (SAC 9985)        : ₹${_fraw(_platformGst)}');
-    sb.writeln('Commission GST      (18% on comm.)   : ₹${_fraw(_commissionGst)}');
+    sb.writeln(
+        'Delivery Service GST (SAC 9965/9967) : ₹${_fraw(_deliveryGst)}');
+    sb.writeln(
+        'Platform Fee GST    (SAC 9985)        : ₹${_fraw(_platformGst)}');
+    sb.writeln(
+        'Commission GST      (18% on comm.)   : ₹${_fraw(_commissionGst)}');
     sb.writeln('──────────────────────────────────────────────');
-    sb.writeln('TOTAL ENYTHING GST PAYABLE            : ₹${_fraw(_enythingTotalPayable)}');
+    sb.writeln(
+        'TOTAL ENYTHING GST PAYABLE            : ₹${_fraw(_enythingTotalPayable)}');
     sb.writeln();
     sb.writeln('════════════════════════════════════════════════');
-    sb.writeln("SELLER PASS-THROUGH & TAX DEDUCTIONS (NOT ENYTHING'S GST LIABILITY)");
+    sb.writeln(
+        "SELLER PASS-THROUGH & TAX DEDUCTIONS (NOT ENYTHING'S GST LIABILITY)");
     sb.writeln('════════════════════════════════════════════════');
     sb.writeln('Non-Food Item GST (Seller remits)    : ₹${_fraw(_nonFoodGst)}');
-    sb.writeln('GST TCS 1% (§52, non-food only)      : ₹${_fraw(_tcsCollected)}');
+    sb.writeln(
+        'GST TCS 1% (§52, non-food only)      : ₹${_fraw(_tcsCollected)}');
     sb.writeln('  (§9(5) food & 0% GST categories exempt from TCS)');
-    sb.writeln('IT TDS 0.1% (§194-O, all categories)  : ₹${_fraw(_tdsCollected)}');
+    sb.writeln(
+        'IT TDS 0.1% (§194-O, all categories)  : ₹${_fraw(_tdsCollected)}');
     sb.writeln('  (Finance Act 2024, eff. Oct 1 2024. File Form 26QE by 7th.)');
     sb.writeln();
     sb.writeln('════════════════════════════════════════════════');
@@ -656,9 +746,11 @@ class _GstStatementTabState extends State<_GstStatementTab> {
     sb.writeln('════════════════════════════════════════════════');
 
     for (final slab in sortedSlabs) {
-      final categories  = _slabMap[slab]!;
-      final slabTaxable = categories.values.fold<double>(0, (s, r) => s + r.taxableAmount);
-      final slabGst     = categories.values.fold<double>(0, (s, r) => s + r.gstAmount);
+      final categories = _slabMap[slab]!;
+      final slabTaxable =
+          categories.values.fold<double>(0, (s, r) => s + r.taxableAmount);
+      final slabGst =
+          categories.values.fold<double>(0, (s, r) => s + r.gstAmount);
       sb.writeln();
       sb.writeln('$slab GST SLAB');
       final sorted = categories.values.toList()
@@ -666,20 +758,24 @@ class _GstStatementTabState extends State<_GstStatementTab> {
       for (final row in sorted) {
         final star = row.isDeemedSupplier ? ' [S.9(5) - Enything pays]' : '';
         sb.writeln('  ${row.category}$star');
-        sb.writeln('    Items: ${row.itemCount}  Taxable: ₹${_fraw(row.taxableAmount)}  GST: ₹${_fraw(row.gstAmount)}');
+        sb.writeln(
+            '    Items: ${row.itemCount}  Taxable: ₹${_fraw(row.taxableAmount)}  GST: ₹${_fraw(row.gstAmount)}');
       }
-      sb.writeln('  ── Slab Total: Taxable ₹${_fraw(slabTaxable)}  |  GST ₹${_fraw(slabGst)}');
+      sb.writeln(
+          '  ── Slab Total: Taxable ₹${_fraw(slabTaxable)}  |  GST ₹${_fraw(slabGst)}');
     }
 
     sb.writeln();
     sb.writeln('════════════════════════════════════════════════');
-    sb.writeln('GRAND TOTAL: Taxable ₹${_fraw(grandTaxable)}  |  GST ₹${_fraw(grandGst)}');
+    sb.writeln(
+        'GRAND TOTAL: Taxable ₹${_fraw(grandTaxable)}  |  GST ₹${_fraw(grandGst)}');
     sb.writeln('════════════════════════════════════════════════');
 
     Clipboard.setData(ClipboardData(text: sb.toString()));
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
       content: Text('GST Statement copied ✓',
-          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+          style: GoogleFonts.outfit(
+              color: Colors.white, fontWeight: FontWeight.w600)),
       backgroundColor: AdminColors.success,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -716,7 +812,8 @@ class _GstStatementTabState extends State<_GstStatementTab> {
                   style: AdminStyles.body(color: Colors.white),
                 ),
               ]),
-              const Icon(Icons.receipt_long_rounded, color: Colors.white54, size: 24),
+              const Icon(Icons.receipt_long_rounded,
+                  color: Colors.white54, size: 24),
             ],
           ),
         ).animate().fadeIn(delay: 50.ms),
@@ -744,16 +841,22 @@ class _GstStatementTabState extends State<_GstStatementTab> {
         // ── Card 2: Seller Pass-Through + TDS (not Enything's liability) ────────
         _GstSectionCard(
           title: "Seller GST Pass-Through & Tax Deductions",
-          subtitle: 'Collected on behalf of sellers — NOT Enything\'s liability',
+          subtitle:
+              'Collected on behalf of sellers — NOT Enything\'s liability',
           accentColor: AdminColors.warning,
           icon: Icons.store_rounded,
           rows: [
-            _GstLineItem("Non-Food Item GST (Sellers remit via GSTR-1/3B)", _nonFoodGst,
+            _GstLineItem(
+                "Non-Food Item GST (Sellers remit via GSTR-1/3B)", _nonFoodGst,
                 tag: 'SELLER', tagColor: AdminColors.warning),
-            _GstLineItem("GST TCS 1% — §52 (non-food only; 0 for food/exempt)", _tcsCollected,
+            _GstLineItem("GST TCS 1% — §52 (non-food only; 0 for food/exempt)",
+                _tcsCollected,
                 tag: 'GSTR-8', tagColor: AdminColors.info),
-            _GstLineItem("IT TDS 0.1% — §194-O (all categories, Finance Act 2024)", _tdsCollected,
-                tag: '26QE', tagColor: const Color(0xFF4DABF7)),
+            _GstLineItem(
+                "IT TDS 0.1% — §194-O (all categories, Finance Act 2024)",
+                _tdsCollected,
+                tag: '26QE',
+                tagColor: const Color(0xFF4DABF7)),
           ],
         ).animate().fadeIn(delay: 150.ms),
         const SizedBox(height: 16),
@@ -772,13 +875,15 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           icon: const Icon(Icons.content_copy_rounded, size: 18),
           label: Text(
             'Copy Full GST Statement for CA',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15),
+            style:
+                GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15),
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: AdminColors.primary,
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 0,
           ),
         ).animate().fadeIn(delay: 250.ms),
@@ -787,7 +892,8 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           '📌  Copy this report and share with your CA via WhatsApp or email.\n'
           '    File GSTR-3B by 20th. File Form 26QE (TDS) by 7th.\n'
           '    Sellers check GSTR-2B after Enything files GSTR-8 by 10th.',
-          style: AdminStyles.caption(color: AdminColors.textMuted).copyWith(height: 1.6),
+          style: AdminStyles.caption(color: AdminColors.textMuted)
+              .copyWith(height: 1.6),
           textAlign: TextAlign.center,
         ),
       ],
@@ -807,7 +913,8 @@ class _GstStatementTabState extends State<_GstStatementTab> {
       ),
       child: Row(children: [
         IconButton(
-          icon: const Icon(Icons.chevron_left_rounded, color: AdminColors.textSecondary),
+          icon: const Icon(Icons.chevron_left_rounded,
+              color: AdminColors.textSecondary),
           onPressed: _prevMonth,
         ),
         Expanded(
@@ -820,7 +927,9 @@ class _GstStatementTabState extends State<_GstStatementTab> {
         IconButton(
           icon: Icon(
             Icons.chevron_right_rounded,
-            color: isCurrentMonth ? AdminColors.cardBorder : AdminColors.textSecondary,
+            color: isCurrentMonth
+                ? AdminColors.cardBorder
+                : AdminColors.textSecondary,
           ),
           onPressed: _nextMonth,
         ),
@@ -839,7 +948,8 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           border: Border.all(color: AdminColors.cardBorder),
         ),
         child: Column(children: [
-          const Icon(Icons.receipt_long_rounded, color: AdminColors.textMuted, size: 40),
+          const Icon(Icons.receipt_long_rounded,
+              color: AdminColors.textMuted, size: 40),
           const SizedBox(height: 12),
           Text('No taxable items for $_monthLabel',
               style: AdminStyles.body(color: AdminColors.textMuted)),
@@ -857,7 +967,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
     for (final s in sortedSlabs) {
       for (final r in _slabMap[s]!.values) {
         grandTaxable += r.taxableAmount;
-        grandGst     += r.gstAmount;
+        grandGst += r.gstAmount;
       }
     }
 
@@ -882,22 +992,27 @@ class _GstStatementTabState extends State<_GstStatementTab> {
                 color: AdminColors.info.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.category_rounded, color: AdminColors.info, size: 16),
+              child: const Icon(Icons.category_rounded,
+                  color: AdminColors.info, size: 16),
             ),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Category-wise GST Breakdown',
-                  style: AdminStyles.body(color: AdminColors.textPrimary)),
-              Text('Grouped by GST slab · $_monthLabel',
-                  style: AdminStyles.caption(color: AdminColors.textMuted)),
-            ])),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text('Category-wise GST Breakdown',
+                      style: AdminStyles.body(color: AdminColors.textPrimary)),
+                  Text('Grouped by GST slab · $_monthLabel',
+                      style: AdminStyles.caption(color: AdminColors.textMuted)),
+                ])),
           ]),
         ),
 
         // Slab sections
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             for (int idx = 0; idx < sortedSlabs.length; idx++) ...[
               _buildSlabSection(sortedSlabs[idx], _slabMap[sortedSlabs[idx]]!),
               if (idx < sortedSlabs.length - 1) ...[
@@ -940,11 +1055,14 @@ class _GstStatementTabState extends State<_GstStatementTab> {
     );
   }
 
-  Widget _buildSlabSection(String slab, Map<String, _CategoryGstRow> categories) {
-    final slabColor    = _slabColor(slab);
-    final slabTaxable  = categories.values.fold<double>(0, (s, r) => s + r.taxableAmount);
-    final slabGst      = categories.values.fold<double>(0, (s, r) => s + r.gstAmount);
-    final sortedCats   = categories.values.toList()
+  Widget _buildSlabSection(
+      String slab, Map<String, _CategoryGstRow> categories) {
+    final slabColor = _slabColor(slab);
+    final slabTaxable =
+        categories.values.fold<double>(0, (s, r) => s + r.taxableAmount);
+    final slabGst =
+        categories.values.fold<double>(0, (s, r) => s + r.gstAmount);
+    final sortedCats = categories.values.toList()
       ..sort((a, b) => b.taxableAmount.compareTo(a.taxableAmount));
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -956,8 +1074,11 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(children: [
-          Container(width: 8, height: 8,
-              decoration: BoxDecoration(color: slabColor, shape: BoxShape.circle)),
+          Container(
+              width: 8,
+              height: 8,
+              decoration:
+                  BoxDecoration(color: slabColor, shape: BoxShape.circle)),
           const SizedBox(width: 8),
           Text(
             '$slab GST${slab == '0%' ? ' — EXEMPT' : ''}',
@@ -974,38 +1095,45 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
       // Category rows
       ...sortedCats.map((row) => Padding(
-        padding: const EdgeInsets.only(left: 16, bottom: 7),
-        child: Row(children: [
-          // S.9(5) indicator
-          if (row.isDeemedSupplier)
-            const Padding(
-              padding: EdgeInsets.only(right: 4),
-              child: Icon(Icons.restaurant_rounded,
-                  color: Color(0xFF51CF66), size: 12),
-            )
-          else
-            const SizedBox(width: 16),
-          // Category name + item count
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(row.category,
-                  style: AdminStyles.body(color: AdminColors.textSecondary, size: 12)),
-              Text('${row.itemCount} item${row.itemCount == 1 ? '' : 's'}',
-                  style: AdminStyles.caption(color: AdminColors.textMuted).copyWith(fontSize: 10)),
+            padding: const EdgeInsets.only(left: 16, bottom: 7),
+            child: Row(children: [
+              // S.9(5) indicator
+              if (row.isDeemedSupplier)
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Icon(Icons.restaurant_rounded,
+                      color: Color(0xFF51CF66), size: 12),
+                )
+              else
+                const SizedBox(width: 16),
+              // Category name + item count
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(row.category,
+                          style: AdminStyles.body(
+                              color: AdminColors.textSecondary, size: 12)),
+                      Text(
+                          '${row.itemCount} item${row.itemCount == 1 ? '' : 's'}',
+                          style:
+                              AdminStyles.caption(color: AdminColors.textMuted)
+                                  .copyWith(fontSize: 10)),
+                    ]),
+              ),
+              // Taxable + GST
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(_f(row.taxableAmount),
+                    style:
+                        AdminStyles.caption(color: AdminColors.textSecondary)),
+                Text(
+                  '+ ${_f(row.gstAmount)} GST',
+                  style: AdminStyles.body(color: slabColor, size: 12)
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+              ]),
             ]),
-          ),
-          // Taxable + GST
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(_f(row.taxableAmount),
-                style: AdminStyles.caption(color: AdminColors.textSecondary)),
-            Text(
-              '+ ${_f(row.gstAmount)} GST',
-              style: AdminStyles.body(color: slabColor, size: 12)
-                  .copyWith(fontWeight: FontWeight.w600),
-            ),
-          ]),
-        ]),
-      )),
+          )),
 
       // Slab subtotal
       Padding(
@@ -1032,37 +1160,45 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
   // ── Legend ─────────────────────────────────────────────────────────────────
   Widget _buildLegend() => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: AdminColors.cardBg,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AdminColors.cardBorder),
-    ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Legend', style: AdminStyles.caption(color: AdminColors.textMuted)
-          .copyWith(fontWeight: FontWeight.w700)),
-      const SizedBox(height: 8),
-      Row(children: [
-        const Icon(Icons.restaurant_rounded, color: Color(0xFF51CF66), size: 12),
-        const SizedBox(width: 6),
-        Expanded(child: Text(
-          'S.9(5) — Enything is the deemed supplier (restaurant/food). Enything remits GST, not the seller.',
-          style: AdminStyles.caption(color: AdminColors.textSecondary).copyWith(fontSize: 10),
-        )),
-      ]),
-      const SizedBox(height: 4),
-      Row(children: [
-        Container(width: 12, height: 12,
-            decoration: const BoxDecoration(
-                color: Color(0xFF868E96), shape: BoxShape.circle)),
-        const SizedBox(width: 6),
-        Expanded(child: Text(
-          '0% — Exempt (fresh produce, meat, fish). No GST charged.',
-          style: AdminStyles.caption(color: AdminColors.textSecondary).copyWith(fontSize: 10),
-        )),
-      ]),
-    ]),
-  );
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AdminColors.cardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AdminColors.cardBorder),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Legend',
+              style: AdminStyles.caption(color: AdminColors.textMuted)
+                  .copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Row(children: [
+            const Icon(Icons.restaurant_rounded,
+                color: Color(0xFF51CF66), size: 12),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(
+              'S.9(5) — Enything is the deemed supplier (restaurant/food). Enything remits GST, not the seller.',
+              style: AdminStyles.caption(color: AdminColors.textSecondary)
+                  .copyWith(fontSize: 10),
+            )),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            Container(
+                width: 12,
+                height: 12,
+                decoration: const BoxDecoration(
+                    color: Color(0xFF868E96), shape: BoxShape.circle)),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(
+              '0% — Exempt (fresh produce, meat, fish). No GST charged.',
+              style: AdminStyles.caption(color: AdminColors.textSecondary)
+                  .copyWith(fontSize: 10),
+            )),
+          ]),
+        ]),
+      );
 }
 
 // ── Shared helper widgets ─────────────────────────────────────────────────────
@@ -1085,42 +1221,50 @@ class _GstSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: AdminColors.cardBg,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: accentColor.withValues(alpha: 0.25)),
-    ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Header
-      Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
-          color: accentColor.withValues(alpha: 0.08),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          color: AdminColors.cardBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: accentColor.withValues(alpha: 0.25)),
         ),
-        child: Row(children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Header
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
+              color: accentColor.withValues(alpha: 0.08),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            child: Icon(icon, color: accentColor, size: 16),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: accentColor, size: 16),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(title,
+                        style:
+                            AdminStyles.body(color: AdminColors.textPrimary)),
+                    Text(subtitle,
+                        style:
+                            AdminStyles.caption(color: AdminColors.textMuted)),
+                  ])),
+            ]),
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: AdminStyles.body(color: AdminColors.textPrimary)),
-            Text(subtitle, style: AdminStyles.caption(color: AdminColors.textMuted)),
-          ])),
+          // Rows
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(children: rows),
+          ),
         ]),
-      ),
-      // Rows
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Column(children: rows),
-      ),
-    ]),
-  );
+      );
 }
 
 /// A single GST line item row
@@ -1143,7 +1287,8 @@ class _GstLineItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayColor = color ?? (isBold ? AdminColors.textPrimary : AdminColors.textSecondary);
+    final displayColor =
+        color ?? (isBold ? AdminColors.textPrimary : AdminColors.textSecondary);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(children: [
@@ -1164,7 +1309,8 @@ class _GstLineItem extends StatelessWidget {
             ),
             child: Text(
               tag!,
-              style: AdminStyles.caption(color: tagColor ?? Colors.white).copyWith(
+              style:
+                  AdminStyles.caption(color: tagColor ?? Colors.white).copyWith(
                 fontSize: 8,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.5,
@@ -1175,7 +1321,8 @@ class _GstLineItem extends StatelessWidget {
         ],
         Text(
           '₹${value.toStringAsFixed(2)}',
-          style: AdminStyles.body(color: displayColor, size: isBold ? 15 : 13).copyWith(
+          style: AdminStyles.body(color: displayColor, size: isBold ? 15 : 13)
+              .copyWith(
             fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
           ),
         ),
@@ -1188,9 +1335,9 @@ class _GstDivider extends StatelessWidget {
   const _GstDivider();
   @override
   Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.symmetric(vertical: 6),
-    child: Divider(color: Colors.white12, height: 1),
-  );
+        padding: EdgeInsets.symmetric(vertical: 6),
+        child: Divider(color: Colors.white12, height: 1),
+      );
 }
 
 // ── Shared skeleton loader ────────────────────────────────────────────────────
@@ -1205,7 +1352,9 @@ Widget _loadingSkeleton() {
       child: const Row(children: [
         SkeletonBox(width: 38, height: 38, radius: 12),
         SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SkeletonBox(width: 100, height: 13),
           SizedBox(height: 6),
           SkeletonBox(width: 70, height: 11),
@@ -1232,7 +1381,7 @@ class _WithdrawalActionSheet extends StatefulWidget {
 class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
   SupabaseClient get _db => Supabase.instance.client;
   final _txnIdCtrl = TextEditingController();
-  
+
   bool _processing = false;
   bool _loadingDetails = true;
   double _totalEarned = 0;
@@ -1244,7 +1393,7 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
     super.initState();
     _loadUserDetails();
   }
-  
+
   @override
   void dispose() {
     _txnIdCtrl.dispose();
@@ -1254,7 +1403,8 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
   Future<void> _updateStatus(String status) async {
     if (status == 'processed' && _txnIdCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please enter a Transaction ID or Receipt', style: AdminStyles.body(color: Colors.white)),
+        content: Text('Please enter a Transaction ID or Receipt',
+            style: AdminStyles.body(color: Colors.white)),
         backgroundColor: AdminColors.warning,
       ));
       return;
@@ -1264,7 +1414,8 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
       await _db.rpc('admin_process_withdrawal', params: {
         'p_withdrawal_id': widget.withdrawal['id'],
         'p_status': status,
-        'p_transaction_id': status == 'processed' ? _txnIdCtrl.text.trim() : null,
+        'p_transaction_id':
+            status == 'processed' ? _txnIdCtrl.text.trim() : null,
       });
       widget.onProcessed();
       if (mounted) Navigator.pop(context);
@@ -1282,7 +1433,11 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
 
       // Securely fetch exact calculated balances via DB RPCs to prevent OOM
       if (role == 'seller') {
-        final shopRes = await _db.from('shops').select('id').eq('seller_id', userId).maybeSingle();
+        final shopRes = await _db
+            .from('shops')
+            .select('id')
+            .eq('seller_id', userId)
+            .maybeSingle();
         if (shopRes != null) {
           final balanceRes = await _db.rpc('get_seller_balance', params: {
             'p_shop_id': shopRes['id'],
@@ -1290,7 +1445,8 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
           if (balanceRes != null) {
             _totalEarned = (balanceRes['total_earned'] as num).toDouble();
             _totalWithdrawn = (balanceRes['total_paid'] as num).toDouble();
-            _availableBalance = (balanceRes['available_balance'] as num).toDouble();
+            _availableBalance =
+                (balanceRes['available_balance'] as num).toDouble();
           }
         }
       } else if (role == 'delivery_partner') {
@@ -1300,17 +1456,15 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
         if (balanceRes != null) {
           _totalEarned = (balanceRes['total_earned'] as num).toDouble();
           _totalWithdrawn = (balanceRes['total_paid'] as num).toDouble();
-          _availableBalance = (balanceRes['available_balance'] as num).toDouble();
+          _availableBalance =
+              (balanceRes['available_balance'] as num).toDouble();
         }
       }
-
     } catch (e) {
       debugPrint('Error loading user details: $e');
     }
     if (mounted) setState(() => _loadingDetails = false);
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -1323,11 +1477,13 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
     final bankAcc = w['bank_account_number'];
     final bankIfsc = w['bank_ifsc'];
     final time = w['requested_at'] != null
-        ? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(w['requested_at'].toString()).toIST())
+        ? DateFormat('dd MMM yyyy, hh:mm a')
+            .format(DateTime.parse(w['requested_at'].toString()).toIST())
         : '';
 
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 48),
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 48),
       decoration: const BoxDecoration(
         color: AdminColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1338,31 +1494,35 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
         children: [
           Text('Withdrawal Request', style: AdminStyles.heading(size: 20)),
           const SizedBox(height: 24),
-          
           _DetailRow('User', '$name ($role)'),
           const SizedBox(height: 12),
-          _DetailRow('Amount', '₹${amount.toStringAsFixed(0)}', highlight: true),
+          _DetailRow('Amount', '₹${amount.toStringAsFixed(0)}',
+              highlight: true),
           const SizedBox(height: 12),
           _DetailRow('Date', time),
-          
           if (_loadingDetails)
-             const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AdminColors.primary)))
+            const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AdminColors.primary)))
           else ...[
-             const SizedBox(height: 12),
-             _DetailRow('Max Allowed (Earnings)', '₹${_totalEarned.toStringAsFixed(0)}'),
-             const SizedBox(height: 12),
-             _DetailRow('Withdrawn Till Date', '₹${_totalWithdrawn.toStringAsFixed(0)}'),
-             const SizedBox(height: 12),
-             _DetailRow('Available Balance', '₹${_availableBalance.toStringAsFixed(0)}', highlight: _availableBalance >= amount),
+            const SizedBox(height: 12),
+            _DetailRow('Max Allowed (Earnings)',
+                '₹${_totalEarned.toStringAsFixed(0)}'),
+            const SizedBox(height: 12),
+            _DetailRow('Withdrawn Till Date',
+                '₹${_totalWithdrawn.toStringAsFixed(0)}'),
+            const SizedBox(height: 12),
+            _DetailRow(
+                'Available Balance', '₹${_availableBalance.toStringAsFixed(0)}',
+                highlight: _availableBalance >= amount),
           ],
-          
           const SizedBox(height: 20),
           const Divider(color: AdminColors.cardBorder),
           const SizedBox(height: 20),
-          
           Text('Payout Details', style: AdminStyles.title(size: 16)),
           const SizedBox(height: 12),
-          
           if (upi != null) _DetailRow('UPI ID', upi),
           if (bankAcc != null) ...[
             _DetailRow('Bank Account', bankAcc),
@@ -1370,13 +1530,13 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
             _DetailRow('IFSC', bankIfsc ?? 'N/A'),
           ],
           if (upi == null && bankAcc == null)
-            Text('No payout destination provided.', style: AdminStyles.body(color: AdminColors.warning)),
-            
+            Text('No payout destination provided.',
+                style: AdminStyles.body(color: AdminColors.warning)),
           const SizedBox(height: 32),
-          
           if (status == 'pending') ...[
-            if (_processing) 
-              const Center(child: CircularProgressIndicator(color: AdminColors.primary))
+            if (_processing)
+              const Center(
+                  child: CircularProgressIndicator(color: AdminColors.primary))
             else ...[
               TextField(
                 controller: _txnIdCtrl,
@@ -1386,8 +1546,11 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
                   labelStyle: AdminStyles.caption(),
                   filled: true,
                   fillColor: AdminColors.bg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1396,9 +1559,11 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AdminColors.success,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                child: Text('Mark as Processed', style: AdminStyles.title(size: 14, color: Colors.white)),
+                child: Text('Mark as Processed',
+                    style: AdminStyles.title(size: 14, color: Colors.white)),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
@@ -1406,21 +1571,29 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AdminColors.danger),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                child: Text('Reject Withdrawal', style: AdminStyles.title(size: 14, color: AdminColors.danger)),
+                child: Text('Reject Withdrawal',
+                    style:
+                        AdminStyles.title(size: 14, color: AdminColors.danger)),
               ),
             ]
           ] else ...[
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: status == 'rejected' ? AdminColors.danger.withValues(alpha: 0.1) : AdminColors.success.withValues(alpha: 0.1),
+                color: status == 'rejected'
+                    ? AdminColors.danger.withValues(alpha: 0.1)
+                    : AdminColors.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 'This request has been ${status.toUpperCase()}',
-                style: AdminStyles.body(color: status == 'rejected' ? AdminColors.danger : AdminColors.success),
+                style: AdminStyles.body(
+                    color: status == 'rejected'
+                        ? AdminColors.danger
+                        : AdminColors.success),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -1443,10 +1616,14 @@ class _DetailRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: AdminStyles.caption(color: AdminColors.textSecondary, size: 14)),
-        Text(value, style: highlight ? AdminStyles.title(color: AdminColors.success, size: 14) : AdminStyles.body(color: AdminColors.textPrimary)),
+        Text(label,
+            style: AdminStyles.caption(
+                color: AdminColors.textSecondary, size: 14)),
+        Text(value,
+            style: highlight
+                ? AdminStyles.title(color: AdminColors.success, size: 14)
+                : AdminStyles.body(color: AdminColors.textPrimary)),
       ],
     );
   }
 }
-

@@ -68,7 +68,8 @@ class _ProductCardState extends State<ProductCard>
     final isLocked = isShopClosed || isProductUnavailable;
 
     return GestureDetector(
-      onTap: isLocked ? null : () => showProductDetailSheet(context, product.id),
+      onTap:
+          isLocked ? null : () => showProductDetailSheet(context, product.id),
       onTapDown: isLocked ? null : (_) => setState(() => _isPressed = true),
       onTapUp: isLocked ? null : (_) => setState(() => _isPressed = false),
       onTapCancel: isLocked ? null : () => setState(() => _isPressed = false),
@@ -290,12 +291,14 @@ class _ProductCardState extends State<ProductCard>
                     if (isLocked)
                       Positioned.fill(
                         child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(PremiumRadius.large)),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(PremiumRadius.large)),
                           child: Container(
                             color: Colors.black.withValues(alpha: 0.65),
                             child: Center(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.black.withValues(alpha: 0.8),
                                   borderRadius: BorderRadius.circular(6),
@@ -506,7 +509,7 @@ class _ProductCardState extends State<ProductCard>
                                 opacity: animation, child: child),
                           );
                         },
-                        child: isLocked 
+                        child: isLocked
                             ? _buildUnavailableButton(isDark)
                             : product.variants.isNotEmpty
                                 ? _buildAddButton(cart, isDark)
@@ -647,7 +650,9 @@ class _ProductCardState extends State<ProductCard>
           GestureDetector(
             onTap: () {
               if (shop != null) {
-                context.read<CartProvider>().addItemWithFeedback(context, product, shop!);
+                context
+                    .read<CartProvider>()
+                    .addItemWithFeedback(context, product, shop!);
               }
             },
             child: const Icon(Icons.add_rounded, size: 16, color: Colors.white),

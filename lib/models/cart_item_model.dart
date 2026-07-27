@@ -23,12 +23,18 @@ class CartItem {
     final defaultW = (type == 'kg' || type == 'liter') ? 1.0 : 0.5;
     final w = product.weightPerUnit ?? defaultW;
     switch (type) {
-      case 'kg': return w * quantity;
-      case 'grams': return (w / 1000) * quantity;
-      case 'liter': return w * quantity;
-      case 'ml': return (w / 1000) * quantity;
-      case 'pieces': return w * quantity;
-      default: return defaultW * quantity;
+      case 'kg':
+        return w * quantity;
+      case 'grams':
+        return (w / 1000) * quantity;
+      case 'liter':
+        return w * quantity;
+      case 'ml':
+        return (w / 1000) * quantity;
+      case 'pieces':
+        return w * quantity;
+      default:
+        return defaultW * quantity;
     }
   }
 }

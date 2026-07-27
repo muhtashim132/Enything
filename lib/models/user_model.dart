@@ -1,23 +1,26 @@
 class UserModel {
   final String id;
-  final String role;          // primary role stored in profiles table
+  final String role; // primary role stored in profiles table
   final String fullName;
   final String email;
   final String phone;
   final String? avatarUrl;
   final DateTime createdAt;
+
   /// All roles this user has signed up for (checked across role tables)
   final List<String> activeRoles;
+
   /// The role currently chosen for this session (may differ from primary role)
   final String activeSessionRole;
   final double averageRating;
   final int totalReviews;
+
   /// KYC verification status for the active role (pending, verified, rejected)
   final String verificationStatus;
-  
+
   /// Specific verification status for seller role (if applicable)
   final String sellerVerificationStatus;
-  
+
   /// Specific verification status for rider role (if applicable)
   final String riderVerificationStatus;
 
@@ -49,13 +52,16 @@ class UserModel {
       phone: map['phone'] ?? '',
       avatarUrl: map['avatar_url'],
       createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
-      activeRoles: (map['activeRoles'] as List<dynamic>?)?.cast<String>() ?? [role],
+      activeRoles:
+          (map['activeRoles'] as List<dynamic>?)?.cast<String>() ?? [role],
       activeSessionRole: map['activeSessionRole'] as String? ?? role,
       averageRating: (map['average_rating'] ?? 0.0).toDouble(),
       totalReviews: map['total_reviews'] ?? 0,
       verificationStatus: map['verification_status'] as String? ?? 'verified',
-      sellerVerificationStatus: map['seller_verification_status'] as String? ?? 'unverified',
-      riderVerificationStatus: map['rider_verification_status'] as String? ?? 'unverified',
+      sellerVerificationStatus:
+          map['seller_verification_status'] as String? ?? 'unverified',
+      riderVerificationStatus:
+          map['rider_verification_status'] as String? ?? 'unverified',
     );
   }
 
@@ -81,26 +87,29 @@ class UserModel {
       averageRating: averageRating ?? this.averageRating,
       totalReviews: totalReviews ?? this.totalReviews,
       verificationStatus: verificationStatus ?? this.verificationStatus,
-      sellerVerificationStatus: sellerVerificationStatus ?? this.sellerVerificationStatus,
-      riderVerificationStatus: riderVerificationStatus ?? this.riderVerificationStatus,
+      sellerVerificationStatus:
+          sellerVerificationStatus ?? this.sellerVerificationStatus,
+      riderVerificationStatus:
+          riderVerificationStatus ?? this.riderVerificationStatus,
     );
   }
 
   Map<String, dynamic> toMap() => {
-    'id': id,
-    'role': role,
-    'full_name': fullName,
-    'email': email,
-    'phone': phone,
-    'avatar_url': avatarUrl,
-    'average_rating': averageRating,
-    'total_reviews': totalReviews,
-  };
+        'id': id,
+        'role': role,
+        'full_name': fullName,
+        'email': email,
+        'phone': phone,
+        'avatar_url': avatarUrl,
+        'average_rating': averageRating,
+        'total_reviews': totalReviews,
+      };
 
   String get initials {
     final trimmed = fullName.trim();
     if (trimmed.isEmpty) return 'U';
-    final parts = trimmed.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    final parts =
+        trimmed.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
     if (parts.length >= 2) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
@@ -110,11 +119,16 @@ class UserModel {
   /// Human-readable label for a given role string
   static String roleLabel(String r) {
     switch (r) {
-      case 'admin':            return 'Admin';       // APP3 FIX: was falling through to default
-      case 'seller':           return 'Seller';
-      case 'delivery_partner': return 'Delivery Partner';
-      case 'customer':         return 'Customer';
-      default:                 return r;
+      case 'admin':
+        return 'Admin'; // APP3 FIX: was falling through to default
+      case 'seller':
+        return 'Seller';
+      case 'delivery_partner':
+        return 'Delivery Partner';
+      case 'customer':
+        return 'Customer';
+      default:
+        return r;
     }
   }
 

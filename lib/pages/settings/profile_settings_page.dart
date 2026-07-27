@@ -25,7 +25,6 @@ class ProfileSettingsPage extends StatefulWidget {
 
 class _ProfileSettingsPageState extends State<ProfileSettingsPage>
     with SingleTickerProviderStateMixin {
-
   @override
   void initState() {
     super.initState();
@@ -63,24 +62,26 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                   ? AppColors.darkBg
                   : AppColors.roleColor(user.activeSessionRole),
               surfaceTintColor: Colors.transparent,
-              leading: Navigator.canPop(context) ? Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: PressScaleButton(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    margin: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ) : const SizedBox.shrink(),
+              leading: Navigator.canPop(context)
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: PressScaleButton(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          margin: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
               flexibleSpace: FlexibleSpaceBar(
                 collapseMode: CollapseMode.parallax,
                 background: _buildHeroCard(user, isDark),
@@ -132,14 +133,16 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                           isDark: isDark,
                           onTap: () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const ReferAndEarnPage()),
+                            MaterialPageRoute(
+                                builder: (_) => const ReferAndEarnPage()),
                           ),
                         ),
                         _buildSettingTile(
                           icon: Icons.notifications_active_outlined,
                           title: 'Notification & Bell Settings',
                           subtitle: 'Alerts, loop bell & sound preferences',
-                          roleColor: AppColors.roleColor(user.activeSessionRole),
+                          roleColor:
+                              AppColors.roleColor(user.activeSessionRole),
                           isDark: isDark,
                           onTap: () => showNotificationSettingsDialog(context),
                         ),
@@ -147,7 +150,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                           icon: Icons.contact_support_rounded,
                           title: 'Contact Us',
                           subtitle: 'Email, phone & office address',
-                          roleColor: AppColors.roleColor(user.activeSessionRole),
+                          roleColor:
+                              AppColors.roleColor(user.activeSessionRole),
                           isDark: isDark,
                           onTap: () =>
                               Navigator.pushNamed(context, AppRoutes.contactUs),
@@ -156,7 +160,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                           icon: Icons.info_outline_rounded,
                           title: 'About Enything',
                           subtitle: 'App version, Terms, Privacy Policy',
-                          roleColor: AppColors.roleColor(user.activeSessionRole),
+                          roleColor:
+                              AppColors.roleColor(user.activeSessionRole),
                           isDark: isDark,
                           onTap: () => Navigator.pushNamed(
                               context, AppRoutes.aboutEnything),
@@ -167,7 +172,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                               : Icons.dark_mode_rounded,
                           title: isDark ? 'Light Mode' : 'Dark Mode',
                           subtitle: 'Toggle app appearance',
-                          roleColor: AppColors.roleColor(user.activeSessionRole),
+                          roleColor:
+                              AppColors.roleColor(user.activeSessionRole),
                           isDark: isDark,
                           onTap: () =>
                               context.read<ThemeProvider>().toggleTheme(),
@@ -294,18 +300,15 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                           ClipRRect(
                             borderRadius: BorderRadius.circular(20),
                             child: BackdropFilter(
-                              filter:
-                                  ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.18),
+                                  color: Colors.white.withValues(alpha: 0.18),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.3),
+                                    color: Colors.white.withValues(alpha: 0.3),
                                   ),
                                 ),
                                 child: Row(
@@ -423,8 +426,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
           subtitle: 'Bank accounts for settlements',
           roleColor: const Color(0xFF9C27B0),
           isDark: isDark,
-          onTap: () =>
-              showPayoutSettingsDialog(context, 'shops', 'seller_id'),
+          onTap: () => showPayoutSettingsDialog(context, 'shops', 'seller_id'),
         ),
         const SizedBox(height: 8),
       ],
@@ -505,8 +507,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
           ),
           boxShadow: [
             BoxShadow(
-              color:
-                  Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -550,8 +551,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                   ],
                 ),
               ),
-              trailing ?? Icon(Icons.arrow_forward_ios_rounded,
-                  size: 14, color: Colors.grey.shade400),
+              trailing ??
+                  Icon(Icons.arrow_forward_ios_rounded,
+                      size: 14, color: Colors.grey.shade400),
             ],
           ),
         ),
@@ -638,11 +640,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: isDark
-                ? const Color(0xFF1A1D30)
-                : Colors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24)),
+            backgroundColor: isDark ? const Color(0xFF1A1D30) : Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             title: Text('Logout',
                 style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
             content: Text('Are you sure you want to logout?',
@@ -659,8 +659,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text('Logout',
                     style: GoogleFonts.outfit(
-                        color: AppColors.danger,
-                        fontWeight: FontWeight.w700)),
+                        color: AppColors.danger, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -718,8 +717,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
     showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) =>
-            const Center(child: CircularProgressIndicator()));
+        builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
       final res = await Supabase.instance.client
           .from('shops')
@@ -735,8 +733,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
           context: context,
           isScrollControlled: true,
           shape: const RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24))),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           builder: (ctx) => Padding(
             padding: EdgeInsets.fromLTRB(
                 24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
@@ -748,35 +745,32 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                   Text('Shop Details',
                       style: GoogleFonts.outfit(
                           fontSize: 20, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 20),
-                TextField(
-                    controller: nameCtrl,
-                    decoration:
-                        const InputDecoration(labelText: 'Shop Name')),
-                const SizedBox(height: 16),
-                TextField(
-                    controller: addrCtrl,
-                    decoration:
-                        const InputDecoration(labelText: 'Shop Address')),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty) return;
-                    await Supabase.instance.client
-                        .from('shops')
-                        .update({
-                          'name': nameCtrl.text.trim(),
-                          'address': addrCtrl.text.trim()
-                        })
-                        .eq('id', res['id']);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
-                  style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 56)),
-                  child: const Text('Save Changes'),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 20),
+                  TextField(
+                      controller: nameCtrl,
+                      decoration:
+                          const InputDecoration(labelText: 'Shop Name')),
+                  const SizedBox(height: 16),
+                  TextField(
+                      controller: addrCtrl,
+                      decoration:
+                          const InputDecoration(labelText: 'Shop Address')),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (nameCtrl.text.trim().isEmpty) return;
+                      await Supabase.instance.client.from('shops').update({
+                        'name': nameCtrl.text.trim(),
+                        'address': addrCtrl.text.trim()
+                      }).eq('id', res['id']);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 56)),
+                    child: const Text('Save Changes'),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -794,8 +788,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
     showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) =>
-            const Center(child: CircularProgressIndicator()));
+        builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
       final res = await Supabase.instance.client
           .from('delivery_partners')
@@ -809,11 +802,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
           context: context,
           isScrollControlled: true,
           shape: const RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24))),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           builder: (ctx) {
-            final isDark =
-                Theme.of(ctx).brightness == Brightness.dark;
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
             return Padding(
               padding: EdgeInsets.fromLTRB(
                   24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
@@ -825,35 +816,29 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                     Text('Vehicle Information',
                         style: GoogleFonts.outfit(
                             fontSize: 20, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 24),
-                  _buildReadOnlyField(
-                      'Vehicle Type',
-                      res['vehicle_type'] ?? 'Not specified',
-                      isDark),
-                  const SizedBox(height: 16),
-                  _buildReadOnlyField(
-                      'Registration Number',
-                      res['vehicle_reg_number'] ?? 'Not specified',
-                      isDark),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: ElevatedButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                    const SizedBox(height: 24),
+                    _buildReadOnlyField('Vehicle Type',
+                        res['vehicle_type'] ?? 'Not specified', isDark),
+                    const SizedBox(height: 16),
+                    _buildReadOnlyField('Registration Number',
+                        res['vehicle_reg_number'] ?? 'Not specified', isDark),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: Text('Close',
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w700, fontSize: 16)),
                       ),
-                      child: Text('Close',
-                          style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16)),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               ),
             );
           },
@@ -861,8 +846,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Vehicle details not found.')),
+            const SnackBar(content: Text('Vehicle details not found.')),
           );
         }
       }
@@ -887,8 +871,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
             ? Colors.white.withValues(alpha: 0.05)
             : Colors.black.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: isDark ? Colors.white12 : Colors.black12),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -58,7 +58,8 @@ class PermissionModel {
 
   @override
   bool operator ==(Object other) =>
-      identical(this, other) || (other is PermissionModel && other.code == code);
+      identical(this, other) ||
+      (other is PermissionModel && other.code == code);
 
   @override
   int get hashCode => code.hashCode;
@@ -148,13 +149,30 @@ class Permissions {
   /// All grouped by module for UI rendering
   static const Map<String, List<String>> grouped = {
     'Dashboard': [dashboardView],
-    'Orders': [ordersView, ordersAssign, ordersCancel, ordersRefund, ordersOverrideStatus],
+    'Orders': [
+      ordersView,
+      ordersAssign,
+      ordersCancel,
+      ordersRefund,
+      ordersOverrideStatus
+    ],
     'Customers': [customersView, customersEdit, customersBlock],
-    'Sellers': [sellersView, sellersApprove, sellersReject, sellersSuspend, sellersPayouts],
+    'Sellers': [
+      sellersView,
+      sellersApprove,
+      sellersReject,
+      sellersSuspend,
+      sellersPayouts
+    ],
     'Riders': [ridersView, ridersApprove, ridersSuspend, ridersEarnings],
     'Payments': [paymentsView, paymentsRefund, paymentsManualAdjustment],
     'Withdrawals': [withdrawalsView, withdrawalsApprove, withdrawalsReject],
-    'Marketing': [marketingView, marketingSendPush, marketingSendSms, marketingSendEmail],
+    'Marketing': [
+      marketingView,
+      marketingSendPush,
+      marketingSendSms,
+      marketingSendEmail
+    ],
     'Support': [supportView, supportReply, supportClose],
     'Finance': [financeView, financeExport, financePayouts],
     'Analytics': [analyticsView, analyticsExport],
@@ -166,22 +184,38 @@ class Permissions {
 
   static IconData moduleIcon(String module) {
     switch (module.toLowerCase()) {
-      case 'dashboard': return Icons.dashboard_rounded;
-      case 'orders': return Icons.receipt_long_rounded;
-      case 'customers': return Icons.people_rounded;
-      case 'sellers': return Icons.store_rounded;
-      case 'riders': return Icons.delivery_dining_rounded;
-      case 'payments': return Icons.payment_rounded;
-      case 'withdrawals': return Icons.account_balance_wallet_rounded;
-      case 'marketing': return Icons.campaign_rounded;
-      case 'support': return Icons.support_agent_rounded;
-      case 'finance': return Icons.account_balance_rounded;
-      case 'analytics': return Icons.bar_chart_rounded;
-      case 'settings': return Icons.settings_rounded;
-      case 'roles': return Icons.admin_panel_settings_rounded;
-      case 'audit': return Icons.history_rounded;
-      case 'system': return Icons.dns_rounded;
-      default: return Icons.lock_rounded;
+      case 'dashboard':
+        return Icons.dashboard_rounded;
+      case 'orders':
+        return Icons.receipt_long_rounded;
+      case 'customers':
+        return Icons.people_rounded;
+      case 'sellers':
+        return Icons.store_rounded;
+      case 'riders':
+        return Icons.delivery_dining_rounded;
+      case 'payments':
+        return Icons.payment_rounded;
+      case 'withdrawals':
+        return Icons.account_balance_wallet_rounded;
+      case 'marketing':
+        return Icons.campaign_rounded;
+      case 'support':
+        return Icons.support_agent_rounded;
+      case 'finance':
+        return Icons.account_balance_rounded;
+      case 'analytics':
+        return Icons.bar_chart_rounded;
+      case 'settings':
+        return Icons.settings_rounded;
+      case 'roles':
+        return Icons.admin_panel_settings_rounded;
+      case 'audit':
+        return Icons.history_rounded;
+      case 'system':
+        return Icons.dns_rounded;
+      default:
+        return Icons.lock_rounded;
     }
   }
 }

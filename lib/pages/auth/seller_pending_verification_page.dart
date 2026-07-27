@@ -10,10 +10,13 @@ class SellerPendingVerificationPage extends StatefulWidget {
   const SellerPendingVerificationPage({super.key});
 
   @override
-  State<SellerPendingVerificationPage> createState() => _SellerPendingVerificationPageState();
+  State<SellerPendingVerificationPage> createState() =>
+      _SellerPendingVerificationPageState();
 }
 
-class _SellerPendingVerificationPageState extends State<SellerPendingVerificationPage> with SingleTickerProviderStateMixin {
+class _SellerPendingVerificationPageState
+    extends State<SellerPendingVerificationPage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animCtrl;
   late Animation<double> _pulseAnim;
   RealtimeChannel? _channel;
@@ -21,8 +24,11 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(duration: const Duration(seconds: 2), vsync: this)..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 1.0, end: 1.08).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut));
+    _animCtrl =
+        AnimationController(duration: const Duration(seconds: 2), vsync: this)
+          ..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 1.0, end: 1.08)
+        .animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeInOut));
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -33,24 +39,30 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
         context.read<NotificationProvider>().registerFcmToken(userId, 'seller');
 
         // Listen for live approval
-        _channel = Supabase.instance.client.channel('public:shops:seller_id=eq.$userId')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'shops',
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'seller_id', value: userId),
-            callback: (payload) async {
-              final newStatus = payload.newRecord['verification_status'];
-              if (newStatus != null && newStatus != 'pending') {
-                auth.retryProfileFetch();
-                if (mounted && (newStatus == 'approved' || newStatus == 'verified')) {
-                  Navigator.pushNamedAndRemoveUntil(context, AppRoutes.sellerDashboard, (_) => false);
-                } else if (mounted && newStatus == 'rejected') {
-                  setState(() {}); 
-                }
-              }
-            }
-          ).subscribe();
+        _channel = Supabase.instance.client
+            .channel('public:shops:seller_id=eq.$userId')
+            .onPostgresChanges(
+                event: PostgresChangeEvent.update,
+                schema: 'public',
+                table: 'shops',
+                filter: PostgresChangeFilter(
+                    type: PostgresChangeFilterType.eq,
+                    column: 'seller_id',
+                    value: userId),
+                callback: (payload) async {
+                  final newStatus = payload.newRecord['verification_status'];
+                  if (newStatus != null && newStatus != 'pending') {
+                    auth.retryProfileFetch();
+                    if (mounted &&
+                        (newStatus == 'approved' || newStatus == 'verified')) {
+                      Navigator.pushNamedAndRemoveUntil(
+                          context, AppRoutes.sellerDashboard, (_) => false);
+                    } else if (mounted && newStatus == 'rejected') {
+                      setState(() {});
+                    }
+                  }
+                })
+            .subscribe();
       }
     });
   }
@@ -68,7 +80,8 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final isRejected = auth.user?.verificationStatus == 'rejected';
-    final primaryColor = isRejected ? Colors.redAccent : const Color(0xFFF4C542);
+    final primaryColor =
+        isRejected ? Colors.redAccent : const Color(0xFFF4C542);
 
     return Scaffold(
       backgroundColor: const Color(0xFF02061A),
@@ -93,13 +106,17 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     ScaleTransition(
-                      scale: isRejected ? const AlwaysStoppedAnimation(1.0) : _pulseAnim,
+                      scale: isRejected
+                          ? const AlwaysStoppedAnimation(1.0)
+                          : _pulseAnim,
                       child: Container(
                         padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
                           color: primaryColor.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
-                          border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 2),
+                          border: Border.all(
+                              color: primaryColor.withValues(alpha: 0.3),
+                              width: 2),
                           boxShadow: [
                             BoxShadow(
                               color: primaryColor.withValues(alpha: 0.2),
@@ -109,7 +126,9 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
                           ],
                         ),
                         child: Icon(
-                          isRejected ? Icons.gpp_bad_rounded : Icons.admin_panel_settings_rounded,
+                          isRejected
+                              ? Icons.gpp_bad_rounded
+                              : Icons.admin_panel_settings_rounded,
                           size: 80,
                           color: primaryColor,
                         ),
@@ -117,7 +136,9 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
                     ),
                     const SizedBox(height: 48),
                     Text(
-                      isRejected ? 'Application Rejected' : 'Verification in Progress',
+                      isRejected
+                          ? 'Application Rejected'
+                          : 'Verification in Progress',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         color: Colors.white,
@@ -132,7 +153,8 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.03),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.05)),
                       ),
                       child: Text(
                         isRejected
@@ -151,7 +173,8 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
                       _buildButton(
                         label: 'Re-upload Documents',
                         color: primaryColor,
-                        onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.sellerKycUpload),
+                        onTap: () => Navigator.pushReplacementNamed(
+                            context, AppRoutes.sellerKycUpload),
                         icon: Icons.upload_file_rounded,
                         textColor: Colors.black,
                       )
@@ -160,7 +183,8 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
                         label: 'Return Home',
                         color: Colors.white.withValues(alpha: 0.1),
                         textColor: Colors.white,
-                        onTap: () => Navigator.pushNamedAndRemoveUntil(context, AppRoutes.roleSelect, (_) => false),
+                        onTap: () => Navigator.pushNamedAndRemoveUntil(
+                            context, AppRoutes.roleSelect, (_) => false),
                         icon: Icons.home_rounded,
                       ),
                   ],
@@ -190,7 +214,12 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
     );
   }
 
-  Widget _buildButton({required String label, required Color color, required VoidCallback onTap, required IconData icon, Color? textColor}) {
+  Widget _buildButton(
+      {required String label,
+      required Color color,
+      required VoidCallback onTap,
+      required IconData icon,
+      Color? textColor}) {
     return SizedBox(
       width: double.infinity,
       height: 60,
@@ -200,7 +229,8 @@ class _SellerPendingVerificationPageState extends State<SellerPendingVerificatio
           backgroundColor: color,
           foregroundColor: textColor ?? Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

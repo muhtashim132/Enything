@@ -32,12 +32,14 @@ class _CaReportPageState extends State<CaReportPage> {
 
   // Aggregated values from DB
   double _totalBaseSales = 0;
-  double _nonFoodGst = 0;      // Seller remits (GSTR-1 liability)
-  double _s9_5Gst = 0;         // Enything remits (exempt for seller)
+  double _nonFoodGst = 0; // Seller remits (GSTR-1 liability)
+  double _s9_5Gst = 0; // Enything remits (exempt for seller)
   double _deliveryGst = 0;
   double _platformGst = 0;
-  double _tcsDeducted = 0;     // GST TCS §52 — GSTR-8 credit in GSTR-2B (only on taxable non-food)
-  double _tdsDeducted = 0;     // Income Tax TDS §194-O — Form 26AS credit (all categories, 0.1%)
+  double _tcsDeducted =
+      0; // GST TCS §52 — GSTR-8 credit in GSTR-2B (only on taxable non-food)
+  double _tdsDeducted =
+      0; // Income Tax TDS §194-O — Form 26AS credit (all categories, 0.1%)
   double _commission = 0;
   double _sellerPayout = 0;
   double _grandCollected = 0;
@@ -92,19 +94,20 @@ class _CaReportPageState extends State<CaReportPage> {
 
       setState(() {
         _totalBaseSales = (response['total_base_sales'] ?? 0).toDouble();
-        _nonFoodGst     = (response['non_food_gst'] ?? 0).toDouble();
-        _s9_5Gst        = (response['s9_5_gst'] ?? 0).toDouble();
-        _deliveryGst    = (response['delivery_gst'] ?? 0).toDouble();
-        _platformGst    = (response['platform_gst'] ?? 0).toDouble();
-        _tcsDeducted    = (response['tcs_deducted'] ?? 0).toDouble();
-        _tdsDeducted    = (response['tds_deducted'] ?? 0).toDouble();
-        _commission     = (response['commission'] ?? 0).toDouble();
-        _sellerPayout   = (response['seller_payout'] ?? 0).toDouble();
+        _nonFoodGst = (response['non_food_gst'] ?? 0).toDouble();
+        _s9_5Gst = (response['s9_5_gst'] ?? 0).toDouble();
+        _deliveryGst = (response['delivery_gst'] ?? 0).toDouble();
+        _platformGst = (response['platform_gst'] ?? 0).toDouble();
+        _tcsDeducted = (response['tcs_deducted'] ?? 0).toDouble();
+        _tdsDeducted = (response['tds_deducted'] ?? 0).toDouble();
+        _commission = (response['commission'] ?? 0).toDouble();
+        _sellerPayout = (response['seller_payout'] ?? 0).toDouble();
         _grandCollected = (response['grand_collected'] ?? 0).toDouble();
-        _gatewayFees    = (response['gateway_fees'] ?? 0).toDouble();
+        _gatewayFees = (response['gateway_fees'] ?? 0).toDouble();
         _deliveredOrders = (response['delivered_orders'] ?? 0) as int;
-        _monthlyOrders  = List<Map<String, dynamic>>.from(ordersListResp as List);
-        _isLoading      = false;
+        _monthlyOrders =
+            List<Map<String, dynamic>>.from(ordersListResp as List);
+        _isLoading = false;
       });
     } catch (e) {
       debugPrint('CaReport error: $e');
@@ -123,7 +126,8 @@ class _CaReportPageState extends State<CaReportPage> {
 
   void _nextMonth() {
     final now = DateTime.now();
-    if (_selectedMonth.year == now.year && _selectedMonth.month == now.month) return;
+    if (_selectedMonth.year == now.year && _selectedMonth.month == now.month)
+      return;
     setState(() {
       _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
     });
@@ -131,8 +135,20 @@ class _CaReportPageState extends State<CaReportPage> {
   }
 
   String get _monthLabel {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun',
-                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return '${months[_selectedMonth.month - 1]} ${_selectedMonth.year}';
   }
 
@@ -163,7 +179,7 @@ class _CaReportPageState extends State<CaReportPage> {
             '\u2192 Enything files GSTR-8 by 10th of next month.\n'
             '\u2192 Claim \u20b9${_f(_tcsDeducted)} as credit in your GSTR-2B after Enything files GSTR-8.\n'
         : '(No GST TCS \u2014 all your orders are food/\u00a79(5) or 0% GST categories)';
-    
+
     return '''
 ENYTHING \u2014 CA MONTHLY TAX REPORT
 Period : $_monthLabel
@@ -230,7 +246,8 @@ Gateway Fees                    : \u20b9${_f(_gatewayFees)}
         backgroundColor: const Color(0xFF0A0A14),
         foregroundColor: Colors.white,
         title: Text('CA Tax Report',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.white)),
+            style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w700, color: Colors.white)),
         elevation: 0,
         actions: [
           IconButton(
@@ -242,201 +259,219 @@ Gateway Fees                    : \u20b9${_f(_gatewayFees)}
       ),
       body: MaxWidthContainer(
         child: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF4C6EF5)))
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
-              children: [
-                // ── Month Selector ────────────────────────────────────────
-                _monthSelector(),
-                const SizedBox(height: 8),
-                // Summary pill
-                _summaryPill(),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _monthlyOrders.isEmpty ? null : _showTransactionsBottomSheet,
-                  icon: const Icon(Icons.list_alt_rounded, size: 18),
-                  label: Text('View Detailed Transactions',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white24),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    minimumSize: const Size(double.infinity, 44),
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF4C6EF5)))
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
+                children: [
+                  // ── Month Selector ────────────────────────────────────────
+                  _monthSelector(),
+                  const SizedBox(height: 8),
+                  // Summary pill
+                  _summaryPill(),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _monthlyOrders.isEmpty
+                        ? null
+                        : _showTransactionsBottomSheet,
+                    icon: const Icon(Icons.list_alt_rounded, size: 18),
+                    label: Text('View Detailed Transactions',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white24),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      minimumSize: const Size(double.infinity, 44),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                // ── Document 1 — Sales Register ───────────────────────────
-                _docCard(
-                  docNumber: '01',
-                  title: 'Sales Register',
-                  subtitle: 'File in GSTR-1 & GSTR-3B by 11th / 20th',
-                  accentColor: const Color(0xFF4C6EF5),
-                  rows: [
-                    _row('Taxable Base Sales (excl. GST)', _totalBaseSales),
-                    _row('GST You Must Remit (non-food)', _nonFoodGst,
-                        color: const Color(0xFFFF6B6B)),
-                    _row('GST Paid by Enything — S.9(5) Food', _s9_5Gst,
-                        color: const Color(0xFF51CF66), tag: 'NOT YOUR LIABILITY'),
-                    _divider(),
-                    _row('Total Orders (Delivered)', _deliveredOrders.toDouble(),
-                        isCount: true),
-                  ],
-                  copyText: '''Sales Register — $_monthLabel
+                  const SizedBox(height: 20),
+                  // ── Document 1 — Sales Register ───────────────────────────
+                  _docCard(
+                    docNumber: '01',
+                    title: 'Sales Register',
+                    subtitle: 'File in GSTR-1 & GSTR-3B by 11th / 20th',
+                    accentColor: const Color(0xFF4C6EF5),
+                    rows: [
+                      _row('Taxable Base Sales (excl. GST)', _totalBaseSales),
+                      _row('GST You Must Remit (non-food)', _nonFoodGst,
+                          color: const Color(0xFFFF6B6B)),
+                      _row('GST Paid by Enything — S.9(5) Food', _s9_5Gst,
+                          color: const Color(0xFF51CF66),
+                          tag: 'NOT YOUR LIABILITY'),
+                      _divider(),
+                      _row('Total Orders (Delivered)',
+                          _deliveredOrders.toDouble(),
+                          isCount: true),
+                    ],
+                    copyText: '''Sales Register — $_monthLabel
 Taxable Base Sales : ₹${_f(_totalBaseSales)}
 GST Seller Remits  : ₹${_f(_nonFoodGst)}
 GST Enything S.9(5)   : ₹${_f(_s9_5Gst)}  (not your liability)
 Orders Delivered   : $_deliveredOrders''',
-                ),
-                // ── Document 2 — Commission Invoice ──────────────────────
-                _docCard(
-                  docNumber: '02',
-                  title: 'Commission Invoice',
-                  subtitle: 'Claim GST on commission as ITC in GSTR-3B',
-                  accentColor: const Color(0xFFCC5DE8),
-                  rows: [
-                    _row('Enything Commission', _commission),
-                    _row('GST on Commission (18%)', _commission * 0.18,
-                        color: const Color(0xFF51CF66), tag: 'CLAIM AS ITC'),
-                    _divider(),
-                    _row('Total Invoice Amount', _commission * 1.18, isBold: true),
-                  ],
-                  copyText: '''Commission Invoice — $_monthLabel
+                  ),
+                  // ── Document 2 — Commission Invoice ──────────────────────
+                  _docCard(
+                    docNumber: '02',
+                    title: 'Commission Invoice',
+                    subtitle: 'Claim GST on commission as ITC in GSTR-3B',
+                    accentColor: const Color(0xFFCC5DE8),
+                    rows: [
+                      _row('Enything Commission', _commission),
+                      _row('GST on Commission (18%)', _commission * 0.18,
+                          color: const Color(0xFF51CF66), tag: 'CLAIM AS ITC'),
+                      _divider(),
+                      _row('Total Invoice Amount', _commission * 1.18,
+                          isBold: true),
+                    ],
+                    copyText: '''Commission Invoice — $_monthLabel
 Enything Commission   : ₹${_f(_commission)}
 GST on Commission  : ₹${_f(_commission * 0.18)}  ← claim as ITC
 Total              : ₹${_f(_commission * 1.18)}''',
-                ),
-                // ── Document 3 — Section 9(5) ─────────────────────────────
-                _docCard(
-                  docNumber: '03',
-                  title: 'Section 9(5) Statement',
-                  subtitle: 'Proves Enything paid food GST — exclude from your GSTR-1',
-                  accentColor: const Color(0xFF51CF66),
-                  rows: [
-                    _row('Food/Restaurant GST — Enything Remitted', _s9_5Gst,
-                        color: const Color(0xFF51CF66)),
-                    _row('Delivery GST — Enything Remitted', _deliveryGst,
-                        color: const Color(0xFF51CF66)),
-                    _row('Platform GST — Enything Remitted', _platformGst,
-                        color: const Color(0xFF51CF66)),
-                    _divider(),
-                    _row('Total GST Enything Pays to Govt',
-                        _s9_5Gst + _deliveryGst + _platformGst,
-                        isBold: true, color: const Color(0xFF51CF66)),
-                  ],
-                  copyText: '''S.9(5) Statement — $_monthLabel
+                  ),
+                  // ── Document 3 — Section 9(5) ─────────────────────────────
+                  _docCard(
+                    docNumber: '03',
+                    title: 'Section 9(5) Statement',
+                    subtitle:
+                        'Proves Enything paid food GST — exclude from your GSTR-1',
+                    accentColor: const Color(0xFF51CF66),
+                    rows: [
+                      _row('Food/Restaurant GST — Enything Remitted', _s9_5Gst,
+                          color: const Color(0xFF51CF66)),
+                      _row('Delivery GST — Enything Remitted', _deliveryGst,
+                          color: const Color(0xFF51CF66)),
+                      _row('Platform GST — Enything Remitted', _platformGst,
+                          color: const Color(0xFF51CF66)),
+                      _divider(),
+                      _row('Total GST Enything Pays to Govt',
+                          _s9_5Gst + _deliveryGst + _platformGst,
+                          isBold: true, color: const Color(0xFF51CF66)),
+                    ],
+                    copyText: '''S.9(5) Statement — $_monthLabel
 Legal basis: CGST Notification 17/2021-CT(R)
 Food GST Enything remits  : ₹${_f(_s9_5Gst)}
 Delivery GST           : ₹${_f(_deliveryGst)}
 Platform GST           : ₹${_f(_platformGst)}
 Total Enything Pays       : ₹${_f(_s9_5Gst + _deliveryGst + _platformGst)}
 Do NOT include food GST in your GSTR-1.''',
-                ),
-                // ── Document 4 — Income Tax TDS Statement (§194-O) ──────────────────
-                _docCard(
-                  docNumber: '04',
-                  title: 'TDS Statement (Income Tax §194-O)',
-                  subtitle: 'Claim this as credit in Form 26AS after Enything files 26QE',
-                  accentColor: const Color(0xFF4DABF7),
-                  rows: [
-                    _row('IT TDS Withheld by Enything (0.1%)', _tdsDeducted,
-                        color: const Color(0xFF4DABF7), tag: 'FORM 26AS CREDIT'),
-                    _row('Gross Sales Basis (all categories)', _totalBaseSales),
-                    _divider(),
-                    _infoRow(
-                      'Finance Act 2024: Rate 0.1% (was 1%) effective Oct 1 2024.\n'
-                      'Applies to ALL categories — food, retail, pharmacy. No exceptions.\n'
-                      'Enything files Form 26QE by 7th of next month. Claim in Form 26AS / AIS.',
-                    ),
-                  ],
-                  copyText: '''TDS Statement (§194-O) — $_monthLabel
+                  ),
+                  // ── Document 4 — Income Tax TDS Statement (§194-O) ──────────────────
+                  _docCard(
+                    docNumber: '04',
+                    title: 'TDS Statement (Income Tax §194-O)',
+                    subtitle:
+                        'Claim this as credit in Form 26AS after Enything files 26QE',
+                    accentColor: const Color(0xFF4DABF7),
+                    rows: [
+                      _row('IT TDS Withheld by Enything (0.1%)', _tdsDeducted,
+                          color: const Color(0xFF4DABF7),
+                          tag: 'FORM 26AS CREDIT'),
+                      _row('Gross Sales Basis (all categories)',
+                          _totalBaseSales),
+                      _divider(),
+                      _infoRow(
+                        'Finance Act 2024: Rate 0.1% (was 1%) effective Oct 1 2024.\n'
+                        'Applies to ALL categories — food, retail, pharmacy. No exceptions.\n'
+                        'Enything files Form 26QE by 7th of next month. Claim in Form 26AS / AIS.',
+                      ),
+                    ],
+                    copyText: '''TDS Statement (§194-O) — $_monthLabel
 Legal basis: IT Act §194-O (Finance Act 2024, rate 0.1% eff. Oct 1 2024)
 TDS Deducted (0.1%) : ₹${_f(_tdsDeducted)}
 Gross Sales Basis   : ₹${_f(_totalBaseSales)}
 → Enything files Form 26QE by 7th of next month.
 → Claim ₹${_f(_tdsDeducted)} as credit in your Form 26AS / AIS.''',
-                ),
-                // ── Document 5 — GST TCS Statement (§52) — conditional ──────────────
-                // Only shown when TCS > 0 (i.e., seller has taxable non-food orders).
-                // Pure restaurant/food sellers will never see this card.
-                if (_tcsDeducted > 0)
-                  _docCard(
-                    docNumber: '05',
-                    title: 'GST TCS Statement (§52 CGST)',
-                    subtitle: 'Only on taxable non-food orders — claim in GSTR-2B',
-                    accentColor: const Color(0xFFF4C542),
-                    rows: [
-                      _row('GST TCS Withheld by Enything (1%)', _tcsDeducted,
-                          color: const Color(0xFFF4C542), tag: 'GSTR-2B CREDIT'),
-                      _row('Net Taxable Supply Basis (non-food)', _totalBaseSales - (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales)),
-                      _divider(),
-                      _infoRow(
-                        'CGST §52: TCS = 1% on taxable non-food supplies only.\n'
-                        '§9(5) food & 0% GST categories (Fruits, Butcher, Fish) are exempt from TCS.\n'
-                        'Enything files GSTR-8 by 10th of next month. Claim credit in GSTR-2B after that.',
-                      ),
-                    ],
-                    copyText: '''GST TCS Statement (§52) — $_monthLabel
+                  ),
+                  // ── Document 5 — GST TCS Statement (§52) — conditional ──────────────
+                  // Only shown when TCS > 0 (i.e., seller has taxable non-food orders).
+                  // Pure restaurant/food sellers will never see this card.
+                  if (_tcsDeducted > 0)
+                    _docCard(
+                      docNumber: '05',
+                      title: 'GST TCS Statement (§52 CGST)',
+                      subtitle:
+                          'Only on taxable non-food orders — claim in GSTR-2B',
+                      accentColor: const Color(0xFFF4C542),
+                      rows: [
+                        _row('GST TCS Withheld by Enything (1%)', _tcsDeducted,
+                            color: const Color(0xFFF4C542),
+                            tag: 'GSTR-2B CREDIT'),
+                        _row(
+                            'Net Taxable Supply Basis (non-food)',
+                            _totalBaseSales -
+                                (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales)),
+                        _divider(),
+                        _infoRow(
+                          'CGST §52: TCS = 1% on taxable non-food supplies only.\n'
+                          '§9(5) food & 0% GST categories (Fruits, Butcher, Fish) are exempt from TCS.\n'
+                          'Enything files GSTR-8 by 10th of next month. Claim credit in GSTR-2B after that.',
+                        ),
+                      ],
+                      copyText: '''GST TCS Statement (§52) — $_monthLabel
 Legal basis: CGST Act §52 (taxable non-food supplies only)
 GST TCS Deducted (1%)     : ₹${_f(_tcsDeducted)}
 Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales))}
 → §9(5) food orders and 0% GST categories are excluded from TCS.
 → Enything files GSTR-8 by 10th. Claim ₹${_f(_tcsDeducted)} in your GSTR-2B.''',
+                    ),
+                  // ── Payout Reconciliation ─────────────────────────────────
+                  _docCard(
+                    docNumber: '✓',
+                    title: 'Payout Reconciliation',
+                    subtitle: 'Match this with your bank statement',
+                    accentColor: const Color(0xFFFF8C42),
+                    rows: [
+                      _row('Gross Collected from Customers', _grandCollected),
+                      _row('Enything Commission', _commission),
+                      _row('Gateway Fees (Razorpay)', _gatewayFees),
+                      _row('Seller Net Payout (Gross)', _sellerPayout),
+                      _row('(-) IT TDS Withheld (§194-O, 0.1%)', _tdsDeducted),
+                      if (_tcsDeducted > 0)
+                        _row('(-) GST TCS Withheld (§52, 1%)', _tcsDeducted),
+                      _row('Final Bank Deposit',
+                          _sellerPayout - _tdsDeducted - _tcsDeducted,
+                          color: const Color(0xFF51CF66), isBold: true),
+                    ],
+                    copyText: 'Payout Reconciliation — $_monthLabel\n'
+                        'Gross Collected    : ₹${_f(_grandCollected)}\n'
+                        'Enything Commission   : ₹${_f(_commission)}\n'
+                        'Gateway Fees       : ₹${_f(_gatewayFees)}\n'
+                        'Seller Payout (Gross) : ₹${_f(_sellerPayout)}\n'
+                        'IT TDS (§194-O)    : -₹${_f(_tdsDeducted)}\n'
+                        '${_tcsDeducted > 0 ? "GST TCS (§52)      : -₹${_f(_tcsDeducted)}\n" : ""}'
+                        'Final Bank Deposit : ₹${_f(_sellerPayout - _tdsDeducted - _tcsDeducted)}',
                   ),
-                // ── Payout Reconciliation ─────────────────────────────────
-                _docCard(
-                  docNumber: '✓',
-                  title: 'Payout Reconciliation',
-                  subtitle: 'Match this with your bank statement',
-                  accentColor: const Color(0xFFFF8C42),
-                  rows: [
-                    _row('Gross Collected from Customers', _grandCollected),
-                    _row('Enything Commission', _commission),
-                    _row('Gateway Fees (Razorpay)', _gatewayFees),
-                    _row('Seller Net Payout (Gross)', _sellerPayout),
-                    _row('(-) IT TDS Withheld (§194-O, 0.1%)', _tdsDeducted),
-                    if (_tcsDeducted > 0)
-                      _row('(-) GST TCS Withheld (§52, 1%)', _tcsDeducted),
-                    _row('Final Bank Deposit', _sellerPayout - _tdsDeducted - _tcsDeducted,
-                        color: const Color(0xFF51CF66), isBold: true),
-                  ],
-                  copyText: 'Payout Reconciliation — $_monthLabel\n'
-                      'Gross Collected    : ₹${_f(_grandCollected)}\n'
-                      'Enything Commission   : ₹${_f(_commission)}\n'
-                      'Gateway Fees       : ₹${_f(_gatewayFees)}\n'
-                      'Seller Payout (Gross) : ₹${_f(_sellerPayout)}\n'
-                      'IT TDS (§194-O)    : -₹${_f(_tdsDeducted)}\n'
-                      '${_tcsDeducted > 0 ? "GST TCS (§52)      : -₹${_f(_tcsDeducted)}\n" : ""}'
-                      'Final Bank Deposit : ₹${_f(_sellerPayout - _tdsDeducted - _tcsDeducted)}',
-                ),
 
-                // ── Copy Full Report Button ───────────────────────────────
-                const SizedBox(height: 8),
-                ElevatedButton.icon(
-                  onPressed: () => _copyText(_buildFullReport()),
-                  icon: const Icon(Icons.copy_all_rounded),
-                  label: Text('Copy Full Report for CA',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4C6EF5),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 52),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
+                  // ── Copy Full Report Button ───────────────────────────────
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => _copyText(_buildFullReport()),
+                    icon: const Icon(Icons.copy_all_rounded),
+                    label: Text('Copy Full Report for CA',
+                        style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w700, fontSize: 15)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4C6EF5),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 52),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '📌  Share this text report with your CA on WhatsApp or email.\n'
-                  '    Enything files Form 26QE (TDS) by the 7th & GSTR-8 (GST TCS) by the 10th.\n'
-                  '    Check Form 26AS for TDS credit; check GSTR-2B for GST TCS credit.',
-                  style: GoogleFonts.outfit(
-                      color: Colors.white38, fontSize: 11, height: 1.6),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-        ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '📌  Share this text report with your CA on WhatsApp or email.\n'
+                    '    Enything files Form 26QE (TDS) by the 7th & GSTR-8 (GST TCS) by the 10th.\n'
+                    '    Check Form 26AS for TDS credit; check GSTR-2B for GST TCS credit.',
+                    style: GoogleFonts.outfit(
+                        color: Colors.white38, fontSize: 11, height: 1.6),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+      ),
     );
   }
 
@@ -549,7 +584,8 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70),
+              icon:
+                  const Icon(Icons.chevron_left_rounded, color: Colors.white70),
               onPressed: _prevMonth,
             ),
             Expanded(
@@ -590,10 +626,14 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(_shopName,
                 style: GoogleFonts.outfit(
-                    color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600)),
             Text('$_deliveredOrders orders · ₹${_f(_grandCollected)} collected',
                 style: GoogleFonts.outfit(
-                    color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
           ]),
           if (isCurrentMonth)
             Container(
@@ -637,7 +677,8 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
               padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
               decoration: BoxDecoration(
                 color: accentColor.withValues(alpha: 0.08),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Row(
                 children: [
@@ -672,7 +713,8 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.copy_rounded, size: 18, color: accentColor),
+                    icon:
+                        Icon(Icons.copy_rounded, size: 18, color: accentColor),
                     tooltip: 'Copy this section',
                     onPressed: () => _copyText(copyText),
                     padding: EdgeInsets.zero,
@@ -692,8 +734,7 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
 
   Widget _row(String label, double value,
       {Color? color, bool isBold = false, String? tag, bool isCount = false}) {
-    final displayValue =
-        isCount ? value.toInt().toString() : '₹${_f(value)}';
+    final displayValue = isCount ? value.toInt().toString() : '₹${_f(value)}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -703,8 +744,7 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
                 style: GoogleFonts.outfit(
                     color: isBold ? Colors.white : Colors.white70,
                     fontSize: 12,
-                    fontWeight:
-                        isBold ? FontWeight.w700 : FontWeight.w400)),
+                    fontWeight: isBold ? FontWeight.w700 : FontWeight.w400)),
           ),
           if (tag != null) ...[
             Container(
@@ -726,8 +766,7 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
               style: GoogleFonts.outfit(
                   color: color ?? Colors.white,
                   fontSize: isBold ? 15 : 13,
-                  fontWeight:
-                      isBold ? FontWeight.w800 : FontWeight.w600)),
+                  fontWeight: isBold ? FontWeight.w800 : FontWeight.w600)),
         ],
       ),
     );

@@ -20,7 +20,7 @@ Future<void> main() async {
       env[key] = value;
     }
   }
-  
+
   final supabaseUrl = env['SUPABASE_URL'];
   final supabaseKey = env['SUPABASE_ANON_KEY'];
 
@@ -30,8 +30,9 @@ Future<void> main() async {
   }
 
   final client = SupabaseClient(supabaseUrl, supabaseKey);
-  
-  print('--- Starting Stress Test for Extreme Edge Cases & Pixel Overloading ---');
+
+  print(
+      '--- Starting Stress Test for Extreme Edge Cases & Pixel Overloading ---');
 
   // Hardcoded IDs for test setup (these can be random for isolation)
   final customerId = 'c0000000-0000-0000-0000-000000000000';
@@ -42,9 +43,28 @@ Future<void> main() async {
   // 1. Setup base data
   print('Setting up base data...');
   try {
-    await client.from('users').upsert({'id': customerId, 'email': 'stress@test.com', 'role': 'customer', 'name': 'Stress Test User', 'phone': '+19999999999'});
-    await client.from('shops').upsert({'id': shopId, 'owner_id': customerId, 'name': 'Stress Test Shop', 'status': 'active', 'category': 'food'});
-    await client.from('products').upsert({'id': productId, 'shop_id': shopId, 'name': 'Stress Test Item', 'price': 100.0, 'total_quantity': 50, 'status': 'active'});
+    await client.from('users').upsert({
+      'id': customerId,
+      'email': 'stress@test.com',
+      'role': 'customer',
+      'name': 'Stress Test User',
+      'phone': '+19999999999'
+    });
+    await client.from('shops').upsert({
+      'id': shopId,
+      'owner_id': customerId,
+      'name': 'Stress Test Shop',
+      'status': 'active',
+      'category': 'food'
+    });
+    await client.from('products').upsert({
+      'id': productId,
+      'shop_id': shopId,
+      'name': 'Stress Test Item',
+      'price': 100.0,
+      'total_quantity': 50,
+      'status': 'active'
+    });
   } catch (e) {
     print('Setup failed: $e');
   }
@@ -55,7 +75,8 @@ Future<void> main() async {
 
   // --- Test 1: Massive Rejection Message ---
   print('\n--- SCENARIO 1: Massive Rejection Message ---');
-  await _createDummyOrder(client, orderId, shopId, customerId, productId, 'awaiting_acceptance');
+  await _createDummyOrder(
+      client, orderId, shopId, customerId, productId, 'awaiting_acceptance');
 
   try {
     await client.rpc('reject_order_seller', params: {
@@ -66,7 +87,8 @@ Future<void> main() async {
     throw Exception('Failed: DB accepted a 5MB rejection message!');
   } catch (e) {
     if (e.toString().contains('orders_rejection_msg_length')) {
-      print('✅ Success: DB successfully blocked the 5MB rejection message via constraint.');
+      print(
+          '✅ Success: DB successfully blocked the 5MB rejection message via constraint.');
     } else {
       throw Exception('Failed with unexpected error: $e');
     }
@@ -74,15 +96,16 @@ Future<void> main() async {
 
   // --- Test 2: Massive Review Comment ---
   print('\n--- SCENARIO 2: Massive Review Comment ---');
-  
+
   // Transition order to delivered for valid review status
   await Process.run('supabase', [
-    'db', 'query',
+    'db',
+    'query',
     "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId'; " +
-    "UPDATE orders SET status = 'preparing' WHERE id = '$orderId'; " +
-    "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId'; " +
-    "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId'; " +
-    "UPDATE orders SET status = 'delivered' WHERE id = '$orderId';",
+        "UPDATE orders SET status = 'preparing' WHERE id = '$orderId'; " +
+        "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId'; " +
+        "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId'; " +
+        "UPDATE orders SET status = 'delivered' WHERE id = '$orderId';",
     '--linked'
   ]);
 
@@ -97,7 +120,8 @@ Future<void> main() async {
     throw Exception('Failed: DB accepted a 5MB review comment!');
   } catch (e) {
     if (e.toString().contains('reviews_comment_length')) {
-      print('✅ Success: DB successfully blocked the 5MB review comment via constraint.');
+      print(
+          '✅ Success: DB successfully blocked the 5MB review comment via constraint.');
     } else {
       throw Exception('Failed with unexpected error: $e');
     }
@@ -106,12 +130,13 @@ Future<void> main() async {
   // Clean up
   print('\nCleaning up...');
   await client.from('orders').delete().eq('id', orderId);
-  
+
   print('\n✅ ALL STRESS TESTS PASSED');
   exit(0);
 }
 
-Future<void> _createDummyOrder(SupabaseClient client, String orderId, String shopId, String customerId, String productId, String status) async {
+Future<void> _createDummyOrder(SupabaseClient client, String orderId,
+    String shopId, String customerId, String productId, String status) async {
   await client.from('orders').delete().eq('id', orderId);
   await client.from('orders').insert({
     'id': orderId,
@@ -125,7 +150,7 @@ Future<void> _createDummyOrder(SupabaseClient client, String orderId, String sho
     'gst_platform': 0.9,
     'grand_total_collected': 105.9,
     'payment_method': 'upi',
-    'delivery_distance_km': 1.0, 
+    'delivery_distance_km': 1.0,
     'gst_item_total': 0.0
   });
 

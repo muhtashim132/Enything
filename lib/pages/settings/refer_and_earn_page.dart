@@ -25,9 +25,9 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
       final auth = context.read<AuthProvider>();
       final userId = auth.user?.id;
       final displayName = auth.user?.fullName ?? 'User';
-      
+
       if (userId == null) return;
-      
+
       await context
           .read<ReferralProvider>()
           .generateReferralCode(userId, displayName);
@@ -42,12 +42,10 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
     Clipboard.setData(ClipboardData(text: code));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Code copied to clipboard!',
-            style: GoogleFonts.outfit()),
+        content: Text('Code copied to clipboard!', style: GoogleFonts.outfit()),
         backgroundColor: const Color(0xFF2F9E44),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
       ),
     );
@@ -67,7 +65,8 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
             expandedHeight: 280,
             pinned: true,
             elevation: 0,
-            backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFF1E3FD8),
+            backgroundColor:
+                isDark ? const Color(0xFF0F172A) : const Color(0xFF1E3FD8),
             leading: Navigator.canPop(context)
                 ? IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new_rounded,
@@ -171,9 +170,7 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.03)
-              : Colors.white,
+          color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
               color: isDark
@@ -213,7 +210,8 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFF4C542).withValues(alpha: 0.4),
+                            color:
+                                const Color(0xFFF4C542).withValues(alpha: 0.4),
                             blurRadius: 16,
                             offset: const Offset(0, 8),
                           )
@@ -239,9 +237,7 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.white,
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: const Color(0xFFF4A800).withValues(alpha: 0.5),
@@ -344,26 +340,33 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
           isDark,
           icon: Icons.share_rounded,
           title: 'Share Your Code',
-          description: 'Share your unique referral code with your friends, family, or colleagues.',
+          description:
+              'Share your unique referral code with your friends, family, or colleagues.',
         ),
         _buildStep(
           isDark,
           icon: Icons.person_add_rounded,
           title: 'Friend Signs Up',
-          description: 'They enter your code in the "Referral Code" field while completing their profile.',
+          description:
+              'They enter your code in the "Referral Code" field while completing their profile.',
         ),
         _buildStep(
           isDark,
           icon: Icons.card_giftcard_rounded,
           title: 'You Both Earn',
-          description: 'When they complete their first order, you get a bonus directly in your wallet!',
+          description:
+              'When they complete their first order, you get a bonus directly in your wallet!',
           isLast: true,
         ),
       ],
     );
   }
 
-  Widget _buildStep(bool isDark, {required IconData icon, required String title, required String description, bool isLast = false}) {
+  Widget _buildStep(bool isDark,
+      {required IconData icon,
+      required String title,
+      required String description,
+      bool isLast = false}) {
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

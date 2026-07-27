@@ -13,29 +13,37 @@ class AuditRepository {
     int limit = 50,
     int offset = 0,
   }) async {
-    var query = _db
-        .from('audit_logs')
-        .select();
+    var query = _db.from('audit_logs').select();
 
     if (actorId != null) query = query.eq('actor_id', actorId);
-    if (action != null && action.isNotEmpty) query = query.ilike('action', '%$action%');
-    if (entityType != null && entityType.isNotEmpty) query = query.eq('entity_type', entityType);
+    if (action != null && action.isNotEmpty)
+      query = query.ilike('action', '%$action%');
+    if (entityType != null && entityType.isNotEmpty)
+      query = query.eq('entity_type', entityType);
     if (from != null) query = query.gte('created_at', from.toIso8601String());
     if (to != null) query = query.lte('created_at', to.toIso8601String());
 
     final data = await query
         .order('created_at', ascending: false)
         .range(offset, offset + limit - 1);
-        
-    final List<Map<String, dynamic>> rawLogs = (data as List).cast<Map<String, dynamic>>();
-    
+
+    final List<Map<String, dynamic>> rawLogs =
+        (data as List).cast<Map<String, dynamic>>();
+
     // Phase 15.1 Fix: Decoupled admin_users fetch to prevent PostgREST FK crashes
-    final actorIds = rawLogs.map((l) => l['actor_id']).whereType<String>().toSet().toList();
+    final actorIds =
+        rawLogs.map((l) => l['actor_id']).whereType<String>().toSet().toList();
     Map<String, dynamic> adminMap = {};
     if (actorIds.isNotEmpty) {
       try {
-        final admins = await _db.from('admin_users').select('id, full_name, email').inFilter('id', actorIds);
-        adminMap = { for (var a in (admins as List).cast<Map<String, dynamic>>()) a['id'] as String: a };
+        final admins = await _db
+            .from('admin_users')
+            .select('id, full_name, email')
+            .inFilter('id', actorIds);
+        adminMap = {
+          for (var a in (admins as List).cast<Map<String, dynamic>>())
+            a['id'] as String: a
+        };
       } catch (e) {
         // Safe fallback if admin_users fails
       }

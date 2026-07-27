@@ -42,12 +42,14 @@ class AllCategoriesPage extends StatelessWidget {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : AppColors.textPrimary),
+        iconTheme:
+            IconThemeData(color: isDark ? Colors.white : AppColors.textPrimary),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final crossAxisCount = Responsive.getGridCrossAxisCount(context, mobile: 2, tablet: 3, desktop: 4);
-          
+          final crossAxisCount = Responsive.getGridCrossAxisCount(context,
+              mobile: 2, tablet: 3, desktop: 4);
+
           return GridView.builder(
             padding: const EdgeInsets.all(16),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -62,15 +64,15 @@ class AllCategoriesPage extends StatelessWidget {
               final catName = cat['name']!;
               final emoji = cat['emoji']!;
               final grad = _gradients[index % _gradients.length];
-              
+
               final group = AppCategories.groupFor(catName);
               final groupInfo = AppCategories.groupInfo(group);
               final desc = groupInfo['label'] ?? 'Explore $catName';
-              
+
               return GestureDetector(
                 onTap: () {
                   Navigator.pushNamed(
-                    context, 
+                    context,
                     AppRoutes.categoryProducts,
                     arguments: {'categoryName': catName},
                   );
@@ -119,7 +121,8 @@ class AllCategoriesPage extends StatelessWidget {
                       ),
                       Positioned.fill(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             mainAxisAlignment: MainAxisAlignment.center,

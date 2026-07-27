@@ -15,8 +15,10 @@ import '../theme/app_colors.dart';
 class MapPickResult {
   final LatLng location;
   final String address;
+
   /// House / Flat / Building name entered by the user (mandatory).
   final String houseNumber;
+
   /// Landmark entered by the user (mandatory).
   final String landmark;
   const MapPickResult({
@@ -124,7 +126,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
     );
 
     // Pre-fill detail fields when editing an existing address
-    if (widget.initialHouseNumber != null && widget.initialHouseNumber!.isNotEmpty) {
+    if (widget.initialHouseNumber != null &&
+        widget.initialHouseNumber!.isNotEmpty) {
       _houseCtrl.text = widget.initialHouseNumber!;
     }
     if (widget.initialLandmark != null && widget.initialLandmark!.isNotEmpty) {
@@ -135,8 +138,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
       _center = widget.initialLocation!;
       _address = widget.initialAddress ?? '';
       if (_address.isEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback(
-            (_) => _reverseGeocode(_center, force: true));
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _reverseGeocode(_center, force: true));
       }
     } else {
       // No seed location → try GPS
@@ -209,9 +212,9 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
         '&zoom=18'
         '&addressdetails=1',
       );
-      final resp = await http
-          .get(uri, headers: {'User-Agent': 'EnythingMobileApp/1.0'})
-          .timeout(const Duration(seconds: 10));
+      final resp = await http.get(uri, headers: {
+        'User-Agent': 'EnythingMobileApp/1.0'
+      }).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
       if (resp.statusCode == 200) {
@@ -293,9 +296,9 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
         '&limit=5'
         '&addressdetails=1',
       );
-      final resp = await http
-          .get(uri, headers: {'User-Agent': 'EnythingMobileApp/1.0'})
-          .timeout(const Duration(seconds: 8));
+      final resp = await http.get(uri, headers: {
+        'User-Agent': 'EnythingMobileApp/1.0'
+      }).timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
       if (resp.statusCode == 200) {
@@ -381,8 +384,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
   Future<void> _confirm() async {
     if (_isGeocoding) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Finding address, please wait…',
-            style: GoogleFonts.outfit()),
+        content:
+            Text('Finding address, please wait…', style: GoogleFonts.outfit()),
         backgroundColor: Colors.orange,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -535,8 +538,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                           width: (16 - t * 6).clamp(8.0, 16.0),
                           height: 5,
                           decoration: BoxDecoration(
-                            color: Colors.black
-                                .withValues(alpha: (0.25 - t * 0.2).clamp(0.0, 0.25)),
+                            color: Colors.black.withValues(
+                                alpha: (0.25 - t * 0.2).clamp(0.0, 0.25)),
                             borderRadius: BorderRadius.circular(4),
                           ),
                         );
@@ -618,8 +621,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                                 child: SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               )
                             : const Icon(Icons.search_rounded,
@@ -651,8 +654,7 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
                     child: Container(
                       decoration: BoxDecoration(
-                        color:
-                            isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -692,13 +694,10 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
           Positioned(
             right: 16,
             // When address is set the bottom card expands with detail fields
-            bottom: _address.isNotEmpty
-                ? safeBottom + 310
-                : safeBottom + 210,
+            bottom: _address.isNotEmpty ? safeBottom + 310 : safeBottom + 210,
             child: FloatingActionButton.small(
               heroTag: 'mapPickerMyLocation',
-              backgroundColor:
-                  isDark ? const Color(0xFF1E1E2E) : Colors.white,
+              backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
               elevation: 6,
               onPressed: _isFetchingGps ? null : _goToCurrentLocation,
               child: _isFetchingGps
@@ -792,7 +791,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                     // Divider label
                     Row(
                       children: [
-                        Expanded(child: Divider(
+                        Expanded(
+                            child: Divider(
                           color: isDark ? Colors.white12 : Colors.grey.shade200,
                           height: 1,
                         )),
@@ -804,11 +804,14 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
-                              color: isDark ? Colors.white38 : Colors.grey.shade500,
+                              color: isDark
+                                  ? Colors.white38
+                                  : Colors.grey.shade500,
                             ),
                           ),
                         ),
-                        Expanded(child: Divider(
+                        Expanded(
+                            child: Divider(
                           color: isDark ? Colors.white12 : Colors.grey.shade200,
                           height: 1,
                         )),
@@ -841,9 +844,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                     width: double.infinity,
                     height: 54,
                     child: ElevatedButton(
-                      onPressed: (_isGeocoding || _address.isEmpty)
-                          ? null
-                          : _confirm,
+                      onPressed:
+                          (_isGeocoding || _address.isEmpty) ? null : _confirm,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -893,8 +895,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
             ),
           ],
         ),
-        child: Icon(icon, size: 20,
-            color: isDark ? Colors.white : Colors.black87),
+        child:
+            Icon(icon, size: 20, color: isDark ? Colors.white : Colors.black87),
       ),
     );
   }
@@ -909,9 +911,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.06)
-            : Colors.grey.shade50,
+        color:
+            isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark ? Colors.white12 : Colors.grey.shade200,
@@ -926,8 +927,7 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
         ),
         decoration: InputDecoration(
           prefixIcon: Icon(icon,
-              size: 18,
-              color: isDark ? Colors.white38 : Colors.grey.shade500),
+              size: 18, color: isDark ? Colors.white38 : Colors.grey.shade500),
           labelText: label,
           labelStyle: GoogleFonts.outfit(
             fontSize: 12,

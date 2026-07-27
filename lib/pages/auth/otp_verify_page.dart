@@ -41,8 +41,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
     super.initState();
     _shakeCtrl = AnimationController(
         duration: const Duration(milliseconds: 500), vsync: this);
-    _shakeAnim = Tween<double>(begin: 0, end: 1).animate(
-        CurvedAnimation(parent: _shakeCtrl, curve: Curves.elasticIn));
+    _shakeAnim = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.elasticIn));
     _startTimer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args =
@@ -110,7 +110,6 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
         _goToWelcomeThenDashboard(_requestedRole ?? 'delivery_partner');
         return;
       }
-
 
       // ── Admin Override: Admins always get the role picker or dashboard directly ──
       if (allRoles.contains('admin')) {
@@ -254,29 +253,42 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
 
   String _roleLabel(String r) {
     switch (r) {
-      case 'seller':           return 'Seller';
-      case 'delivery_partner': return 'Delivery Partner';
-      case 'customer':         return 'Customer';
-      case 'admin':            return 'Admin';
-      default:                 return r;
+      case 'seller':
+        return 'Seller';
+      case 'delivery_partner':
+        return 'Delivery Partner';
+      case 'customer':
+        return 'Customer';
+      case 'admin':
+        return 'Admin';
+      default:
+        return r;
     }
   }
 
   String _roleEmoji(String r) {
     switch (r) {
-      case 'seller':           return '🏪';
-      case 'delivery_partner': return '🏍️';
-      case 'admin':            return '👑';
-      default:                 return '🛒';
+      case 'seller':
+        return '🏪';
+      case 'delivery_partner':
+        return '🏍️';
+      case 'admin':
+        return '👑';
+      default:
+        return '🛒';
     }
   }
 
   Color _roleColor(String r) {
     switch (r) {
-      case 'seller':           return const Color(0xFFF4C542);
-      case 'delivery_partner': return const Color(0xFF51CF66);
-      case 'admin':            return const Color(0xFF8B2FC9);
-      default:                 return const Color(0xFF4C6EF5);
+      case 'seller':
+        return const Color(0xFFF4C542);
+      case 'delivery_partner':
+        return const Color(0xFF51CF66);
+      case 'admin':
+        return const Color(0xFF8B2FC9);
+      default:
+        return const Color(0xFF4C6EF5);
     }
   }
 
@@ -312,8 +324,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
               ),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 decoration: BoxDecoration(
                   color: _roleColor(_welcomeRole).withValues(alpha: 0.20),
                   borderRadius: BorderRadius.circular(30),
@@ -361,150 +373,152 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
             child: MaxWidthContainer(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                children: [
-                  const SizedBox(height: 48),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 48),
 
-                  // Check icon
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2F9E44).withValues(alpha: 0.20),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: const Color(0xFF51CF66).withValues(alpha: 0.50),
-                          width: 2),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.verified_rounded,
-                          color: Color(0xFF51CF66), size: 40),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  Text(
-                    'Verified, $name! 🎉',
-                    style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'You have multiple roles. Choose how\nyou want to continue today:',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
-                        color: Colors.white54, fontSize: 14, height: 1.5),
-                  ),
-                  const SizedBox(height: 36),
-
-                  // Role option cards
-                  ..._availableRoles.map((role) => Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: GestureDetector(
-                          onTap: () => _selectRole(role),
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: _roleColor(role).withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                  color: _roleColor(role).withValues(alpha: 0.35),
-                                  width: 1.5),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    color: _roleColor(role).withValues(alpha: 0.18),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                        color: _roleColor(role)
-                                            .withValues(alpha: 0.40)),
-                                  ),
-                                  child: Center(
-                                    child: Text(_roleEmoji(role),
-                                        style:
-                                            const TextStyle(fontSize: 26)),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _roleLabel(role),
-                                        style: GoogleFonts.outfit(
-                                          color: Colors.white,
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        _roleDashboardHint(role),
-                                        style: GoogleFonts.outfit(
-                                            color: Colors.white38,
-                                            fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(Icons.arrow_forward_ios_rounded,
-                                    color: _roleColor(role), size: 18),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )),
-
-                  const SizedBox(height: 16),
-
-                  // Add new role option
-                  GestureDetector(
-                    onTap: () {
-                      setState(() => _showRolePicker = false);
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        AppRoutes.roleSelect,
-                        (_) => false,
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
+                    // Check icon
+                    Container(
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(16),
+                        color: const Color(0xFF2F9E44).withValues(alpha: 0.20),
+                        shape: BoxShape.circle,
                         border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.10)),
+                            color:
+                                const Color(0xFF51CF66).withValues(alpha: 0.50),
+                            width: 2),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.add_circle_outline,
-                              color: Color(0xFFF4C542), size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Add another role',
-                            style: GoogleFonts.outfit(
-                              color: const Color(0xFFF4C542),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                      child: const Center(
+                        child: Icon(Icons.verified_rounded,
+                            color: Color(0xFF51CF66), size: 40),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 40),
-                ],
+                    const SizedBox(height: 24),
+
+                    Text(
+                      'Verified, $name! 🎉',
+                      style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'You have multiple roles. Choose how\nyou want to continue today:',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                          color: Colors.white54, fontSize: 14, height: 1.5),
+                    ),
+                    const SizedBox(height: 36),
+
+                    // Role option cards
+                    ..._availableRoles.map((role) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: GestureDetector(
+                            onTap: () => _selectRole(role),
+                            child: Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: _roleColor(role).withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: _roleColor(role)
+                                        .withValues(alpha: 0.35),
+                                    width: 1.5),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 56,
+                                    height: 56,
+                                    decoration: BoxDecoration(
+                                      color: _roleColor(role)
+                                          .withValues(alpha: 0.18),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: _roleColor(role)
+                                              .withValues(alpha: 0.40)),
+                                    ),
+                                    child: Center(
+                                      child: Text(_roleEmoji(role),
+                                          style: const TextStyle(fontSize: 26)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _roleLabel(role),
+                                          style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          _roleDashboardHint(role),
+                                          style: GoogleFonts.outfit(
+                                              color: Colors.white38,
+                                              fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(Icons.arrow_forward_ios_rounded,
+                                      color: _roleColor(role), size: 18),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )),
+
+                    const SizedBox(height: 16),
+
+                    // Add new role option
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _showRolePicker = false);
+                        Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          AppRoutes.roleSelect,
+                          (_) => false,
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.10)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.add_circle_outline,
+                                color: Color(0xFFF4C542), size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Add another role',
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFFF4C542),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
-            ),
             ),
           ),
         ],
@@ -514,10 +528,14 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
 
   String _roleDashboardHint(String r) {
     switch (r) {
-      case 'seller':           return 'Go to Seller Dashboard';
-      case 'delivery_partner': return 'Go to Delivery Dashboard';
-      case 'admin':            return 'Enter God Mode Control Tower';
-      default:                 return 'Go to Customer Home';
+      case 'seller':
+        return 'Go to Seller Dashboard';
+      case 'delivery_partner':
+        return 'Go to Delivery Dashboard';
+      case 'admin':
+        return 'Enter God Mode Control Tower';
+      default:
+        return 'Go to Customer Home';
     }
   }
 
@@ -566,192 +584,200 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
             child: MaxWidthContainer(
               child: SingleChildScrollView(
                 child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 16),
-                    // Logo mark
-                    if (MediaQuery.of(context).viewInsets.bottom == 0) ...[
-                      const _MiniLogo(size: 110),
-                      const SizedBox(height: 20),
-                    ],
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      // Logo mark
+                      if (MediaQuery.of(context).viewInsets.bottom == 0) ...[
+                        const _MiniLogo(size: 110),
+                        const SizedBox(height: 20),
+                      ],
 
-                    // Role badge
-                    if (_requestedRole != null)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: roleColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(30),
-                          border:
-                              Border.all(color: roleColor.withValues(alpha: 0.40)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_roleEmoji(_requestedRole!),
-                                style: const TextStyle(fontSize: 14)),
-                            const SizedBox(width: 6),
-                            Text(
-                              'As ${_roleLabel(_requestedRole!)}',
-                              style: GoogleFonts.outfit(
-                                  color: roleColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    Text(
-                      'Verify your number',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 8),
-                    RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(children: [
-                        TextSpan(
-                            text: 'OTP sent to ',
-                            style: GoogleFonts.outfit(
-                                color: Colors.white54, fontSize: 14)),
-                        TextSpan(
-                            text: maskedPhone,
-                            style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700)),
-                      ]),
-                    ),
-                    SizedBox(height: MediaQuery.of(context).viewInsets.bottom > 0 ? 20 : 40),
-
-                    // 6-box OTP input
-                    AnimatedBuilder(
-                      animation: _shakeAnim,
-                      builder: (_, child) => Transform.translate(
-                        offset: Offset(
-                            _shakeAnim.value > 0
-                                ? (8 * (0.5 - _shakeAnim.value).abs() * 4)
-                                : 0,
-                            0),
-                        child: child,
-                      ),
-                      child: Pinput(
-                        length: 6,
-                        controller: _ctrl,
-                        focusNode: _focusNode,
-                        autofillHints: const [AutofillHints.oneTimeCode],
-                        onCompleted: (_) => _verify(),
-                        separatorBuilder: (index) => const SizedBox(width: 10),
-                        defaultPinTheme: PinTheme(
-                          width: 46,
-                          height: 56,
-                          textStyle: GoogleFonts.outfit(
-                            color: const Color(0xFFF4C542),
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
+                      // Role badge
+                      if (_requestedRole != null)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(14),
+                            color: roleColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(30),
                             border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.12),
-                                width: 1.5),
+                                color: roleColor.withValues(alpha: 0.40)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_roleEmoji(_requestedRole!),
+                                  style: const TextStyle(fontSize: 14)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'As ${_roleLabel(_requestedRole!)}',
+                                style: GoogleFonts.outfit(
+                                    color: roleColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700),
+                              ),
+                            ],
                           ),
                         ),
-                        focusedPinTheme: PinTheme(
-                          width: 46,
-                          height: 56,
-                          textStyle: GoogleFonts.outfit(
-                            color: const Color(0xFFF4C542),
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                                color: const Color(0xFF4C6EF5)
-                                    .withValues(alpha: 0.60),
-                                width: 1.5),
-                          ),
-                        ),
+
+                      Text(
+                        'Verify your number',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800),
                       ),
-                    ),
-
-                    SizedBox(height: MediaQuery.of(context).viewInsets.bottom > 0 ? 16 : 36),
-
-                    // Verify button
-                    GestureDetector(
-                      onTap: _loading ? null : _verify,
-                      child: Container(
-                        width: double.infinity,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                              colors: [Color(0xFFFFD700), Color(0xFFF4A800)]),
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                                color: const Color(0xFFF4C542).withValues(alpha: 0.40),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8))
-                          ],
-                        ),
-                        child: Center(
-                          child: _loading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.black, strokeWidth: 2.5))
-                              : Text('Verify OTP',
-                                  style: GoogleFonts.outfit(
-                                      color: Colors.black,
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w800)),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Resend
-                    GestureDetector(
-                      onTap: _resendTimer == 0 ? _resend : null,
-                      child: RichText(
+                      const SizedBox(height: 8),
+                      RichText(
                         textAlign: TextAlign.center,
                         text: TextSpan(children: [
                           TextSpan(
-                              text: "Didn't receive OTP? ",
+                              text: 'OTP sent to ',
                               style: GoogleFonts.outfit(
-                                  color: Colors.white38, fontSize: 14)),
+                                  color: Colors.white54, fontSize: 14)),
                           TextSpan(
-                            text: _resendTimer > 0
-                                ? 'Resend in ${_resendTimer}s'
-                                : 'Resend',
-                            style: GoogleFonts.outfit(
-                              color: _resendTimer == 0
-                                  ? const Color(0xFFF4C542)
-                                  : Colors.white30,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                              text: maskedPhone,
+                              style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700)),
                         ]),
                       ),
-                    ),
-                    const SizedBox(height: 40),
-                  ],
+                      SizedBox(
+                          height: MediaQuery.of(context).viewInsets.bottom > 0
+                              ? 20
+                              : 40),
+
+                      // 6-box OTP input
+                      AnimatedBuilder(
+                        animation: _shakeAnim,
+                        builder: (_, child) => Transform.translate(
+                          offset: Offset(
+                              _shakeAnim.value > 0
+                                  ? (8 * (0.5 - _shakeAnim.value).abs() * 4)
+                                  : 0,
+                              0),
+                          child: child,
+                        ),
+                        child: Pinput(
+                          length: 6,
+                          controller: _ctrl,
+                          focusNode: _focusNode,
+                          autofillHints: const [AutofillHints.oneTimeCode],
+                          onCompleted: (_) => _verify(),
+                          separatorBuilder: (index) =>
+                              const SizedBox(width: 10),
+                          defaultPinTheme: PinTheme(
+                            width: 46,
+                            height: 56,
+                            textStyle: GoogleFonts.outfit(
+                              color: const Color(0xFFF4C542),
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  width: 1.5),
+                            ),
+                          ),
+                          focusedPinTheme: PinTheme(
+                            width: 46,
+                            height: 56,
+                            textStyle: GoogleFonts.outfit(
+                              color: const Color(0xFFF4C542),
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                  color: const Color(0xFF4C6EF5)
+                                      .withValues(alpha: 0.60),
+                                  width: 1.5),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(
+                          height: MediaQuery.of(context).viewInsets.bottom > 0
+                              ? 16
+                              : 36),
+
+                      // Verify button
+                      GestureDetector(
+                        onTap: _loading ? null : _verify,
+                        child: Container(
+                          width: double.infinity,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                                colors: [Color(0xFFFFD700), Color(0xFFF4A800)]),
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: const Color(0xFFF4C542)
+                                      .withValues(alpha: 0.40),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8))
+                            ],
+                          ),
+                          child: Center(
+                            child: _loading
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.black, strokeWidth: 2.5))
+                                : Text('Verify OTP',
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.black,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Resend
+                      GestureDetector(
+                        onTap: _resendTimer == 0 ? _resend : null,
+                        child: RichText(
+                          textAlign: TextAlign.center,
+                          text: TextSpan(children: [
+                            TextSpan(
+                                text: "Didn't receive OTP? ",
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white38, fontSize: 14)),
+                            TextSpan(
+                              text: _resendTimer > 0
+                                  ? 'Resend in ${_resendTimer}s'
+                                  : 'Resend',
+                              style: GoogleFonts.outfit(
+                                color: _resendTimer == 0
+                                    ? const Color(0xFFF4C542)
+                                    : Colors.white30,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ]),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
               ),
-            ),
             ),
           ),
         ],

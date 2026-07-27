@@ -27,7 +27,8 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
     setState(() => _isEditing = true);
   }
 
-  Future<void> _saveEdit(PlatformConfigProvider config, RbacProvider rbac) async {
+  Future<void> _saveEdit(
+      PlatformConfigProvider config, RbacProvider rbac) async {
     final text = _ctrl.text.trim();
     if (text.isEmpty || double.tryParse(text) == null) {
       setState(() => _isEditing = false);
@@ -44,7 +45,8 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
     if (mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Referral bonus updated!', style: AdminStyles.body(size: 13)),
+          content: Text('Referral bonus updated!',
+              style: AdminStyles.body(size: 13)),
           backgroundColor: AdminColors.success,
           behavior: SnackBarBehavior.floating,
         ));
@@ -70,7 +72,8 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
         ),
       ),
       body: config.loading
-          ? const Center(child: CircularProgressIndicator(color: AdminColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AdminColors.primary))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -88,7 +91,8 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
       decoration: BoxDecoration(
         color: AdminColors.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AdminColors.primary.withValues(alpha: 0.5), width: 1.5),
+        border: Border.all(
+            color: AdminColors.primary.withValues(alpha: 0.5), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,16 +105,20 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
                   color: AdminColors.primary.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.card_giftcard_rounded, color: AdminColors.primary, size: 24),
+                child: const Icon(Icons.card_giftcard_rounded,
+                    color: AdminColors.primary, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Referral Bonus Amount', style: AdminStyles.title(size: 16)),
+                    Text('Referral Bonus Amount',
+                        style: AdminStyles.title(size: 16)),
                     const SizedBox(height: 4),
-                    Text('Amount credited to both referrer and referee', style: AdminStyles.caption(color: AdminColors.textMuted)),
+                    Text('Amount credited to both referrer and referee',
+                        style:
+                            AdminStyles.caption(color: AdminColors.textMuted)),
                   ],
                 ),
               ),
@@ -123,14 +131,17 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
                 Expanded(
                   child: TextField(
                     controller: _ctrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     style: AdminStyles.title(size: 24),
                     decoration: InputDecoration(
                       prefixText: '₹ ',
                       prefixStyle: AdminStyles.title(size: 24),
                       filled: true,
                       fillColor: AdminColors.surface,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none),
                     ),
                     onSubmitted: (_) => _saveEdit(config, rbac),
                   ),
@@ -140,16 +151,21 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
                   onPressed: () => _saveEdit(config, rbac),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AdminColors.success,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 16),
                   ),
-                  child: Text('Save', style: AdminStyles.title(color: Colors.white, size: 16)),
+                  child: Text('Save',
+                      style: AdminStyles.title(color: Colors.white, size: 16)),
                 ),
               ],
             )
           else
             GestureDetector(
-              onTap: rbac.isSuperAdmin ? () => _startEdit(config.referralBonusAmount) : null,
+              onTap: rbac.isSuperAdmin
+                  ? () => _startEdit(config.referralBonusAmount)
+                  : null,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 20),
@@ -161,16 +177,20 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
                   children: [
                     Text(
                       '₹${config.referralBonusAmount}',
-                      style: AdminStyles.title(size: 36, color: AdminColors.primary),
+                      style: AdminStyles.title(
+                          size: 36, color: AdminColors.primary),
                     ),
                     const SizedBox(height: 4),
                     if (rbac.isSuperAdmin)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.edit_rounded, color: AdminColors.textMuted, size: 14),
+                          const Icon(Icons.edit_rounded,
+                              color: AdminColors.textMuted, size: 14),
                           const SizedBox(width: 4),
-                          Text('Tap to edit', style: AdminStyles.caption(color: AdminColors.textMuted)),
+                          Text('Tap to edit',
+                              style: AdminStyles.caption(
+                                  color: AdminColors.textMuted)),
                         ],
                       ),
                   ],
@@ -198,7 +218,8 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
           Row(
             children: [
               _buildStatItem('Total Referrals', '0', Icons.people_rounded),
-              _buildStatItem('Bonus Paid Out', '₹0', Icons.account_balance_wallet_rounded),
+              _buildStatItem(
+                  'Bonus Paid Out', '₹0', Icons.account_balance_wallet_rounded),
             ],
           ),
           const SizedBox(height: 16),
@@ -210,7 +231,8 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline_rounded, color: AdminColors.warning, size: 16),
+                const Icon(Icons.info_outline_rounded,
+                    color: AdminColors.warning, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -235,7 +257,8 @@ class _ReferralSettingsPageState extends State<ReferralSettingsPage> {
             children: [
               Icon(icon, size: 14, color: AdminColors.textMuted),
               const SizedBox(width: 6),
-              Text(label, style: AdminStyles.caption(color: AdminColors.textMuted)),
+              Text(label,
+                  style: AdminStyles.caption(color: AdminColors.textMuted)),
             ],
           ),
           const SizedBox(height: 8),

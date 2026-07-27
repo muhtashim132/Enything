@@ -90,7 +90,7 @@ class AuthProvider extends ChangeNotifier {
         _mockUserId = null;
         _pendingPhone = null;
         _isProfileFetched = false;
-        
+
         // C1 FIX: Clear cart from shared preferences on logout to prevent dirty state
         SharedPreferences.getInstance().then((prefs) {
           prefs.remove('enything_cart_v2');
@@ -104,7 +104,7 @@ class AuthProvider extends ChangeNotifier {
           // FIX BUG-12: Wrong route '/roleSelect' doesn't match AppRoutes.roleSelect = '/auth/role'
           navigatorKey.currentState!
               .pushNamedAndRemoveUntil('/auth/role', (route) => false);
-          
+
           final context = navigatorKey.currentContext;
           if (context != null) {
             if (!context.mounted) return;
@@ -430,16 +430,18 @@ class AuthProvider extends ChangeNotifier {
       _user = UserModel.fromMap({
         ...data,
         'email': _supabase.auth.currentUser?.email ?? '',
-        'phone':
-            (_supabase.auth.currentUser?.email?.contains('9999999996') == true)
-                ? '+919999999996'
-                : (_supabase.auth.currentUser?.email?.contains('9999999997') == true)
-                    ? '+919999999997'
-                    : (_supabase.auth.currentUser?.email?.contains('9999999998') == true)
-                        ? '+919999999998'
-                        : (_supabase.auth.currentUser?.phone?.isNotEmpty == true)
-                            ? _supabase.auth.currentUser!.phone!
-                            : (data['phone'] ?? ''),
+        'phone': (_supabase.auth.currentUser?.email?.contains('9999999996') ==
+                true)
+            ? '+919999999996'
+            : (_supabase.auth.currentUser?.email?.contains('9999999997') ==
+                    true)
+                ? '+919999999997'
+                : (_supabase.auth.currentUser?.email?.contains('9999999998') ==
+                        true)
+                    ? '+919999999998'
+                    : (_supabase.auth.currentUser?.phone?.isNotEmpty == true)
+                        ? _supabase.auth.currentUser!.phone!
+                        : (data['phone'] ?? ''),
         'activeRoles': allRoles,
         'activeSessionRole': sessionRole,
         'verification_status': verificationStatus,
@@ -518,13 +520,17 @@ class AuthProvider extends ChangeNotifier {
   }
 
   String _legacyPasswordFromPhone(String phone) {
-    if (phone.endsWith('9999999996') || phone.endsWith('9999999997') || phone.endsWith('9999999998')) return 'Dummy123';
+    if (phone.endsWith('9999999996') ||
+        phone.endsWith('9999999997') ||
+        phone.endsWith('9999999998')) return 'Dummy123';
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return 'Enything$digits#Auth2025';
   }
 
   String _passwordFromPhone(String phone) {
-    if (phone.endsWith('9999999996') || phone.endsWith('9999999997') || phone.endsWith('9999999998')) return 'Dummy123';
+    if (phone.endsWith('9999999996') ||
+        phone.endsWith('9999999997') ||
+        phone.endsWith('9999999998')) return 'Dummy123';
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     final bytes = utf8.encode('Enything_${digits}_Secured#2026');
     final digest = sha256.convert(bytes);
@@ -657,11 +663,12 @@ class AuthProvider extends ChangeNotifier {
             password: legacyPassword,
           );
           userId = legacyRes.user?.id;
-          
+
           // Transparently upgrade password
           if (userId != null) {
             try {
-              await _supabase.auth.updateUser(UserAttributes(password: password));
+              await _supabase.auth
+                  .updateUser(UserAttributes(password: password));
             } catch (e) {
               debugPrint('Failed to upgrade legacy password: $e');
               // Proceed anyway, they are logged in!
@@ -1014,11 +1021,15 @@ class AuthProvider extends ChangeNotifier {
             .limit(1)
             .maybeSingle();
         if (existing == null) {
-          final res = await _supabase.from('shops').insert({
-            'seller_id': userId,
-            'is_active': false, // shops are inactive pending KYC
-            if (additionalData != null) ...additionalData,
-          }).select('id').single();
+          final res = await _supabase
+              .from('shops')
+              .insert({
+                'seller_id': userId,
+                'is_active': false, // shops are inactive pending KYC
+                if (additionalData != null) ...additionalData,
+              })
+              .select('id')
+              .single();
           if (additionalData != null) {
             additionalData['shop_id'] = res['id'];
           }

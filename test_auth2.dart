@@ -10,13 +10,17 @@ void main() async {
 
   try {
     print('Testing login...');
-    final res = await client.auth.signInWithPassword(email: 'mock919999999997@enything.com', password: 'Dummy123');
+    final res = await client.auth.signInWithPassword(
+        email: 'mock919999999997@enything.com', password: 'Dummy123');
     print('Login success! User: ${res.user?.id}');
   } catch (e) {
     print('Login failed: $e');
     try {
       print('Trying signup...');
-      final res2 = await client.auth.signUp(email: 'mock919999999997@enything.com', password: 'Dummy123', data: {'phone': '+919999999997'});
+      final res2 = await client.auth.signUp(
+          email: 'mock919999999997@enything.com',
+          password: 'Dummy123',
+          data: {'phone': '+919999999997'});
       print('Signup success! User: ${res2.user?.id}');
     } catch (e2) {
       print('Signup failed: $e2');
