@@ -167,7 +167,7 @@ class AppCategories {
       case 'Grocery': return '${base}1583258292688-d0213dc5a3a8$params';
       case 'Restaurant': return '${base}1550966871-3ed3cdb5ed0c$params';
       case 'Fast Food': return '${base}1568901346375-23c9450c58cd$params';
-      case 'Food': return '${base}1553979459-d2229ba7433b$params'; // Epic, perfectly centered, dripping smashburger
+      case 'Food': return '${base}1568901346375-23c9450c58cd$params'; // Epic, perfectly centered, dripping smashburger
       case 'Bakery': return '${base}1509440159596-0249088772ff$params';
       case 'Butcher': return '${base}1628543108325-1c27cd7246b3$params';
       case 'Fish & Seafood': return '${base}1519708227418-c8fd9a32b7a2$params';
