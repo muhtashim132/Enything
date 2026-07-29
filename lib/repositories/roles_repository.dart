@@ -132,8 +132,9 @@ class RolesRepository {
     // Guard: cannot delete system roles
     final role =
         await _db.from('roles').select('is_system').eq('id', roleId).single();
-    if (role['is_system'] == true)
+    if (role['is_system'] == true) {
       throw Exception('Cannot delete system roles');
+    }
     await _db.from('roles').delete().eq('id', roleId);
   }
 

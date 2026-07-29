@@ -7,10 +7,12 @@ Future<void> main() async {
   String supabaseUrl = '';
   String supabaseAnonKey = '';
   for (var line in await envFile.readAsLines()) {
-    if (line.startsWith('SUPABASE_URL='))
+    if (line.startsWith('SUPABASE_URL=')) {
       supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY='))
+    }
+    if (line.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseAnonKey = line.split('=')[1].trim();
+    }
   }
 
   final client = SupabaseClient(

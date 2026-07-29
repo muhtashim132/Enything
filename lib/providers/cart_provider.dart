@@ -528,8 +528,9 @@ class CartProvider extends ChangeNotifier {
             List<String>.from(prefs.getStringList(prefsKey) ?? []);
         currentList.remove(orderId);
         currentList.add(orderId);
-        if (currentList.length > 100)
+        if (currentList.length > 100) {
           currentList = currentList.sublist(currentList.length - 100);
+        }
         await prefs.setStringList(prefsKey, currentList);
         return const RestoreResult(0,
             'All products in this order are no longer available or data is invalid.');
@@ -623,9 +624,10 @@ class CartProvider extends ChangeNotifier {
           List<String>.from(prefs.getStringList(prefsKey) ?? []);
       finalProcessedList.remove(orderId);
       finalProcessedList.add(orderId);
-      if (finalProcessedList.length > 100)
+      if (finalProcessedList.length > 100) {
         finalProcessedList =
             finalProcessedList.sublist(finalProcessedList.length - 100);
+      }
       await prefs.setStringList(prefsKey, finalProcessedList);
 
       return RestoreResult(added, lastError);
@@ -645,8 +647,9 @@ class CartProvider extends ChangeNotifier {
                 List<String>.from(prefs.getStringList(prefsKey) ?? []);
             currentList.remove(orderId);
             currentList.add(orderId);
-            if (currentList.length > 100)
+            if (currentList.length > 100) {
               currentList = currentList.sublist(currentList.length - 100);
+            }
             await prefs.setStringList(prefsKey, currentList);
           }
         } catch (_) {}

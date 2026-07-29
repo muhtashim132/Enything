@@ -7,12 +7,15 @@ Future<void> main() async {
   final lines = envFile.readAsLinesSync();
   String? supabaseUrl, supabaseKey, serviceRoleKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL='))
+    if (line.startsWith('SUPABASE_URL=')) {
       supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY='))
+    }
+    if (line.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseKey = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_SERVICE_ROLE='))
+    }
+    if (line.startsWith('SUPABASE_SERVICE_ROLE=')) {
       serviceRoleKey = line.split('=')[1].trim();
+    }
   }
 
   final client = SupabaseClient(supabaseUrl!, supabaseKey!);
@@ -21,8 +24,8 @@ Future<void> main() async {
       authOptions:
           const AuthClientOptions(authFlowType: AuthFlowType.implicit));
 
-  final email = 'test_customer@auth.enything.app';
-  final password = 'password123';
+  const email = 'test_customer@auth.enything.app';
+  const password = 'password123';
   await authClient.auth.signInWithPassword(email: email, password: password);
   final uid = authClient.auth.currentUser!.id;
 

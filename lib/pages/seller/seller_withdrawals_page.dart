@@ -215,10 +215,12 @@ class _SellerWithdrawalsPageState extends State<SellerWithdrawalsPage> {
                                   'Amount (₹)', Icons.currency_rupee_rounded),
                               validator: (v) {
                                 final d = double.tryParse(v ?? '');
-                                if (d == null || d <= 0)
+                                if (d == null || d <= 0) {
                                   return 'Enter a valid amount';
-                                if (d < 100)
+                                }
+                                if (d < 100) {
                                   return 'Minimum withdrawal is ₹100';
+                                }
                                 return null;
                               },
                             ),

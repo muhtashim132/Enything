@@ -53,18 +53,20 @@ class _KycReviewPageState extends State<KycReviewPage>
       final pending = allShops
           .where((s) => (s['verification_status'] as String?) == 'pending')
           .toList();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _sellerPending = pending;
           _loadingSellers = false;
         });
+      }
     } catch (e) {
       debugPrint('Error loading seller KYC: $e');
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loadingSellers = false;
           _sellerError = e.toString();
         });
+      }
     }
   }
 
@@ -80,18 +82,20 @@ class _KycReviewPageState extends State<KycReviewPage>
       final pending = allRiders
           .where((r) => (r['verification_status'] as String?) == 'pending')
           .toList();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _riderPending = pending;
           _loadingRiders = false;
         });
+      }
     } catch (e) {
       debugPrint('Error loading rider KYC: $e');
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loadingRiders = false;
           _riderError = e.toString();
         });
+      }
     }
   }
 
@@ -379,9 +383,10 @@ class _KycReviewPageState extends State<KycReviewPage>
     required bool isRider,
     String? error,
   }) {
-    if (loading)
+    if (loading) {
       return const Center(
           child: CircularProgressIndicator(color: AdminColors.primary));
+    }
     if (error != null) {
       return Center(
         child: Padding(

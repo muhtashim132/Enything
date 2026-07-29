@@ -59,12 +59,14 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
     if (user.activeRoles.contains('admin')) return true;
 
     // Accept both 'verified' and 'approved' — older admin flows use 'approved'
-    if (role == 'seller')
+    if (role == 'seller') {
       return const ['verified', 'approved']
           .contains(user.sellerVerificationStatus);
-    if (role == 'delivery_partner')
+    }
+    if (role == 'delivery_partner') {
       return const ['verified', 'approved']
           .contains(user.riderVerificationStatus);
+    }
     return false;
   }
 
@@ -77,12 +79,14 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
     if (user.activeRoles.contains('admin')) return false;
 
     // Not pending if status is 'verified' OR 'approved'
-    if (role == 'seller')
+    if (role == 'seller') {
       return !const ['verified', 'approved']
           .contains(user.sellerVerificationStatus);
-    if (role == 'delivery_partner')
+    }
+    if (role == 'delivery_partner') {
       return !const ['verified', 'approved']
           .contains(user.riderVerificationStatus);
+    }
     return false;
   }
 

@@ -12,7 +12,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late CartProvider cartProvider;
-  late PlatformConfigProvider platformProvider;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -22,7 +21,6 @@ void main() {
         anonKey: 'mock',
       );
     } catch (_) {} // Ignore if already initialized
-    platformProvider = PlatformConfigProvider();
     // In test environment, PlatformConfigProvider defaults to values matching PaymentConfig
     cartProvider = CartProvider();
   });

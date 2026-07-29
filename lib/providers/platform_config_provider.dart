@@ -262,8 +262,9 @@ class PlatformConfigProvider extends ChangeNotifier {
   @override
   void dispose() {
     _debounceTimer?.cancel();
-    if (_platformConfigChannel != null)
+    if (_platformConfigChannel != null) {
       _db.removeChannel(_platformConfigChannel!);
+    }
     if (_taxConfigChannel != null) _db.removeChannel(_taxConfigChannel!);
     super.dispose();
   }

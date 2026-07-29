@@ -252,8 +252,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                               final int index = v.toInt();
                                               if (index < 0 ||
                                                   index >=
-                                                      _last7DaysDates.length)
+                                                      _last7DaysDates.length) {
                                                 return const SizedBox.shrink();
+                                              }
                                               final date =
                                                   _last7DaysDates[index];
                                               return Padding(

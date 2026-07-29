@@ -75,8 +75,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
       if (res != null) {
         String roleToNavigate = 'customer';
         if (fullPhone.contains('9999999997')) roleToNavigate = 'seller';
-        if (fullPhone.contains('9999999998'))
+        if (fullPhone.contains('9999999998')) {
           roleToNavigate = 'delivery_partner';
+        }
 
         if (roleToNavigate == 'seller') {
           Navigator.pushNamedAndRemoveUntil(

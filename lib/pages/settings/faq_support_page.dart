@@ -592,8 +592,9 @@ class _FaqSupportPageState extends State<FaqSupportPage>
         final status = ticket['status'] as String? ?? 'open';
 
         Color statusColor = AppColors.info;
-        if (status == 'resolved' || status == 'closed')
+        if (status == 'resolved' || status == 'closed') {
           statusColor = AppColors.success;
+        }
         if (status == 'in_progress') statusColor = AppColors.warning;
 
         return Card(

@@ -35,10 +35,10 @@ Future<void> main() async {
       '--- Starting Stress Test for Extreme Edge Cases & Pixel Overloading ---');
 
   // Hardcoded IDs for test setup (these can be random for isolation)
-  final customerId = 'c0000000-0000-0000-0000-000000000000';
-  final shopId = 's0000000-0000-0000-0000-000000000000';
-  final productId = 'p0000000-0000-0000-0000-000000000000';
-  final orderId = 'a1111111-1111-1111-1111-111111111111';
+  const customerId = 'c0000000-0000-0000-0000-000000000000';
+  const shopId = 's0000000-0000-0000-0000-000000000000';
+  const productId = 'p0000000-0000-0000-0000-000000000000';
+  const orderId = 'a1111111-1111-1111-1111-111111111111';
 
   // 1. Setup base data
   print('Setting up base data...');
@@ -101,8 +101,7 @@ Future<void> main() async {
   await Process.run('supabase', [
     'db',
     'query',
-    "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId'; " +
-        "UPDATE orders SET status = 'preparing' WHERE id = '$orderId'; " +
+    "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId'; " +
         "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId'; " +
         "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId'; " +
         "UPDATE orders SET status = 'delivered' WHERE id = '$orderId';",

@@ -9,10 +9,12 @@ Future<void> main() async {
   String? supabaseUrl;
   String? supabaseKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL='))
+    if (line.startsWith('SUPABASE_URL=')) {
       supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY='))
+    }
+    if (line.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseKey = line.split('=')[1].trim();
+    }
   }
 
   if (supabaseUrl == null || supabaseKey == null) {
@@ -44,7 +46,7 @@ Future<void> runShopEdgeCaseTests(SupabaseClient client) async {
   final customerId = await authUser(client, customerPhone, 'customer');
   final sellerId = await authUser(client, sellerPhone, 'seller');
   final otherSellerId = await authUser(client, otherSellerPhone, 'seller');
-  final dpId = await authUser(client, dpPhone, 'delivery_partner');
+  await authUser(client, dpPhone, 'delivery_partner');
 
   final shopRec = await client
       .from('shops')
@@ -58,7 +60,6 @@ Future<void> runShopEdgeCaseTests(SupabaseClient client) async {
       .select('id')
       .eq('seller_id', otherSellerId)
       .single();
-  final otherShopId = otherShopRec['id'];
 
   final productId = const Uuid().v4();
   await client.auth.signInWithPassword(
@@ -146,9 +147,10 @@ Future<void> runShopEdgeCaseTests(SupabaseClient client) async {
       password: _passwordFromPhone(sellerPhone));
   final res1 =
       await client.rpc('accept_order_seller', params: {'p_order_id': o1});
-  if (res1 == true)
+  if (res1 == true) {
     throw Exception(
         'Test 1 Failed: Returned true but rider had not accepted yet');
+  }
   final fetchO1 = await client
       .from('orders')
       .select('status, seller_accepted')
@@ -181,8 +183,9 @@ Future<void> runShopEdgeCaseTests(SupabaseClient client) async {
       password: _passwordFromPhone(sellerPhone));
   final res2 =
       await client.rpc('accept_order_seller', params: {'p_order_id': o2});
-  if (res2 != true)
+  if (res2 != true) {
     throw Exception('Test 2 Failed: Returned false but rider HAD accepted');
+  }
   final fetchO2 = await client
       .from('orders')
       .select('status, payment_deadline')

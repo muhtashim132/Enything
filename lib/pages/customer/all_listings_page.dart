@@ -274,11 +274,12 @@ class _AllListingsPageState extends State<AllListingsPage> {
                         _searchDebounce = Timer(
                           const Duration(milliseconds: 250),
                           () {
-                            if (mounted)
+                            if (mounted) {
                               setState(() {
                                 _searchQuery = v.trim();
                                 _displayLimit = 20;
                               });
+                            }
                           },
                         );
                       },

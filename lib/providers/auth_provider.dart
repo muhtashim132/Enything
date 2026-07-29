@@ -522,7 +522,9 @@ class AuthProvider extends ChangeNotifier {
   String _legacyPasswordFromPhone(String phone) {
     if (phone.endsWith('9999999996') ||
         phone.endsWith('9999999997') ||
-        phone.endsWith('9999999998')) return 'Dummy123';
+        phone.endsWith('9999999998')) {
+      return 'Dummy123';
+    }
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return 'Enything$digits#Auth2025';
   }
@@ -530,7 +532,9 @@ class AuthProvider extends ChangeNotifier {
   String _passwordFromPhone(String phone) {
     if (phone.endsWith('9999999996') ||
         phone.endsWith('9999999997') ||
-        phone.endsWith('9999999998')) return 'Dummy123';
+        phone.endsWith('9999999998')) {
+      return 'Dummy123';
+    }
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     final bytes = utf8.encode('Enything_${digits}_Secured#2026');
     final digest = sha256.convert(bytes);

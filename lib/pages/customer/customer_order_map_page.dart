@@ -280,8 +280,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final features = data['features'] as List?;
-        if (features == null || features.isEmpty)
+        if (features == null || features.isEmpty) {
           throw Exception('No features');
+        }
 
         final geometry = features.first['geometry'] as Map<String, dynamic>;
         final coords = geometry['coordinates'] as List;
@@ -900,8 +901,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                               ValueListenableBuilder<Map<String, LatLng>>(
                                 valueListenable: _riderLocationsNotifier,
                                 builder: (context, riderLocs, child) {
-                                  if (riderLocs.isEmpty)
+                                  if (riderLocs.isEmpty) {
                                     return const SizedBox.shrink();
+                                  }
                                   return Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -929,8 +931,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                             _riderUpdatedAtsNotifier,
                                         builder:
                                             (context, riderUpdatedAts, child) {
-                                          if (riderUpdatedAts.isEmpty)
+                                          if (riderUpdatedAts.isEmpty) {
                                             return const SizedBox.shrink();
+                                          }
                                           return Padding(
                                             padding:
                                                 const EdgeInsets.only(left: 12),

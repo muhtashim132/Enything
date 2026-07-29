@@ -24,8 +24,9 @@ class AppValidators {
     }
 
     if (sanitized.length != 10) return 'Enter valid 10-digit number';
-    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(sanitized))
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(sanitized)) {
       return 'Enter valid Indian mobile number';
+    }
     return null;
   }
 
@@ -36,8 +37,9 @@ class AppValidators {
 
   static String? pinCode(String? value) {
     if (value == null || value.isEmpty) return 'Pin code is required';
-    if (!RegExp(r'^\d{6}$').hasMatch(value))
+    if (!RegExp(r'^\d{6}$').hasMatch(value)) {
       return 'Enter valid 6-digit pin code';
+    }
     return null;
   }
 

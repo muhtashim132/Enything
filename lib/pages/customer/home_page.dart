@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -402,8 +403,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'grad': [const Color(0xFFFF6B6B), const Color(0xFFEE5A24)]
     },
     {
-      'name': 'Grocery',
-      'emoji': '🛒',
+      'name': 'Supermarket / Hypermarket',
+      'emoji': '🏬',
       'grad': [const Color(0xFF51CF66), const Color(0xFF2F9E44)]
     },
     {
@@ -809,10 +810,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           final shop = ShopModel.fromMap(s);
           if (!locationProvider.hasLocation &&
               requireNameMatch &&
-              !shop.name.toLowerCase().contains(lowerQuery)) continue;
+              !shop.name.toLowerCase().contains(lowerQuery)) {
+            continue;
+          }
           if (!locationProvider.hasLocation &&
               effectiveCategories != null &&
-              !effectiveCategories.contains(shop.category)) continue;
+              !effectiveCategories.contains(shop.category)) {
+            continue;
+          }
           allShopsSet[shop.id] = shop;
         }
       }
@@ -849,14 +854,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
           if (!locationProvider.hasLocation &&
               effectiveCategories != null &&
-              !effectiveCategories.contains(product.category)) continue;
+              !effectiveCategories.contains(product.category)) {
+            continue;
+          }
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
           if (!shop.isActive) continue;
           if (!locationProvider.hasLocation &&
               effectiveCategories != null &&
-              !effectiveCategories.contains(shop.category)) continue;
+              !effectiveCategories.contains(shop.category)) {
+            continue;
+          }
 
           if (locationProvider.hasLocation) {
             // Distance is enforced by RPC, just populate it
@@ -1070,15 +1079,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           final product = ProductModel.fromMap(p);
           // Removed product.isAvailable check so unavailable items still render
           if (effectiveCategories != null &&
-              !effectiveCategories.contains(product.category)) continue;
+              !effectiveCategories.contains(product.category)) {
+            continue;
+          }
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
           if (!shop.isActive) continue;
 
           if (locationProvider.hasLocation) {
-            if (shop.location.latitude == 0 || shop.location.longitude == 0)
+            if (shop.location.latitude == 0 || shop.location.longitude == 0) {
               continue;
+            }
             final d = locationProvider.distanceTo(shop.location);
             if (!DeliveryCalculator.isWithinRange(d)) continue;
           }
@@ -1214,15 +1226,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           final product = ProductModel.fromMap(p);
           // Removed product.isAvailable check so unavailable items still render
           if (effectiveCategories != null &&
-              !effectiveCategories.contains(product.category)) continue;
+              !effectiveCategories.contains(product.category)) {
+            continue;
+          }
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
           if (!shop.isActive) continue;
 
           if (locationProvider.hasLocation) {
-            if (shop.location.latitude == 0 || shop.location.longitude == 0)
+            if (shop.location.latitude == 0 || shop.location.longitude == 0) {
               continue;
+            }
             final d = locationProvider.distanceTo(shop.location);
             if (!DeliveryCalculator.isWithinRange(d)) continue;
           }
@@ -1797,8 +1812,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 itemBuilder: (context, index) {
                                   final product = _sortedProductResults[index];
                                   final shop = _searchProductShops[product.id];
-                                  if (shop == null)
+                                  if (shop == null) {
                                     return const SizedBox.shrink();
+                                  }
                                   return ProductSearchCard(
                                       product: product, shop: shop);
                                 },
@@ -1971,8 +1987,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               child: Builder(builder: (ctx) {
                                 final recentProv =
                                     ctx.watch<RecentlyViewedProvider>();
-                                if (!recentProv.hasItems)
+                                if (!recentProv.hasItems) {
                                   return const SizedBox.shrink();
+                                }
 
                                 // Filter out products whose shop is closed
                                 final availableRecent =
@@ -1981,8 +1998,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   return shop != null && shop.isActive;
                                 }).toList();
 
-                                if (availableRecent.isEmpty)
+                                if (availableRecent.isEmpty) {
                                   return const SizedBox.shrink();
+                                }
 
                                 return Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -3083,10 +3101,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       _locationGlowCtrl.reverse();
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Please enable location to view nearby items.'),
+      const SnackBar(
+        content: Text('Please enable location to view nearby items.'),
         backgroundColor: AppColors.danger,
-        duration: const Duration(seconds: 3),
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -3615,7 +3633,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               final cat = mainCats[index];
               final grad = cat['grad'] as List<Color>;
               final catName = cat['name'] as String;
-              final emoji = cat['emoji'] as String;
+              final displayLabel = catName == 'Supermarket / Hypermarket' ? 'Supermarket\nHypermarket' : catName;
+              final imageUrl = AppCategories.getImageUrl(catName);
               final isSelected = _selectedTabIndex == index;
 
               return GestureDetector(
@@ -3653,102 +3672,92 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   width: isSelected ? 96 : 88,
                   margin: const EdgeInsets.only(right: 10, top: 2, bottom: 2),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: grad,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
                     borderRadius: BorderRadius.circular(20),
+                    image: DecorationImage(
+                      image: CachedNetworkImageProvider(imageUrl),
+                      fit: BoxFit.cover,
+                    ),
                     // Selected state: brighter glow + white border ring
                     boxShadow: [
                       BoxShadow(
                         color: isSelected
                             ? grad.first.withValues(alpha: 0.60)
-                            : grad.first.withValues(alpha: 0.30),
+                            : Colors.black.withValues(alpha: 0.15),
                         blurRadius: isSelected ? 18 : 10,
                         offset: const Offset(0, 4),
                       ),
                     ],
                     border: isSelected
                         ? Border.all(
-                            color: Colors.white.withValues(alpha: 0.70),
+                            color: Colors.white,
                             width: 2.5,
                           )
                         : null,
                   ),
-                  child: Stack(
-                    children: [
-                      // Subtle decorative circle top-right
-                      Positioned(
-                        right: -8,
-                        top: -8,
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white
-                                .withValues(alpha: isSelected ? 0.20 : 0.12),
-                          ),
-                        ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.8),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                       ),
-                      // Selected checkmark badge
-                      if (isSelected)
-                        Positioned(
-                          top: 5,
-                          left: 5,
-                          child: Container(
-                            width: 18,
-                            height: 18,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.90),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.check_rounded,
-                              size: 12,
-                              color: grad.first,
+                    ),
+                    child: Stack(
+                      children: [
+                        // Selected checkmark badge
+                        if (isSelected)
+                          Positioned(
+                            top: 5,
+                            left: 5,
+                            child: Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.90),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.check_rounded,
+                                size: 12,
+                                color: grad.first,
+                              ),
                             ),
                           ),
-                        ),
-                      // Content — CENTERED
-                      Positioned.fill(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 12, 6, 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              AnimatedScale(
-                                scale: isSelected ? 1.12 : 1.0,
-                                duration: const Duration(milliseconds: 250),
-                                child: Text(
-                                  emoji,
-                                  style: TextStyle(
-                                    fontSize: isSelected ? 30 : 28,
+                        // Content — CENTERED text at bottom
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(6, 12, 6, 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.bottomCenter,
+                                  child: Text(
+                                    displayLabel,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11.5,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w900
+                                          : FontWeight.w800,
+                                      color: Colors.white,
+                                      height: 1.1,
+                                    ),
+                                    maxLines: 2,
+                                    textAlign: TextAlign.center,
                                   ),
-                                  textAlign: TextAlign.center,
                                 ),
-                              ),
-                              Text(
-                                catName,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 11.5,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w900
-                                      : FontWeight.w800,
-                                  color: Colors.white,
-                                  height: 1.2,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );

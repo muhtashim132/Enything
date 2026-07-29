@@ -154,4 +154,51 @@ class AppCategories {
         return ['Small', 'Large', 'Pack of 1', 'Pack of 2', 'Pack of 5'];
     }
   }
+
+  /// Returns a high-quality Unsplash image URL for the given category name.
+  /// All images are sourced from Unsplash, which is royalty-free and copyright-free.
+  static String getImageUrl(String categoryName) {
+    const base = 'https://images.unsplash.com/photo-';
+    // Forced perfect 600x600 square crop via CDN to ensure flawless UI placement
+    const params = '?q=80&w=600&h=600&auto=format&fit=crop';
+    
+    switch (categoryName) {
+      case 'Supermarket / Hypermarket': return '${base}1643107242058-9391a7ba60d3$params';
+      case 'Grocery': return '${base}1583258292688-d0213dc5a3a8$params';
+      case 'Restaurant': return '${base}1550966871-3ed3cdb5ed0c$params';
+      case 'Fast Food': return '${base}1568901346375-23c9450c58cd$params';
+      case 'Food': return '${base}1553979459-d2229ba7433b$params'; // Epic, perfectly centered, dripping smashburger
+      case 'Bakery': return '${base}1509440159596-0249088772ff$params';
+      case 'Butcher': return '${base}1628543108325-1c27cd7246b3$params';
+      case 'Fish & Seafood': return '${base}1519708227418-c8fd9a32b7a2$params';
+      case 'Dairy & Eggs': return '${base}1550583724-b2692b85b150$params';
+      case 'Fruits & Vegs': return '${base}1610832958506-aa56368176cf$params';
+      case 'Sweets & Mithai': return '${base}1582716401301-b2407dc7563d$params';
+      case 'Beverages': return '${base}1513558161293-cdaf765ed2fd$params';
+      case 'Pharmacy': return '${base}1696861308115-54a5e5a134b0$params';
+      case 'Medical Store': return '${base}1576602976047-174e57a47881$params';
+      case 'Electronics': return '${base}1585298723682-7115561c51b7$params';
+      case 'Mobile & Repair': return '${base}1597740985671-2a8a3b805150$params';
+      case 'Clothing': return 'https://plus.unsplash.com/premium_photo-1718913936342-eaafff98834b$params';
+      case 'Footwear': return '${base}1542291026-7eec264c27ff$params';
+      case 'Jewellery': return '${base}1515562141207-7a88fb7ce338$params';
+      case 'Hardware Store': return '${base}1581783898377-1c85bf937427$params';
+      case 'Stationery': return '${base}1513542789411-b6a5d4f31634$params';
+      case 'Toys & Games': return '${base}1566576912321-d58ddd7a6088$params';
+      case 'Sports': return '${base}1517649763962-0c623066013b$params';
+      case 'Pet Supplies': return '${base}1583337130417-3346a1be7dee$params';
+      case 'Cosmetics & Beauty': return '${base}1522335789203-aabd1fc54c28$params';
+      case 'Salon & Beauty': return '${base}1527799820374-d64e9a66d03d$params';
+      case 'Flowers': return '${base}1561181286-d3fee7d55ef6$params';
+      case 'Home Decor': return '${base}1524758631624-e2822e304c36$params';
+      case 'Furniture': return '${base}1505691938895-1758d7bef511$params';
+      case 'Auto Parts': return '${base}1530046339160-ce3e530c7d2f$params';
+      case 'Paan Shop': return '${base}1596649281783-5ec94a0d9baf$params';
+      case 'Tea & Coffee': return '${base}1497935586351-b67a49e012bf$params';
+      case 'Ice Cream': return '${base}1559703248-dcaaec9fac92$params';
+      case 'Organic': return '${base}1464226184852-09419184df24$params';
+      case 'Other': return '${base}1472851294608-062f824d29cc$params';
+      default: return '${base}1472851294608-062f824d29cc$params';
+    }
+  }
 }

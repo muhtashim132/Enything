@@ -11,10 +11,12 @@ Future<void> main() async {
   String? supabaseUrl;
   String? supabaseKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL='))
+    if (line.startsWith('SUPABASE_URL=')) {
       supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY='))
+    }
+    if (line.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseKey = line.split('=')[1].trim();
+    }
   }
 
   if (supabaseUrl == null || supabaseKey == null) {
@@ -54,7 +56,7 @@ Future<void> runEdgeCaseTests(
       .single();
   final shopId = shopRec['id'];
 
-  final dpId = await authUser(client, dpPhone, 'delivery_partner');
+  await authUser(client, dpPhone, 'delivery_partner');
 
   // Sign back in as customer to place an order with a LEGACY address (no lat/lng)
   print('\n--- SCENARIO: Legacy Address, Idempotency, and OTP ---');
@@ -207,7 +209,7 @@ Future<void> runEdgeCaseTests(
   print('Initial arrival time: $t1');
 
   // Wait 2 seconds and mark arrived AGAIN to test idempotency
-  await Future.delayed(Duration(seconds: 2));
+  await Future.delayed(const Duration(seconds: 2));
   print('Rider marking arrived AGAIN (testing idempotency)...');
   await client.rpc('set_arrived_at_shop', params: {
     'p_order_id': orderId,

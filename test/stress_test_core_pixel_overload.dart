@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:supabase/supabase.dart';
 import 'package:uuid/uuid.dart';
 
 Future<void> main() async {
@@ -19,10 +18,12 @@ Future<void> main() async {
     if (parts.length >= 2) {
       final key = parts[0].trim();
       var value = parts.sublist(1).join('=').trim();
-      if (value.startsWith('"') && value.endsWith('"'))
+      if (value.startsWith('"') && value.endsWith('"')) {
         value = value.substring(1, value.length - 1);
-      if (value.startsWith("'") && value.endsWith("'"))
+      }
+      if (value.startsWith("'") && value.endsWith("'")) {
         value = value.substring(1, value.length - 1);
+      }
       env[key] = value;
     }
   }

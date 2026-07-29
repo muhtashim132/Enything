@@ -387,8 +387,9 @@ class NotificationProvider extends ChangeNotifier {
                 orderId: orderId,
               ));
               // [BELL] Ring alert bell for new pending order
-              if (orderId != null)
+              if (orderId != null) {
                 BellAlertService.instance.addPendingOrder(orderId);
+              }
             }
           },
         )
@@ -507,8 +508,9 @@ class NotificationProvider extends ChangeNotifier {
                   orderId: orderId,
                 ));
                 // [BELL] Ring alert bell for new pending order
-                if (orderId != null)
+                if (orderId != null) {
                   BellAlertService.instance.addPendingOrder(orderId);
+                }
               }
             },
           )

@@ -16,10 +16,12 @@ Future<void> main() async {
   String? supabaseUrl;
   String? supabaseKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL='))
+    if (line.startsWith('SUPABASE_URL=')) {
       supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY='))
+    }
+    if (line.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseKey = line.split('=')[1].trim();
+    }
   }
 
   if (supabaseUrl == null || supabaseKey == null) {
@@ -136,8 +138,9 @@ Future<void> runTests(SupabaseClient client) async {
     reviewFailed = true;
     print('✅ Review blocked successfully on non-delivered order.');
   }
-  if (!reviewFailed)
+  if (!reviewFailed) {
     throw Exception('Review was allowed on a cancelled order!');
+  }
 
   // Create a delivered order
   final orderId2 = const Uuid().v4();
@@ -145,8 +148,7 @@ Future<void> runTests(SupabaseClient client) async {
   await Process.run('supabase', [
     'db',
     'query',
-    "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId2'; " +
-        "UPDATE orders SET status = 'preparing' WHERE id = '$orderId2'; " +
+    "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId2'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId2'; " +
         "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId2'; " +
         "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId2'; " +
         "UPDATE orders SET status = 'delivered' WHERE id = '$orderId2';",
@@ -180,9 +182,10 @@ Future<void> runTests(SupabaseClient client) async {
     print(
         '✅ Duplicate review blocked successfully (Review Bombing Protection).');
   }
-  if (!duplicateFailed)
+  if (!duplicateFailed) {
     throw Exception(
         'Duplicate review was allowed! Review bombing is possible.');
+  }
 
   // Try out of bounds rating
   print('Attempting out of bounds rating (Should Fail)...');
@@ -193,8 +196,7 @@ Future<void> runTests(SupabaseClient client) async {
     await Process.run('supabase', [
       'db',
       'query',
-      "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId3'; " +
-          "UPDATE orders SET status = 'preparing' WHERE id = '$orderId3'; " +
+      "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId3'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId3'; " +
           "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId3'; " +
           "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId3'; " +
           "UPDATE orders SET status = 'delivered' WHERE id = '$orderId3';",
@@ -254,8 +256,9 @@ Future<void> runTests(SupabaseClient client) async {
   } catch (e) {
     print('Caught error for 5MB rejection: $e');
   }
-  if (!rejectionBloatFailed)
+  if (!rejectionBloatFailed) {
     throw Exception('5MB Rejection message was NOT truncated!');
+  }
 
   print('Attempting to review with 5MB comment (Should Fail)...');
   bool reviewBloatFailed = false;
@@ -269,8 +272,7 @@ Future<void> runTests(SupabaseClient client) async {
     await Process.run('supabase', [
       'db',
       'query',
-      "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId5'; " +
-          "UPDATE orders SET status = 'preparing' WHERE id = '$orderId5'; " +
+      "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId5'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId5'; " +
           "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId5'; " +
           "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId5'; " +
           "UPDATE orders SET status = 'delivered' WHERE id = '$orderId5';",
@@ -292,9 +294,10 @@ Future<void> runTests(SupabaseClient client) async {
       print('✅ Blocked 5MB review comment successfully.');
     }
   }
-  if (!reviewBloatFailed)
+  if (!reviewBloatFailed) {
     throw Exception(
         '5MB Review comment was NOT blocked properly! (See error above)');
+  }
 
   print('\nAll scenarios completed successfully.');
 }

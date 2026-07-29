@@ -30,7 +30,7 @@ void main() {
       '-- =============================================================================');
   outSql.writeln('');
 
-  final radiusLogicPlpgsql = '''
+  const radiusLogicPlpgsql = '''
   DECLARE
     v_admin_max_radius double precision;
   BEGIN

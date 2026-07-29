@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../../lib/services/bell_alert_service.dart';
+import 'package:enythingmobilenew/services/bell_alert_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

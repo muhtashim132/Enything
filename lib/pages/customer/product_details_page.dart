@@ -688,9 +688,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _qtyBtn(Icons.remove, () {
-                        if (_shop != null)
+                        if (_shop != null) {
                           cart.updateQuantity(_product!.id, quantity - 1,
                               variantName: _selectedVariant?.name);
+                        }
                       }),
                       const SizedBox(width: 28),
                       Text(
@@ -703,9 +704,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ),
                       const SizedBox(width: 28),
                       _qtyBtn(Icons.add, () {
-                        if (_shop != null)
+                        if (_shop != null) {
                           cart.addItemWithFeedback(context, _product!, _shop!,
                               selectedVariant: _selectedVariant);
+                        }
                       }),
                       const SizedBox(width: 24),
                       Expanded(

@@ -623,8 +623,9 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
   void _nextMonth() {
     final now = DateTime.now();
-    if (_selectedMonth.year == now.year && _selectedMonth.month == now.month)
+    if (_selectedMonth.year == now.year && _selectedMonth.month == now.month) {
       return;
+    }
     setState(() {
       _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
     });

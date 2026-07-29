@@ -402,17 +402,19 @@ class _ComplaintCard extends StatelessWidget {
                         try {
                           await db.from('support_tickets').update(
                               {'status': 'resolved'}).eq('id', complaint['id']);
-                          if (context.mounted)
+                          if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                     content: Text('Ticket resolved'),
                                     backgroundColor: AdminColors.success));
+                          }
                           await onRefresh();
                         } catch (e) {
-                          if (context.mounted)
+                          if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                 content: Text('Error: $e'),
                                 backgroundColor: AdminColors.danger));
+                          }
                         }
                       },
                       style: ElevatedButton.styleFrom(

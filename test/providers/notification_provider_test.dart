@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:enythingmobilenew/providers/notification_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';

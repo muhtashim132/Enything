@@ -7,10 +7,12 @@ Future<void> main() async {
   final lines = envFile.readAsLinesSync();
   String? supabaseUrl, supabaseKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL='))
+    if (line.startsWith('SUPABASE_URL=')) {
       supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY='))
+    }
+    if (line.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseKey = line.split('=')[1].trim();
+    }
   }
   final client = SupabaseClient(supabaseUrl!, supabaseKey!,
       authOptions:
@@ -124,20 +126,21 @@ Future<String> authUser(
         .signUp(email: email, password: password, data: {'phone': phone});
     userId = res2.user?.id;
   }
-  if (userId != null)
+  if (userId != null) {
     await client.from('profiles').upsert({
       'id': userId,
       'role': role,
       'full_name': 'Test $role',
       'phone': phone
     });
+  }
   if (role == 'seller') {
     final hasShop = await client
         .from('shops')
         .select('id')
         .eq('seller_id', userId as Object)
         .maybeSingle();
-    if (hasShop == null)
+    if (hasShop == null) {
       await client.from('shops').insert({
         'seller_id': userId,
         'name': 'Shop $phone',
@@ -146,6 +149,7 @@ Future<String> authUser(
         'is_accepting_orders': true,
         'verification_status': 'verified'
       });
+    }
   }
   return userId!;
 }

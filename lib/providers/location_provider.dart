@@ -28,12 +28,14 @@ class LocationProvider extends ChangeNotifier {
     // If a saved address is actively selected, use its full address
     if (_selectedAddress != null) return _selectedAddress!.fullAddress;
     if (_matchedAddress != null) return _matchedAddress!.fullAddress;
-    if (_houseNumber.isEmpty && _landmark.isEmpty && _pincode.isEmpty)
+    if (_houseNumber.isEmpty && _landmark.isEmpty && _pincode.isEmpty) {
       return _currentAddress;
+    }
     final parts = <String>[];
     if (_houseNumber.isNotEmpty) parts.add(_houseNumber);
-    if (_currentAddress.isNotEmpty && _currentAddress != 'Fetching address...')
+    if (_currentAddress.isNotEmpty && _currentAddress != 'Fetching address...') {
       parts.add(_currentAddress);
+    }
     if (_landmark.isNotEmpty) parts.add(_landmark);
     if (_pincode.isNotEmpty) parts.add(_pincode);
     return parts.isNotEmpty ? parts.join(', ') : _currentAddress;
@@ -340,8 +342,9 @@ class LocationProvider extends ChangeNotifier {
     if (house != null) _houseNumber = house;
     if (mark != null) _landmark = mark;
     if (pin != null) _pincode = pin;
-    if (addressText != null && addressText.isNotEmpty)
+    if (addressText != null && addressText.isNotEmpty) {
       _currentAddress = addressText;
+    }
     notifyListeners();
   }
 

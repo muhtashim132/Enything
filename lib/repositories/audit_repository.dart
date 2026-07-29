@@ -16,10 +16,12 @@ class AuditRepository {
     var query = _db.from('audit_logs').select();
 
     if (actorId != null) query = query.eq('actor_id', actorId);
-    if (action != null && action.isNotEmpty)
+    if (action != null && action.isNotEmpty) {
       query = query.ilike('action', '%$action%');
-    if (entityType != null && entityType.isNotEmpty)
+    }
+    if (entityType != null && entityType.isNotEmpty) {
       query = query.eq('entity_type', entityType);
+    }
     if (from != null) query = query.gte('created_at', from.toIso8601String());
     if (to != null) query = query.lte('created_at', to.toIso8601String());
 

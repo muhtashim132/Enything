@@ -3827,15 +3827,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   .neq('shop_id', rejectedOrder.shopId ?? '')
                   .limit(5),
               builder: (ctx, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting)
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SizedBox(
                       height: 100,
                       child: Center(child: CircularProgressIndicator()));
+                }
                 if (snapshot.hasError) return Text('Error: ${snapshot.error}');
                 final List<dynamic> products =
                     snapshot.data as List<dynamic>? ?? [];
-                if (products.isEmpty)
+                if (products.isEmpty) {
                   return const Text('No alternatives found nearby.');
+                }
                 return SizedBox(
                     width: double.maxFinite,
                     child: ListView.builder(

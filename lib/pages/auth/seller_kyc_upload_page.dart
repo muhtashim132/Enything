@@ -119,8 +119,9 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       final shopId = args?['shop_id'] as String?;
-      if (shopId == null)
+      if (shopId == null) {
         throw Exception('Shop ID not provided. Please restart the app.');
+      }
 
       // Upload Images
       final aadharFrontUrl =

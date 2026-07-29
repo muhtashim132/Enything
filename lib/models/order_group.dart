@@ -53,20 +53,23 @@ class OrderGroup {
     if (orders.every((o) => o.status == 'delivered')) return 'delivered';
     // BUG-OG1 FIX: allow mixed out_for_delivery + delivered (last shop still delivering)
     if (orders.every(
-        (o) => o.status == 'out_for_delivery' || o.status == 'delivered'))
+        (o) => o.status == 'out_for_delivery' || o.status == 'delivered')) {
       return 'out_for_delivery';
+    }
     if (allPickedUp) return 'picked_up'; // ready to go out for delivery
 
     // Check if any is still pending/preparing
-    if (orders.any((o) => o.status == 'awaiting_payment'))
+    if (orders.any((o) => o.status == 'awaiting_payment')) {
       return 'awaiting_payment';
+    }
     if (orders.any((o) => o.status == 'pending')) return 'pending';
 
     // BUG-OG1 FIX: confirmed and ready_for_pickup were missing — fell through to
     // 'pickup_in_progress' which has no UI handler, showing a blank label on the
     // rider dashboard for multi-shop orders in the confirmed/preparing/ready phases.
-    if (orders.any((o) => o.status == 'ready_for_pickup'))
+    if (orders.any((o) => o.status == 'ready_for_pickup')) {
       return 'ready_for_pickup';
+    }
     if (orders.any((o) => o.status == 'preparing')) return 'preparing';
     if (orders.any((o) => o.status == 'confirmed')) return 'confirmed';
 

@@ -9,10 +9,12 @@ Future<void> main() async {
   String? supabaseUrl;
   String? supabaseKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL='))
+    if (line.startsWith('SUPABASE_URL=')) {
       supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY='))
+    }
+    if (line.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseKey = line.split('=')[1].trim();
+    }
   }
 
   if (supabaseUrl == null || supabaseKey == null) {
@@ -74,7 +76,7 @@ Future<void> runEdgeCaseTests(
     'total_quantity': 10
   });
 
-  final dpId = await authUser(client, dpPhone, 'delivery_partner');
+  await authUser(client, dpPhone, 'delivery_partner');
 
   Future<String> createOrderForCustomer(String cPhone, String cId) async {
     await client.auth.signInWithPassword(

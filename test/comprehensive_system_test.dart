@@ -16,10 +16,12 @@ Future<void> main() async {
   String? supabaseUrl;
   String? supabaseKey;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_URL='))
+    if (line.startsWith('SUPABASE_URL=')) {
       supabaseUrl = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_ANON_KEY='))
+    }
+    if (line.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseKey = line.split('=')[1].trim();
+    }
   }
 
   if (supabaseUrl == null || supabaseKey == null) {
@@ -138,7 +140,7 @@ Future<void> runComprehensiveTests(SupabaseClient client) async {
   final c2Id = await authUser(client, c2Phone, 'customer');
   final s1Id = await authUser(client, s1Phone, 'seller');
   final s2Id = await authUser(client, s2Phone, 'seller');
-  final d1Id = await authUser(client, d1Phone, 'delivery_partner');
+  await authUser(client, d1Phone, 'delivery_partner');
 
   final s1Shop =
       await client.from('shops').select('id').eq('seller_id', s1Id).single();
@@ -248,9 +250,10 @@ Future<void> runComprehensiveTests(SupabaseClient client) async {
     }
   }
 
-  if (!o4Failed)
+  if (!o4Failed) {
     throw Exception(
         'Rider was allowed to accept 4 orders! Max limit bypass failed.');
+  }
 
   print('Simulating delivery of O1 to free rider slot...');
   await Process.run('supabase', [
@@ -308,7 +311,7 @@ Future<void> runComprehensiveTests(SupabaseClient client) async {
     'p_delivery_otp': null,
   });
 
-  await Future.delayed(Duration(seconds: 1));
+  await Future.delayed(const Duration(seconds: 1));
   print('Rider trying to accept O4 again...');
   await client.rpc('accept_order_rider', params: {
     'p_order_id': o4,

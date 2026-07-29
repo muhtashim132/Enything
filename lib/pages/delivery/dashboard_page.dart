@@ -444,14 +444,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             .eq('id', auth.currentUserId!)
             .maybeSingle();
         if (partnerResp != null) {
-          if (partnerResp['is_accepting_orders'] != null)
+          if (partnerResp['is_accepting_orders'] != null) {
             _isOnline = partnerResp['is_accepting_orders'] as bool;
-          if (partnerResp['preferred_nav_app'] != null)
+          }
+          if (partnerResp['preferred_nav_app'] != null) {
             _navApp = partnerResp['preferred_nav_app'] as String;
-          if (partnerResp['vehicle_type'] != null)
+          }
+          if (partnerResp['vehicle_type'] != null) {
             _vehicleType = partnerResp['vehicle_type'] as String;
-          if (partnerResp['bg_tracking_secret'] != null)
+          }
+          if (partnerResp['bg_tracking_secret'] != null) {
             _bgTrackingSecret = partnerResp['bg_tracking_secret'] as String;
+          }
         }
       }
 
@@ -3220,10 +3224,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _locationGlowCtrl.reverse();
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Please enable location to view nearby orders.'),
+      const SnackBar(
+        content: Text('Please enable location to view nearby orders.'),
         backgroundColor: AppColors.danger,
-        duration: const Duration(seconds: 3),
+        duration: Duration(seconds: 3),
       ),
     );
   }

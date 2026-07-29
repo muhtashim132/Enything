@@ -3,7 +3,7 @@ import 'package:file/file.dart';
 import 'dart:io';
 
 void main() async {
-  final fs = LocalFileSystem();
+  const fs = LocalFileSystem();
   final inputFile = fs.file(
       r'e:\Enything\supabase\migrations\20271125000007_100x_critical_bug_fixes.sql');
   final content = await inputFile.readAsString();
@@ -20,13 +20,13 @@ void main() async {
 
   String funcContent = match.group(1)!;
 
-  final oldLoop = '''  FOR v_item IN SELECT y.quantity, p.weight_per_unit 
+  const oldLoop = '''  FOR v_item IN SELECT y.quantity, p.weight_per_unit 
                 FROM jsonb_to_recordset(p_items) AS y(product_id uuid, quantity int)
                 JOIN products p ON p.id = y.product_id LOOP
     v_total_weight_kg := v_total_weight_kg + (COALESCE(v_item.weight_per_unit, 0.5) * v_item.quantity);
   END LOOP;''';
 
-  final newLoop =
+  const newLoop =
       '''  FOR v_item IN SELECT y.quantity, p.weight_per_unit, p.unit_type 
                 FROM jsonb_to_recordset(p_items) AS y(product_id uuid, quantity int)
                 JOIN products p ON p.id = y.product_id LOOP

@@ -240,7 +240,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   Widget _buildFloatingBottomNav(BuildContext context, CartProvider cart) {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + bottomPadding),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPadding > 0 ? bottomPadding + 8.0 : 20.0),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(

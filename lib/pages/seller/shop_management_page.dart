@@ -240,10 +240,11 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
           isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
       appBar: AppBar(
         title: Text('Shop Management',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.white)),
         centerTitle: true,
         backgroundColor: const Color(0xFF0A1260),
         foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
       body: _isLoading
