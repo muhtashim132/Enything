@@ -794,23 +794,61 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // Phase 26 Fix: Fetch products without .select('*, shops(*)')  which
         // causes PostgREST to reject embedded-resource requests on SETOF RPCs.
         // Instead, we batch-fetch shops separately and reconstruct the map.
-        debugPrint('[Search] Step 2/4: search_products_geospatial (byName) q="$query"');
-        List<dynamic> rawProductsByName;
+        debugPrint('[Search] Step 2/4: search_products_geospatial (byName) BYPASS q="$query"');
+        List<dynamic> rawProductsByName = [];
         try {
-          rawProductsByName =
-              await _supabase.rpc('search_products_geospatial', params: {
+          // Offload geospatial ST_DWithin and ST_Distance to the working shops RPC
+          final nearbyShops = await _supabase.rpc('search_shops_geospatial', params: {
             'p_lat': lat,
             'p_lng': lng,
-            'p_query': query,
+            'p_query': null, // All shops in radius to search their products
             'p_categories': effectiveCategories,
             'p_radius_km': maxRadius,
-            'p_limit': 50,
-            'p_limit_per_shop': 5,
-            if (specialTag != null) 'p_special_tag': specialTag
+            'p_limit': 150
           });
+
+          final shopIds = (nearbyShops as List).map((s) => s['id'] as String).toList();
+          
+          if (shopIds.isNotEmpty) {
+            var q = _supabase
+                .from('products')
+                .select()
+                .eq('is_available', true)
+                .inFilter('shop_id', shopIds)
+                .ilike('name', '%$query%');
+            
+            if (specialTag != null) {
+              q = q.contains('special_tags', [specialTag]);
+            }
+            
+            final allProducts = await q;
+            
+            // Group, sort by rating, limit 5 per shop
+            final productsByShop = <String, List<dynamic>>{};
+            for (final p in allProducts) {
+              final sid = p['shop_id'] as String;
+              productsByShop.putIfAbsent(sid, () => []).add(p);
+            }
+            
+            // Iterate through sorted shops to maintain distance ordering
+            for (final shop in nearbyShops) {
+              final sid = shop['id'] as String;
+              if (productsByShop.containsKey(sid)) {
+                final shopProds = productsByShop[sid]!;
+                shopProds.sort((a, b) {
+                  final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
+                  final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
+                  return ratingB.compareTo(ratingA);
+                });
+                rawProductsByName.addAll(shopProds.take(5));
+                if (rawProductsByName.length >= 50) break;
+              }
+            }
+            if (rawProductsByName.length > 50) rawProductsByName = rawProductsByName.sublist(0, 50);
+          }
           debugPrint('[Search] Step 2/4 OK: ${rawProductsByName.length} products found');
         } catch (e) {
-          debugPrint('[Search] Step 2/4 FAILED (search_products_geospatial byName): $e');
+          debugPrint('[Search] Step 2/4 FAILED (byName bypass): $e');
           rethrow;
         }
 
@@ -831,19 +869,42 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             rethrow;
           }
 
-          debugPrint('[Search] Step 4/4: search_products_geospatial (byCat) cats=$matchedSubcategories');
+          debugPrint('[Search] Step 4/4: search_products_geospatial (byCat) BYPASS cats=$matchedSubcategories');
           try {
-            rawProductsByCat =
-                await _supabase.rpc('search_products_geospatial', params: {
-              'p_lat': lat,
-              'p_lng': lng,
-              'p_categories': matchedSubcategories,
-              'p_radius_km': maxRadius,
-              'p_limit': 100
-            });
+            // Leverage shopsByCat from Step 3 which is already distance sorted
+            final shopIds = (shopsByCat as List).map((s) => s['id'] as String).toList();
+            
+            if (shopIds.isNotEmpty) {
+              final allProducts = await _supabase
+                  .from('products')
+                  .select()
+                  .eq('is_available', true)
+                  .inFilter('shop_id', shopIds);
+              
+              final productsByShop = <String, List<dynamic>>{};
+              for (final p in allProducts) {
+                final sid = p['shop_id'] as String;
+                productsByShop.putIfAbsent(sid, () => []).add(p);
+              }
+              
+              for (final shop in shopsByCat) {
+                final sid = shop['id'] as String;
+                if (productsByShop.containsKey(sid)) {
+                  final shopProds = productsByShop[sid]!;
+                  shopProds.sort((a, b) {
+                    final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
+                    final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
+                    return ratingB.compareTo(ratingA);
+                  });
+                  rawProductsByCat.addAll(shopProds.take(5));
+                  if (rawProductsByCat.length >= 100) break;
+                }
+              }
+              if (rawProductsByCat.length > 100) rawProductsByCat = rawProductsByCat.sublist(0, 100);
+            }
             debugPrint('[Search] Step 4/4 OK: ${rawProductsByCat.length} products found');
           } catch (e) {
-            debugPrint('[Search] Step 4/4 FAILED (search_products_geospatial byCat): $e');
+            debugPrint('[Search] Step 4/4 FAILED (byCat bypass): $e');
             rethrow;
           }
         } else {

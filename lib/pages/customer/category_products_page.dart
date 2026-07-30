@@ -97,31 +97,68 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
         // Phase 26 Fix (Ported): Fetch products WITHOUT .select('*, shops(*)')
         // which causes PostgREST to reject embedded-resource requests on
         // SECURITY DEFINER SETOF RPCs. Batch-fetch shops separately instead.
-        final List<dynamic> rawProducts =
-            await _supabase.rpc('search_products_geospatial', params: {
+        // Phase 31 Fix: Bypass PostgREST overload bug entirely
+        final nearbyShops = await _supabase.rpc('search_shops_geospatial', params: {
           'p_lat': lat,
           'p_lng': lng,
+          'p_query': null,
           'p_categories': subcategories,
           'p_radius_km': DeliveryCalculator.maxRadiusKm,
           'p_limit': 150,
-          'p_limit_per_shop': 5,
-          if (_selectedDemographic != 'All') 'p_special_tag': '#$_selectedDemographic'
         });
 
+        List<dynamic> rawProducts = [];
+        final shopIds = (nearbyShops as List).map((s) => s['id'] as String).toList();
+        
+        if (shopIds.isNotEmpty) {
+          var q = _supabase
+              .from('products')
+              .select()
+              .eq('is_available', true)
+              .inFilter('shop_id', shopIds);
+          
+          if (_selectedDemographic != 'All') {
+            q = q.contains('special_tags', ['#$_selectedDemographic']);
+          }
+          
+          final allProducts = await q;
+          
+          final productsByShop = <String, List<dynamic>>{};
+          for (final p in allProducts) {
+            final sid = p['shop_id'] as String;
+            productsByShop.putIfAbsent(sid, () => []).add(p);
+          }
+          
+          for (final shop in nearbyShops) {
+            final sid = shop['id'] as String;
+            if (productsByShop.containsKey(sid)) {
+              final shopProds = productsByShop[sid]!;
+              shopProds.sort((a, b) {
+                final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
+                final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
+                return ratingB.compareTo(ratingA);
+              });
+              rawProducts.addAll(shopProds.take(5));
+              if (rawProducts.length >= 150) break;
+            }
+          }
+          if (rawProducts.length > 150) rawProducts = rawProducts.sublist(0, 150);
+        }
+
         // Collect unique shop_ids for a single batch query
-        final Set<String> shopIds = {};
+        final Set<String> productShopIds = {};
         for (final p in rawProducts) {
           final sid = (p as Map<String, dynamic>)['shop_id'] as String?;
-          if (sid != null && sid.isNotEmpty) shopIds.add(sid);
+          if (sid != null && sid.isNotEmpty) productShopIds.add(sid);
         }
 
         // Single batch query for all referenced shops
         final Map<String, Map<String, dynamic>> shopById = {};
-        if (shopIds.isNotEmpty) {
+        if (productShopIds.isNotEmpty) {
           final shopRows = await _supabase
               .from('shops')
               .select('*')
-              .inFilter('id', shopIds.toList());
+              .inFilter('id', productShopIds.toList());
           for (final s in shopRows as List) {
             final sm = s as Map<String, dynamic>;
             shopById[sm['id'] as String] = sm;
