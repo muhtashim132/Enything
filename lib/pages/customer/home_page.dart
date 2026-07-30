@@ -801,7 +801,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             'p_categories': effectiveCategories,
             'p_radius_km': maxRadius,
             'p_limit': 50,
-            'p_special_tag': specialTag
+            'p_limit_per_shop': 5,
+            if (specialTag != null) 'p_special_tag': specialTag
           });
           debugPrint('[Search] Step 2/4 OK: ${rawProductsByName.length} products found');
         } catch (e) {
