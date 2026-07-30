@@ -104,6 +104,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           'p_categories': subcategories,
           'p_radius_km': DeliveryCalculator.maxRadiusKm,
           'p_limit': 150,
+          'p_limit_per_shop': 5,
           if (_selectedDemographic != 'All') 'p_special_tag': '#$_selectedDemographic'
         });
 

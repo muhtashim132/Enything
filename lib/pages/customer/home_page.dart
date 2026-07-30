@@ -751,12 +751,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
          specialTag = '#$_selectedSearchDemographic';
       }
 
-      List<String>? effectiveCategories;
+      List<String> effectiveCategories = [];
       if (_selectedFilterCategories.isNotEmpty) {
-        effectiveCategories = [];
         for (final cat in _selectedFilterCategories) {
           effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
         }
+      } else {
+        final allTabCats = _tabCategories.values.expand((e) => e);
+        final allAppCats = AppCategories.all.map((c) => c['name']!);
+        final allAppCatsLower = AppCategories.all.map((c) => c['name']!.toLowerCase());
+        effectiveCategories = {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
       }
 
       List<dynamic> shopsByName = [];
@@ -1122,12 +1126,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     try {
       final locationProvider = context.read<LocationProvider>();
 
-      List<String>? effectiveCategories;
+      List<String> effectiveCategories = [];
       if (_selectedFilterCategories.isNotEmpty) {
-        effectiveCategories = [];
         for (final cat in _selectedFilterCategories) {
           effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
         }
+      } else {
+        // Phase 31 Fix: PostgREST 42809 Overload Resolution Bug
+        // When overloaded functions (like search_products_geospatial) receive `null` for an array parameter,
+        // PostgREST loses the type context (text[]) during JSON mapping, crashing PostgreSQL with error 42809.
+        // By passing an exhaustive array of ALL categories instead of null, PostgREST correctly types it as a string array.
+        final allTabCats = _tabCategories.values.expand((e) => e);
+        final allAppCats = AppCategories.all.map((c) => c['name']!);
+        final allAppCatsLower = AppCategories.all.map((c) => c['name']!.toLowerCase());
+        effectiveCategories = {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
       }
 
       // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
@@ -1266,12 +1278,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       final locationProvider = context.read<LocationProvider>();
       final subcategories = _tabCategories[tabName] ?? [tabName];
 
-      List<String>? effectiveCategories;
+      List<String> effectiveCategories = [];
       if (_selectedFilterCategories.isNotEmpty) {
-        effectiveCategories = [];
         for (final cat in _selectedFilterCategories) {
           effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
         }
+      } else {
+        final allTabCats = _tabCategories.values.expand((e) => e);
+        final allAppCats = AppCategories.all.map((c) => c['name']!);
+        final allAppCatsLower = AppCategories.all.map((c) => c['name']!.toLowerCase());
+        effectiveCategories = {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
       }
 
       List<String> finalCategories = [];
