@@ -319,22 +319,25 @@ class _FavoritesPageState extends State<FavoritesPage>
 
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
-                                child: isFood
-                                    ? RestaurantShopCard(
-                                        shop: shop,
-                                        onTap: () =>
-                                            showRestaurantDashboardSheet(
-                                          context,
-                                          shop.id,
+                                child: SizedBox(
+                                  height: 345,
+                                  child: isFood
+                                      ? RestaurantShopCard(
+                                          shop: shop,
+                                          onTap: () =>
+                                              showRestaurantDashboardSheet(
+                                            context,
+                                            shop.id,
+                                          ),
+                                        )
+                                      : ShopCard(
+                                          shop: shop,
+                                          onTap: () => showShopDetailSheet(
+                                            context,
+                                            shop.id,
+                                          ),
                                         ),
-                                      )
-                                    : ShopCard(
-                                        shop: shop,
-                                        onTap: () => showShopDetailSheet(
-                                          context,
-                                          shop.id,
-                                        ),
-                                      ),
+                                ),
                               );
                             },
                           ),

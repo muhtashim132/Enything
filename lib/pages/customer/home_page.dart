@@ -751,18 +751,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
          specialTag = '#$_selectedSearchDemographic';
       }
 
-      List<String> effectiveCategories = [];
+      List<String>? effectiveCategories;
       if (_selectedFilterCategories.isNotEmpty) {
+        effectiveCategories = [];
         for (final cat in _selectedFilterCategories) {
           effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
         }
-      } else {
-        final allTabCats = _tabCategories.values.expand((e) => e);
-        final allAppCats = AppCategories.all.map((c) => c['name']!);
-        final allAppCatsLower = AppCategories.all.map((c) => c['name']!.toLowerCase());
-        effectiveCategories = {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
       }
-
       List<dynamic> shopsByName = [];
       List<dynamic> productsByName = [];
       List<dynamic> shopsByCat = [];
@@ -814,8 +809,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 .from('products')
                 .select()
                 .eq('is_available', true)
-                .inFilter('shop_id', shopIds)
-                .ilike('name', '%$query%');
+                .inFilter('shop_id', shopIds);
+            
+            final terms = query.trim().split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+            for (final term in terms) {
+              q = q.ilike('name', '%$term%');
+            }
             
             if (specialTag != null) {
               q = q.contains('special_tags', [specialTag]);
@@ -2104,16 +2103,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           CategoryGroup.food;
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 16),
-                                    child: isFood
-                                        ? RestaurantShopCard(
-                                            shop: shop,
-                                            onTap: () =>
-                                                showRestaurantDashboardSheet(
-                                                    context, shop.id))
-                                        : ShopCard(
-                                            shop: shop,
-                                            onTap: () => showShopDetailSheet(
-                                                context, shop.id)),
+                                    child: SizedBox(
+                                      height: 345,
+                                      child: isFood
+                                          ? RestaurantShopCard(
+                                              shop: shop,
+                                              onTap: () =>
+                                                  showRestaurantDashboardSheet(
+                                                      context, shop.id))
+                                          : ShopCard(
+                                              shop: shop,
+                                              onTap: () => showShopDetailSheet(
+                                                  context, shop.id)),
+                                    ),
                                   );
                                 },
                               ),
@@ -2270,7 +2272,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: crossAxisCount,
                                     mainAxisExtent:
-                                        280, // Fixed extent for the card
+                                        345, // Fixed extent for the card
                                     crossAxisSpacing: 16,
                                     mainAxisSpacing: 16,
                                   ),
