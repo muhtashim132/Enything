@@ -101,10 +101,7 @@ Future<void> main() async {
   await Process.run('supabase', [
     'db',
     'query',
-    "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId'; " +
-        "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId'; " +
-        "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId'; " +
-        "UPDATE orders SET status = 'delivered' WHERE id = '$orderId';",
+    "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId'; " "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId'; " "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId'; " "UPDATE orders SET status = 'delivered' WHERE id = '$orderId';",
     '--linked'
   ]);
 

@@ -213,7 +213,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
             );
           } else {
             // ignore: use_build_context_synchronously
-            SystemNavigator.pop();
+            SystemNavigator.pop(animated: true);
           }
         }
       },

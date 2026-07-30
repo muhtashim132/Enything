@@ -30,6 +30,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   List<ProductModel> _products = [];
   Map<String, ShopModel> _productShops = {};
   int _displayLimit = 20;
+  String _selectedDemographic = 'All';
 
   static const Map<String, List<String>> _tabCategories = {
     'Food': [
@@ -93,15 +94,45 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           _tabCategories[widget.categoryName] ?? [widget.categoryName];
 
       if (lat != null && lng != null) {
-        final productsResponse =
+        // Phase 26 Fix (Ported): Fetch products WITHOUT .select('*, shops(*)')
+        // which causes PostgREST to reject embedded-resource requests on
+        // SECURITY DEFINER SETOF RPCs. Batch-fetch shops separately instead.
+        final List<dynamic> rawProducts =
             await _supabase.rpc('search_products_geospatial', params: {
           'p_lat': lat,
           'p_lng': lng,
-          'p_query': null,
           'p_categories': subcategories,
           'p_radius_km': DeliveryCalculator.maxRadiusKm,
-          'p_limit': 150
-        }).select('*, shops(*)');
+          'p_limit': 150,
+          if (_selectedDemographic != 'All') 'p_special_tag': '#$_selectedDemographic'
+        });
+
+        // Collect unique shop_ids for a single batch query
+        final Set<String> shopIds = {};
+        for (final p in rawProducts) {
+          final sid = (p as Map<String, dynamic>)['shop_id'] as String?;
+          if (sid != null && sid.isNotEmpty) shopIds.add(sid);
+        }
+
+        // Single batch query for all referenced shops
+        final Map<String, Map<String, dynamic>> shopById = {};
+        if (shopIds.isNotEmpty) {
+          final shopRows = await _supabase
+              .from('shops')
+              .select('*')
+              .inFilter('id', shopIds.toList());
+          for (final s in shopRows as List) {
+            final sm = s as Map<String, dynamic>;
+            shopById[sm['id'] as String] = sm;
+          }
+        }
+
+        // Reconstruct with 'shops' key for downstream ProductModel parsing
+        final productsResponse = rawProducts.map((p) {
+          final m = Map<String, dynamic>.from(p as Map<String, dynamic>);
+          m['shops'] = shopById[m['shop_id'] as String?];
+          return m;
+        }).toList();
 
         final prods = <ProductModel>[];
         final prodShops = <String, ShopModel>{};
@@ -209,6 +240,40 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
         surfaceTintColor: Colors.transparent,
         iconTheme:
             IconThemeData(color: isDark ? Colors.white : AppColors.textPrimary),
+        bottom: (['Clothing', 'Footwear', 'Jewellery', 'Cosmetics & Beauty', 'Salon & Beauty'].contains(widget.categoryName))
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(50),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: ['All', 'Men', 'Women', 'Boys', 'Girls']
+                        .map((demo) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(demo),
+                                selected: _selectedDemographic == demo,
+                                onSelected: (selected) {
+                                  if (selected) {
+                                    setState(() {
+                                      _selectedDemographic = demo;
+                                      _fetchProducts();
+                                    });
+                                  }
+                                },
+                                selectedColor: AppColors.primary,
+                                labelStyle: TextStyle(
+                                  color: _selectedDemographic == demo
+                                      ? Colors.white
+                                      : (isDark ? Colors.white : AppColors.textPrimary),
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              )
+            : null,
       ),
       body: _isLoading
           ? _buildShimmer(isDark)
@@ -280,8 +345,13 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                         final itemHeight = itemWidth + 178;
                         final childAspectRatio = itemWidth / itemHeight;
 
+                        var filteredProducts = _products;
+                        if (_selectedDemographic != 'All') {
+                          filteredProducts = _products.where((p) => p.specialTags.contains('#$_selectedDemographic') || p.specialTags.contains('#Unisex')).toList();
+                        }
+
                         final displayProducts =
-                            _products.take(_displayLimit).toList();
+                            filteredProducts.take(_displayLimit).toList();
 
                         return CustomScrollView(
                           slivers: [
@@ -304,7 +374,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                 },
                               ),
                             ),
-                            if (_products.length > _displayLimit)
+                            if (filteredProducts.length > _displayLimit)
                               SliverToBoxAdapter(
                                 child: Padding(
                                   padding:

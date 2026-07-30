@@ -1324,7 +1324,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             );
           } else {
             // ignore: use_build_context_synchronously
-            SystemNavigator.pop();
+            SystemNavigator.pop(animated: true);
           }
         },
         child: AnnotatedRegion<SystemUiOverlayStyle>(

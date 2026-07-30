@@ -60,6 +60,7 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _gstLoading = false;
   bool _gstUserOverridden = false;
   Timer? _gstDebounce;
+  String _selectedDemographic = 'Unisex';
 
   List<String> get _availableUnitTypes {
     if (_productCategory == 'Clothing' ||
@@ -113,6 +114,11 @@ class _AddProductPageState extends State<AddProductPage> {
               '${(p.gstRateOverride! * 100).toStringAsFixed(0)}% — Previously saved',
           isAmbiguous: false,
         );
+      }
+      for (final tag in p.specialTags) {
+        if (['#Men', '#Women', '#Boys', '#Girls', '#Kids', '#Unisex'].contains(tag)) {
+          _selectedDemographic = tag.replaceAll('#', '');
+        }
       }
     }
   }
@@ -471,6 +477,14 @@ class _AddProductPageState extends State<AddProductPage> {
         'variants': _variants.map((v) => v.toMap()).toList(),
         // Product-level GST override (null = use category default)
         'gst_rate_override': _gstRateOverride,
+        'special_tags': () {
+          var tags = widget.existingProduct?.specialTags.toList() ?? [];
+          tags.removeWhere((t) => ['#Men', '#Women', '#Boys', '#Girls', '#Kids', '#Unisex'].contains(t));
+          if (['Clothing', 'Footwear', 'Jewellery', 'Cosmetics & Beauty', 'Salon & Beauty'].contains(_productCategory)) {
+            tags.add('#$_selectedDemographic');
+          }
+          return tags;
+        }(),
       };
 
       if (widget.existingProduct == null) {
@@ -1173,6 +1187,42 @@ class _AddProductPageState extends State<AddProductPage> {
                           }
                         },
                       ),
+                    
+                    if (['Clothing', 'Footwear', 'Jewellery', 'Cosmetics & Beauty', 'Salon & Beauty'].contains(_productCategory)) ...[
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Target Demographic',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ['Unisex', 'Men', 'Women', 'Boys', 'Girls', 'Kids']
+                            .map((demo) => ChoiceChip(
+                                  label: Text(demo),
+                                  selected: _selectedDemographic == demo,
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      setState(() {
+                                        _selectedDemographic = demo;
+                                      });
+                                    }
+                                  },
+                                  selectedColor: AppColors.primary,
+                                  labelStyle: TextStyle(
+                                    color: _selectedDemographic == demo
+                                        ? Colors.white
+                                        : AppColors.textPrimary,
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+                    ],
+
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _menuCategoryController,

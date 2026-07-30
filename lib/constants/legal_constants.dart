@@ -113,9 +113,9 @@ class LegalConstants {
           'You may cancel your order at no charge before the Seller accepts it. If payment has been collected (in rare edge cases), a full refund will be issued within 5–7 business days to the original payment method.',
     ),
     LegalSection(
-      heading: '2. Cancellation After Seller Acceptance',
+      heading: '2. Cancellation After Seller and Rider Acceptance',
       content:
-          'Once the Seller has accepted your order and begun preparation, cancellation requests are evaluated on a case-by-case basis. If approved by Enything support, a refund may be issued within 5–7 business days. If the order is already out for delivery, cancellation is not permitted.',
+          'Once the seller and rider accepted your order and payment is done, cancellation requests are evaluated on a case-by-case basis. If approved by Enything support, a refund may be issued within 5–7 business days. If the order is already out for delivery, cancellation is not permitted.',
     ),
     LegalSection(
       heading: '3. Dispute — Missing or Damaged Items',
@@ -125,7 +125,7 @@ class LegalConstants {
     LegalSection(
       heading: '4. Non-Refundable Situations',
       content:
-          'Refunds will NOT be issued for: orders where the customer was unavailable at the delivery address; perishable goods (food items) unless they are visibly spoiled or tampered with; incorrect delivery address provided by the customer; orders cancelled after preparation is complete.',
+          'Refunds will NOT be issued for: orders where the customer was unavailable at the delivery address; perishable goods (food items) unless they are visibly spoiled or tampered with; incorrect delivery address provided by the customer; orders cancelled after preparation is complete. Additionally, no returns are applicable after receiving an order, including for size or fit issues in categories like clothes and shoes. However, you may contact the seller directly; if the seller agrees to accept a return personally, it must be handled within a 15 km radius.',
     ),
     LegalSection(
       heading: '5. Refund Method & Timeline',

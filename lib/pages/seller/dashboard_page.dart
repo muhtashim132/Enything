@@ -291,7 +291,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
               );
             } else {
               // ignore: use_build_context_synchronously
-              SystemNavigator.pop();
+              SystemNavigator.pop(animated: true);
             }
           },
           child: Scaffold(

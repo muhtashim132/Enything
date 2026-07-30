@@ -145,7 +145,7 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
           isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
       appBar: AppBar(
         title: Text('Rider Insights',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.white)),
         centerTitle: true,
         backgroundColor: const Color(0xFF0A1260),
         foregroundColor: Colors.white,

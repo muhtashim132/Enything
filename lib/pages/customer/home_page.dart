@@ -63,6 +63,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   bool _isLoading = true;
   bool _isSearching = false;
   bool _searchError = false;
+  String _searchErrorMessage = '';
   int _shopsDisplayLimit = 3;
   int _productsDisplayLimit = 6;
   int _searchShopsDisplayLimit = 12;
@@ -74,6 +75,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   List<ProductModel> _products = [];
   Map<String, ShopModel> _productShops = {};
   String _searchQuery = '';
+  String _selectedSearchDemographic = 'All';
   _SortMode _sortMode = _SortMode.relevant;
   final _searchController = TextEditingController();
   final Set<String> _selectedFilterCategories = {};
@@ -697,7 +699,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   }
 
   /// Runs a Supabase text search for shops by name across all categories.
-  Future<void> _searchShops(String query) async {
+  Future<void> _searchShops(String query, {bool skipNLP = false}) async {
     final locationProvider = context.read<LocationProvider>();
     if (!locationProvider.hasLocation) {
       _promptEnableLocation();
@@ -711,30 +713,43 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _searchProductShops = {};
         _isSearching = false;
         _searchError = false;
+        _searchErrorMessage = '';
         _sortMode = _SortMode.relevant; // reset sort on clear
+        _selectedSearchDemographic = 'All'; // reset demographic on clear
       });
       return;
     }
+
     setState(() {
-      _searchQuery = query;
       _isSearching = true;
       _searchError = false;
+      _searchErrorMessage = '';
+      _searchQuery = query;
       _searchShopsDisplayLimit = 2;
       _searchProductsDisplayLimit = 10;
+      if (!skipNLP) _selectedSearchDemographic = 'All';
     });
+
     try {
       final locationProvider = context.read<LocationProvider>();
+      final String lowerQuery = query.toLowerCase().trim();
+      List<String> matchedSubcategories = [];
 
-      final lowerQuery = query.toLowerCase().trim();
-      final List<String> matchedSubcategories = [];
-      _searchKeywords.forEach((catName, keywords) {
-        bool match = keywords.any((k) {
-          return lowerQuery.contains(k) || k.contains(lowerQuery);
+      if (!skipNLP) {
+        _searchKeywords.forEach((catName, keywords) {
+          bool match = keywords.any((k) {
+            return lowerQuery.contains(k) || k.contains(lowerQuery);
+          });
+          if (match) {
+            matchedSubcategories.addAll(_tabCategories[catName] ?? [catName]);
+          }
         });
-        if (match) {
-          matchedSubcategories.addAll(_tabCategories[catName] ?? [catName]);
-        }
-      });
+      }
+
+      String? specialTag;
+      if (_selectedSearchDemographic != 'All') {
+         specialTag = '#$_selectedSearchDemographic';
+      }
 
       List<String>? effectiveCategories;
       if (_selectedFilterCategories.isNotEmpty) {
@@ -756,45 +771,120 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // Phase 24: Mathematically pure ST_DWithin geospatial search via Additive RPC
         final maxRadius = DeliveryCalculator.maxRadiusKm;
 
-        shopsByName = await _supabase.rpc('search_shops_geospatial', params: {
-          'p_lat': lat,
-          'p_lng': lng,
-          'p_query': query,
-          'p_categories': effectiveCategories,
-          'p_radius_km': maxRadius,
-          'p_limit': 50
-        });
-
-        productsByName =
-            await _supabase.rpc('search_products_geospatial', params: {
-          'p_lat': lat,
-          'p_lng': lng,
-          'p_query': query,
-          'p_categories': effectiveCategories,
-          'p_radius_km': maxRadius,
-          'p_limit': 50
-        }).select('*, shops(*)');
-
-        if (matchedSubcategories.isNotEmpty) {
-          shopsByCat = await _supabase.rpc('search_shops_geospatial', params: {
+        debugPrint('[Search] Step 1/4: search_shops_geospatial (byName) q="$query" lat=$lat lng=$lng radius=$maxRadius');
+        try {
+          shopsByName = await _supabase.rpc('search_shops_geospatial', params: {
             'p_lat': lat,
             'p_lng': lng,
-            'p_query': null,
-            'p_categories': matchedSubcategories,
+            'p_query': query,
+            'p_categories': effectiveCategories,
             'p_radius_km': maxRadius,
             'p_limit': 50
           });
+          debugPrint('[Search] Step 1/4 OK: ${(shopsByName as List).length} shops found');
+        } catch (e) {
+          debugPrint('[Search] Step 1/4 FAILED (search_shops_geospatial byName): $e');
+          rethrow;
+        }
 
-          productsByCat =
+        // Phase 26 Fix: Fetch products without .select('*, shops(*)')  which
+        // causes PostgREST to reject embedded-resource requests on SETOF RPCs.
+        // Instead, we batch-fetch shops separately and reconstruct the map.
+        debugPrint('[Search] Step 2/4: search_products_geospatial (byName) q="$query"');
+        List<dynamic> rawProductsByName;
+        try {
+          rawProductsByName =
               await _supabase.rpc('search_products_geospatial', params: {
             'p_lat': lat,
             'p_lng': lng,
-            'p_query': null,
-            'p_categories': matchedSubcategories,
+            'p_query': query,
+            'p_categories': effectiveCategories,
             'p_radius_km': maxRadius,
-            'p_limit': 100
-          }).select('*, shops(*)');
+            'p_limit': 50,
+            'p_special_tag': specialTag
+          });
+          debugPrint('[Search] Step 2/4 OK: ${rawProductsByName.length} products found');
+        } catch (e) {
+          debugPrint('[Search] Step 2/4 FAILED (search_products_geospatial byName): $e');
+          rethrow;
         }
+
+        List<dynamic> rawProductsByCat = [];
+        if (matchedSubcategories.isNotEmpty && !skipNLP) {
+          debugPrint('[Search] Step 3/4: search_shops_geospatial (byCat) cats=$matchedSubcategories');
+          try {
+            shopsByCat = await _supabase.rpc('search_shops_geospatial', params: {
+              'p_lat': lat,
+              'p_lng': lng,
+              'p_categories': matchedSubcategories,
+              'p_radius_km': maxRadius,
+              'p_limit': 50
+            });
+            debugPrint('[Search] Step 3/4 OK: ${(shopsByCat as List).length} shops found');
+          } catch (e) {
+            debugPrint('[Search] Step 3/4 FAILED (search_shops_geospatial byCat): $e');
+            rethrow;
+          }
+
+          debugPrint('[Search] Step 4/4: search_products_geospatial (byCat) cats=$matchedSubcategories');
+          try {
+            rawProductsByCat =
+                await _supabase.rpc('search_products_geospatial', params: {
+              'p_lat': lat,
+              'p_lng': lng,
+              'p_categories': matchedSubcategories,
+              'p_radius_km': maxRadius,
+              'p_limit': 100
+            });
+            debugPrint('[Search] Step 4/4 OK: ${rawProductsByCat.length} products found');
+          } catch (e) {
+            debugPrint('[Search] Step 4/4 FAILED (search_products_geospatial byCat): $e');
+            rethrow;
+          }
+        } else {
+          debugPrint('[Search] Steps 3-4 skipped: no NLP-matched subcategories for "$query"');
+        }
+
+        // Collect all unique shop_ids from both product lists so we can
+        // batch-fetch shop rows in a single query — no per-product round trips.
+        final Set<String> productShopIds = {};
+        for (final p in rawProductsByName) {
+          final sid = (p as Map<String, dynamic>)['shop_id'] as String?;
+          if (sid != null && sid.isNotEmpty) productShopIds.add(sid);
+        }
+        for (final p in rawProductsByCat) {
+          final sid = (p as Map<String, dynamic>)['shop_id'] as String?;
+          if (sid != null && sid.isNotEmpty) productShopIds.add(sid);
+        }
+
+        // Single batch query for all shops referenced by the product results.
+        final Map<String, Map<String, dynamic>> shopById = {};
+        if (productShopIds.isNotEmpty) {
+          debugPrint('[Search] Batch-fetching ${productShopIds.length} shop(s) for product results');
+          final shopRows = await _supabase
+              .from('shops')
+              .select('*')
+              .inFilter('id', productShopIds.toList());
+          for (final s in shopRows as List) {
+            final sm = s as Map<String, dynamic>;
+            shopById[sm['id'] as String] = sm;
+          }
+        }
+
+        // Reconstruct the product maps with the 'shops' key so that the
+        // existing addProducts() closure (which reads p['shops']) works
+        // without any modification — all downstream logic is preserved exactly.
+        productsByName = rawProductsByName.map((p) {
+          final m = Map<String, dynamic>.from(p as Map<String, dynamic>);
+          m['shops'] = shopById[m['shop_id'] as String?];
+          return m;
+        }).toList();
+
+        productsByCat = rawProductsByCat.map((p) {
+          final m = Map<String, dynamic>.from(p as Map<String, dynamic>);
+          m['shops'] = shopById[m['shop_id'] as String?];
+          return m;
+        }).toList();
       } else {
         // Fallback removed to prevent out-of-bounds checkouts
         shopsByName = [];
@@ -902,14 +992,37 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }
     } catch (e, st) {
       debugPrint('_searchShops ERROR: $e\n$st');
+
+      // Classify the error for user-facing messaging
+      String userMessage;
+      final errStr = e.toString();
+      if (errStr.contains('SocketException') ||
+          errStr.contains('TimeoutException') ||
+          errStr.contains('HandshakeException') ||
+          errStr.contains('Connection closed') ||
+          errStr.contains('Network is unreachable')) {
+        userMessage = 'Please check your internet connection.';
+      } else if (errStr.contains('42883') || errStr.contains('function') && errStr.contains('does not exist')) {
+        userMessage = 'Search service unavailable. DB function missing — contact support.';
+        debugPrint('[Search] ⚠ PostgREST 42883: search function not found. Migrations may not be applied.');
+      } else if (errStr.contains('42725') || errStr.contains('is not unique')) {
+        userMessage = 'Search service error. DB function ambiguity — contact support.';
+        debugPrint('[Search] ⚠ PostgREST 42725: ambiguous function overload.');
+      } else if (errStr.contains('PGRST')) {
+        userMessage = 'Search service error: $errStr';
+      } else {
+        userMessage = 'Search failed: ${errStr.length > 120 ? '${errStr.substring(0, 120)}...' : errStr}';
+      }
+
       if (mounted) {
         setState(() {
           _isSearching = false;
           _searchError = true;
+          _searchErrorMessage = userMessage;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Search failed. Please check your connection.'),
+          SnackBar(
+            content: Text(userMessage),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1675,7 +1788,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                                   : AppColors.textPrimary)),
                                       const SizedBox(height: 8),
                                       Text(
-                                          'Please check your internet connection',
+                                          _searchErrorMessage.isNotEmpty
+                                              ? _searchErrorMessage
+                                              : 'Please check your internet connection',
+                                          textAlign: TextAlign.center,
                                           style: GoogleFonts.outfit(
                                               fontSize: 13,
                                               color: AppColors.textSecondary)),
@@ -2376,60 +2492,103 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       },
     ];
 
-    return SizedBox(
-      height: 50,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: filters.length,
-        itemBuilder: (context, index) {
-          final filter = filters[index];
-          final mode = filter['mode'] as _SortMode;
-          final isSelected = _sortMode == mode;
+    final hasDemographicCategories = _searchProductResults.any((p) => ['Clothing', 'Footwear', 'Jewellery', 'Cosmetics & Beauty', 'Salon & Beauty'].contains(p.category)) || _selectedSearchDemographic != 'All';
 
-          return GestureDetector(
-            onTap: () => setState(() => _sortMode = mode),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.primary
-                      : (isDark ? Colors.white24 : Colors.grey.shade300),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    filter['icon'] as IconData,
-                    size: 16,
-                    color: isSelected
-                        ? Colors.white
-                        : (isDark ? Colors.white70 : AppColors.textPrimary),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    filter['label'] as String,
-                    style: GoogleFonts.outfit(
-                      fontSize: 13,
-                      fontWeight:
-                          isSelected ? FontWeight.w700 : FontWeight.w500,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: filters.map((filter) {
+              final mode = filter['mode'] as _SortMode;
+              final isSelected = _sortMode == mode;
+
+              return GestureDetector(
+                onTap: () => setState(() => _sortMode = mode),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
                       color: isSelected
-                          ? Colors.white
-                          : (isDark ? Colors.white70 : AppColors.textPrimary),
+                          ? AppColors.primary
+                          : (isDark ? Colors.white24 : Colors.grey.shade300),
                     ),
                   ),
-                ],
-              ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        filter['icon'] as IconData,
+                        size: 16,
+                        color: isSelected
+                            ? Colors.white
+                            : (isDark ? Colors.white70 : AppColors.textPrimary),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        filter['label'] as String,
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: isSelected
+                              ? Colors.white
+                              : (isDark ? Colors.white70 : AppColors.textPrimary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        if (hasDemographicCategories)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: ['All', 'Men', 'Women', 'Boys', 'Girls', 'Kids']
+                  .map((demo) => Padding(
+                        padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+                        child: ChoiceChip(
+                          label: Text(demo),
+                          selected: _selectedSearchDemographic == demo,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() {
+                                _selectedSearchDemographic = demo;
+                              });
+                              _searchShops(_searchQuery, skipNLP: true);
+                            }
+                          },
+                          selectedColor: AppColors.primary,
+                          labelStyle: TextStyle(
+                            color: _selectedSearchDemographic == demo
+                                ? Colors.white
+                                : (isDark ? Colors.white : AppColors.textPrimary),
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                          ),
+                          backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                          side: BorderSide(
+                            color: _selectedSearchDemographic == demo
+                                ? AppColors.primary
+                                : (isDark ? Colors.white24 : Colors.grey.shade300),
+                          ),
+                        ),
+                      ))
+                  .toList(),
             ),
-          );
-        },
-      ),
+          ),
+      ],
     );
   }
 

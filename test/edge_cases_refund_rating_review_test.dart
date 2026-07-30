@@ -148,10 +148,7 @@ Future<void> runTests(SupabaseClient client) async {
   await Process.run('supabase', [
     'db',
     'query',
-    "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId2'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId2'; " +
-        "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId2'; " +
-        "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId2'; " +
-        "UPDATE orders SET status = 'delivered' WHERE id = '$orderId2';",
+    "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId2'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId2'; " "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId2'; " "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId2'; " "UPDATE orders SET status = 'delivered' WHERE id = '$orderId2';",
     '--linked'
   ]);
 
@@ -196,10 +193,7 @@ Future<void> runTests(SupabaseClient client) async {
     await Process.run('supabase', [
       'db',
       'query',
-      "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId3'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId3'; " +
-          "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId3'; " +
-          "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId3'; " +
-          "UPDATE orders SET status = 'delivered' WHERE id = '$orderId3';",
+      "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId3'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId3'; " "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId3'; " "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId3'; " "UPDATE orders SET status = 'delivered' WHERE id = '$orderId3';",
       '--linked'
     ]);
 
@@ -272,10 +266,7 @@ Future<void> runTests(SupabaseClient client) async {
     await Process.run('supabase', [
       'db',
       'query',
-      "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId5'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId5'; " +
-          "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId5'; " +
-          "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId5'; " +
-          "UPDATE orders SET status = 'delivered' WHERE id = '$orderId5';",
+      "UPDATE orders SET status = 'confirmed', payment_status = 'captured' WHERE id = '$orderId5'; " "UPDATE orders SET status = 'preparing' WHERE id = '$orderId5'; " "UPDATE orders SET status = 'ready_for_pickup' WHERE id = '$orderId5'; " "UPDATE orders SET status = 'picked_up' WHERE id = '$orderId5'; " "UPDATE orders SET status = 'delivered' WHERE id = '$orderId5';",
       '--linked'
     ]);
 

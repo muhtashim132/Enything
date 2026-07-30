@@ -135,7 +135,7 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
         backgroundColor: const Color(0xFF1A1A2E),
         foregroundColor: Colors.white,
         title: const Text('Withdraw Earnings',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
         elevation: 0,
       ),
       body: _loadingHistory

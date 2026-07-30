@@ -275,7 +275,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
               );
             } else {
               // ignore: use_build_context_synchronously
-              SystemNavigator.pop();
+              SystemNavigator.pop(animated: true);
             }
           }
         },

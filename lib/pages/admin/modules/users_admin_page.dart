@@ -609,7 +609,9 @@ class _RidersTabState extends State<_RidersTab> {
   Future<void> _fetch() async {
     try {
       final res = await _db.rpc('admin_get_all_riders');
-      _riders = List<Map<String, dynamic>>.from(res);
+      // BUG 4 FIX: Guard against null — mirrors the null guard already present in
+      // _SellersTabState._fetch(). RPC returns null when permission is denied or 0 rows.
+      _riders = res == null ? [] : List<Map<String, dynamic>>.from(res as List);
       _filtered = _riders;
     } catch (e) {
       debugPrint('Error fetching riders: $e');

@@ -1,5 +1,4 @@
 import 'package:file/local.dart';
-import 'package:file/file.dart';
 import 'dart:io';
 
 void main() async {
