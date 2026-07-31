@@ -2024,6 +2024,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     bool isExpanded = !_collapsedAvailableGroups.contains(group.groupId);
 
     return StatefulBuilder(builder: (context, setStateBuilder) {
+      bool isExpired = false;
+      if (group.orders.isNotEmpty &&
+          group.orders.first.acceptanceDeadline != null) {
+        final remaining = group.orders.first.acceptanceDeadline!
+            .difference(DateTime.now().toUtc())
+            .inSeconds;
+        isExpired = remaining <= 0;
+      }
+
       return Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
@@ -2201,6 +2210,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               acceptanceDeadline:
                                   group.orders.first.acceptanceDeadline!,
                               fontSize: 13,
+                              onExpire: () {
+                                if (mounted) {
+                                  setStateBuilder(() {});
+                                  _debouncedLoadOrders();
+                                }
+                              },
                             ),
                           ],
                         ),
@@ -2254,20 +2269,21 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       const SizedBox(width: 8),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _isLoading
+                          onPressed: (_isLoading || isExpired)
                               ? null
                               : () => _acceptOrderGroup(group),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.success,
+                            backgroundColor: isExpired ? Colors.grey : AppColors.success,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
-                            elevation: 4,
-                            shadowColor:
-                                AppColors.success.withValues(alpha: 0.4),
+                            elevation: isExpired ? 0 : 4,
+                            shadowColor: isExpired
+                                ? Colors.transparent
+                                : AppColors.success.withValues(alpha: 0.4),
                           ),
-                          child: Text('Accept',
+                          child: Text(isExpired ? 'Expired' : 'Accept',
                               style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.w800, fontSize: 14)),
                         ),

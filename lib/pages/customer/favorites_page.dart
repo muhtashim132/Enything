@@ -320,7 +320,7 @@ class _FavoritesPageState extends State<FavoritesPage>
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
                                 child: SizedBox(
-                                  height: 345,
+                                  height: 280,
                                   child: isFood
                                       ? RestaurantShopCard(
                                           shop: shop,

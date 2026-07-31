@@ -1,0 +1,18 @@
+import 'package:supabase/supabase.dart';
+void main() async {
+  final client = SupabaseClient('https://mmdrgcuaetwohflcvzou.supabase.co', 'sb_publishable_f4uHzztf4EK76hcL0-bS5A_Ga0G2K6p');
+  final res = await client.rpc('get_nearby_shops', params: {
+    'p_lat': 34.0837,
+    'p_lng': 74.7974,
+    'p_radius_km': 5000.0,
+    'p_limit': 500,
+    'p_categories': ['Groceries', 'Fruits & Veggies', 'Meat & Poultry', 'Snacks & Drinks', 'Household', 'Pharmacy', 'Other']
+  });
+  final shops = (res as List);
+  print("Found ${shops.length} shops");
+  for (final s in shops) {
+    if (s['name'].toString().contains('Kamrans') || s['name'].toString().contains('Haji')) {
+      print("${s['name']} - open: ${s['open_time']} close: ${s['close_time']} isActive: ${s['is_active']} isAccepting: ${s['is_accepting_orders']}");
+    }
+  }
+}

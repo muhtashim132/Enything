@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../providers/referral_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
@@ -708,40 +709,66 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _shopCategory,
-                    isExpanded: true,
-                    dropdownColor: const Color(0xFF0D1440),
-                    style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500),
-                    icon: const Icon(Icons.keyboard_arrow_down,
-                        color: Colors.white54),
-                    items: AppCategories.all
-                        .map((cat) => DropdownMenuItem(
-                              value: cat['name'],
-                              child: Row(
-                                children: [
-                                  Text(cat['emoji']!,
-                                      style: const TextStyle(fontSize: 18)),
-                                  const SizedBox(width: 10),
-                                  Text(cat['name']!,
-                                      style: GoogleFonts.outfit(
-                                          color: Colors.white, fontSize: 14)),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() {
-                          _shopCategory = v;
-                          _shopGroup = AppCategories.groupFor(v);
-                        });
-                      }
-                    },
-                  ),
+                  child: Builder(builder: (ctx) {
+                    // Use active categories from provider; fallback to full list
+                    final config = ctx.read<PlatformConfigProvider>();
+                    final activeCats = config.activeCategoryMaps.isNotEmpty
+                        ? config.activeCategoryMaps
+                        : AppCategories.all;
+                    // If current selection is now disabled, reset to first active
+                    final activeNames =
+                        activeCats.map((c) => c['name']!).toList();
+                    if (!activeNames.contains(_shopCategory) &&
+                        activeNames.isNotEmpty) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(() {
+                            _shopCategory = activeNames.first;
+                            _shopGroup =
+                                AppCategories.groupFor(activeNames.first);
+                          });
+                        }
+                      });
+                    }
+                    return DropdownButton<String>(
+                      value: activeNames.contains(_shopCategory)
+                          ? _shopCategory
+                          : (activeNames.isNotEmpty ? activeNames.first : null),
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF0D1440),
+                      style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500),
+                      icon: const Icon(Icons.keyboard_arrow_down,
+                          color: Colors.white54),
+                      items: activeCats
+                          .map((cat) => DropdownMenuItem(
+                                value: cat['name'],
+                                child: Row(
+                                  children: [
+                                    Text(cat['emoji'] ?? '',
+                                        style:
+                                            const TextStyle(fontSize: 18)),
+                                    const SizedBox(width: 10),
+                                    Text(cat['name']!,
+                                        style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontSize: 14)),
+                                  ],
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() {
+                            _shopCategory = v;
+                            _shopGroup = AppCategories.groupFor(v);
+                          });
+                        }
+                      },
+                    );
+                  }),
                 ),
               ),
             ],

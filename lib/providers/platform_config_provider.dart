@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/app_categories.dart';
 import '../config/tax_config.dart';
 
 class PlatformConfigProvider extends ChangeNotifier {
@@ -36,8 +38,16 @@ class PlatformConfigProvider extends ChangeNotifier {
   // Cache for tax_config table (category -> row data)
   final Map<String, Map<String, dynamic>> _taxConfigCache = {};
 
+  // ── Category Management (Additive) ──────────────────────────────────────
+  /// Set of category names that the admin has disabled.
+  final Set<String> _disabledCategories = {};
+
+  /// Admin-created custom categories from the `custom_categories` DB table.
+  final List<Map<String, String>> _customCategories = [];
+
   RealtimeChannel? _platformConfigChannel;
   RealtimeChannel? _taxConfigChannel;
+  RealtimeChannel? _customCategoriesChannel;
   Timer? _debounceTimer;
 
   bool _loading = false;
@@ -50,6 +60,42 @@ class PlatformConfigProvider extends ChangeNotifier {
       notifyListeners();
     });
   }
+
+  // ── Category Management Getters (Additive) ──────────────────────────────
+
+  /// Returns true if this category is currently active (not disabled by admin).
+  bool isActiveCategory(String name) => !_disabledCategories.contains(name);
+
+  /// All disabled category names.
+  Set<String> get disabledCategories => Set.unmodifiable(_disabledCategories);
+
+  /// Returns all active built-in category maps (filtered by disabled set).
+  List<Map<String, String>> get activeCategoryMaps {
+    final builtIn = AppCategories.all
+        .where((c) => !_disabledCategories.contains(c['name']))
+        .toList();
+    final custom = _customCategories
+        .where((c) => !_disabledCategories.contains(c['name']))
+        .toList();
+    return [...builtIn, ...custom];
+  }
+
+  /// All category maps regardless of active status (for admin pages).
+  List<Map<String, String>> get allCategoryMaps {
+    return [...AppCategories.all, ..._customCategories];
+  }
+
+  /// Active category names (for filtering DB queries).
+  List<String> get activeCategoryNames =>
+      activeCategoryMaps.map((c) => c['name']!).toList();
+
+  /// All category names including custom (for admin commission/tax pages).
+  List<String> get allCategoryNames =>
+      allCategoryMaps.map((c) => c['name']!).toList();
+
+  /// Custom categories created by admin.
+  List<Map<String, String>> get customCategories =>
+      List.unmodifiable(_customCategories);
 
   // ── Getters ──────────────────────────────────────────────────
   double get commissionPercent => _commissionPercent;
@@ -178,7 +224,30 @@ class PlatformConfigProvider extends ChangeNotifier {
               Map<String, dynamic>.from(row);
         }
 
+        // ── Load Disabled Categories (Additive) ───────────────────────
+        // Key stored as 'disabled_categories' with JSON array value e.g. '[]'
+        try {
+          final dcRow = await _db
+              .from('platform_config')
+              .select('value')
+              .eq('key', 'disabled_categories')
+              .maybeSingle();
+          _disabledCategories.clear();
+          if (dcRow != null && dcRow['value'] != null) {
+            final decoded = jsonDecode(dcRow['value'].toString());
+            if (decoded is List) {
+              _disabledCategories.addAll(decoded.map((e) => e.toString()));
+            }
+          }
+        } catch (e) {
+          debugPrint('[CategoryMgmt] Could not load disabled_categories: $e');
+        }
+
+        // ── Load Custom Categories (Additive) ────────────────────────
+        await _loadCustomCategories();
+
         _loading = false;
+        _isFirstLoad = false;
         notifyListeners();
         return; // Success
       } catch (e) {
@@ -193,6 +262,14 @@ class PlatformConfigProvider extends ChangeNotifier {
           await Future.delayed(const Duration(seconds: 2));
         }
       }
+    }
+  }
+
+  void _handleReconnect(RealtimeSubscribeStatus status, [Object? error]) {
+    if (status == RealtimeSubscribeStatus.subscribed) {
+      if (_isFirstLoad) return;
+      final jitterMs = Random().nextInt(3000);
+      Future.delayed(Duration(milliseconds: jitterMs), () => load());
     }
   }
 
@@ -217,17 +294,7 @@ class PlatformConfigProvider extends ChangeNotifier {
             _debouncedNotifyListeners();
           },
         )
-        .subscribe((status, [error]) {
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        if (_isFirstLoad) {
-          _isFirstLoad = false;
-          return;
-        }
-        final jitterMs = Random().nextInt(3000);
-        Future.delayed(Duration(milliseconds: jitterMs),
-            () => load()); // Re-sync any gaps missed while offline with jitter
-      }
-    });
+        .subscribe(_handleReconnect);
 
     _taxConfigChannel ??= _db
         .channel('public:tax_config')
@@ -246,17 +313,21 @@ class PlatformConfigProvider extends ChangeNotifier {
             _debouncedNotifyListeners();
           },
         )
-        .subscribe((status, [error]) {
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        if (_isFirstLoad) {
-          _isFirstLoad = false;
-          return;
-        }
-        final jitterMs = Random().nextInt(3000);
-        Future.delayed(Duration(milliseconds: jitterMs),
-            () => load()); // Re-sync any gaps missed while offline with jitter
-      }
-    });
+        .subscribe(_handleReconnect);
+
+    // ── Realtime: custom_categories (Additive) ───────────────────
+    _customCategoriesChannel ??= _db
+        .channel('public:custom_categories')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'custom_categories',
+          callback: (_) async {
+            await _loadCustomCategories();
+            _debouncedNotifyListeners();
+          },
+        )
+        .subscribe(_handleReconnect);
   }
 
   @override
@@ -266,7 +337,120 @@ class PlatformConfigProvider extends ChangeNotifier {
       _db.removeChannel(_platformConfigChannel!);
     }
     if (_taxConfigChannel != null) _db.removeChannel(_taxConfigChannel!);
+    if (_customCategoriesChannel != null) {
+      _db.removeChannel(_customCategoriesChannel!);
+    }
     super.dispose();
+  }
+
+  // ── Category Management Helpers (Additive) ────────────────────────────────
+
+  Future<void> _loadCustomCategories() async {
+    try {
+      final rows = await _db
+          .from('custom_categories')
+          .select('name, emoji, category_group, image_url')
+          .order('sort_order');
+      _customCategories.clear();
+      for (final row in rows as List) {
+        _customCategories.add({
+          'name': row['name']?.toString() ?? '',
+          'emoji': row['emoji']?.toString() ?? '🏪',
+          'group': row['category_group']?.toString() ?? 'retail',
+          'image': row['image_url']?.toString() ?? '',
+        });
+      }
+    } catch (e) {
+      debugPrint('[CategoryMgmt] Could not load custom_categories: $e');
+    }
+  }
+
+  /// Toggle a category enabled/disabled.
+  /// [categoryName] — the exact name string.
+  /// Returns true on success.
+  Future<bool> toggleCategory(String categoryName) async {
+    try {
+      final wasDisabled = _disabledCategories.contains(categoryName);
+      if (wasDisabled) {
+        _disabledCategories.remove(categoryName);
+      } else {
+        _disabledCategories.add(categoryName);
+      }
+      notifyListeners();
+
+      // Persist to platform_config as JSON array
+      final jsonVal = jsonEncode(_disabledCategories.toList());
+      await _db.from('platform_config').upsert(
+        {'key': 'disabled_categories', 'value': jsonVal},
+        onConflict: 'key',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[CategoryMgmt] toggleCategory error: $e');
+      // Rollback optimistic update
+      if (_disabledCategories.contains(categoryName)) {
+        _disabledCategories.remove(categoryName);
+      } else {
+        _disabledCategories.add(categoryName);
+      }
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Create a new admin category.
+  Future<bool> createCategory({
+    required String name,
+    required String emoji,
+    required String group,
+    String? imageUrl,
+  }) async {
+    try {
+      final userId = _db.auth.currentUser?.id;
+      await _db.from('custom_categories').insert({
+        'name': name.trim(),
+        'emoji': emoji.trim(),
+        'category_group': group,
+        if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
+        if (userId != null) 'created_by': userId,
+      });
+      await _loadCustomCategories();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('[CategoryMgmt] createCategory error: $e');
+      return false;
+    }
+  }
+
+  /// Delete a custom (admin-created) category by name.
+  Future<bool> deleteCustomCategory(String name) async {
+    try {
+      await _db.from('custom_categories').delete().eq('name', name);
+      _customCategories.removeWhere((c) => c['name'] == name);
+      _disabledCategories.remove(name); // clean up disabled set too
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('[CategoryMgmt] deleteCustomCategory error: $e');
+      return false;
+    }
+  }
+
+  /// Returns shop counts per category from the DB (used by admin page).
+  Future<Map<String, int>> getCategoryShopCounts() async {
+    try {
+      final rows = await _db.rpc('get_category_shop_counts');
+      final result = <String, int>{};
+      for (final row in rows as List) {
+        result[row['category']?.toString() ?? ''] =
+            (row['shop_count'] as num?)?.toInt() ?? 0;
+      }
+      return result;
+    } catch (e) {
+      debugPrint('[CategoryMgmt] getCategoryShopCounts error: $e');
+      return {};
+    }
   }
 
   // ── GST Rate Helper (DB-driven) ──────────────────────────────────────────

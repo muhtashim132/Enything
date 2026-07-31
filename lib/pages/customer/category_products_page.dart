@@ -9,6 +9,7 @@ import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/location_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/product_card.dart';
 import '../../utils/responsive_layout.dart';
@@ -31,6 +32,8 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   Map<String, ShopModel> _productShops = {};
   int _displayLimit = 20;
   String _selectedDemographic = 'All';
+  String _selectedSize = 'All';
+  List<String> _availableSizes = [];
 
   static const Map<String, List<String>> _tabCategories = {
     'Food': [
@@ -75,6 +78,12 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Guard: if this category is disabled by admin, don't fetch & pop back
+      final config = context.read<PlatformConfigProvider>();
+      if (!config.isActiveCategory(widget.categoryName)) {
+        Navigator.of(context).pop();
+        return;
+      }
       _fetchProducts();
     });
   }
@@ -118,13 +127,27 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
               .inFilter('shop_id', shopIds);
           
           if (_selectedDemographic != 'All') {
-            q = q.contains('special_tags', ['#$_selectedDemographic']);
+            final List<String> overlapTags = ['#$_selectedDemographic', '#Unisex'];
+            if (_selectedDemographic == 'Boys' || _selectedDemographic == 'Girls') {
+              overlapTags.add('#Kids');
+            }
+            q = q.overlaps('special_tags', overlapTags);
           }
           
           final allProducts = await q;
           
+          final filteredProducts = _selectedSize == 'All'
+              ? allProducts
+              : allProducts.where((p) {
+                  final variants = p['variants'] as List<dynamic>? ?? [];
+                  return variants.any((v) {
+                    final name = (v['name'] as String?)?.trim() ?? '';
+                    return name == _selectedSize;
+                  });
+                }).toList();
+          
           final productsByShop = <String, List<dynamic>>{};
-          for (final p in allProducts) {
+          for (final p in filteredProducts) {
             final sid = p['shop_id'] as String;
             productsByShop.putIfAbsent(sid, () => []).add(p);
           }
@@ -209,6 +232,27 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
             _products = prods;
             _productShops = prodShops;
             _isLoading = false;
+            
+            if (_selectedSize == 'All') {
+              final Set<String> sizes = {};
+              for (final p in prods) {
+                if (_selectedDemographic != 'All') {
+                  final List<String> allowedTags = ['#$_selectedDemographic', '#Unisex'];
+                  if (_selectedDemographic == 'Boys' || _selectedDemographic == 'Girls') {
+                    allowedTags.add('#Kids');
+                  }
+                  if (!p.specialTags.any((tag) => allowedTags.contains(tag))) {
+                    continue;
+                  }
+                }
+                for (final v in p.variants) {
+                  if (v.name.trim().isNotEmpty && v.isAvailable) {
+                    sizes.add(v.name.trim());
+                  }
+                }
+              }
+              _availableSizes = sizes.toList()..sort();
+            }
           });
         }
       } else {
@@ -280,35 +324,74 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
             IconThemeData(color: isDark ? Colors.white : AppColors.textPrimary),
         bottom: (['Clothing', 'Footwear', 'Jewellery', 'Cosmetics & Beauty', 'Salon & Beauty'].contains(widget.categoryName))
             ? PreferredSize(
-                preferredSize: const Size.fromHeight(50),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Row(
-                    children: ['All', 'Men', 'Women', 'Boys', 'Girls']
-                        .map((demo) => Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text(demo),
-                                selected: _selectedDemographic == demo,
-                                onSelected: (selected) {
-                                  if (selected) {
-                                    setState(() {
-                                      _selectedDemographic = demo;
-                                      _fetchProducts();
-                                    });
-                                  }
-                                },
-                                selectedColor: AppColors.primary,
-                                labelStyle: TextStyle(
-                                  color: _selectedDemographic == demo
-                                      ? Colors.white
-                                      : (isDark ? Colors.white : AppColors.textPrimary),
-                                ),
-                              ),
-                            ))
-                        .toList(),
-                  ),
+                preferredSize: Size.fromHeight(_availableSizes.isNotEmpty ? 100 : 50),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: Row(
+                        children: ['All', 'Men', 'Women', 'Boys', 'Girls']
+                            .map((demo) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    label: Text(demo),
+                                    selected: _selectedDemographic == demo,
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _selectedDemographic = demo;
+                                          _selectedSize = 'All';
+                                          _fetchProducts();
+                                        });
+                                      }
+                                    },
+                                    selectedColor: AppColors.primary,
+                                    labelStyle: TextStyle(
+                                      color: _selectedDemographic == demo
+                                          ? Colors.white
+                                          : (isDark ? Colors.white : AppColors.textPrimary),
+                                    ),
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+                    ),
+                    if (_availableSizes.isNotEmpty)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Row(
+                          children: ['All', ..._availableSizes]
+                              .map((size) => Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ChoiceChip(
+                                      label: Text(size),
+                                      selected: _selectedSize == size,
+                                      onSelected: (selected) {
+                                        if (selected) {
+                                          setState(() {
+                                            _selectedSize = size;
+                                            _fetchProducts();
+                                          });
+                                        }
+                                      },
+                                      selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                                      backgroundColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade100,
+                                      labelStyle: TextStyle(
+                                        color: _selectedSize == size
+                                            ? AppColors.primary
+                                            : (isDark ? Colors.white70 : Colors.black),
+                                      ),
+                                      side: BorderSide(
+                                          color: _selectedSize == size ? AppColors.primary : Colors.transparent),
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                  ],
                 ),
               )
             : null,
@@ -385,9 +468,13 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
 
                         var filteredProducts = _products;
                         if (_selectedDemographic != 'All') {
-                          filteredProducts = _products.where((p) => p.specialTags.contains('#$_selectedDemographic') || p.specialTags.contains('#Unisex')).toList();
+                          final List<String> allowedTags = ['#$_selectedDemographic', '#Unisex'];
+                          if (_selectedDemographic == 'Boys' || _selectedDemographic == 'Girls') {
+                            allowedTags.add('#Kids');
+                          }
+                          filteredProducts = filteredProducts.where((p) => p.specialTags.any((tag) => allowedTags.contains(tag))).toList();
                         }
-
+                        
                         final displayProducts =
                             filteredProducts.take(_displayLimit).toList();
 

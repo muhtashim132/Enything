@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enything - Play Store Asset Generator</title>
+    <style>
+        :root {
+            --primary: #1E3FD8;
+            --secondary: #3D6BFF;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        h1 {
+            text-align: center;
+            background: -webkit-linear-gradient(var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        p.subtitle {
+            text-align: center;
+            color: #64748b;
+            margin-bottom: 3rem;
+        }
+        .card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .card h2 {
+            margin-top: 0;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .instructions {
+            background: #f1f5f9;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid var(--primary);
+        }
+        input[type="file"], select, input[type="text"] {
+            display: block;
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        button {
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+            transition: opacity 0.2s;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .canvas-container {
+            margin-top: 1.5rem;
+            text-align: center;
+            background: #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        /* Specific canvas max heights for preview so it doesn't take up entire screen */
+        #iconCanvas { max-width: 256px; }
+        #featureCanvas { max-width: 100%; }
+        #screenshotCanvas { max-height: 500px; width: auto; }
+    </style>
+</head>
+<body>
+
+    <h1>Enything Asset Generator</h1>
+    <p class="subtitle">100x Automated ASO Image Creator for Google Play</p>
+
+    <!-- 1. APP ICON -->
+    <div class="card">
+        <h2>1. App Icon (512x512)</h2>
+        <div class="instructions">
+            <strong>Layman Guide:</strong> Upload your logo here (preferably a square image). We will automatically resize and crop it to the exact 512x512 pixels required by Google Play. Don't worry about rounded corners; Google adds them automatically!
+        </div>
+        <input type="file" id="iconFile" accept="image/*" onchange="generateIcon()">
+        
+        <div class="canvas-container" id="iconContainer" style="display: none;">
+            <p style="font-size: 0.8rem; color: #64748b;">Preview:</p>
+            <canvas id="iconCanvas" width="512" height="512"></canvas>
+            <br><br>
+            <button onclick="downloadCanvas('iconCanvas', 'enything_app_icon.png')">Download HQ PNG</button>
+        </div>
+    </div>
+
+    <!-- 2. FEATURE GRAPHIC -->
+    <div class="card">
+        <h2>2. Feature Graphic (1024x500)</h2>
+        <div class="instructions">
+            <strong>Layman Guide:</strong> Upload your logo (transparent PNG is best). We will place it perfectly in the center of a premium gradient background. This is the billboard image at the top of your store listing.
+        </div>
+        <input type="file" id="featureFile" accept="image/*" onchange="generateFeature()">
+        
+        <div class="canvas-container" id="featureContainer" style="display: none;">
+            <p style="font-size: 0.8rem; color: #64748b;">Preview:</p>
+            <canvas id="featureCanvas" width="1024" height="500"></canvas>
+            <br><br>
+            <button onclick="downloadCanvas('featureCanvas', 'enything_feature_graphic.png')">Download HQ PNG</button>
+        </div>
+    </div>
+
+    <!-- 3. PHONE SCREENSHOTS -->
+    <div class="card">
+        <h2>3. Phone Screenshots (1080x1920)</h2>
+        <div class="instructions">
+            <strong>Layman Guide:</strong> Step 1: Pick what screen you are uploading. Step 2: Upload a raw screenshot straight from your phone. We will automatically generate a beautiful, professional App Store presentation with the text at the top!
+        </div>
+        
+        <label for="screenshotType"><strong>Select Screenshot Type:</strong></label>
+        <select id="screenshotType" onchange="generateScreenshot()">
+            <option value="Order Enything You Need">1. Home Screen -> "Order Enything You Need"</option>
+            <option value="Fast Food Delivery">2. Restaurant Page -> "Fast Food Delivery"</option>
+            <option value="Groceries & Medicines">3. Category Page -> "Groceries & Medicines"</option>
+            <option value="Live Order Tracking">4. Map Screen -> "Live Order Tracking"</option>
+            <option value="CUSTOM">5. Custom Text...</option>
+        </select>
+
+        <input type="text" id="customText" placeholder="Enter custom title..." style="display: none;" onkeyup="generateScreenshot()">
+
+        <label for="screenshotFile"><strong>Upload Raw Phone Screenshot:</strong></label>
+        <input type="file" id="screenshotFile" accept="image/*" onchange="generateScreenshot()">
+        
+        <div class="canvas-container" id="screenshotContainer" style="display: none;">
+            <p style="font-size: 0.8rem; color: #64748b;">Preview (Scaled down):</p>
+            <canvas id="screenshotCanvas" width="1080" height="1920"></canvas>
+            <br><br>
+            <button onclick="downloadCanvas('screenshotCanvas', 'enything_screenshot.png')">Download HQ PNG</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. ICON GENERATOR ---
+        function generateIcon() {
+            const file = document.getElementById('iconFile').files[0];
+            if (!file) return;
+
+            document.getElementById('iconContainer').style.display = 'block';
+            const canvas = document.getElementById('iconCanvas');
+            const ctx = canvas.getContext('2d');
+
+            const img = new Image();
+            img.onload = () => {
+                // Clear canvas
+                ctx.clearRect(0, 0, 512, 512);
+                
+                // Calculate cover scaling
+                const scale = Math.max(512 / img.width, 512 / img.height);
+                const x = (512 / 2) - (img.width / 2) * scale;
+                const y = (512 / 2) - (img.height / 2) * scale;
+
+                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        // --- 2. FEATURE GRAPHIC GENERATOR ---
+        function generateFeature() {
+            const file = document.getElementById('featureFile').files[0];
+            if (!file) return;
+
+            document.getElementById('featureContainer').style.display = 'block';
+            const canvas = document.getElementById('featureCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Draw Premium Gradient Background
+            const grad = ctx.createLinearGradient(0, 0, 1024, 500);
+            grad.addColorStop(0, '#0F1E80');
+            grad.addColorStop(0.55, '#1E3FD8');
+            grad.addColorStop(1, '#3D6BFF');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 1024, 500);
+
+            const img = new Image();
+            img.onload = () => {
+                // Scale logo to fit nicely in the center (max width 400px or max height 250px)
+                const scale = Math.min(400 / img.width, 250 / img.height);
+                const drawW = img.width * scale;
+                const drawH = img.height * scale;
+                const x = (1024 - drawW) / 2;
+                const y = (500 - drawH) / 2;
+
+                // Add drop shadow to logo for premium look
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 20;
+                ctx.shadowOffsetY = 10;
+                
+                ctx.drawImage(img, x, y, drawW, drawH);
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        // --- 3. SCREENSHOT GENERATOR ---
+        document.getElementById('screenshotType').addEventListener('change', function() {
+            document.getElementById('customText').style.display = this.value === 'CUSTOM' ? 'block' : 'none';
+        });
+
+        function generateScreenshot() {
+            const file = document.getElementById('screenshotFile').files[0];
+            const selectVal = document.getElementById('screenshotType').value;
+            const textStr = selectVal === 'CUSTOM' ? document.getElementById('customText').value : selectVal;
+            
+            if (!file && !textStr) return;
+
+            document.getElementById('screenshotContainer').style.display = 'block';
+            const canvas = document.getElementById('screenshotCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Draw Premium Gradient Background
+            const grad = ctx.createLinearGradient(0, 0, 0, 1920); // vertical gradient
+            grad.addColorStop(0, '#0F1E80');
+            grad.addColorStop(0.55, '#1E3FD8');
+            grad.addColorStop(1, '#3D6BFF');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 1080, 1920);
+
+            // Draw Text
+            ctx.shadowColor = 'transparent'; // reset shadow for text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 85px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(textStr, 540, 250);
+
+            if (file) {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.save();
+                    
+                    // Device Frame parameters
+                    const frameW = 820;
+                    const frameH = 1500; // Let it run off the bottom edge slightly, looks good
+                    const frameX = (1080 - frameW) / 2;
+                    const frameY = 400;
+                    const cornerRadius = 60;
+
+                    // Draw shadow
+                    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                    ctx.shadowBlur = 50;
+                    ctx.shadowOffsetY = 30;
+
+                    // Draw rounded rect path for the "Phone Frame"
+                    ctx.beginPath();
+                    ctx.moveTo(frameX + cornerRadius, frameY);
+                    ctx.lineTo(frameX + frameW - cornerRadius, frameY);
+                    ctx.quadraticCurveTo(frameX + frameW, frameY, frameX + frameW, frameY + cornerRadius);
+                    ctx.lineTo(frameX + frameW, frameY + frameH);
+                    ctx.lineTo(frameX, frameY + frameH);
+                    ctx.lineTo(frameX, frameY + cornerRadius);
+                    ctx.quadraticCurveTo(frameX, frameY, frameX + cornerRadius, frameY);
+                    ctx.closePath();
+                    
+                    ctx.fill(); // fill to create the shadow
+                    
+                    // Clip to the rounded rect
+                    ctx.clip();
+                    
+                    // Draw screenshot inside the clipped area
+                    ctx.drawImage(img, frameX, frameY, frameW, frameH);
+                    
+                    ctx.restore();
+                };
+                img.src = URL.createObjectURL(file);
+            }
+        }
+
+        // --- DOWNLOAD HELPER ---
+        function downloadCanvas(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = dataUrl;
+            link.click();
+        }
+    </script>
+</body>
+</html>

@@ -513,7 +513,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
               return SliverGrid.builder(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
-                  mainAxisExtent: 345,
+                  mainAxisExtent: 280,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
                 ),

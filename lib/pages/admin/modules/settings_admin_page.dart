@@ -13,6 +13,7 @@ import '../platform/coupon_management_page.dart';
 import '../platform/referral_settings_page.dart';
 import '../platform/tax_settings_page.dart';
 import '../platform/active_sessions_page.dart';
+import '../platform/category_management_page.dart';
 
 class SettingsAdminPage extends StatelessWidget {
   const SettingsAdminPage({super.key});
@@ -69,6 +70,14 @@ class SettingsAdminPage extends StatelessWidget {
           onTap: () =>
               Navigator.push(context, _route(const CommissionFeesPage())),
         ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.1),
+        _SettingsTile(
+          icon: Icons.category_rounded,
+          iconColor: const Color(0xFF8B5CF6),
+          title: 'Category Management',
+          subtitle: 'Enable/disable categories, create new ones',
+          onTap: () =>
+              Navigator.push(context, _route(const CategoryManagementPage())),
+        ).animate().fadeIn(delay: 225.ms).slideX(begin: -0.1),
         _SettingsTile(
           icon: Icons.local_offer_rounded,
           iconColor: AdminColors.warning,

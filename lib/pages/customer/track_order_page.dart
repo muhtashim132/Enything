@@ -616,9 +616,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         final awaitingPayOrder = _groupOrders.firstWhere(
             (o) => o.status == 'awaiting_payment',
             orElse: () => _order!);
+            
+        // 100x FIX: Prevent Razorpay UI Lock if order expired while user was offline
+        bool isExpired = false;
+        if (awaitingPayOrder.paymentDeadline != null) {
+          isExpired = awaitingPayOrder.paymentDeadline!.isBefore(_serverTime);
+        }
+
         _startPaymentCountdown(awaitingPayOrder);
 
-        if (!_isProcessingPayment &&
+        if (!isExpired &&
+            !_isProcessingPayment &&
             !_razorpayOpened &&
             !_hasPartialRejection) {
           Future.delayed(const Duration(milliseconds: 800), () {

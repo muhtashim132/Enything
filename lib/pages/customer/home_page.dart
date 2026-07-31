@@ -13,6 +13,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/platform_config_provider.dart';
 
 import '../../providers/recently_viewed_provider.dart';
 import '../../providers/referral_provider.dart';
@@ -51,7 +52,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     if (!mounted) return;
     setState(() {
       _selectedTabIndex = -1;
+      _comingSoonMessage = null;
+      _comingSoonSubMessage = null;
       _selectedFilterCategories.clear();
+      _selectedSizes.clear();
       _searchQuery = '';
       _searchController.clear();
     });
@@ -60,6 +64,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   SupabaseClient get _supabase => Supabase.instance.client;
   int _selectedTabIndex = -1; // -1 = no tab selected (show ALL)
+  String? _comingSoonMessage;
+  String? _comingSoonSubMessage;
   bool _isLoading = true;
   bool _isSearching = false;
   bool _searchError = false;
@@ -79,6 +85,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   _SortMode _sortMode = _SortMode.relevant;
   final _searchController = TextEditingController();
   final Set<String> _selectedFilterCategories = {};
+  final Set<String> _selectedSizes = {};
+  final Set<String> _cachedAvailableSizes = {};
 
   static const Map<String, List<String>> _searchKeywords = {
     'Food': [
@@ -171,7 +179,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   /// Returns search product results sorted by the current _sortMode.
   List<ProductModel> get _sortedProductResults {
-    final list = List<ProductModel>.from(_searchProductResults);
+    var list = List<ProductModel>.from(_searchProductResults);
     list.sort((a, b) {
       final availCmp = _compareAvailability(a, b, _searchProductShops);
       if (availCmp != 0) return availCmp;
@@ -199,7 +207,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   /// Returns normal product results sorted by the current _sortMode.
   List<ProductModel> get _sortedNormalProducts {
-    final list = List<ProductModel>.from(_products);
+    var list = List<ProductModel>.from(_products);
     list.sort((a, b) {
       final availCmp = _compareAvailability(a, b, _productShops);
       if (availCmp != 0) return availCmp;
@@ -394,42 +402,57 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   /// True when a food-type tab is currently selected.
   bool get _isFoodTab {
     if (_selectedTabIndex < 0) return false;
-    final name = _categories[_selectedTabIndex]['name'] as String;
+    final cats = _categories;
+    if (_selectedTabIndex >= cats.length) return false;
+    final name = cats[_selectedTabIndex]['name'] as String;
     return name == 'Food';
   }
 
-  final List<Map<String, dynamic>> _categories = [
-    {
-      'name': 'Food',
-      'emoji': '🍔',
-      'grad': [const Color(0xFFFF6B6B), const Color(0xFFEE5A24)]
-    },
-    {
-      'name': 'Supermarket / Hypermarket',
-      'emoji': '🏬',
-      'grad': [const Color(0xFF51CF66), const Color(0xFF2F9E44)]
-    },
-    {
-      'name': 'Pharmacy',
-      'emoji': '💊',
-      'grad': [const Color(0xFF4C6EF5), const Color(0xFF364FC7)]
-    },
-    {
-      'name': 'Clothing',
-      'emoji': '👕',
-      'grad': [const Color(0xFFFF8C42), const Color(0xFFE8590C)]
-    },
-    {
-      'name': 'Electronics',
-      'emoji': '📱',
-      'grad': [const Color(0xFFCC5DE8), const Color(0xFF9C36B5)]
-    },
-    {
-      'name': 'More',
-      'emoji': '🛍️',
-      'grad': [const Color(0xFF20C997), const Color(0xFF0CA678)]
-    },
-  ];
+  // ── Category tabs: filtered by admin-disabled categories (Additive) ──────
+  // This is a getter so it reacts to PlatformConfigProvider changes.
+  List<Map<String, dynamic>> get _categories {
+    final config = context.read<PlatformConfigProvider>();
+    const allTabs = [
+      {
+        'name': 'Food',
+        'emoji': '🍔',
+        'grad': [Color(0xFFFF6B6B), Color(0xFFEE5A24)]
+      },
+      {
+        'name': 'Supermarket / Hypermarket',
+        'emoji': '🏬',
+        'grad': [Color(0xFF51CF66), Color(0xFF2F9E44)]
+      },
+      {
+        'name': 'Pharmacy',
+        'emoji': '💊',
+        'grad': [Color(0xFF4C6EF5), Color(0xFF364FC7)]
+      },
+      {
+        'name': 'Clothing',
+        'emoji': '👕',
+        'grad': [Color(0xFFFF8C42), Color(0xFFE8590C)]
+      },
+      {
+        'name': 'Electronics',
+        'emoji': '📱',
+        'grad': [Color(0xFFCC5DE8), Color(0xFF9C36B5)]
+      },
+      {
+        'name': 'More',
+        'emoji': '🛍️',
+        'grad': [Color(0xFF20C997), Color(0xFF0CA678)]
+      },
+    ];
+    // Keep a tab if its name is active, OR if it's a group-tab like "More"
+    // whose sub-categories may still have active entries
+    return allTabs.where((tab) {
+      final name = tab['name'] as String;
+      // Group tabs 'More' always shown (sub-filtered in _tabCategories logic)
+      if (name == 'More') return true;
+      return config.isActiveCategory(name);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -500,16 +523,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       dynamic response;
       if (locationProvider.hasLocation && lat != null && lng != null) {
+        final disabledCats =
+            context.read<PlatformConfigProvider>().disabledCategories.toList();
         response =
             await _supabase.rpc('get_trending_keywords_geospatial', params: {
           'p_lat': lat,
           'p_lng': lng,
           'p_radius_km': DeliveryCalculator.maxRadiusKm,
-          'p_limit': 12
+          'p_limit': 12,
+          'p_disabled_categories': disabledCats.isEmpty ? null : disabledCats,
         });
       } else {
-        response = await _supabase
-            .rpc('get_trending_keywords', params: {'p_limit': 12});
+        final disabledCats =
+            context.read<PlatformConfigProvider>().disabledCategories.toList();
+        response = await _supabase.rpc('get_trending_keywords', params: {
+          'p_limit': 12,
+          'p_disabled_categories': disabledCats.isEmpty ? null : disabledCats,
+        });
       }
 
       if (!mounted) return;
@@ -714,8 +744,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _isSearching = false;
         _searchError = false;
         _searchErrorMessage = '';
+        _comingSoonMessage = null;
+        _comingSoonSubMessage = null;
         _sortMode = _SortMode.relevant; // reset sort on clear
         _selectedSearchDemographic = 'All'; // reset demographic on clear
+        _selectedSizes.clear(); // reset sizes on clear
       });
       return;
     }
@@ -724,10 +757,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       _isSearching = true;
       _searchError = false;
       _searchErrorMessage = '';
+      _comingSoonMessage = null;
+      _comingSoonSubMessage = null;
       _searchQuery = query;
       _searchShopsDisplayLimit = 2;
       _searchProductsDisplayLimit = 10;
-      if (!skipNLP) _selectedSearchDemographic = 'All';
+      if (!skipNLP) {
+        _selectedSearchDemographic = 'All';
+        _selectedSizes.clear();
+      }
     });
 
     try {
@@ -780,7 +818,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             'p_radius_km': maxRadius,
             'p_limit': 50
           });
-          debugPrint('[Search] Step 1/4 OK: ${(shopsByName as List).length} shops found');
+          debugPrint('[Search] Step 1/4 OK: ${shopsByName.length} shops found');
         } catch (e) {
           debugPrint('[Search] Step 1/4 FAILED (search_shops_geospatial byName): $e');
           rethrow;
@@ -822,9 +860,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             
             final allProducts = await q;
             
+            // Phase 31 Fix: Pre-truncation Local Size Filter (Solves JSONB + Pagination Edge Cases)
+            final filteredProducts = _selectedSizes.isEmpty
+                ? allProducts
+                : allProducts.where((p) {
+                    final variants = p['variants'] as List<dynamic>? ?? [];
+                    return variants.any((v) {
+                      final name = (v['name'] as String?)?.trim() ?? '';
+                      return _selectedSizes.contains(name);
+                    });
+                  }).toList();
+            
             // Group, sort by rating, limit 5 per shop
             final productsByShop = <String, List<dynamic>>{};
-            for (final p in allProducts) {
+            for (final p in filteredProducts) {
               final sid = p['shop_id'] as String;
               productsByShop.putIfAbsent(sid, () => []).add(p);
             }
@@ -862,7 +911,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               'p_radius_km': maxRadius,
               'p_limit': 50
             });
-            debugPrint('[Search] Step 3/4 OK: ${(shopsByCat as List).length} shops found');
+            debugPrint('[Search] Step 3/4 OK: ${shopsByCat.length} shops found');
           } catch (e) {
             debugPrint('[Search] Step 3/4 FAILED (search_shops_geospatial byCat): $e');
             rethrow;
@@ -871,7 +920,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           debugPrint('[Search] Step 4/4: search_products_geospatial (byCat) BYPASS cats=$matchedSubcategories');
           try {
             // Leverage shopsByCat from Step 3 which is already distance sorted
-            final shopIds = (shopsByCat as List).map((s) => s['id'] as String).toList();
+            final shopIds = shopsByCat.map((s) => s['id'] as String).toList();
             
             if (shopIds.isNotEmpty) {
               final allProducts = await _supabase
@@ -879,9 +928,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   .select()
                   .eq('is_available', true)
                   .inFilter('shop_id', shopIds);
+                  
+              // Phase 31 Fix: Pre-truncation Local Size Filter
+              final filteredProducts = _selectedSizes.isEmpty
+                  ? allProducts
+                  : allProducts.where((p) {
+                      final variants = p['variants'] as List<dynamic>? ?? [];
+                      return variants.any((v) {
+                        final name = (v['name'] as String?)?.trim() ?? '';
+                        return _selectedSizes.contains(name);
+                      });
+                    }).toList();
               
               final productsByShop = <String, List<dynamic>>{};
-              for (final p in allProducts) {
+              for (final p in filteredProducts) {
                 final sid = p['shop_id'] as String;
                 productsByShop.putIfAbsent(sid, () => []).add(p);
               }
@@ -1104,6 +1164,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         authProvider.user?.phone.endsWith('9999999997') == true ||
         authProvider.user?.phone.endsWith('9999999998') == true;
 
+    setState(() {
+      _isSearching = false;
+      _searchError = false;
+      _searchQuery = '';
+      _comingSoonMessage = null;
+      _comingSoonSubMessage = null;
+    });
+
     if (isMagic) {
       locationProvider.setManualLocation(
         const LatLng(34.4225, 74.6366),
@@ -1114,10 +1182,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     }
 
     // _selectedTabIndex == -1 means "All" — fetch every active shop
-    if (_selectedTabIndex < 0) {
+    final cats = _categories;
+    if (_selectedTabIndex < 0 || _selectedTabIndex >= cats.length) {
       _loadAllData();
     } else {
-      _loadData(_categories[_selectedTabIndex]['name']! as String);
+      _loadData(cats[_selectedTabIndex]['name']! as String);
     }
   }
 
@@ -1264,8 +1333,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
           // Removed product.isAvailable check so unavailable items still render
-          if (effectiveCategories != null &&
-              !effectiveCategories.contains(product.category)) {
+          if (!effectiveCategories.contains(product.category)) {
             continue;
           }
           if (p['shops'] == null) continue;
@@ -1326,6 +1394,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   Future<void> _loadData(String tabName) async {
     final currentFetchId = ++_fetchId;
     _isFetching = true;
+    
+    if (mounted) {
+      setState(() {
+        _comingSoonMessage = null;
+        _comingSoonSubMessage = null;
+      });
+    }
 
     // Do NOT set _isLoading = true here on category switch — this causes the
     // existing content to disappear (the "flash"). Keep old data visible
@@ -1350,14 +1425,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         effectiveCategories = {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
       }
 
-      List<String> finalCategories = [];
-      if (effectiveCategories != null) {
-        finalCategories = subcategories
-            .where((c) => effectiveCategories!.contains(c))
-            .toList();
-      } else {
-        finalCategories = subcategories;
-      }
+      final finalCategories = subcategories
+          .where((c) => effectiveCategories.contains(c))
+          .toList();
 
       // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
       final shopsResponse =
@@ -1415,8 +1485,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
           // Removed product.isAvailable check so unavailable items still render
-          if (effectiveCategories != null &&
-              !effectiveCategories.contains(product.category)) {
+          if (!effectiveCategories.contains(product.category)) {
             continue;
           }
           if (p['shops'] == null) continue;
@@ -2104,7 +2173,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 16),
                                     child: SizedBox(
-                                      height: 345,
+                                      height: 280,
                                       child: isFood
                                           ? RestaurantShopCard(
                                               shop: shop,
@@ -2272,7 +2341,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: crossAxisCount,
                                     mainAxisExtent:
-                                        345, // Fixed extent for the card
+                                        280, // Fixed extent for the card
                                     crossAxisSpacing: 16,
                                     mainAxisSpacing: 16,
                                   ),
@@ -2467,6 +2536,66 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           height: 1.4,
                                         ),
                                       ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ] else if (_comingSoonMessage != null && !_isLoading) ...[
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 60),
+                                child: Center(
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? AppColors.primary
+                                                  .withValues(alpha: 0.15)
+                                              : AppColors.primary
+                                                  .withValues(alpha: 0.08),
+                                          borderRadius:
+                                              BorderRadius.circular(24),
+                                        ),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.rocket_launch_rounded,
+                                            size: 36,
+                                            color: isDark
+                                                ? AppColors.primaryLight
+                                                : AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(_comingSoonMessage!,
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.outfit(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w800,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : AppColors.textPrimary)),
+                                      if (_comingSoonSubMessage != null) ...[
+                                        const SizedBox(height: 8),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                                          child: Text(
+                                            _comingSoonSubMessage!,
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 14,
+                                              color: isDark
+                                                  ? Colors.white54
+                                                  : AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ),
+                                      ]
                                     ],
                                   ),
                                 ),
@@ -2782,7 +2911,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             _promptEnableLocation();
             return;
           }
-          setState(() => _selectedTabIndex = 0);
+          final idx = _categories.indexWhere((c) => c['name'] == 'Food');
+          if (idx == -1) {
+            setState(() {
+              _selectedTabIndex = -1;
+              _selectedFilterCategories.clear();
+              _comingSoonMessage = 'Food Delivery Coming Soon!';
+              _comingSoonSubMessage = 'We are partnering with the best local restaurants. Stay tuned!';
+              _shops = [];
+              _products = [];
+              _isLoading = false;
+            });
+            return;
+          }
+          setState(() {
+            _selectedTabIndex = idx;
+            _selectedFilterCategories.clear();
+          });
           _loadData('Food');
         },
       },
@@ -2803,7 +2948,24 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             _promptEnableLocation();
             return;
           }
-          setState(() => _selectedTabIndex = -1);
+          final hasGrocery = _categories.any((c) => c['name'] == 'Supermarket / Hypermarket');
+          final hasPharmacy = _categories.any((c) => c['name'] == 'Pharmacy');
+          if (!hasGrocery && !hasPharmacy) {
+            setState(() {
+              _selectedTabIndex = -1;
+              _selectedFilterCategories.clear();
+              _comingSoonMessage = 'Groceries & Medicines Coming Soon!';
+              _comingSoonSubMessage = 'Daily essentials delivered to your doorstep, launching soon.';
+              _shops = [];
+              _products = [];
+              _isLoading = false;
+            });
+            return;
+          }
+          setState(() {
+            _selectedTabIndex = -1;
+            _selectedFilterCategories.clear();
+          });
           _loadData('GroceryAndMed');
         },
       },
@@ -2824,7 +2986,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             _promptEnableLocation();
             return;
           }
-          setState(() => _selectedTabIndex = 3);
+          final idx = _categories.indexWhere((c) => c['name'] == 'Clothing');
+          if (idx == -1) {
+            setState(() {
+              _selectedTabIndex = -1;
+              _selectedFilterCategories.clear();
+              _comingSoonMessage = 'Fashion & Clothing Coming Soon!';
+              _comingSoonSubMessage = 'Your favorite local apparel stores will be here shortly.';
+              _shops = [];
+              _products = [];
+              _isLoading = false;
+            });
+            return;
+          }
+          setState(() {
+            _selectedTabIndex = idx;
+            _selectedFilterCategories.clear();
+          });
           _loadData('Clothing');
         },
       },
@@ -3465,6 +3643,25 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   void _showFilterSheet(BuildContext context, bool isDark) {
     if (_isFilterSheetOpen) return;
     _isFilterSheetOpen = true;
+
+    // Cache available sizes if no size filter is currently active
+    if (_selectedSizes.isEmpty) {
+      _cachedAvailableSizes.clear();
+      final productsToCheck = _searchQuery.isNotEmpty ? _searchProductResults : _products;
+      for (final p in productsToCheck) {
+        for (final v in p.variants) {
+          if (v.name.trim().isNotEmpty && v.isAvailable) {
+            _cachedAvailableSizes.add(v.name.trim());
+          }
+        }
+      }
+    }
+    final sortedAvailableSizes = _cachedAvailableSizes.toList()..sort();
+    
+    // Create localized state copies to prevent desync on sheet dismissal
+    final Set<String> tempSelectedSizes = Set.from(_selectedSizes);
+    final Set<String> tempCategories = Set.from(_selectedFilterCategories);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -3541,17 +3738,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           spacing: 8,
                           runSpacing: 8,
                           children: catNames.map((cat) {
-                            final isSelected =
-                                _selectedFilterCategories.contains(cat);
+                            final isSelected = tempCategories.contains(cat);
                             return ChoiceChip(
                               label: Text(cat),
                               selected: isSelected,
                               onSelected: (selected) {
                                 setSheetState(() {
                                   if (selected) {
-                                    _selectedFilterCategories.add(cat);
+                                    tempCategories.add(cat);
                                   } else {
-                                    _selectedFilterCategories.remove(cat);
+                                    tempCategories.remove(cat);
                                   }
                                 });
                               },
@@ -3573,6 +3769,44 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             );
                           }).toList(),
                         ),
+                        if (sortedAvailableSizes.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          Text('Sizes',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white70 : Colors.black54)),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: sortedAvailableSizes.map((size) {
+                              final isSelected = tempSelectedSizes.contains(size);
+                              return ChoiceChip(
+                                label: Text(size),
+                                selected: isSelected,
+                                onSelected: (selected) {
+                                  setSheetState(() {
+                                    if (selected) {
+                                      tempSelectedSizes.add(size);
+                                    } else {
+                                      tempSelectedSizes.remove(size);
+                                    }
+                                  });
+                                },
+                                selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                                backgroundColor:
+                                    isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade100,
+                                labelStyle: TextStyle(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : (isDark ? Colors.white70 : Colors.black)),
+                                side: BorderSide(
+                                    color: isSelected ? AppColors.primary : Colors.transparent),
+                              );
+                            }).toList(),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                       ],
                     ),
@@ -3586,10 +3820,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     onPressed: () {
                       if (isApplying) return;
                       isApplying = true;
+                      
+                      // Apply temp localized state to parent state
+                      _selectedSizes.clear();
+                      _selectedSizes.addAll(tempSelectedSizes);
+                      _selectedFilterCategories.clear();
+                      _selectedFilterCategories.addAll(tempCategories);
+                      
                       Navigator.pop(context);
                       setState(() {});
                       if (_searchQuery.isNotEmpty) {
-                        _searchShops(_searchQuery);
+                        _searchShops(_searchQuery, skipNLP: true);
                       } else {
                         if (_selectedTabIndex < 0) {
                           _loadAllData();

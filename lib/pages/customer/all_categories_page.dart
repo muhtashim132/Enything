@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
@@ -14,7 +15,11 @@ class AllCategoriesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
-    const categories = AppCategories.all;
+    final config = context.watch<PlatformConfigProvider>();
+    // Show only active categories (filtering disabled ones)
+    final categories = config.activeCategoryMaps.isNotEmpty
+        ? config.activeCategoryMaps
+        : AppCategories.all; // fallback to full list if provider not ready
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -50,7 +55,10 @@ class AllCategoriesPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final cat = categories[index];
               final catName = cat['name']!;
-              final imageUrl = AppCategories.getImageUrl(catName);
+              final catImage = cat['image'];
+              final imageUrl = (catImage != null && catImage.isNotEmpty)
+                  ? catImage
+                  : AppCategories.getImageUrl(catName);
 
               final group = AppCategories.groupFor(catName);
               final groupInfo = AppCategories.groupInfo(group);

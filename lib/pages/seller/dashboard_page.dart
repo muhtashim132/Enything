@@ -215,8 +215,24 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
             'products': products,
           };
 
-          _shopIsActive = (firstShopData['is_active'] ?? true) &&
-              (firstShopData['is_accepting_orders'] ?? false);
+          // Dashboard badge reflects the seller's own toggle (is_accepting_orders).
+          // Auto-fix: Ensure verified/approved shops are active
+          // (Fixes the state where a seller previously disabled it via the old UI)
+          if (firstShopData['is_active'] == false &&
+              (firstShopData['verification_status'] == 'approved' ||
+               firstShopData['verification_status'] == 'verified')) {
+            try {
+              _supabase.from('shops').update({'is_active': true}).eq('id', activeShopIds.first);
+            } catch (e) {
+              debugPrint('Auto-fix failed: $e');
+            }
+          }
+
+          // NOTE: is_active (admin KYC flag) is already guarded above via
+          // verification_status redirect (lines 147-165). If we reach this
+          // point, the shop is admin-verified. The badge must only reflect
+          // what the SELLER controls — their open/close toggle.
+          _shopIsActive = firstShopData['is_accepting_orders'] == true;
           final rawRating = firstShopData['average_rating'];
           _shopRating =
               rawRating != null ? (rawRating as num).toStringAsFixed(1) : '--';

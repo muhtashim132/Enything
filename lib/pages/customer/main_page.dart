@@ -91,7 +91,9 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         totalAdded += result.added;
         if (result.error != null) {
           if (result.added == 0) {
-            if (fatalErrors.length < 2) fatalErrors.add(result.error!);
+            if (!fatalErrors.contains(result.error!) && fatalErrors.length < 2) {
+              fatalErrors.add(result.error!);
+            }
           } else {
             lastWarning = result.error;
           }
