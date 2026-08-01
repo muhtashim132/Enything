@@ -4,10 +4,10 @@
 //
 // ── HOW FEES WORK (for your reference) ──────────────────────────────────────
 //
-//  [platformFee] = ₹15 flat per order, shown as "Handling Fee" to customer.
+//  [platformFee] = ₹20 flat per order, shown as "Handling Fee" to customer.
 //   → This covers Enything's app operations PLUS absorbs the Razorpay gateway fee.
 //   → This allows sellers to receive exactly 95% of their item price with no hidden cuts.
-//   → This is GST-INCLUSIVE at 18%. The GST inside = ₹15 - ₹15/1.18 = ₹2.29
+//   → This is GST-INCLUSIVE at 18%. The GST inside = ₹20 - ₹20/1.18 = ₹3.05
 //
 //  Enything's commission on item sales is pure 5%.
 //  It is exactly [TaxConfig.enythingTargetMarginPercent] (5%).
@@ -20,7 +20,7 @@ class PaymentConfig {
 
   /// Handling / platform fee per order. Shown as "Handling Fee" in bill.
   /// 18% GST is embedded in this amount (extracted for accounting).
-  static const double platformFee = 15.0;
+  static const double platformFee = 20.0;
 
   // ── Order Eligibility ─────────────────────────────────────────────────────
 

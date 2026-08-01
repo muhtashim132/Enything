@@ -17,7 +17,7 @@ class PlatformConfigProvider extends ChangeNotifier {
 
   // ── Defaults (matches hardcoded constants initially) ────────
   double _commissionPercent = 5.0;
-  double _platformFee = 15.0;
+  double _platformFee = 20.0;
   double _smallCartFee = 15.0;
   double _smallCartThreshold = 99.0;
   double _heavyOrderFee = 25.0;
