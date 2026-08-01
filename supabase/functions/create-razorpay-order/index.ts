@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     if (cart_group_id) {
       const { data: orders, error } = await supabaseAdmin
         .from('orders')
-        .select('grand_total_collected, customer_id')
+        .select('grand_total, customer_id')
         .eq('cart_group_id', cart_group_id)
         .neq('status', 'cancelled')
         .neq('status', 'seller_rejected');
@@ -72,18 +72,18 @@ Deno.serve(async (req) => {
       if (error || !orders || orders.length === 0) throw new Error("Orders not found");
       if (orders[0].customer_id !== user.id) throw new Error("Unauthorized");
       
-      dbAmount = orders.reduce((sum, o) => sum + (o.grand_total_collected || 0), 0);
+      dbAmount = orders.reduce((sum, o) => sum + (o.grand_total || 0), 0);
     } else {
       const { data: order, error } = await supabaseAdmin
         .from('orders')
-        .select('grand_total_collected, customer_id')
+        .select('grand_total, customer_id')
         .eq('id', order_id)
         .maybeSingle();
 
       if (error || !order) throw new Error("Order not found");
       if (order.customer_id !== user.id) throw new Error("Unauthorized");
 
-      dbAmount = order.grand_total_collected || 0;
+      dbAmount = order.grand_total || 0;
     }
 
     const amount = Math.round(dbAmount * 100);
