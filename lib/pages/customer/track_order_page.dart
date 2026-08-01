@@ -2632,9 +2632,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 : Text(
                                     'PAY NOW \u20b9${_computeGroupGrandTotal().toStringAsFixed(0)}',
                                     style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.w800,
                                         fontSize: 16)),
                           ),
+                        ),
                       ],
                     ),
                   ),
