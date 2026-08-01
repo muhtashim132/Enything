@@ -716,7 +716,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'grand_total_collected': math.max(
               0.0, shopGrandTotal - (appliedCouponDiscount * proportion)),
           'gst_rate_snapshot': rateSnapshot,
-          'prescription_urls': uploadedPrescriptionUrls,
+          'prescription_urls': shopItems.any((item) => item.product.requiresPrescription)
+              ? uploadedPrescriptionUrls
+              : [],
           'estimated_distance_km': shopDistanceKm,
           'shop_prep_time_snapshot': shop.prepTimeMinutes,
           'coupon_id': appliedCouponId,

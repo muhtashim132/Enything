@@ -231,13 +231,18 @@ Deno.serve(async (req: Request) => {
                   default_vibrate_timings: true,
                   notification_priority: 'PRIORITY_MAX',
                   visibility: 'PUBLIC',
+                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
                 },
               },
               apns: {
+                headers: {
+                  'apns-priority': '10',
+                },
                 payload: {
                   aps: {
                     sound: apnsSound,
                     badge: 1,
+                    'content-available': 1,
                   },
                 },
               },

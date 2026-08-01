@@ -221,10 +221,14 @@ Deno.serve(async (req: Request) => {
                   },
                 },
                 apns: {
+                  headers: {
+                    'apns-priority': '10',
+                  },
                   payload: {
                     aps: {
                       sound: 'default',
                       badge: 1,
+                      'content-available': 1,
                     },
                   },
                 },
