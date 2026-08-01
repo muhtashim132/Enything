@@ -164,8 +164,10 @@ class CartProvider extends ChangeNotifier {
 
   // PlatformConfigProvider.instance now safely attaches its listener even if it's delayed.
   // This ensures UI rebuilds instantly when admin updates platform fee or rates.
-  double get platformFee =>
-      PlatformConfigProvider.instance?.platformFee ?? PaymentConfig.platformFee;
+  double get platformFee {
+    final baseFee = PlatformConfigProvider.instance?.platformFee ?? PaymentConfig.platformFee;
+    return baseFee * (shops.isEmpty ? 1 : shops.length);
+  }
 
   bool get requiresPrescription =>
       _items.any((item) => item.product.requiresPrescription);
