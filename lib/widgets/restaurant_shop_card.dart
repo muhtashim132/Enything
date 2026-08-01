@@ -85,7 +85,6 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
         curve: PremiumAnimations.defaultCurve,
         child: AnimatedContainer(
           duration: PremiumAnimations.normal,
-          margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : Colors.white,
             borderRadius: PremiumRadius.largeBorder,

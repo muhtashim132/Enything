@@ -285,8 +285,20 @@ class PlatformConfigProvider extends ChangeNotifier {
             if (newRow.isNotEmpty) {
               final key = newRow['key'] as String;
               final valRaw = newRow['value'];
-              final val = double.tryParse(valRaw.toString()) ?? 0.0;
-              _setValue(key, val);
+              if (key == 'disabled_categories') {
+                try {
+                  final decoded = jsonDecode(valRaw.toString());
+                  if (decoded is List) {
+                    _disabledCategories.clear();
+                    _disabledCategories.addAll(decoded.map((e) => e.toString()));
+                  }
+                } catch (e) {
+                  debugPrint('[CategoryMgmt] realtime disabled_categories parse error: $e');
+                }
+              } else {
+                final val = double.tryParse(valRaw.toString()) ?? 0.0;
+                _setValue(key, val);
+              }
             } else if (payload.oldRecord.isNotEmpty) {
               final key = payload.oldRecord['key'] as String;
               _removeValue(key);
@@ -379,9 +391,15 @@ class PlatformConfigProvider extends ChangeNotifier {
       notifyListeners();
 
       // Persist to platform_config as JSON array
+      final actorId = _db.auth.currentUser?.id;
       final jsonVal = jsonEncode(_disabledCategories.toList());
       await _db.from('platform_config').upsert(
-        {'key': 'disabled_categories', 'value': jsonVal},
+        {
+          'key': 'disabled_categories',
+          'value': jsonVal,
+          if (actorId != null) 'updated_by': actorId,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
         onConflict: 'key',
       );
       return true;

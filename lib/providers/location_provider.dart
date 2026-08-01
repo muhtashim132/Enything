@@ -6,7 +6,42 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 import '../models/saved_address_model.dart';
 
-class LocationProvider extends ChangeNotifier {
+class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
+  LocationProvider() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkLocationOnResume();
+    }
+  }
+
+  Future<void> _checkLocationOnResume() async {
+    if (_isLoading) return;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        if (!_permissionGranted || _currentLocation == null) {
+          requestLocation();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking location on resume: $e');
+    }
+  }
+
   SupabaseClient get _supabase => Supabase.instance.client;
 
   LatLng? _currentLocation;

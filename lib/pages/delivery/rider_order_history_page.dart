@@ -14,7 +14,8 @@ class RiderOrderHistoryPage extends StatefulWidget {
   State<RiderOrderHistoryPage> createState() => _RiderOrderHistoryPageState();
 }
 
-class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
+class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage>
+    with WidgetsBindingObserver {
   SupabaseClient get _supabase => Supabase.instance.client;
   bool _isLoading = true;
   List<Map<String, dynamic>> _orders = [];
@@ -22,7 +23,23 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _loadHistory();
+      }
+    }
   }
 
   Future<void> _loadHistory() async {

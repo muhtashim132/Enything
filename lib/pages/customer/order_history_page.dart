@@ -23,7 +23,8 @@ class OrderHistoryPage extends StatefulWidget {
   State<OrderHistoryPage> createState() => _OrderHistoryPageState();
 }
 
-class _OrderHistoryPageState extends State<OrderHistoryPage> {
+class _OrderHistoryPageState extends State<OrderHistoryPage>
+    with WidgetsBindingObserver {
   SupabaseClient get _supabase => Supabase.instance.client;
   List<OrderModel> _orders = [];
   bool _isLoading = true;
@@ -36,6 +37,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   bool _isLoadingMore = false;
   bool _hasMoreOrders = true;
   static const int _pageSize = 15;
+
+  RealtimeChannel? _customerOrdersChannel;
 
   // ── Reorder: fetch items from a past order, add valid ones to cart ──────
   Future<void> _reorder(OrderModel order) async {
@@ -170,8 +173,47 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchOrders();
     _scrollController.addListener(_onScroll);
+    _setupRealtimeOrders();
+  }
+
+  void _setupRealtimeOrders() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      final userId = auth.currentUserId;
+      if (userId == null) return;
+
+      _customerOrdersChannel = _supabase
+          .channel('customer-orders-$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'orders',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'customer_id',
+              value: userId,
+            ),
+            callback: (payload) {
+              if (mounted) {
+                _fetchOrders();
+              }
+            },
+          )
+          .subscribe();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _fetchOrders();
+      }
+    }
   }
 
   void _onScroll() {
@@ -183,6 +225,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (_customerOrdersChannel != null) {
+      _supabase.removeChannel(_customerOrdersChannel!);
+    }
     _scrollController.dispose();
     super.dispose();
   }
