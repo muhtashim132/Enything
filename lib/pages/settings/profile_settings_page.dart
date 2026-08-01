@@ -474,13 +474,26 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
   Widget _buildSectionTitle(String title, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        title,
-        style: GoogleFonts.outfit(
-          fontSize: 17,
-          fontWeight: FontWeight.w800,
-          color: isDark ? Colors.white : AppColors.textPrimary,
-        ),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }

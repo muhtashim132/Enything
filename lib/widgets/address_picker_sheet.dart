@@ -67,15 +67,15 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final savedAddresses = locProv.savedAddresses;
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.75,
-      ),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
+    return Material(
+      color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Drag handle
@@ -337,7 +337,7 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildUseCurrentLocation(bool isDark, LocationProvider locProv) {

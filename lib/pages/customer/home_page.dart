@@ -1568,7 +1568,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           slivers: [
             // ── Premium Modern AppBar ──────────────────────────────────────
             SliverAppBar(
-              expandedHeight: _searchQuery.isNotEmpty ? 0 : 135,
+              expandedHeight: _searchQuery.isNotEmpty ? 0 : 125,
               floating: true,
               pinned: true,
               elevation: 0,
@@ -1581,7 +1581,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   child: SingleChildScrollView(
                     physics: const NeverScrollableScrollPhysics(),
                     child: Container(
-                      padding: const EdgeInsets.fromLTRB(16, 50, 16, 0),
+                      padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 10, 16, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
