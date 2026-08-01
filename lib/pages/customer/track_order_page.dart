@@ -1550,24 +1550,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // ── Razorpay Payment on TrackOrder page ──────────────────────────────────
 
   void _onPaymentSuccess(PaymentSuccessResponse response) {
-    final razorpayKeyId = dotenv.maybeGet('RAZORPAY_KEY_ID') ?? '';
-    final isTestMode = razorpayKeyId.startsWith('rzp_test_');
-
-    if (isTestMode) {
-      // Test mode: skip server-side HMAC verification and capture.
-      // Directly confirm payment using the dev RPC (same as mock bypass).
-      _testModeConfirmPayment(
-        paymentId: response.paymentId ?? '',
-        razorpayOrderId: response.orderId ?? '',
-      );
-    } else {
-      // Production: full server-side verify + capture flow
-      _verifyAndConfirmOrder(
-        paymentId: response.paymentId ?? '',
-        razorpayOrderId: response.orderId ?? '',
-        signature: response.signature ?? '',
-      );
-    }
+    // Both Test Mode and Production now use the secure edge function.
+    // The edge function correctly verifies test signatures and captures test payments.
+    _verifyAndConfirmOrder(
+      paymentId: response.paymentId ?? '',
+      razorpayOrderId: response.orderId ?? '',
+      signature: response.signature ?? '',
+    );
   }
 
   void _onPaymentError(PaymentFailureResponse response) {
@@ -1629,26 +1618,36 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     setState(() => _isProcessingPayment = true);
 
     bool canPay = false;
-    if (_order!.cartGroupId != null) {
-      final statusesResp = await _supabase
-          .from('orders')
-          .select('status')
-          .eq('cart_group_id', _order!.cartGroupId!);
-      final statuses =
-          (statusesResp as List).map((r) => r['status'] as String).toList();
-      if (statuses.contains('awaiting_payment') &&
-          !statuses.contains('awaiting_acceptance')) {
-        canPay = true;
+    try {
+      if (_order!.cartGroupId != null) {
+        final statusesResp = await _supabase
+            .from('orders')
+            .select('status')
+            .eq('cart_group_id', _order!.cartGroupId!);
+        final statuses =
+            (statusesResp as List).map((r) => r['status'] as String).toList();
+        if (statuses.contains('awaiting_payment') &&
+            !statuses.contains('awaiting_acceptance')) {
+          canPay = true;
+        }
+      } else {
+        final freshStatus = await _supabase
+            .from('orders')
+            .select('status')
+            .eq('id', widget.orderId)
+            .maybeSingle();
+        if (freshStatus != null && freshStatus['status'] == 'awaiting_payment') {
+          canPay = true;
+        }
       }
-    } else {
-      final freshStatus = await _supabase
-          .from('orders')
-          .select('status')
-          .eq('id', widget.orderId)
-          .maybeSingle();
-      if (freshStatus != null && freshStatus['status'] == 'awaiting_payment') {
-        canPay = true;
+    } catch (e) {
+      debugPrint('Error fetching order status before payment: $e');
+      setState(() => _isProcessingPayment = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Network error. Please try again.')));
       }
+      return;
     }
 
     if (!canPay) {
@@ -1809,83 +1808,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
   }
 
-  // S3 FIX: Mock payment bypass is ONLY available in debug builds.
-  // kDebugMode is a compile-time constant that tree-shakes this in release.
-  Future<void> _mockPaymentBypass() async {
-    assert(() {
-      // Extra guard: this method must never be called in release mode.
-      return true;
-    }());
-    if (!kDebugMode) return; // Belt-and-suspenders: never run in release
-    if (_isProcessingPayment || _order == null) return;
-    setState(() => _isProcessingPayment = true);
-    try {
-      final paymentId = 'pay_mock_${DateTime.now().millisecondsSinceEpoch}';
-      final razorpayOrderId =
-          'order_mock_${DateTime.now().millisecondsSinceEpoch}';
-
-      await _supabase.rpc('dev_client_confirm_payment', params: {
-        'p_order_id': widget.orderId,
-        'p_cart_group_id': _order?.cartGroupId,
-        'p_razorpay_payment_id': paymentId,
-        'p_razorpay_order_id': razorpayOrderId,
-      });
-      _paymentCountdownTimer?.cancel();
-      // 100x FIX: Optimistically update UI so the payment panel disappears instantly.
-      if (mounted) {
-        setState(() {
-          if (_order != null) _order!.status = 'confirmed';
-          for (var o in _groupOrders) {
-            if (o.status == 'awaiting_payment') o.status = 'confirmed';
-          }
-          _isProcessingPayment = false;
-        });
-        _fetchOrder(); // fetch fresh data
-      }
-    } catch (e) {
-      debugPrint('Mock payment error: $e');
-      if (mounted) setState(() => _isProcessingPayment = false);
-    }
-  }
-
-  /// Test-mode payment confirmation: Uses dev_client_confirm_payment RPC
-  /// to bypass server-side HMAC verification (which can fail with test keys).
-  /// Only called when RAZORPAY_KEY_ID starts with 'rzp_test_'.
-  Future<void> _testModeConfirmPayment({
-    required String paymentId,
-    required String razorpayOrderId,
-  }) async {
-    try {
-      await _supabase.rpc('dev_client_confirm_payment', params: {
-        'p_order_id': widget.orderId,
-        'p_cart_group_id': _order?.cartGroupId,
-        'p_razorpay_payment_id': paymentId,
-        'p_razorpay_order_id': razorpayOrderId,
-      });
-      _paymentCountdownTimer?.cancel();
-      _razorpayOpened = false;
-      if (mounted) {
-        setState(() {
-          if (_order != null) _order!.status = 'confirmed';
-          for (var o in _groupOrders) {
-            if (o.status == 'awaiting_payment') o.status = 'confirmed';
-          }
-          _isProcessingPayment = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text('💳 Payment confirmed! Shop is now preparing your order.'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-        ));
-        _fetchOrder(); // Fetch fresh data to ensure UI sync
-      }
-    } catch (e) {
-      debugPrint('Test-mode payment confirm error: $e');
-      _razorpayOpened = false;
-      if (mounted) setState(() => _isProcessingPayment = false);
-    }
-  }
+  // (Removed _mockPaymentBypass and _testModeConfirmPayment)
 
   /// S2 FIX: HMAC verification and order confirmation now happen SERVER-SIDE.
   /// The Edge Function `verify-razorpay-payment` checks the signature using
@@ -2712,28 +2635,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16)),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton(
-                            onPressed: _isProcessingPayment
-                                ? null
-                                : () => _mockPaymentBypass(),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.5)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                            ),
-                            child: Text(
-                                'Simulate Successful Payment (Test Mode)',
-                                style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w600, fontSize: 14)),
-                          ),
-                        ),
                       ],
                     ),
                   ),
