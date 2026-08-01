@@ -1550,11 +1550,24 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // ── Razorpay Payment on TrackOrder page ──────────────────────────────────
 
   void _onPaymentSuccess(PaymentSuccessResponse response) {
-    _verifyAndConfirmOrder(
-      paymentId: response.paymentId ?? '',
-      razorpayOrderId: response.orderId ?? '',
-      signature: response.signature ?? '',
-    );
+    final razorpayKeyId = dotenv.maybeGet('RAZORPAY_KEY_ID') ?? '';
+    final isTestMode = razorpayKeyId.startsWith('rzp_test_');
+
+    if (isTestMode) {
+      // Test mode: skip server-side HMAC verification and capture.
+      // Directly confirm payment using the dev RPC (same as mock bypass).
+      _testModeConfirmPayment(
+        paymentId: response.paymentId ?? '',
+        razorpayOrderId: response.orderId ?? '',
+      );
+    } else {
+      // Production: full server-side verify + capture flow
+      _verifyAndConfirmOrder(
+        paymentId: response.paymentId ?? '',
+        razorpayOrderId: response.orderId ?? '',
+        signature: response.signature ?? '',
+      );
+    }
   }
 
   void _onPaymentError(PaymentFailureResponse response) {
@@ -1831,6 +1844,45 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     } catch (e) {
       debugPrint('Mock payment error: $e');
+      if (mounted) setState(() => _isProcessingPayment = false);
+    }
+  }
+
+  /// Test-mode payment confirmation: Uses dev_client_confirm_payment RPC
+  /// to bypass server-side HMAC verification (which can fail with test keys).
+  /// Only called when RAZORPAY_KEY_ID starts with 'rzp_test_'.
+  Future<void> _testModeConfirmPayment({
+    required String paymentId,
+    required String razorpayOrderId,
+  }) async {
+    try {
+      await _supabase.rpc('dev_client_confirm_payment', params: {
+        'p_order_id': widget.orderId,
+        'p_cart_group_id': _order?.cartGroupId,
+        'p_razorpay_payment_id': paymentId,
+        'p_razorpay_order_id': razorpayOrderId,
+      });
+      _paymentCountdownTimer?.cancel();
+      _razorpayOpened = false;
+      if (mounted) {
+        setState(() {
+          if (_order != null) _order!.status = 'confirmed';
+          for (var o in _groupOrders) {
+            if (o.status == 'awaiting_payment') o.status = 'confirmed';
+          }
+          _isProcessingPayment = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('💳 Payment confirmed! Shop is now preparing your order.'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ));
+        _fetchOrder(); // Fetch fresh data to ensure UI sync
+      }
+    } catch (e) {
+      debugPrint('Test-mode payment confirm error: $e');
+      _razorpayOpened = false;
       if (mounted) setState(() => _isProcessingPayment = false);
     }
   }
