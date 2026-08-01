@@ -55,6 +55,7 @@ Future<void> runShopEdgeCaseTests(SupabaseClient client) async {
       .single();
   final shopId = shopRec['id'];
 
+  // ignore: unused_local_variable — query validates the shop exists; result not needed
   final otherShopRec = await client
       .from('shops')
       .select('id')

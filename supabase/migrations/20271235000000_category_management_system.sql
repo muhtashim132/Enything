@@ -38,13 +38,13 @@ COMMENT ON TABLE public.custom_categories IS
 ALTER TABLE public.custom_categories ENABLE ROW LEVEL SECURITY;
 
 -- Anyone (authenticated or anon) can READ custom categories
-CREATE POLICY "custom_categories_select_all"
+DROP POLICY IF EXISTS "custom_categories_select_all" ON public.custom_categories; CREATE POLICY "custom_categories_select_all"
   ON public.custom_categories
   FOR SELECT
   USING (true);
 
 -- Only admin_team members can INSERT / UPDATE / DELETE
-CREATE POLICY "custom_categories_admin_insert"
+DROP POLICY IF EXISTS "custom_categories_admin_insert" ON public.custom_categories; CREATE POLICY "custom_categories_admin_insert"
   ON public.custom_categories
   FOR INSERT
   WITH CHECK (
@@ -54,7 +54,7 @@ CREATE POLICY "custom_categories_admin_insert"
     )
   );
 
-CREATE POLICY "custom_categories_admin_update"
+DROP POLICY IF EXISTS "custom_categories_admin_update" ON public.custom_categories; CREATE POLICY "custom_categories_admin_update"
   ON public.custom_categories
   FOR UPDATE
   USING (
@@ -64,7 +64,7 @@ CREATE POLICY "custom_categories_admin_update"
     )
   );
 
-CREATE POLICY "custom_categories_admin_delete"
+DROP POLICY IF EXISTS "custom_categories_admin_delete" ON public.custom_categories; CREATE POLICY "custom_categories_admin_delete"
   ON public.custom_categories
   FOR DELETE
   USING (

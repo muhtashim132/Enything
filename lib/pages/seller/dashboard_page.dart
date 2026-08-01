@@ -89,7 +89,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   }
 
   void _setupRealtimeOrders(String shopId) {
-    final channelName = 'seller-orders-$shopId';
+    final channelName = 'seller-dashboard-$shopId';
     // Phase 9: Scale to multiple shops without duplicating subscriptions
     if (_realtimeChannels.containsKey(channelName)) return;
 

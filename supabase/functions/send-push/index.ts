@@ -208,7 +208,10 @@ Deno.serve(async (req: Request) => {
                                       
           const channelId = isUrgentOrderAlert ? 'order_alert_loop_channel' : 'enything_push_channel';
           const soundFile = isUrgentOrderAlert ? 'enything_bell' : undefined;
-          const apnsSound = isUrgentOrderAlert ? 'enything_bell.wav' : 'default'; // STRESS-TEST FIX: iOS Custom Bell Parity
+          
+          // Fix for iOS buzzing: ALWAYS use 'default' for iOS sound so it buzzes when app is closed, unless specifically a bell.
+          // Wait, the user said they didn't get buzz "at all". So we just use 'default' for all iOS to ensure it buzzes.
+          const apnsSound = 'default';
 
           const message = {
             message: {

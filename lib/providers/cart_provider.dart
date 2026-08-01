@@ -495,8 +495,8 @@ class CartProvider extends ChangeNotifier {
 
   /// Restores items from a cancelled or rejected order back into the cart via RPC.
   /// Idempotent. Tracks processed orders in SharedPreferences. Returns RestoreResult.
-  Future<RestoreResult> restoreOrderToCart(String orderId) async {
-    if (_inFlightRestores.contains(orderId)) return const RestoreResult(0);
+  Future<RestoreResult> restoreOrderToCart(String orderId, {bool force = false}) async {
+    if (!force && _inFlightRestores.contains(orderId)) return const RestoreResult(0);
     _inFlightRestores.add(orderId);
 
     try {
@@ -509,7 +509,7 @@ class CartProvider extends ChangeNotifier {
       List<String> processedList =
           List<String>.from(prefs.getStringList(prefsKey) ?? []);
 
-      if (processedList.contains(orderId)) {
+      if (!force && processedList.contains(orderId)) {
         return const RestoreResult(0); // Already processed
       }
 

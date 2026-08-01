@@ -594,16 +594,59 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   Future<void> _acceptOrderGroup(OrderGroup group) async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
-    // A2: Track failures and surface them to the rider
     int failedCount = 0;
     for (int i = 0; i < group.orders.length; i++) {
       final success = await _acceptOrder(group.orders[i],
-          skipReload: true, notifyCustomer: i == 0);
+          skipReload: true, notifyCustomer: false);
       if (!success) {
         failedCount += (group.orders.length - i);
         break; // Prevent cascading errors/dialogs for the rest of the group
       }
     }
+
+    if (failedCount == 0 && mounted) {
+      // Check if ALL shops in this group have accepted
+      try {
+        final orderIds = group.orders.map((o) => o.id).toList();
+        final groupStatusData = await _supabase
+            .from('orders')
+            .select('status')
+            .inFilter('id', orderIds);
+            
+        bool allShopsAccepted = true;
+        for (final o in groupStatusData) {
+           final st = o['status'] as String?;
+           if (st == 'pending' || st == 'awaiting_acceptance') {
+             allShopsAccepted = false;
+             break;
+           }
+        }
+        
+        final notifProv = context.read<NotificationProvider>();
+        final firstOrder = group.orders.first;
+        
+        if (allShopsAccepted) {
+            notifProv.sendBackgroundPush(
+              targetUserId: firstOrder.customerId,
+              title: 'Ready for Payment! 💳',
+              body: 'Both the shop(s) and rider accepted your order. Open the app and complete payment within 10 minutes.',
+              data: {
+                'route': '/track_order',
+                'order_id': firstOrder.id,
+              },
+            );
+        } else {
+            notifProv.sendBackgroundPush(
+              targetUserId: firstOrder.customerId,
+              title: '🛵 Rider is Ready!',
+              body: 'A rider accepted your order and is on standby. Waiting for the shop(s) to also confirm.',
+            );
+        }
+      } catch (e) {
+        debugPrint('Error fetching group status after rider accept: $e');
+      }
+    }
+
     if (failedCount > 0 && mounted) {
       _showSnack(
         failedCount == group.orders.length

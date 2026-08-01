@@ -64,6 +64,10 @@ class NotificationProvider extends ChangeNotifier {
 
   final Map<String, String> _lastProcessedStatus = {};
 
+  // Multi-shop: tracks how many shops have accepted per cart_group_id
+  // so we can send numbered notifications: "Shop 1 Accepted!", "Shop 2 Accepted!"
+  final Map<String, int> _shopAcceptedCount = {};
+
   // STRESS-TEST FIX: Cache properties to prevent O(N) allocation on every frame/getter access
   List<AppNotification>? _cachedNotifications;
   int? _cachedUnreadCount;
@@ -101,6 +105,30 @@ class NotificationProvider extends ChangeNotifier {
         sound: true,
       );
       debugPrint('FCM permission: ${settings.authorizationStatus}');
+
+      // iOS FIX: On iOS, FCM requires the APNS token to be set before getToken()
+      // can succeed. The APNS token is registered asynchronously by the OS
+      // (didRegisterForRemoteNotificationsWithDeviceToken). On first launch, this
+      // can race with our getToken() call, causing:
+      //   [firebase_messaging/apns-token-not-set] APNS token has not been set yet.
+      // Fix: retry getAPNSToken() up to 5 times with 800ms delay before proceeding.
+      if (Platform.isIOS) {
+        String? apnsToken;
+        for (int i = 0; i < 5 && apnsToken == null; i++) {
+          apnsToken = await messaging.getAPNSToken();
+          if (apnsToken == null) {
+            debugPrint('FCM [iOS]: APNS token not ready, retry ${i + 1}/5...');
+            await Future<void>.delayed(const Duration(milliseconds: 800));
+          }
+        }
+        if (apnsToken == null) {
+          debugPrint(
+              'FCM [iOS]: APNS token still unavailable after 5 retries — '
+              'skipping FCM registration. Will retry on next app launch.');
+          return;
+        }
+        debugPrint('FCM [iOS]: APNS token ready → proceeding with FCM token request.');
+      }
 
       final token = await messaging.getToken();
       debugPrint(
@@ -281,14 +309,30 @@ class NotificationProvider extends ChangeNotifier {
             final cartGroupId = payload.newRecord['cart_group_id'] as String?;
 
             // Notify customer when the shop accepts (one down, rider still needed)
+            // For multi-shop orders: send numbered notifications so customer knows
+            // which shop accepted — "Shop 1 Accepted!", "Shop 2 Accepted!", etc.
             if (sellerAcceptedNow &&
                 !sellerAcceptedBefore &&
                 newStatus == 'awaiting_acceptance') {
+              // Use cart_group_id as the dedup key; fall back to orderId for single-shop
+              final groupKey = cartGroupId ?? orderId ?? '';
+              // Increment the acceptance counter for this cart group
+              final shopNum = (_shopAcceptedCount[groupKey] ?? 0) + 1;
+              _shopAcceptedCount[groupKey] = shopNum;
+
+              // Build numbered title only for multi-shop orders (cart_group_id present)
+              final shopTitle = cartGroupId != null
+                  ? '🏪 Shop $shopNum Accepted!'
+                  : '🏪 Shop Accepted!';
+              final shopBody = cartGroupId != null
+                  ? 'Shop #$shopNum in your group order has accepted. Waiting for remaining shops and rider...'
+                  : 'The shop accepted your order. Waiting for a rider now...';
+
               _add(AppNotification(
-                id: '${orderId}_shop_accepted', // Keep per-order
-                title: '🏪 Shop Accepted!',
-                body:
-                    'The shop accepted your order. Waiting for a rider now...',
+                // Use orderId so each shop gets its own unique notification entry
+                id: '${orderId}_shop_accepted',
+                title: shopTitle,
+                body: shopBody,
                 orderId: orderId,
               ));
             }
@@ -733,6 +777,7 @@ class NotificationProvider extends ChangeNotifier {
     _listeningUserId = null;
     _listeningRole = null;
     _lastProcessedStatus.clear();
+    _shopAcceptedCount.clear(); // Reset per-shop acceptance counters on role switch
     _clearMemory(); // Clear RAM only — DB history is preserved per user
   }
 

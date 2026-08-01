@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
@@ -23,7 +22,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:uuid/uuid.dart';
+import 'dart:math' as math;
 import '../../services/notification_service.dart';
 import '../../utils/responsive_layout.dart';
 import 'package:collection/collection.dart';
@@ -50,6 +49,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       ValueNotifier({});
   bool _razorpayOpened = false;
   bool _isMapOpening = false;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _partialRejectionKey = GlobalKey();
+  bool _hasScrolledToRejection = false;
 
   // Payment (Razorpay) — triggered when both seller & rider accept
   late Razorpay _razorpay;
@@ -586,6 +588,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (!mounted || _order == null) return;
     final aggStatus = _aggregateStatus;
 
+    if (_hasPartialRejection && !_hasScrolledToRejection) {
+      _hasScrolledToRejection = true;
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted && _partialRejectionKey.currentContext != null) {
+          Scrollable.ensureVisible(
+            _partialRejectionKey.currentContext!,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+          );
+        }
+      });
+    }
+
     if (aggStatus != _lastAggStatus) {
       _lastAggStatus = aggStatus;
       NotificationService().updateOrderNotificationFromStatus(aggStatus);
@@ -632,6 +647,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         }
 
         _startPaymentCountdown(awaitingPayOrder);
+        
+        // Auto-redirect to Razorpay if there is no partial rejection requiring a decision
+        if (!_hasPartialRejection && !isExpired && !_isProcessingPayment) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted && _aggregateStatus == 'awaiting_payment' && !_isProcessingPayment) {
+               _openRazorpay();
+            }
+          });
+        }
       } else {
         _paymentCountdownTimer?.cancel();
       }
@@ -820,195 +844,36 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (_order == null || _isRetrying) return;
     setState(() => _isRetrying = true);
     try {
-      final newDeadline = _serverTime.add(const Duration(minutes: 3));
-      final notifProv = context.read<NotificationProvider>();
-      String? firstNewOrderId;
+      final cart = context.read<CartProvider>();
       final shopsToRetry =
           retryGroup && _groupOrders.isNotEmpty ? _groupOrders : [_order!];
 
-      final List<Map<String, dynamic>> allOrders = [];
-      final List<Map<String, dynamic>> allItems = [];
-      final List<Map<String, dynamic>> notificationData = [];
-      final nowUtc = _serverTime.toIso8601String();
-      String? couponIdToPass;
-      final newCartGroupId = const Uuid().v4();
+      int totalAdded = 0;
+      String? lastError;
 
       for (final order in shopsToRetry) {
-        final newOrderId = const Uuid().v4();
-        firstNewOrderId ??= newOrderId;
-
-        if (couponIdToPass == null && order.couponId != null) {
-          couponIdToPass = order.couponId;
-        }
-
-        // O3 FIX: Re-validate product availability before inserting retried order.
-        final oldItems = await _supabase
-            .from('order_items')
-            .select()
-            .eq('order_id', order.id);
-
-        if ((oldItems as List).isNotEmpty) {
-          final productIds = oldItems.map((i) => i['product_id']).toList();
-          final latestProducts = await _supabase
-              .from('products')
-              .select('id, name, is_available, total_quantity, price, variants')
-              .inFilter('id', productIds)
-              .limit(50);
-
-          for (final item in oldItems) {
-            final dbProduct = (latestProducts as List).firstWhereOrNull(
-              (p) => p['id'] == item['product_id'],
-            );
-            if (dbProduct == null || dbProduct['is_available'] == false) {
-              throw Exception(
-                  '${item['product_name']} is no longer available. Cannot retry.');
-            }
-            if (dbProduct['total_quantity'] != null &&
-                dbProduct['total_quantity'] < (item['quantity'] as int)) {
-              throw Exception(
-                'Only ${dbProduct['total_quantity']} units of ${item['product_name']} are available.',
-              );
-            }
-
-            double currentPrice = (dbProduct['price'] as num).toDouble();
-            if (item['variant_name'] != null && dbProduct['variants'] != null) {
-              final variants = dbProduct['variants'] as List<dynamic>;
-              final v = variants
-                  .firstWhereOrNull((v) => v['name'] == item['variant_name']);
-              if (v != null && v['price'] != null) {
-                currentPrice = (v['price'] as num).toDouble();
-              }
-            }
-            if (currentPrice != (item['price'] as num).toDouble()) {
-              throw Exception(
-                  '${item['product_name']} price has changed. Please create a new order from your cart.');
-            }
-          }
-
-          // BUG-1 FIX: Include variant_name so the place_orders_transaction RPC
-          // validates variant price correctly. Without this, variant products always
-          // trigger "Price spoofing detected" because the RPC falls through to
-          // the base product price instead of the variant price.
-          final newItems = oldItems
-              .map((item) => {
-                    'id': const Uuid().v4(),
-                    'created_at': nowUtc,
-                    'order_id': newOrderId,
-                    'product_id': item['product_id'],
-                    'product_name': item['product_name'],
-                    'variant_name': item['variant_name'], // BUG-1 FIX
-                    'quantity': item['quantity'],
-                    'price': item['price'],
-                    'weight_kg': item['weight_kg'],
-                    'special_instructions': item['special_instructions'],
-                    'requires_prescription':
-                        item['requires_prescription'] ?? false,
-                  })
-              .toList();
-          allItems.addAll(newItems);
-        }
-
-        allOrders.add({
-          'id': newOrderId,
-          'created_at': nowUtc,
-          'updated_at': nowUtc,
-          'cart_group_id': order.cartGroupId != null ? newCartGroupId : null,
-          'shop_id': order.shopId,
-          'customer_id': order.customerId,
-          'status': 'awaiting_acceptance',
-          'seller_accepted': false,
-          'partner_accepted': false,
-          'acceptance_deadline': newDeadline.toIso8601String(),
-          'total_amount': order.totalAmount,
-          'delivery_charges': order.deliveryCharges,
-          'rider_earnings': order.riderEarnings,
-          'platform_fee': order.platformFee,
-          'address': order.address,
-          'address_label': order.addressLabel,
-          'delivery_lat': order.deliveryLat,
-          'delivery_lng': order.deliveryLng,
-          'delivery_notes': order.deliveryNotes,
-          'payment_method': order.paymentMethod,
-          'payment_status': 'pending',
-          'customer_phone': order.customerPhone,
-          'shop_phone': order.shopPhone,
-          'multi_shop_surcharge': order.multiShopSurcharge,
-          'small_cart_fee': order.smallCartFee,
-          'heavy_order_fee': order.heavyOrderFee,
-          'coupon_id': order.couponId,
-          'coupon_discount': order.couponDiscount,
-          'gst_item_total': order.gstItemTotal,
-          'gst_delivery': order.gstDelivery,
-          'gst_platform': order.gstPlatform,
-          'enything_commission': order.enythingCommission,
-          'seller_payout': order.sellerPayout,
-          'gateway_deduction': order.gatewayDeduction,
-          's9_5_gst_amount': order.s9_5GstAmount,
-          'non_food_gst_amount': order.nonFoodGstAmount,
-          'tcs_amount': order.tcsAmount,
-          'tds_amount': order.tdsAmount,
-          'grand_total_collected':
-              order.grandTotalCollected >= 0 ? order.grandTotalCollected : null,
-          'gst_rate_snapshot': order.gstRateSnapshot,
-          'estimated_distance_km': order.estimatedDistanceKm,
-          'shop_prep_time_snapshot': order.shopPrepTimeSnapshot,
-          'prescription_urls': order.prescriptionUrls,
-        });
-
-        if (order.shopId != null) {
-          notificationData.add({
-            'shop_id': order.shopId,
-            'order_id': newOrderId,
-            'grand_total': order.grandTotal,
-          });
+        final result = await cart.restoreOrderToCart(order.id, force: true);
+        totalAdded += result.added;
+        if (result.error != null) {
+          lastError = result.error;
         }
       }
 
-      // Execute atomic transaction RPC
-      await _supabase.rpc('place_orders_transaction', params: {
-        'p_orders': allOrders,
-        'p_items': allItems,
-        'p_coupon_id': couponIdToPass,
-        'p_idempotency_key': newCartGroupId,
-        'p_cart_group_id': newCartGroupId,
-        'p_order_id_to_cancel': null,
-      });
-
-      // BUG-6 FIX: Capture notifProv and navigate FIRST, then fire notifications
-      // without relying on BuildContext after the page is disposed.
-      // Notifications are sent using the captured notifProv reference, which is
-      // safe to use from the new page's initState context.
-      // Also fixes "2 min window" → "3 min window" (BUG-7b notification body).
-      final pendingNotifications =
-          List<Map<String, dynamic>>.from(notificationData);
-      final capturedNotifProv = notifProv;
-
-      if (mounted && firstNewOrderId != null) {
-        Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.trackOrder,
-          arguments: {'orderId': firstNewOrderId},
-        );
-      }
-
-      // Fire seller notifications AFTER navigation so context disposal is safe.
-      for (final data in pendingNotifications) {
-        try {
-          final shopData = await _supabase
-              .from('shops')
-              .select('seller_id')
-              .eq('id', data['shop_id']!)
-              .maybeSingle();
-          if (shopData != null && shopData['seller_id'] != null) {
-            capturedNotifProv.sendBackgroundPush(
-              targetUserId: shopData['seller_id'] as String,
-              title: '🔔 New Order! Accept now',
-              body:
-                  'Order ₹${(data['grand_total'] as double).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 3 min window.',
-              data: {'order_id': data['order_id'], 'role': 'seller'},
-            );
+      if (mounted) {
+        if (totalAdded > 0) {
+          if (lastError != null) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(lastError),
+              backgroundColor: AppColors.warning,
+              behavior: SnackBarBehavior.floating,
+            ));
           }
-        } catch (_) {}
+          Navigator.pushNamedAndRemoveUntil(
+              context, AppRoutes.cart, (route) => false);
+        } else {
+          throw Exception(
+              lastError ?? 'Order items are no longer available.');
+        }
       }
     } catch (e) {
       debugPrint('Retry order error: $e');
@@ -1118,6 +983,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     const cancellableStatuses = [
       'awaiting_acceptance',
       'awaiting_payment',
+      'pending',
     ];
     if (!cancellableStatuses.contains(_aggregateStatus)) {
       if (mounted) {
@@ -1138,13 +1004,46 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       // preserves seller_rejected / verification_failed rows during bulk updates,
       // so no extra Dart filter is needed here. The neq('status','delivered') guard
       // is kept as a secondary safety net.
-      await _supabase.rpc('cancel_order',
-          params: {'p_order_id': widget.orderId, 'p_reason': 'customer'});
+      final targetOrders = _groupOrders.isEmpty 
+          ? [_order!] 
+          : _groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList();
+
+      bool anyAttempted = false;
+      bool anyError = false;
+      await Future.wait(targetOrders.map((order) async {
+        try {
+          final fresh = await _supabase
+              .from('orders')
+              .select('status')
+              .eq('id', order.id)
+              .maybeSingle();
+
+          if (fresh != null && !['cancelled', 'seller_rejected', 'delivered'].contains(fresh['status'])) {
+            await _supabase.rpc('cancel_order',
+                params: {'p_order_id': order.id, 'p_reason': 'customer'});
+            anyAttempted = true;
+          }
+        } catch (e) {
+          debugPrint('Error cancelling order ${order.id}: $e');
+          anyError = true;
+        }
+      }));
+      
+      if (!anyAttempted && targetOrders.isNotEmpty) {
+         // Force a fetch to update the UI if the local status was out of sync
+         await _fetchOrder();
+         if (anyError) throw Exception('Failed to cancel order due to an error');
+         return; // Already terminal
+      }
+      
+      if (anyError && !anyAttempted) {
+          throw Exception('Failed to cancel active orders.');
+      }
 
       // Notify seller and rider that the customer cancelled
       if (mounted && _order != null) {
         final notifProv = context.read<NotificationProvider>();
-        final shopsToNotify = _groupOrders.isEmpty ? [_order!] : _groupOrders;
+        final shopsToNotify = targetOrders;
 
         for (final o in shopsToNotify) {
           // Notify seller
@@ -1549,64 +1448,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // ── Razorpay Payment on TrackOrder page ──────────────────────────────────
 
   void _onPaymentSuccess(PaymentSuccessResponse response) {
-    final razorpayKeyId = dotenv.maybeGet('RAZORPAY_KEY_ID') ?? '';
-    final isTestMode = razorpayKeyId.startsWith('rzp_test_');
-
-    if (isTestMode) {
-      _testModeConfirmPayment(
-        paymentId: response.paymentId ?? '',
-        razorpayOrderId: response.orderId ?? '',
-      );
-    } else {
-      _verifyAndConfirmOrder(
-        paymentId: response.paymentId ?? '',
-        razorpayOrderId: response.orderId ?? '',
-        signature: response.signature ?? '',
-      );
-    }
-  }
-
-  Future<void> _testModeConfirmPayment({
-    required String paymentId,
-    required String razorpayOrderId,
-  }) async {
-    try {
-      // 100x FIX: Directly call the public client_confirm_payment RPC 
-      // This guarantees instant, bug-free payment confirmation in test mode without relying on external APIs.
-      await _supabase.rpc('client_confirm_payment', params: {
-        'p_order_id': widget.orderId,
-        'p_cart_group_id': _order?.cartGroupId,
-        'p_razorpay_payment_id': paymentId,
-        'p_razorpay_order_id': razorpayOrderId,
-      });
-      _paymentCountdownTimer?.cancel();
-      _razorpayOpened = false;
-      if (mounted) {
-        setState(() {
-          if (_order != null) _order!.status = 'confirmed';
-          for (var o in _groupOrders) {
-            if (o.status == 'awaiting_payment') o.status = 'confirmed';
-          }
-          _isProcessingPayment = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('💳 Payment confirmed! Shop is now preparing your order.'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-        ));
-        _fetchOrder(); // Fetch fresh data to ensure UI sync
-      }
-    } catch (e) {
-      debugPrint('Test-mode payment confirm error: $e');
-      _razorpayOpened = false;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Could not confirm payment: $e'),
-          backgroundColor: AppColors.danger,
-        ));
-        setState(() => _isProcessingPayment = false);
-      }
-    }
+    _verifyAndConfirmOrder(
+      paymentId: response.paymentId ?? '',
+      razorpayOrderId: response.orderId ?? '',
+      signature: response.signature ?? '',
+    );
   }
 
   void _onPaymentError(PaymentFailureResponse response) {
@@ -2104,6 +1950,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         ),
         body: MaxWidthContainer(
           child: SingleChildScrollView(
+            controller: _scrollController,
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safeBottom),
             child: Column(
               children: [
@@ -2145,8 +1992,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     ),
                     child: Column(
                       children: [
-                        // Countdown ring for awaiting_acceptance
-                        if (_aggregateStatus == 'awaiting_acceptance')
+                        // Countdown ring for awaiting_acceptance or awaiting_payment
+                        if (_aggregateStatus == 'awaiting_acceptance' ||
+                            _aggregateStatus == 'awaiting_payment')
                           Stack(
                             alignment: Alignment.center,
                             children: [
@@ -2156,7 +2004,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 child: TweenAnimationBuilder<double>(
                                   tween: Tween<double>(
                                       begin: 1.0,
-                                      end: _acceptanceSecondsLeft / 180.0),
+                                      end: (_aggregateStatus ==
+                                                  'awaiting_acceptance'
+                                              ? _acceptanceSecondsLeft
+                                              : (_hasPartialRejection
+                                                  ? _decisionSecondsLeft
+                                                  : _paymentSecondsLeft)) /
+                                          (_aggregateStatus ==
+                                                  'awaiting_acceptance'
+                                              ? 180.0
+                                              : (_hasPartialRejection
+                                                  ? 300.0
+                                                  : 600.0))),
                                   duration: const Duration(milliseconds: 500),
                                   builder: (_, v, __) =>
                                       CircularProgressIndicator(
@@ -2181,7 +2040,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
-                                      '${(_acceptanceSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_acceptanceSecondsLeft % 60).toString().padLeft(2, '0')}',
+                                      _aggregateStatus == 'awaiting_acceptance'
+                                          ? '${(_acceptanceSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_acceptanceSecondsLeft % 60).toString().padLeft(2, '0')}'
+                                          : (_hasPartialRejection
+                                              ? '${(_decisionSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_decisionSecondsLeft % 60).toString().padLeft(2, '0')}'
+                                              : '${(_paymentSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_paymentSecondsLeft % 60).toString().padLeft(2, '0')}'),
                                       style: GoogleFonts.outfit(
                                         color: Colors.white,
                                         fontSize: 16,
@@ -2603,92 +2466,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     ),
                   ),
 
-                // ── PAY NOW BUTTON (when both seller & rider accepted) ────────
-                if (_aggregateStatus == 'awaiting_payment' &&
-                    !_hasPartialRejection) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF0F9B58), Color(0xFF1DB954)],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0F9B58).withValues(alpha: 0.4),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.check_circle_rounded,
-                                color: Colors.white, size: 20),
-                            const SizedBox(width: 8),
-                            Text('Shop & Rider Confirmed!',
-                                style: GoogleFonts.outfit(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15)),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '\u23f1 ${(_paymentSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_paymentSecondsLeft % 60).toString().padLeft(2, '0')}',
-                                style: GoogleFonts.outfit(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                            'Complete your payment to confirm the order. Shop and rider are ready!',
-                            style: GoogleFonts.outfit(
-                                color: Colors.white.withValues(alpha: 0.9),
-                                fontSize: 12)),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isProcessingPayment
-                                ? null
-                                : () => _openRazorpay(),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF0F9B58),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                            ),
-                            child: _isProcessingPayment
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2))
-                                : Text(
-                                    'PAY NOW \u20b9${_computeGroupGrandTotal().toStringAsFixed(0)}',
-                                    style: GoogleFonts.outfit(
-                                        fontSize: 16)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
 
                 if (_aggregateStatus == 'awaiting_payment' &&
                     _hasPartialRejection) ...[
@@ -2794,6 +2571,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         .toList();
 
     return Container(
+      key: _partialRejectionKey,
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -2836,25 +2614,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             isDark: isDark,
             loading: _isProcessingPayment,
             onTap: () async {
+              if (_isProcessingPayment) return;
               setState(() => _isProcessingPayment = true);
               try {
-                // 100x Edge Case: Cancel all rejected orders so they are cleaned up and no longer hold up _hasPartialRejection
-                final rejected = _groupOrders
-                    .where((o) =>
-                        o.status == 'seller_rejected' ||
-                        o.status == 'rider_rejected')
-                    .toList();
-                await Future.wait(rejected.map((o) => _supabase
-                        .rpc('cancel_order', params: {
-                      'p_order_id': o.id,
-                      'p_reason': 'customer_proceed_partial'
-                    })));
-
                 if (_order?.cartGroupId != null) {
                   await _supabase.rpc('restart_payment_timer',
                       params: {'p_cart_group_id': _order!.cartGroupId});
                 }
 
+                if (mounted) setState(() => _isProcessingPayment = false);
                 if (mounted) _openRazorpay();
               } catch (e) {
                 debugPrint('Error proceeding with remaining: $e');

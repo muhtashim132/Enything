@@ -107,7 +107,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
         for (final shopId in shopIds) {
           final channel = _supabase
-              .channel('seller-orders-$shopId')
+              .channel('seller-orders-page-$shopId')
               .onPostgresChanges(
                 event: PostgresChangeEvent.insert,
                 schema: 'public',
@@ -248,6 +248,25 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           .rpc('accept_order_seller', params: {'p_order_id': order.id});
       final riderAlreadyAccepted = result == true;
 
+      bool allGroupAccepted = true;
+      if (riderAlreadyAccepted && order.cartGroupId != null) {
+        try {
+          final groupStatusData = await _supabase
+              .from('orders')
+              .select('status')
+              .eq('cart_group_id', order.cartGroupId!);
+          for (final o in groupStatusData) {
+            final st = o['status'] as String?;
+            if (st == 'pending' || st == 'awaiting_acceptance') {
+              allGroupAccepted = false;
+              break;
+            }
+          }
+        } catch (e) {
+          debugPrint('Error checking group status in seller accept: $e');
+        }
+      }
+
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
 
@@ -257,15 +276,27 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               '✅ Both you & rider accepted. Waiting for customer to pay.',
               isError: false);
 
-          notifProv.sendBackgroundPush(
-            targetUserId: order.customerId,
-            title: '✅ Shop & Rider Ready! Pay Now 💳',
-            body:
-                'Both the shop and rider accepted your order. Complete payment within 10 minutes.',
-            data: {'order_id': order.id, 'action': 'pay'},
-          ).then((err) {
-            if (err != null && mounted) _showSnack(err, isError: true);
-          });
+          if (allGroupAccepted) {
+            notifProv.sendBackgroundPush(
+              targetUserId: order.customerId,
+              title: '✅ Shop & Rider Ready! Pay Now 💳',
+              body:
+                  'Both the shop(s) and rider accepted your order. Complete payment within 10 minutes.',
+              data: {'order_id': order.id, 'action': 'pay'},
+            ).then((err) {
+              if (err != null && mounted) _showSnack(err, isError: true);
+            });
+          } else {
+            notifProv.sendBackgroundPush(
+              targetUserId: order.customerId,
+              title: '🏪 Shop Accepted!',
+              body:
+                  'A shop accepted your order. Still waiting for other shops to confirm.',
+              data: {'order_id': order.id, 'role': 'customer'},
+            ).then((err) {
+              if (err != null && mounted) _showSnack(err, isError: true);
+            });
+          }
 
           // Notify rider: seller is in, customer is paying
           if (order.deliveryPartnerId != null) {
