@@ -370,6 +370,7 @@ class _RoleCardState extends State<_RoleCard>
                   ? ImageFilter.blur(sigmaX: 0, sigmaY: 0)
                   : ImageFilter.blur(sigmaX: 4, sigmaY: 4),
               child: Stack(
+                alignment: Alignment.center,
                 children: [
                   // Main content
                   Padding(

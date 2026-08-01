@@ -55,7 +55,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
           slivers: [
             // ── Premium Hero AppBar ──────────────────────────────────────────
             SliverAppBar(
-              expandedHeight: 260,
+              expandedHeight: 210,
               pinned: true,
               elevation: 0,
               backgroundColor: isDark
@@ -250,7 +250,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
           Positioned.fill(
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 50, 24, 24),
+                padding: const EdgeInsets.fromLTRB(24, 35, 24, 24),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [

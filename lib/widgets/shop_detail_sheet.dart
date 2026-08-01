@@ -12,6 +12,8 @@ import 'product_card.dart';
 import 'common/enything_map.dart';
 import '../utils/share_utils.dart';
 import 'common/sheet_skeleton_loader.dart';
+import '../providers/cart_provider.dart';
+import '../config/routes.dart';
 
 bool _isShopSheetOpen = false;
 
@@ -224,11 +226,14 @@ class _SheetContentState extends State<_SheetContent> {
     final isFav = favs.isShopFavorite(shop.id);
     final filteredProducts = _filteredProducts;
     final cats = _categories;
+    final cart = context.watch<CartProvider>();
 
-    return CustomScrollView(
-      controller: widget.scrollController,
-      slivers: [
-        // Drag handle
+    return Stack(
+      children: [
+        CustomScrollView(
+          controller: widget.scrollController,
+          slivers: [
+            // Drag handle
         SliverToBoxAdapter(
           child: Center(
             child: Container(
@@ -875,8 +880,77 @@ class _SheetContentState extends State<_SheetContent> {
               ),
             ),
         ],
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
+    ),
+    if (cart.totalItemCount > 0)
+      Positioned(
+        bottom: 0,
+        left: 0,
+        right: 0,
+        child: _buildCartBar(context, cart),
+      ),
+      ],
+    );
+  }
+
+  Widget _buildCartBar(BuildContext context, CartProvider cart) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      child: GestureDetector(
+        onTap: () {
+            Navigator.pop(context);
+            Navigator.pushNamed(context, AppRoutes.cart);
+        },
+        child: Container(
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            gradient: AppColors.ctaGradient,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                  color: AppColors.secondary.withValues(alpha: 0.4),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8)),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${cart.totalItemCount} item${cart.totalItemCount > 1 ? 's' : ''}',
+                  style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'View Cart  →',
+                style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '₹${cart.subtotal.toStringAsFixed(0)}',
+                style: GoogleFonts.outfit(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

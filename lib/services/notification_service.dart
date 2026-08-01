@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -136,6 +137,11 @@ class NotificationService {
     required String body,
     required int progress, // 0 to 100
   }) async {
+    // Additive Fix: iOS does not support persistent live progress bars (ongoing: true).
+    // To prevent iOS users from being spammed with a new banner every time progress updates,
+    // we bypass this completely on iOS. Real order status notifications are still sent via showNotification().
+    if (Platform.isIOS) return;
+
     final AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
       'order_tracking_channel',
@@ -184,7 +190,19 @@ class NotificationService {
       fullScreenIntent: true,
       icon: 'ic_notification',
     );
-    const platformDetails = NotificationDetails(android: androidDetails);
+    
+    // Additive Fix: Define iOS foreground notification details so the banner actually appears locally on iOS.
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      sound: 'enything_bell.wav',
+    );
+
+    const platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
 
     await _flutterLocalNotificationsPlugin.show(
       DateTime.now().millisecondsSinceEpoch % 100000,

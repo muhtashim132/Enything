@@ -205,6 +205,7 @@ Future<CroppedFile?> cropImage(BuildContext context, String path,
         rotateButtonsHidden: false,
         rotateClockwiseButtonHidden: false,
         resetButtonHidden: false,
+        hidesNavigationBar: true,
       ),
     ],
   );

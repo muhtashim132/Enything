@@ -78,11 +78,18 @@ extension AppDelegate {
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
-    // Show banner + sound even when app is in the foreground
-    if #available(iOS 14.0, *) {
-      completionHandler([.banner, .badge, .sound])
+    if notification.request.trigger is UNPushNotificationTrigger {
+      // Remote push notification received in foreground.
+      // Suppress native iOS banner to avoid duplicates, because Flutter's
+      // onMessage handler will manually trigger a local notification.
+      completionHandler([])
     } else {
-      completionHandler([.alert, .badge, .sound])
+      // Local notification triggered by flutter_local_notifications
+      if #available(iOS 14.0, *) {
+        completionHandler([.banner, .badge, .sound])
+      } else {
+        completionHandler([.alert, .badge, .sound])
+      }
     }
   }
 

@@ -520,7 +520,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             .map((i) => OrderItem.fromMap(i))
             .toList();
         return model;
-      }).toList();
+      }).where((o) => DateTime.now().difference(o.createdAt).inHours < 24).toList();
 
       if (filtered.isEmpty) {
         _supabase.from('app_logs').insert({
@@ -1583,15 +1583,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       // Location Required Alert
-                      if (_locationUnavailable ||
-                          !context.read<LocationProvider>().hasLocation) ...[
+                      if (_locationUnavailable) ...[
                         _buildLocationRequired(),
                         const SizedBox(height: 24),
                       ],
                       // Full-width Online Toggle Card
                       GestureDetector(
                         onTap: () async {
-                          if (!context.read<LocationProvider>().hasLocation) {
+                          if (_locationUnavailable) {
                             _promptEnableLocation();
                             return;
                           }

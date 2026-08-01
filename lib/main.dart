@@ -193,8 +193,11 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
 
   final plugin = FlutterLocalNotificationsPlugin();
   const androidSettings = AndroidInitializationSettings('ic_notification');
-  await plugin
-      .initialize(const InitializationSettings(android: androidSettings));
+  const iosSettings = DarwinInitializationSettings();
+  await plugin.initialize(const InitializationSettings(
+    android: androidSettings,
+    iOS: iosSettings,
+  ));
 
   // Create both channels in the background isolate:
   // • order_alert_loop_channel: primary channel with enything_bell.wav sound
@@ -242,6 +245,11 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
         sound: RawResourceAndroidNotificationSound('enything_bell'),
         enableVibration: true,
         icon: 'ic_notification',
+      ),
+      iOS: DarwinNotificationDetails(
+        presentSound: true,
+        presentBadge: true,
+        presentAlert: true,
       ),
     ),
     payload: jsonEncode(message.data),

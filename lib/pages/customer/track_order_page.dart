@@ -1818,9 +1818,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         'p_razorpay_order_id': razorpayOrderId,
       });
       _paymentCountdownTimer?.cancel();
+      // 100x FIX: Optimistically update UI so the payment panel disappears instantly.
+      if (mounted) {
+        setState(() {
+          if (_order != null) _order!.status = 'confirmed';
+          for (var o in _groupOrders) {
+            if (o.status == 'awaiting_payment') o.status = 'confirmed';
+          }
+          _isProcessingPayment = false;
+        });
+        _fetchOrder(); // fetch fresh data
+      }
     } catch (e) {
       debugPrint('Mock payment error: $e');
-    } finally {
       if (mounted) setState(() => _isProcessingPayment = false);
     }
   }
@@ -1871,18 +1881,27 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
       // S2 FIX: Server verified the signature AND updated order status via admin RPC.
       // Client no longer writes status directly. The realtime stream will pick up the change.
-
+      // 100x FIX: Optimistically update status so the payment button vanishes instantly.
       _paymentCountdownTimer?.cancel();
-      setState(() => _isProcessingPayment = false);
       _razorpayOpened = false;
 
       if (mounted) {
+        setState(() {
+          if (_order != null) _order!.status = 'confirmed';
+          for (var o in _groupOrders) {
+            if (o.status == 'awaiting_payment') o.status = 'confirmed';
+          }
+          _isProcessingPayment = false;
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content:
               Text('💳 Payment confirmed! Shop is now preparing your order.'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ));
+        
+        _fetchOrder(); // Fetch fresh data to ensure UI sync
       }
     } catch (e) {
       debugPrint('Verify payment error: $e');
