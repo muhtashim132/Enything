@@ -105,12 +105,17 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
-		<!-- ─── Push Notifications ──────────────────────────────────────────── -->
+		<!-- ─── Push Notifications & Background Service ─────────────────────── -->
 		<!-- Required: allows FCM to deliver data-only messages when app is backgrounded -->
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>fetch</string>
 			<string>remote-notification</string>
+			<string>processing</string>
+		</array>
+		<key>BGTaskSchedulerPermittedIdentifiers</key>
+		<array>
+			<string>dev.flutter.background.refresh</string>
 		</array>
 		<!-- Disable Firebase method swizzling so we forward APNs token manually  -->
 		<!-- (already done in AppDelegate.swift via Messaging.messaging().apnsToken) -->

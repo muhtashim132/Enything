@@ -3,6 +3,8 @@ import UIKit
 import FirebaseCore
 import FirebaseMessaging
 import UserNotifications
+import flutter_background_service_ios
+import flutter_local_notifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -11,6 +13,12 @@ import UserNotifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+
+    SwiftFlutterBackgroundServicePlugin.taskIdentifier = "dev.flutter.background.refresh"
+
+    FlutterLocalNotificationsPlugin.setPluginRegistrantCallback { (registry) in
+        GeneratedPluginRegistrant.register(with: registry)
+    }
 
     // ── 1. Configure Firebase ────────────────────────────────────────────────
     FirebaseApp.configure()
