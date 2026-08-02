@@ -209,9 +209,6 @@ Deno.serve(async (req: Request) => {
           const channelId = isUrgentOrderAlert ? 'order_alert_loop_channel' : 'enything_push_channel';
           const soundFile = isUrgentOrderAlert ? 'enything_bell' : undefined;
           
-          // Fix for iOS buzzing: ALWAYS use 'default' for iOS sound so it buzzes when app is closed, unless specifically a bell.
-          // Wait, the user said they didn't get buzz "at all". So we just use 'default' for all iOS to ensure it buzzes.
-          const apnsSound = 'default';
 
           const message = {
             message: {
@@ -240,12 +237,28 @@ Deno.serve(async (req: Request) => {
               apns: {
                 headers: {
                   'apns-priority': '10',
+                  // 10 = immediate delivery (vs 5 = conservative/low-power)
+                  // Required for sound + banner to appear reliably on iOS
                 },
                 payload: {
                   aps: {
-                    sound: apnsSound,
+                    // Explicit alert object guarantees iOS shows the banner,
+                    // even when FCM-to-APNs translation has edge cases.
+                    alert: {
+                      title: title,
+                      body: body,
+                    },
+                    sound: 'default',
                     badge: 1,
-                    'content-available': 1,
+                    // NOTE: 'content-available': 1 has been REMOVED.
+                    // That flag marks the message as a SILENT background update,
+                    // which causes iOS 15+ to suppress the visible notification
+                    // banner and sound — especially when the app is killed.
+                    // For visible + sound notifications, we must NOT use it.
+                    'mutable-content': 1,
+                    // mutable-content=1 allows notification service extensions
+                    // to modify the notification (e.g., for rich media) without
+                    // interfering with display or sound.
                   },
                 },
               },

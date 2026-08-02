@@ -141,9 +141,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   void _startPollingTimer() {
     _pollingTimer?.cancel();
-    // 30-second staggered polling replaces the global Realtime firehose to safely
-    // clean up stale (claimed/cancelled) orders from the UI.
-    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Bug #4 FIX: Reduced from 30s → 15s so riders see new orders faster.
+    // The primary mechanism is now FCM push (via get_nearby_online_riders RPC)
+    // which triggers _debouncedLoadOrders() instantly via _fcmForegroundSub.
+    // This 15-second polling is the reliable fallback for edge cases (e.g.
+    // FCM delivery delay, location gap). 15s is safe — the query is cheap
+    // (indexed PostGIS RPC) and guarded by _isOrdersLoadInProgress debounce.
+    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted && _isOnline && !_isOrdersLoadInProgress) {
         _debouncedLoadOrders();
       }

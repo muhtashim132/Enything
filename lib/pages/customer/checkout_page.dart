@@ -777,7 +777,73 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
-      // 100x Edge Case: Cancel old order logic has been moved INTO place_orders_transaction above for 100% atomicity.
+      // ── Bug #3 FIX: Notify nearby online riders about the new order ─────────
+      // Previously, riders had NO push notification when a new order appeared.
+      // They relied entirely on a 30-second polling timer (which only works when
+      // the app is open). With this fix, riders get a buzz notification even when
+      // their app is completely killed.
+      //
+      // We fire-and-forget this in a separate unawaited Future so it never
+      // blocks or delays the user's navigation to TrackOrderPage.
+      if (mounted) {
+        final notifProv = context.read<NotificationProvider>();
+        final configRadius =
+            PlatformConfigProvider.instance?.riderNotificationRadiusKm ?? 15.0;
+
+        // Collect unique shop locations to query riders near each shop.
+        // For multi-shop carts, we notify riders near ALL shops so none is missed.
+        Future(() async {
+          final notifiedRiderIds = <String>{};
+          for (final data in notificationData) {
+            if (data['isMagic'] as bool) continue; // Skip test orders
+            final shop = data['shop'] as dynamic;
+            final shopLat = shop.location.latitude as double;
+            final shopLng = shop.location.longitude as double;
+
+            // Skip shops with no location (data integrity guard)
+            if (shopLat == 0.0 && shopLng == 0.0) continue;
+
+            try {
+              // Query nearby online riders using the new additive RPC
+              final nearbyRiders = await supabase.rpc(
+                'get_nearby_online_riders',
+                params: {
+                  'p_shop_lat': shopLat,
+                  'p_shop_lng': shopLng,
+                  'p_radius_km': configRadius,
+                },
+              ) as List?;
+
+              if (nearbyRiders == null) continue;
+
+              for (final row in nearbyRiders) {
+                final riderId = row['rider_id'] as String?;
+                if (riderId == null) continue;
+                if (notifiedRiderIds.contains(riderId)) continue; // Dedup
+                notifiedRiderIds.add(riderId);
+
+                // Fire-and-forget individual pushes to each nearby rider
+                notifProv.sendBackgroundPush(
+                  targetUserId: riderId,
+                  title: '🛵 New Order Nearby!',
+                  body:
+                      'A new order is available near you. Open the app to accept it.',
+                  data: {
+                    'role': 'delivery',
+                    'action': 'new_order',
+                    'order_id': data['orderId'] as String,
+                  },
+                );
+              }
+            } catch (e) {
+              // Non-critical: log and continue — never block the order flow
+              debugPrint('Rider push notification error (non-fatal): $e');
+            }
+          }
+        });
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
 
       // Cleanup
       cart.clear();

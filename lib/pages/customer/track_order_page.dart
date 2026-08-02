@@ -2364,9 +2364,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 const SizedBox(height: 20),
 
                 // ── Bill Summary ──────────────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
+                if (!isCancelled)
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(

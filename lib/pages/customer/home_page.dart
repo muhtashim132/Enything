@@ -592,7 +592,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       try {
         final activeOrder = await _supabase
             .from('orders')
-            .select('id, status')
+            .select('id, status, payment_deadline, created_at')
             .eq('customer_id', auth.currentUserId!)
             .inFilter('status', ['awaiting_payment', 'pending', 'preparing'])
             .order('created_at', ascending: false)
@@ -600,7 +600,34 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             .maybeSingle();
 
         if (activeOrder != null && mounted) {
-          if (activeOrder['status'] == 'awaiting_payment') {
+          final status = activeOrder['status'];
+          bool isExpired = false;
+          
+          if (status == 'awaiting_payment' && activeOrder['payment_deadline'] != null) {
+            final deadline = DateTime.parse(activeOrder['payment_deadline']).toLocal();
+            if (DateTime.now().isAfter(deadline)) {
+              isExpired = true;
+            }
+          } else if (status == 'pending' && activeOrder['created_at'] != null) {
+            final createdAt = DateTime.parse(activeOrder['created_at']).toLocal();
+            // If stuck in payment processing for more than 30 mins, treat as expired
+            if (DateTime.now().difference(createdAt).inMinutes > 30) {
+              isExpired = true;
+            }
+          }
+
+          if (isExpired) {
+            // Silently cancel it in the background so it stops polluting queries
+            _supabase.rpc('cancel_order', params: {
+              'p_order_id': activeOrder['id'],
+              'p_reason': 'timeout'
+            }).catchError((e) {
+              debugPrint('Failed to auto-cancel expired active order: $e');
+            });
+            return; // DO NOT NAVIGATE
+          }
+
+          if (status == 'awaiting_payment') {
             if (_isActiveOrderNavigating) return;
             _isActiveOrderNavigating = true;
             Navigator.pushNamed(context, AppRoutes.trackOrder,
