@@ -853,7 +853,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         Navigator.pushNamedAndRemoveUntil(
           context,
           AppRoutes.trackOrder,
-          (route) => route.settings.name == AppRoutes.customerHome,
+          (route) => route.isFirst || route.settings.name == AppRoutes.customerHome,
           arguments: {'orderId': orderIds.first},
         );
       }

@@ -233,6 +233,15 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
     super.dispose();
   }
 
+  void _handleBack() {
+    final isFirst = ModalRoute.of(context)?.isFirst ?? false;
+    if (isFirst) {
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
   Future<void> _fetchOrders() async {
     final auth = context.read<AuthProvider>();
     try {
@@ -477,17 +486,24 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
-
-    return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
+    final isFirst = ModalRoute.of(context)?.isFirst ?? false;
+    return PopScope(
+      canPop: !isFirst,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
+        }
+      },
+      child: Scaffold(
+        backgroundColor:
+            isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
       appBar: AppBar(
         backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: Navigator.canPop(context)
             ? GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: _handleBack,
                 child: Container(
                   margin: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -539,7 +555,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                     ),
                   ),
       ),
-    );
+    ));
   }
 
   Widget _buildOrderCard(OrderModel order, bool isDark) {

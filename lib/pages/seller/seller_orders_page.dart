@@ -1010,10 +1010,39 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                           style: GoogleFonts.outfit(
                               fontWeight: FontWeight.w700, fontSize: 14),
                         ),
-                        Text(
-                          DateFormat('hh:mm a').format(order.createdAt.toIST()),
-                          style: GoogleFonts.outfit(
-                              color: AppColors.textSecondary, fontSize: 12),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              DateFormat('hh:mm a').format(order.createdAt.toIST()),
+                              style: GoogleFonts.outfit(
+                                  color: AppColors.textSecondary, fontSize: 12),
+                            ),
+                            if (tab == 'active' &&
+                                ['confirmed', 'preparing', 'ready_for_pickup'].contains(order.status))
+                              PopupMenuButton<String>(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                                onSelected: (value) {
+                                  if (value == 'cancel') {
+                                    _sellerReject(order);
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  PopupMenuItem(
+                                    value: 'cancel',
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.cancel_outlined, color: AppColors.danger, size: 18),
+                                        const SizedBox(width: 8),
+                                        Text('Cancel Order', style: GoogleFonts.outfit(color: AppColors.danger, fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -1457,12 +1486,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.danger,
                               side: const BorderSide(color: AppColors.danger),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: Text('Reject',
-                                style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w600)),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('Reject',
+                                  maxLines: 1,
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w600)),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1471,13 +1505,18 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             onPressed: () => _sellerAccept(order),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.success,
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: Text('Accept',
-                                style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white)),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('Accept',
+                                  maxLines: 1,
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white)),
+                            ),
                           ),
                         ),
                       ]),
@@ -1486,34 +1525,24 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                       const Divider(height: 20),
                       Row(children: [
                         Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => _sellerReject(order),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.danger,
-                              side: const BorderSide(color: AppColors.danger),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: Text('Cancel',
-                                style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
                           flex: 2,
                           child: ElevatedButton(
                             onPressed: () =>
                                 _updateOrderStatus(order, 'preparing'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: Text('Start Preparing',
-                                style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white)),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('Start Preparing',
+                                  maxLines: 1,
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white)),
+                            ),
                           ),
                         ),
                       ]),
@@ -1522,34 +1551,24 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                       const Divider(height: 20),
                       Row(children: [
                         Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => _sellerReject(order),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.danger,
-                              side: const BorderSide(color: AppColors.danger),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: Text('Cancel',
-                                style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
                           flex: 2,
                           child: ElevatedButton(
                             onPressed: () =>
                                 _updateOrderStatus(order, 'ready_for_pickup'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.accent,
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: Text('Mark Ready for Pickup',
-                                style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.black)),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('Mark Ready for Pickup',
+                                  maxLines: 1,
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black)),
+                            ),
                           ),
                         ),
                       ]),

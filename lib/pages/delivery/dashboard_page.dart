@@ -851,7 +851,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }
   }
 
-  Future<void> _updateStatus(OrderModel order, String status,
+  Future<bool> _updateStatus(OrderModel order, String status,
       {bool skipReload = false,
       bool skipRating = false,
       bool notifyCustomer = true}) async {
@@ -863,13 +863,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             order.shopLng == 0.0) {
           _showSnack('⚠️ Shop location missing. Cannot verify arrival.',
               isError: true);
-          return;
+          return false;
         }
         await _fetchRiderLocation();
         if (_riderLat == null || _riderLng == null) {
           _showSnack('⚠️ Cannot fetch your GPS. Ensure location is enabled.',
               isError: true);
-          return;
+          return false;
         }
         final dist = Geolocator.distanceBetween(
             _riderLat!, _riderLng!, order.shopLat!, order.shopLng!);
@@ -877,7 +877,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           _showSnack(
               '⚠️ Too far from shop! You are ${(dist).toInt()}m away (max 300m).',
               isError: true);
-          return;
+          return false;
         }
         await _supabase.rpc('set_arrived_at_shop', params: {
           'p_order_id': order.id,
@@ -969,7 +969,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           }
         }
         _loadOrders();
-        return;
+        return true;
       } else if (status == 'delivered') {
         await _supabase.rpc('update_order_status', params: {
           'p_order_id': order.id,
@@ -1011,7 +1011,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           Future.delayed(const Duration(milliseconds: 500),
               () => _showDeliveryRatingFlow(order));
         }
-        return;
+        return true;
       } else {
         await _supabase.rpc('update_order_status', params: {
           'p_order_id': order.id,
@@ -1048,11 +1048,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         _startLocationBroadcast();
       }
       if (!skipReload) _loadOrders();
+      return true;
     } on PostgrestException catch (pe) {
       _showSnack(pe.message, isError: true);
+      return false;
     } catch (e) {
       _showSnack('Update error: $e', isError: true);
       debugPrint('Status update error: $e');
+      return false;
     }
   }
 
@@ -2437,7 +2440,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     child: _buildAddressDisplay(
                       address: group.customerAddress,
                       isDark: isDark,
-                      lightTheme: true,
                     ),
                   ),
                 ]),
@@ -2552,15 +2554,40 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () async {
+                        if (_riderLat == null || _riderLng == null) {
+                          await _fetchRiderLocation();
+                          if (_riderLat == null || _riderLng == null) {
+                            _showSnack('⚠️ Cannot fetch your GPS to verify delivery.', isError: true);
+                            return;
+                          }
+                        }
+
+                        bool allSuccess = true;
                         for (int i = 0; i < group.orders.length; i++) {
-                          await _updateStatus(group.orders[i], 'delivered',
+                          final success = await _updateStatus(group.orders[i], 'delivered',
                               skipReload: true,
                               skipRating: true,
                               notifyCustomer: i == 0);
+                          if (!success) {
+                            allSuccess = false;
+                            break;
+                          }
                         }
-                        _loadOrders();
-                        if (mounted) {
-                          _showGroupDeliveryRatingFlow(group);
+                        
+                        if (allSuccess) {
+                          // Optimistic update for UI feel
+                          if (mounted) {
+                            setState(() {
+                              _myGroups.removeWhere((g) => g.groupId == group.groupId);
+                            });
+                          }
+                          _loadOrders();
+                          if (mounted) {
+                            _showGroupDeliveryRatingFlow(group);
+                          }
+                        } else {
+                          // If failed, reload to ensure correct state
+                          _loadOrders();
                         }
                       },
                       icon: const Icon(Icons.check_circle_outline, size: 18),

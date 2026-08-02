@@ -8,6 +8,7 @@ import '../../utils/responsive_layout.dart';
 import '../../providers/cart_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
+import '../../config/route_observer.dart';
 
 import 'home_page.dart';
 import 'favorites_page.dart';
@@ -34,11 +35,23 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   int _pendingAddedCount = 0;
   bool _isCheckingMissed = false;
 
+  final ValueNotifier<int?> _globalPendingTimer = ValueNotifier<int?>(null);
+  Timer? _globalCountdown;
+  String? _pendingOrderId;
+  
+  void _onRouteChanged() {
+    if (currentRouteNotifier.value == AppRoutes.customerHome) {
+      _checkPendingOrdersTimer();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    currentRouteNotifier.addListener(_onRouteChanged);
     _checkMissedCancellations();
+    _checkPendingOrdersTimer();
 
     // Listen to order cancellation to auto-readd items to cart
     _orderCancelledSub = context
@@ -119,6 +132,73 @@ class _CustomerMainPageState extends State<CustomerMainPage>
     }
   }
 
+  Future<void> _checkPendingOrdersTimer() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+      
+      final resp = await supabase.from('orders')
+         .select('id, payment_deadline, created_at, status, cart_group_id, updated_at')
+         .eq('customer_id', userId)
+         .inFilter('status', ['awaiting_payment', 'awaiting_acceptance'])
+         .order('created_at', ascending: false)
+         .limit(1);
+      
+      if (!mounted) return;
+      if (resp.isNotEmpty) {
+        final status = resp[0]['status'];
+        final deadlineStr = resp[0]['payment_deadline'];
+        final createdAtStr = resp[0]['created_at'];
+
+        DateTime? deadline;
+        if (deadlineStr != null) {
+          deadline = DateTime.parse(deadlineStr).toLocal();
+        } else if (status == 'awaiting_acceptance' && createdAtStr != null) {
+          // Fallback to 3 minutes from created_at for awaiting_acceptance
+          deadline = DateTime.parse(createdAtStr).toLocal().add(const Duration(minutes: 3));
+        }
+
+        if (deadline != null) {
+          _pendingOrderId = resp[0]['id'];
+          
+          Duration serverTimeOffset = Duration.zero;
+          final updatedAtStr = resp[0]['updated_at'];
+          if (updatedAtStr != null) {
+            final serverUpdatedAt = DateTime.tryParse(updatedAtStr);
+            if (serverUpdatedAt != null) {
+              serverTimeOffset = serverUpdatedAt.toUtc().difference(DateTime.now().toUtc());
+            }
+          }
+          
+          _globalCountdown?.cancel();
+          _globalCountdown = Timer.periodic(const Duration(seconds: 1), (t) {
+            if (!mounted) {
+              t.cancel();
+              return;
+            }
+            final serverNow = DateTime.now().toUtc().add(serverTimeOffset);
+            final remaining = deadline!.difference(serverNow).inSeconds;
+            if (remaining > 0) {
+              _globalPendingTimer.value = remaining;
+            } else {
+              _globalPendingTimer.value = null;
+              t.cancel();
+            }
+          });
+        } else {
+          _globalPendingTimer.value = null;
+          _globalCountdown?.cancel();
+        }
+      } else {
+        _globalPendingTimer.value = null;
+        _globalCountdown?.cancel();
+      }
+    } catch (e) {
+      debugPrint('Error checking pending timer: $e');
+    }
+  }
+
   void _showErrorSnackbar(String errorMsg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -168,8 +248,11 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    currentRouteNotifier.removeListener(_onRouteChanged);
     _orderCancelledSub?.cancel();
     _snackbarDebounceTimer?.cancel();
+    _globalCountdown?.cancel();
+    _globalPendingTimer.dispose();
     super.dispose();
   }
 
@@ -177,6 +260,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkMissedCancellations();
+      _checkPendingOrdersTimer();
     }
   }
 
@@ -222,13 +306,81 @@ class _CustomerMainPageState extends State<CustomerMainPage>
       child: Scaffold(
         extendBody: true, // Let body extend behind bottom nav
         backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Prevent black flash on back nav
-        body: IndexedStack(
-          index: _navIndex,
+        body: Stack(
           children: [
-            CustomerHomeView(key: _homeKey),
-            const FavoritesPage(),
-            const OrderHistoryPage(),
-            const ProfileSettingsPage(),
+            IndexedStack(
+              index: _navIndex,
+              children: [
+                CustomerHomeView(key: _homeKey),
+                const FavoritesPage(),
+                const OrderHistoryPage(),
+                const ProfileSettingsPage(),
+              ],
+            ),
+            ValueListenableBuilder<int?>(
+              valueListenable: _globalPendingTimer,
+              builder: (context, secondsLeft, child) {
+                if (secondsLeft == null) return const SizedBox.shrink();
+                return Positioned(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  left: 16,
+                  right: 16,
+                  child: GestureDetector(
+                    onTap: () {
+                      if (_pendingOrderId != null) {
+                        Navigator.pushNamed(context, AppRoutes.trackOrder,
+                            arguments: {'orderId': _pendingOrderId});
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.timer, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Finish replacing items for your pending order!',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${(secondsLeft ~/ 60).toString().padLeft(2, '0')}:${(secondsLeft % 60).toString().padLeft(2, '0')}',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ],
         ),
         bottomNavigationBar: MaxWidthContainer(

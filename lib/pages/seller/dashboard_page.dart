@@ -14,6 +14,7 @@ import '../../widgets/common/notification_bell.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../utils/responsive_layout.dart';
 import '../../theme/app_colors.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class SellerDashboardPage extends StatefulWidget {
   const SellerDashboardPage({super.key});
@@ -22,11 +23,12 @@ class SellerDashboardPage extends StatefulWidget {
 }
 
 class _SellerDashboardPageState extends State<SellerDashboardPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   SupabaseClient get _supabase => Supabase.instance.client;
 
   Map<String, dynamic> _stats = {
     'total_orders': 0,
+    'active_orders': 0,
     'pending_orders': 0,
     'revenue': 0.0,
     'products': 0,
@@ -41,6 +43,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   late AnimationController _entryCtrl;
   late Animation<double> _bgAnim;
   Timer? _debounceTimer;
+  StreamSubscription? _fcmSub;
   bool _isStatsLoadInProgress = false;
   bool _needsReload = false;
 
@@ -59,6 +62,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
+    _fcmSub = FirebaseMessaging.onMessage.listen((_) {
+      if (mounted) _debouncedLoadStats();
+    });
     _bgCtrl =
         AnimationController(duration: const Duration(seconds: 6), vsync: this)
           ..repeat(reverse: true);
@@ -77,6 +85,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _fcmSub?.cancel();
     _bgCtrl.dispose();
     _entryCtrl.dispose();
     _debounceTimer?.cancel();
@@ -86,6 +96,15 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     _realtimeChannels.clear();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _debouncedLoadStats();
+      }
+    }
   }
 
   void _setupRealtimeOrders(String shopId) {
@@ -165,6 +184,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
       }
 
       int totalOrders = 0;
+      int activeOrders = 0;
       int pendingOrders = 0;
       double todaysEarning = 0.0;
       int products = 0;
@@ -187,6 +207,26 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
               (statsResult['todays_earning'] as num?)?.toDouble() ?? 0.0;
           products += (statsResult['products'] ?? 0) as int;
         }
+
+        // Fetch active orders count purely client-side to be 100% additive
+        final activeResp = await _supabase
+            .from('orders')
+            .select('id, status, seller_accepted')
+            .eq('shop_id', shopId)
+            .neq('status', 'delivered')
+            .neq('status', 'cancelled')
+            .neq('status', 'seller_rejected');
+        
+        int shopActiveCount = 0;
+        for (var o in activeResp) {
+          final status = o['status'];
+          final sellerAccepted = o['seller_accepted'] == true;
+          if (((status == 'awaiting_acceptance' || status == 'pending') && sellerAccepted) ||
+              ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(status)) {
+            shopActiveCount++;
+          }
+        }
+        activeOrders += shopActiveCount;
       }
 
       if (activeShopIds.isNotEmpty) {
@@ -210,6 +250,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
 
           _stats = {
             'total_orders': totalOrders,
+            'active_orders': activeOrders,
             'pending_orders': pendingOrders,
             'todays_earning': todaysEarning,
             'products': products,
@@ -550,8 +591,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                             const SizedBox(width: 14),
                                             Expanded(
                                                 child: _statCard(
-                                                    'Orders',
-                                                    '${_stats['total_orders']}',
+                                                    'Active Orders',
+                                                    '${_stats['active_orders'] ?? 0}',
                                                     Icons.receipt_long_rounded,
                                                     const Color(0xFF4C6EF5),
                                                     const Color(0xFF364FC7),
@@ -605,8 +646,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                           Row(children: [
                                             Expanded(
                                                 child: _statCard(
-                                                    'Orders',
-                                                    '${_stats['total_orders']}',
+                                                    'Active Orders',
+                                                    '${_stats['active_orders'] ?? 0}',
                                                     Icons.receipt_long_rounded,
                                                     const Color(0xFF4C6EF5),
                                                     const Color(0xFF364FC7),

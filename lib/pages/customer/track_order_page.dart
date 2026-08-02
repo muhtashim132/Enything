@@ -22,7 +22,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:math' as math;
 import '../../services/notification_service.dart';
 import '../../utils/responsive_layout.dart';
 import 'package:collection/collection.dart';
@@ -61,7 +60,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   // Decision countdown (5 minutes) for partial rejections
   Timer? _decisionCountdownTimer;
-  int _decisionSecondsLeft = 300;
+  final ValueNotifier<int> _decisionSecondsLeft = ValueNotifier<int>(300);
   bool _partnersNotifiedOfHolding = false;
 
   // Acceptance countdown (3 minutes)
@@ -169,11 +168,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _pulseController.dispose();
     _paymentCountdownTimer?.cancel();
     _acceptanceCountdownTimer?.cancel();
+    _decisionCountdownTimer?.cancel();
     _magicAutoAcceptTimer?.cancel();
     _pollingTimer?.cancel();
     if (_channel != null) _supabase.removeChannel(_channel!);
     _riderLocationsNotifier.dispose();
+    _decisionSecondsLeft.dispose();
     super.dispose();
+  }
+
+  void _handleBack() {
+    final isFirst = ModalRoute.of(context)?.isFirst ?? false;
+    if (isFirst) {
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -609,6 +619,29 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           aggStatus == 'cancelled' ||
           aggStatus == 'seller_rejected') {
         _riderLocationsNotifier.value = {};
+        
+        // 100x Edge Case: Cascading Cancellation
+        if (aggStatus == 'cancelled' || aggStatus == 'seller_rejected') {
+           if (_isMissingItemsSheetOpen || _isSearchingAlternatives) {
+              Navigator.of(context).pop();
+              _isMissingItemsSheetOpen = false;
+              _isSearchingAlternatives = false;
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Order Cancelled'),
+                  content: const Text('Your entire order has been cancelled by the shops. Please start a new order.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Okay'),
+                    ),
+                  ],
+                ),
+              );
+           }
+        }
       }
 
       if (aggStatus == 'awaiting_acceptance') {
@@ -660,7 +693,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         _paymentCountdownTimer?.cancel();
       }
 
-      if (_hasPartialRejection && _aggregateStatus == 'awaiting_payment') {
+      if (_hasPartialRejection && 
+          (_aggregateStatus == 'awaiting_payment' || _aggregateStatus == 'awaiting_acceptance')) {
         _startDecisionCountdown();
         if (!_partnersNotifiedOfHolding) {
           _notifyPartnersOfHolding();
@@ -725,8 +759,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         return;
       }
       setState(() {
-        if (_decisionSecondsLeft > 0) {
-          _decisionSecondsLeft--;
+        if (_decisionSecondsLeft.value > 0) {
+          _decisionSecondsLeft.value--;
         } else {
           t.cancel();
           _autoCancelOnTimeout('awaiting_payment');
@@ -1458,6 +1492,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   void _onPaymentError(PaymentFailureResponse response) {
     _razorpayOpened = false;
     setState(() => _isProcessingPayment = false);
+    
+    // 100x Edge Case: Unfreeze the decision timer if Razorpay aborted
+    if (_hasPartialRejection && mounted) {
+       _startDecisionCountdown();
+    }
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Payment failed: ${response.message ?? "Unknown error"}'),
@@ -1471,6 +1511,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   void _onExternalWallet(ExternalWalletResponse response) {
     _razorpayOpened = false;
     setState(() => _isProcessingPayment = false);
+
+    // 100x Edge Case: Unfreeze the decision timer
+    if (_hasPartialRejection && mounted) {
+       _startDecisionCountdown();
+    }
   }
 
   void _startPaymentCountdown(OrderModel order) {
@@ -1512,6 +1557,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Future<void> _openRazorpay() async {
     if (_isProcessingPayment || _order == null) return;
     setState(() => _isProcessingPayment = true);
+    
+    // 100x Edge Case: Freeze the local decision timer so it doesn't auto-cancel while paying
+    _decisionCountdownTimer?.cancel();
+
+    void abortPayment() {
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+        if (_hasPartialRejection) {
+          _startDecisionCountdown();
+        }
+      }
+    }
 
     bool canPay = false;
     try {
@@ -1538,7 +1595,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     } catch (e) {
       debugPrint('Error fetching order status before payment: $e');
-      setState(() => _isProcessingPayment = false);
+      abortPayment();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Network error. Please try again.')));
@@ -1547,7 +1604,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
 
     if (!canPay) {
-      setState(() => _isProcessingPayment = false);
+      abortPayment();
       return;
     }
 
@@ -1558,7 +1615,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               params: {'p_cart_group_id': _order!.cartGroupId});
         } catch (e) {
           debugPrint('Error restarting timer for Razorpay: $e');
-          setState(() => _isProcessingPayment = false);
+          abortPayment();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Network error. Please try again.')));
@@ -1571,7 +1628,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               params: {'p_order_id': widget.orderId});
         } catch (e) {
           debugPrint('Error restarting timer for Razorpay: $e');
-          setState(() => _isProcessingPayment = false);
+          abortPayment();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Network error. Please try again.')));
@@ -1585,7 +1642,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           ? [_order!]
           : _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
       if (activeOrders.isEmpty) {
-        setState(() => _isProcessingPayment = false);
+        abortPayment();
         return;
       }
 
@@ -1609,7 +1666,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 .where((o) => o.status == 'awaiting_payment')
                 .toList();
             if (activeOrders.isEmpty) {
-              setState(() => _isProcessingPayment = false);
+              abortPayment();
               return;
             }
           }
@@ -1792,15 +1849,23 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       );
     }
     if (_order == null || _fetchError) {
-      return Scaffold(
-        backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
+      final isFirst = ModalRoute.of(context)?.isFirst ?? false;
+      return PopScope(
+        canPop: !isFirst,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) {
+            Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
+          }
+        },
+        child: Scaffold(
+          backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             icon: Icon(Icons.arrow_back_ios_new_rounded,
                 color: isDark ? Colors.white : AppColors.textPrimary, size: 20),
-            onPressed: () => Navigator.maybePop(context),
+            onPressed: _handleBack,
           ),
         ),
         body: Center(
@@ -1848,7 +1913,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             ],
           ),
         ),
-      );
+      ));
     }
 
     final currentStep = _getCurrentStep();
@@ -1856,10 +1921,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     final isCancelled = _isCancelled;
     final isLive = _aggregateStatus == 'out_for_delivery';
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: Scaffold(
-        backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
+    final isFirst = ModalRoute.of(context)?.isFirst ?? false;
+    return PopScope(
+      canPop: !isFirst,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
+        }
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: isDark ? AppColors.darkBg : AppColors.background,
         // ── Premium Custom AppBar ─────────────────────────────────────────
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(64),
@@ -1873,7 +1946,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   children: [
                     // Glass back button
                     GestureDetector(
-                      onTap: () => Navigator.maybePop(context),
+                      onTap: _handleBack,
                       child: Container(
                         width: 40,
                         height: 40,
@@ -2008,7 +2081,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                                   'awaiting_acceptance'
                                               ? _acceptanceSecondsLeft
                                               : (_hasPartialRejection
-                                                  ? _decisionSecondsLeft
+                                                  ? _decisionSecondsLeft.value
                                                   : _paymentSecondsLeft)) /
                                           (_aggregateStatus ==
                                                   'awaiting_acceptance'
@@ -2043,7 +2116,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                       _aggregateStatus == 'awaiting_acceptance'
                                           ? '${(_acceptanceSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_acceptanceSecondsLeft % 60).toString().padLeft(2, '0')}'
                                           : (_hasPartialRejection
-                                              ? '${(_decisionSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_decisionSecondsLeft % 60).toString().padLeft(2, '0')}'
+                                              ? '${(_decisionSecondsLeft.value ~/ 60).toString().padLeft(2, '0')}:${(_decisionSecondsLeft.value % 60).toString().padLeft(2, '0')}'
                                               : '${(_paymentSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_paymentSecondsLeft % 60).toString().padLeft(2, '0')}'),
                                       style: GoogleFonts.outfit(
                                         color: Colors.white,
@@ -2363,6 +2436,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   ),
                 const SizedBox(height: 20),
 
+                if (_groupOrders.length > 1) ...[
+                  _buildShopStatusList(isDark),
+                ],
+
                 // ── Bill Summary ──────────────────────────────────────────────
                 if (!isCancelled)
                   Container(
@@ -2468,7 +2545,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   ),
 
 
-                if (_aggregateStatus == 'awaiting_payment' &&
+                if ((_aggregateStatus == 'awaiting_payment' ||
+                     _aggregateStatus == 'awaiting_acceptance') &&
                     _hasPartialRejection) ...[
                   const SizedBox(height: 16),
                   _buildPartialRejectionPanel(isDark),
@@ -2562,9 +2640,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           ),
         ),
       ),
-    );
+    ));
   }
-
   // ── Partial Rejection Panel ───────────────────────────────────────────
   Widget _buildPartialRejectionPanel(bool isDark) {
     final rejectedOrders = _groupOrders
@@ -2598,45 +2675,78 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       color: isDark ? Colors.white : AppColors.textPrimary,
                     )),
               ),
+              ValueListenableBuilder<int>(
+                valueListenable: _decisionSecondsLeft,
+                builder: (context, seconds, child) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.danger,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '⏱ ${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  );
+                },
+              ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-              'One or more shops could not accept their part of your order. Do you want to proceed with the remaining items or search for the missing ones?',
+              'One or more shops could not accept their part of your order. Please decide how you want to proceed before the timer runs out, or your entire order will be automatically cancelled.',
               style: GoogleFonts.outfit(
                 fontSize: 13,
                 color: isDark ? Colors.white70 : AppColors.textSecondary,
               )),
           const SizedBox(height: 16),
-          _recoveryBtn(
-            label: '✅ Proceed & Pay for Remaining',
-            subtitle: 'Continue without the rejected items',
-            color: const Color(0xFF0F9B58),
-            isDark: isDark,
-            loading: _isProcessingPayment,
-            onTap: () async {
-              if (_isProcessingPayment) return;
-              setState(() => _isProcessingPayment = true);
-              try {
-                if (_order?.cartGroupId != null) {
-                  await _supabase.rpc('restart_payment_timer',
-                      params: {'p_cart_group_id': _order!.cartGroupId});
-                }
+          if (_aggregateStatus == 'awaiting_payment') ...[
+            _recoveryBtn(
+              label: '✅ Proceed & Pay for Remaining',
+              subtitle: 'Continue without the rejected items',
+              color: const Color(0xFF0F9B58),
+              isDark: isDark,
+              loading: _isProcessingPayment,
+              onTap: () async {
+                if (_isProcessingPayment) return;
+                setState(() => _isProcessingPayment = true);
+                try {
+                  if (_order?.cartGroupId != null) {
+                    await _supabase.rpc('restart_payment_timer',
+                        params: {'p_cart_group_id': _order!.cartGroupId});
+                  }
 
-                if (mounted) setState(() => _isProcessingPayment = false);
-                if (mounted) _openRazorpay();
-              } catch (e) {
-                debugPrint('Error proceeding with remaining: $e');
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Network error. Please try again.')));
+                  if (mounted) setState(() => _isProcessingPayment = false);
+                  if (mounted) _openRazorpay();
+                } catch (e) {
+                  debugPrint('Error proceeding with remaining: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Network error. Please try again.')));
+                  }
+                } finally {
+                  if (mounted) setState(() => _isProcessingPayment = false);
                 }
-              } finally {
-                if (mounted) setState(() => _isProcessingPayment = false);
-              }
-            },
-          ),
-          const SizedBox(height: 10),
+              },
+            ),
+            const SizedBox(height: 10),
+          ] else ...[
+            _recoveryBtn(
+              label: '⏳ Waiting for other shops...',
+              subtitle: 'You can pay once the remaining shops accept',
+              color: isDark ? Colors.white24 : Colors.grey.shade300,
+              isDark: isDark,
+              loading: false,
+              onTap: () {},
+            ),
+            const SizedBox(height: 10),
+          ],
           _recoveryBtn(
             label: '🔍 Find Missing Items',
             subtitle: 'Search other shops for these products',
@@ -2645,12 +2755,26 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             loading: false,
             onTap: () => _showMissingItemsSheet(rejectedOrders, isDark),
           ),
+          const SizedBox(height: 10),
+          _recoveryBtn(
+            label: '🆕 Search for Different Items',
+            subtitle: 'Add completely different items to this order',
+            color: const Color(0xFF6366F1), // Indigo
+            isDark: isDark,
+            loading: false,
+            onTap: () {
+              // We will integrate CartProvider pendingCartGroupId here soon
+              Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
+            },
+          ),
         ],
       ),
     );
   }
 
   bool _isMissingItemsSheetOpen = false;
+  bool _isSearchingAlternatives = false;
+
   void _showMissingItemsSheet(List<OrderModel> rejectedOrders, bool isDark) {
     if (_isMissingItemsSheetOpen) return;
     final missingItems = <OrderItem>[];
@@ -2682,16 +2806,51 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Missing Items',
-                style: GoogleFonts.outfit(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : AppColors.textPrimary,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    'Missing Items',
+                    style: GoogleFonts.outfit(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  ValueListenableBuilder<int>(
+                    valueListenable: _decisionSecondsLeft,
+                    builder: (context, seconds, child) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '⏱ ${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
+              Text(
+                'Hurry! Your active order will be cancelled when time runs out.',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.danger,
+                ),
+              ),
+              const SizedBox(height: 4),
               Text(
                 'Select an item to search for it in other shops.',
                 style: GoogleFonts.outfit(
@@ -3318,6 +3477,167 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     );
   }
 
+  Widget _buildShopStatusList(bool isDark) {
+    if (_groupOrders.length <= 1) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.07)
+              : Colors.transparent,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              width: 4,
+              height: 20,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Shop Statuses',
+              style: GoogleFonts.outfit(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          ..._groupOrders.asMap().entries.map((entry) {
+            final index = entry.key;
+            final shopOrder = entry.value;
+            final shopName = 'Shop ${index + 1}';
+            final statusStr = shopOrder.status;
+            
+            // Map status to a readable string and color
+            String displayStatus;
+            Color statusColor;
+            IconData statusIcon;
+
+            switch (statusStr) {
+              case 'awaiting_acceptance':
+                displayStatus = 'Awaiting Acceptance';
+                statusColor = Colors.orange;
+                statusIcon = Icons.storefront_outlined;
+                break;
+              case 'awaiting_payment':
+                displayStatus = 'Awaiting Payment';
+                statusColor = Colors.orange;
+                statusIcon = Icons.payment_outlined;
+                break;
+              case 'pending':
+                displayStatus = 'Pending';
+                statusColor = Colors.orange;
+                statusIcon = Icons.pending_outlined;
+                break;
+              case 'confirmed':
+                displayStatus = 'Confirmed';
+                statusColor = AppColors.primary;
+                statusIcon = Icons.check_circle_outline;
+                break;
+              case 'preparing':
+                displayStatus = 'Preparing';
+                statusColor = AppColors.primary;
+                statusIcon = Icons.soup_kitchen_outlined;
+                break;
+              case 'ready_for_pickup':
+                displayStatus = 'Ready for Pickup';
+                statusColor = AppColors.accent;
+                statusIcon = Icons.inventory_2_outlined;
+                break;
+              case 'picked_up':
+                displayStatus = 'Picked Up';
+                statusColor = AppColors.success;
+                statusIcon = Icons.delivery_dining_outlined;
+                break;
+              case 'out_for_delivery':
+                displayStatus = 'Out for Delivery';
+                statusColor = AppColors.success;
+                statusIcon = Icons.two_wheeler_outlined;
+                break;
+              case 'delivered':
+                displayStatus = 'Delivered';
+                statusColor = AppColors.success;
+                statusIcon = Icons.done_all;
+                break;
+              case 'cancelled':
+              case 'seller_rejected':
+              case 'partner_rejected':
+                displayStatus = 'Cancelled';
+                statusColor = AppColors.danger;
+                statusIcon = Icons.cancel_outlined;
+                break;
+              default:
+                displayStatus = statusStr;
+                statusColor = Colors.grey;
+                statusIcon = Icons.info_outline;
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(statusIcon, color: statusColor, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          shopName,
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : AppColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          displayStatus,
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: statusColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _billRow(String label, String value,
       {bool isBold = false, bool isDark = false}) {
     return Row(
@@ -3610,6 +3930,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   void _showAlternativesDialog(OrderItem item, OrderModel rejectedOrder) {
+    _isSearchingAlternatives = true;
     showDialog(
         context: context,
         builder: (ctx) {
@@ -3711,3 +4032,4 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
   }
 }
+
