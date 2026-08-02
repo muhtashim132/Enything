@@ -221,6 +221,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
       },
       child: Scaffold(
         extendBody: true, // Let body extend behind bottom nav
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Prevent black flash on back nav
         body: IndexedStack(
           index: _navIndex,
           children: [
