@@ -38,6 +38,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   final ValueNotifier<int?> _globalPendingTimer = ValueNotifier<int?>(null);
   Timer? _globalCountdown;
   String? _pendingOrderId;
+  bool _isGlobalPartialRejection = false;
   
   void _onRouteChanged() {
     if (currentRouteNotifier.value == AppRoutes.customerHome) {
@@ -150,17 +151,49 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         final status = resp[0]['status'];
         final deadlineStr = resp[0]['payment_deadline'];
         final createdAtStr = resp[0]['created_at'];
+        final cartGroupId = resp[0]['cart_group_id'];
 
         DateTime? deadline;
-        if (deadlineStr != null) {
-          deadline = DateTime.parse(deadlineStr).toLocal();
-        } else if (status == 'awaiting_acceptance' && createdAtStr != null) {
-          // Fallback to 3 minutes from created_at for awaiting_acceptance
-          deadline = DateTime.parse(createdAtStr).toLocal().add(const Duration(minutes: 3));
+        bool isPartialRejection = false;
+
+        // POINT 6: Check sibling orders to determine true partial rejection state and 5-min timer
+        if (cartGroupId != null) {
+          final siblings = await supabase.from('orders')
+              .select('status, updated_at')
+              .eq('cart_group_id', cartGroupId);
+           
+          DateTime? rejectionTime;
+          for (var s in siblings) {
+            if (s['status'] == 'seller_rejected' || s['status'] == 'cancelled') {
+                isPartialRejection = true;
+                final u = s['updated_at'] != null ? DateTime.tryParse(s['updated_at']) : null;
+                if (u != null && (rejectionTime == null || u.isBefore(rejectionTime))) {
+                   rejectionTime = u;
+                }
+            }
+          }
+          if (isPartialRejection) {
+             deadline = (rejectionTime ?? DateTime.tryParse(createdAtStr ?? '') ?? DateTime.now().toUtc()).add(const Duration(minutes: 5));
+          }
+        }
+
+        if (!isPartialRejection) {
+          if (deadlineStr != null) {
+            deadline = DateTime.parse(deadlineStr).toLocal();
+          } else if (status == 'awaiting_acceptance' && createdAtStr != null) {
+            // Fallback to 3 minutes from created_at for awaiting_acceptance
+            deadline = DateTime.parse(createdAtStr).toLocal().add(const Duration(minutes: 3));
+          }
         }
 
         if (deadline != null) {
           _pendingOrderId = resp[0]['id'];
+          
+          if (mounted) {
+            setState(() {
+              _isGlobalPartialRejection = isPartialRejection;
+            });
+          }
           
           Duration serverTimeOffset = Duration.zero;
           final updatedAtStr = resp[0]['updated_at'];
@@ -351,7 +384,9 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Finish replacing items for your pending order!',
+                              _isGlobalPartialRejection 
+                                  ? 'Finish replacing items for your pending order!'
+                                  : 'Complete your pending order before time runs out!',
                               style: GoogleFonts.outfit(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,

@@ -26,6 +26,7 @@ import '../../services/notification_service.dart';
 import '../../utils/responsive_layout.dart';
 import 'package:collection/collection.dart';
 import '../../utils/delivery_calculator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TrackOrderPage extends StatefulWidget {
   final String orderId;
@@ -62,6 +63,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Timer? _decisionCountdownTimer;
   final ValueNotifier<int> _decisionSecondsLeft = ValueNotifier<int>(300);
   bool _partnersNotifiedOfHolding = false;
+  bool _wasPartialRejectionTimerStarted = false;
 
   // Acceptance countdown (3 minutes)
   Timer? _acceptanceCountdownTimer;
@@ -611,6 +613,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       });
     }
 
+    // POINT 4: Start timer abruptly on partial rejection, independent of aggregate status change
+    if (_hasPartialRejection && !_wasPartialRejectionTimerStarted) {
+      if (_aggregateStatus == 'awaiting_payment' || _aggregateStatus == 'awaiting_acceptance') {
+        _startDecisionCountdown();
+        if (!_partnersNotifiedOfHolding) {
+          _notifyPartnersOfHolding();
+          _partnersNotifiedOfHolding = true;
+        }
+        _wasPartialRejectionTimerStarted = true;
+      }
+    }
+
     if (aggStatus != _lastAggStatus) {
       _lastAggStatus = aggStatus;
       NotificationService().updateOrderNotificationFromStatus(aggStatus);
@@ -693,16 +707,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         _paymentCountdownTimer?.cancel();
       }
 
-      if (_hasPartialRejection && 
-          (_aggregateStatus == 'awaiting_payment' || _aggregateStatus == 'awaiting_acceptance')) {
-        _startDecisionCountdown();
-        if (!_partnersNotifiedOfHolding) {
-          _notifyPartnersOfHolding();
-          _partnersNotifiedOfHolding = true;
-        }
-      } else {
+      if (!_hasPartialRejection) {
         _decisionCountdownTimer?.cancel();
         _partnersNotifiedOfHolding = false;
+        _wasPartialRejectionTimerStarted = false;
       }
 
       if (aggStatus == 'delivered' && !_order!.hasCustomerRated) {
@@ -751,19 +759,51 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  void _startDecisionCountdown() {
+  void _startDecisionCountdown() async {
     _decisionCountdownTimer?.cancel();
+
+    // POINT 5: Timer fixed decreasing, persistent across page reloads
+    final prefs = await SharedPreferences.getInstance();
+    final cartGroupId = _order?.cartGroupId ?? _order?.id ?? 'unknown';
+    final timerKey = 'partial_rejection_timer_start_$cartGroupId';
+    
+    final storedStartTimeStr = prefs.getString(timerKey);
+    DateTime startTime;
+
+    if (storedStartTimeStr != null) {
+      startTime = DateTime.parse(storedStartTimeStr);
+    } else {
+      // Look for the database rejection time as a fallback
+      DateTime? rejectionTime;
+      for (var o in _groupOrders.where((o) => o.status == 'seller_rejected' || o.status == 'cancelled')) {
+        if (o.updatedAt != null && (rejectionTime == null || o.updatedAt!.isBefore(rejectionTime))) {
+          rejectionTime = o.updatedAt;
+        }
+      }
+      // Only trust updatedAt if it's recent (less than 15 mins old), otherwise it might be the creation time
+      if (rejectionTime != null && _serverTime.difference(rejectionTime).inMinutes < 15) {
+         startTime = rejectionTime;
+      } else {
+         startTime = _serverTime;
+      }
+      await prefs.setString(timerKey, startTime.toIso8601String());
+    }
+    
+    final deadline = startTime.add(const Duration(minutes: 5));
+
     _decisionCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
         return;
       }
       setState(() {
-        if (_decisionSecondsLeft.value > 0) {
-          _decisionSecondsLeft.value--;
+        final remaining = deadline.difference(_serverTime).inSeconds;
+        if (remaining > 0) {
+          _decisionSecondsLeft.value = remaining;
         } else {
           t.cancel();
-          _autoCancelOnTimeout('awaiting_payment');
+          prefs.remove(timerKey);
+          _cancelActiveGroupOnTimeout(); // 100x FIX: Force cancel all active siblings on decision timeout
         }
       });
     });
@@ -870,6 +910,46 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     } catch (e) {
       debugPrint('Auto-cancel error: $e');
+    }
+  }
+
+  Future<void> _cancelActiveGroupOnTimeout() async {
+    if (_order == null) return;
+    try {
+      final targetOrders = _groupOrders.isEmpty ? [_order!] : _groupOrders;
+      bool anyCancelled = false;
+
+      // 100x Edge Case: Concurrent resilient cancellation for all active siblings on decision timeout
+      await Future.wait(targetOrders.map((order) async {
+        try {
+          final fresh = await _supabase
+              .from('orders')
+              .select('status')
+              .eq('id', order.id)
+              .maybeSingle();
+
+          if (fresh != null && ['awaiting_acceptance', 'awaiting_payment', 'pending'].contains(fresh['status'])) {
+            await _supabase.rpc('cancel_order',
+                params: {'p_order_id': order.id, 'p_reason': 'timeout'});
+            anyCancelled = true;
+          }
+        } catch (e) {
+          debugPrint('Error auto-canceling active group order ${order.id}: $e');
+        }
+      }));
+
+      if (anyCancelled && mounted) {
+        // Re-fetch all group orders to sync sibling order states
+        await _fetchOrder();
+        if (mounted && targetOrders.length == 1) {
+          setState(() {
+            _order = _order!
+                .copyWith(status: 'cancelled', cancelledReason: 'timeout');
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Active group auto-cancel error: $e');
     }
   }
 
@@ -2647,6 +2727,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     final rejectedOrders = _groupOrders
         .where((o) => o.status == 'seller_rejected' || o.status == 'cancelled')
         .toList();
+    final hasReadyToPayShops = _groupOrders.any((o) => o.status == 'awaiting_payment');
+    final hasSellerAcceptedShops = _groupOrders.any((o) => o.sellerAccepted == true && o.status != 'cancelled' && o.status != 'seller_rejected');
 
     return Container(
       key: _partialRejectionKey,
@@ -2706,47 +2788,108 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 color: isDark ? Colors.white70 : AppColors.textSecondary,
               )),
           const SizedBox(height: 16),
-          if (_aggregateStatus == 'awaiting_payment') ...[
-            _recoveryBtn(
-              label: '✅ Proceed & Pay for Remaining',
-              subtitle: 'Continue without the rejected items',
-              color: const Color(0xFF0F9B58),
-              isDark: isDark,
-              loading: _isProcessingPayment,
-              onTap: () async {
-                if (_isProcessingPayment) return;
-                setState(() => _isProcessingPayment = true);
-                try {
-                  if (_order?.cartGroupId != null) {
-                    await _supabase.rpc('restart_payment_timer',
-                        params: {'p_cart_group_id': _order!.cartGroupId});
-                  }
+          // POINTS 1, 2, 3: UI fixes for the 3 distinct sections permanently shown
+          _recoveryBtn(
+            label: _aggregateStatus == 'awaiting_payment'
+                ? '✅ Proceed & Pay for Remaining'
+                : (hasReadyToPayShops 
+                     ? '✅ Pay Now (Skip Waiting Shops)' 
+                     : (hasSellerAcceptedShops ? '✅ Cancel Pending Shops' : '⏳ Waiting for other shops...')),
+            subtitle: _aggregateStatus == 'awaiting_payment'
+                ? 'Continue without the rejected items'
+                : (hasReadyToPayShops 
+                     ? 'Cancel pending shops and pay for accepted items' 
+                     : (hasSellerAcceptedShops ? 'Cancel pending shops and wait for rider for accepted items' : 'You can pay once the remaining shops accept')),
+            color: (_aggregateStatus == 'awaiting_payment' || hasReadyToPayShops || hasSellerAcceptedShops)
+                ? const Color(0xFF0F9B58)
+                : Colors.grey, // Ensure the text is visible even when disabled
+            isDark: isDark,
+            loading: _isProcessingPayment,
+            onTap: (_aggregateStatus == 'awaiting_payment' || hasReadyToPayShops || hasSellerAcceptedShops)
+                ? () async {
+                    if (_isProcessingPayment) return;
+                    
+                    if (_aggregateStatus == 'awaiting_acceptance') {
+                       final shouldProceed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                             backgroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                             title: Text(hasReadyToPayShops ? 'Skip Waiting Shops?' : 'Cancel Pending Shops?', style: GoogleFonts.outfit(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+                             content: Text('Some shops haven\'t accepted their items yet. If you proceed now, those pending items will be cancelled. Do you want to continue?', style: GoogleFonts.outfit(color: isDark ? Colors.white70 : Colors.black87)),
+                             actions: [
+                               TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey))),
+                               ElevatedButton(
+                                 onPressed: () => Navigator.pop(ctx, true),
+                                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F9B58)),
+                                 child: Text('Yes, Continue', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                               ),
+                             ],
+                          )
+                       );
+                       if (shouldProceed != true) return;
+                       
+                       setState(() => _isProcessingPayment = true);
+                       try {
+                          final pendingOrders = _groupOrders.where((o) => o.status == 'awaiting_acceptance' && o.sellerAccepted != true).toList();
+                          for (var pending in pendingOrders) {
+                             await _supabase.rpc('cancel_order', params: {'p_order_id': pending.id, 'p_reason': 'customer'});
+                          }
+                          // Manually update the state of these orders locally
+                          setState(() {
+                             for (var i = 0; i < _groupOrders.length; i++) {
+                               if (_groupOrders[i].status == 'awaiting_acceptance' && _groupOrders[i].sellerAccepted != true) {
+                                 _groupOrders[i] = _groupOrders[i].copyWith(
+                                    status: 'cancelled',
+                                    cancelledReason: 'customer'
+                                 );
+                               }
+                             }
+                          });
+                          _handleAggregateStatusChange();
+                       } catch (e) {
+                          if (mounted) {
+                             setState(() => _isProcessingPayment = false);
+                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to cancel pending items. Please try again.')));
+                          }
+                          return;
+                       }
+                       if (mounted) setState(() => _isProcessingPayment = false);
+                       
+                       if (_aggregateStatus != 'awaiting_payment') {
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pending shops cancelled! Waiting for a rider for the remaining accepted shops...')));
+                          return;
+                       }
+                    }
 
-                  if (mounted) setState(() => _isProcessingPayment = false);
-                  if (mounted) _openRazorpay();
-                } catch (e) {
-                  debugPrint('Error proceeding with remaining: $e');
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Network error. Please try again.')));
+                    setState(() => _isProcessingPayment = true);
+                    try {
+                      if (_order?.cartGroupId != null) {
+                        await _supabase.rpc('restart_payment_timer',
+                            params: {'p_cart_group_id': _order!.cartGroupId});
+                      }
+
+                      if (mounted) setState(() => _isProcessingPayment = false);
+                      if (mounted) _openRazorpay();
+                    } catch (e) {
+                      debugPrint('Error proceeding with remaining: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Network error. Please try again.')));
+                      }
+                    } finally {
+                      if (mounted) setState(() => _isProcessingPayment = false);
+                    }
                   }
-                } finally {
-                  if (mounted) setState(() => _isProcessingPayment = false);
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-          ] else ...[
-            _recoveryBtn(
-              label: '⏳ Waiting for other shops...',
-              subtitle: 'You can pay once the remaining shops accept',
-              color: isDark ? Colors.white24 : Colors.grey.shade300,
-              isDark: isDark,
-              loading: false,
-              onTap: () {},
-            ),
-            const SizedBox(height: 10),
-          ],
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please wait for at least one shop to accept before paying.'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+          ),
+          const SizedBox(height: 10),
           _recoveryBtn(
             label: '🔍 Find Missing Items',
             subtitle: 'Search other shops for these products',
@@ -3535,9 +3678,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
             switch (statusStr) {
               case 'awaiting_acceptance':
-                displayStatus = 'Awaiting Acceptance';
-                statusColor = Colors.orange;
-                statusIcon = Icons.storefront_outlined;
+                if (shopOrder.sellerAccepted == true) {
+                  displayStatus = 'Accepted (Waiting for Rider)';
+                  statusColor = Colors.orange;
+                  statusIcon = Icons.storefront_outlined;
+                } else {
+                  displayStatus = 'Awaiting Acceptance';
+                  statusColor = Colors.orange;
+                  statusIcon = Icons.storefront_outlined;
+                }
                 break;
               case 'awaiting_payment':
                 displayStatus = 'Awaiting Payment';

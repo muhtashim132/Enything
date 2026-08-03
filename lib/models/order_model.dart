@@ -30,6 +30,7 @@ class OrderModel {
   final double multiShopSurcharge;
   final double platformFee;
   final DateTime createdAt;
+  final DateTime? updatedAt;
   List<OrderItem> items;
   String? deliveryPartnerId;
   final String? shopId;
@@ -163,6 +164,7 @@ class OrderModel {
     this.multiShopSurcharge = 0,
     this.platformFee = 0,
     required this.createdAt,
+    this.updatedAt,
     this.items = const [],
     this.deliveryPartnerId,
     this.shopId,
@@ -244,6 +246,7 @@ class OrderModel {
       platformFee: _parseDouble(map['platform_fee']),
       createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      updatedAt: map['updated_at'] != null ? DateTime.tryParse(map['updated_at'].toString()) : null,
       deliveryPartnerId: map['delivery_partner_id']?.toString(),
       shopId: map['shop_id']?.toString(),
       address: map['address']?.toString(),
@@ -369,6 +372,7 @@ class OrderModel {
     double? shopLat,
     double? shopLng,
     String? cancelledReason,
+    DateTime? updatedAt,
     double? waitTimePenalty,
     bool? waitTimeDisputed,
     List<String>? prescriptionUrls,
@@ -390,6 +394,7 @@ class OrderModel {
       multiShopSurcharge: multiShopSurcharge,
       platformFee: platformFee,
       createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       items: items,
       deliveryPartnerId: deliveryPartnerId ?? this.deliveryPartnerId,
       shopId: shopId ?? this.shopId,
