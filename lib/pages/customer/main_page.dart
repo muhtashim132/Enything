@@ -16,6 +16,7 @@ import 'order_history_page.dart';
 import '../settings/profile_settings_page.dart';
 import '../../providers/notification_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 
 class CustomerMainPage extends StatefulWidget {
@@ -172,8 +173,23 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                 }
             }
           }
+          // BUG FIX (Bug 4): Read the timer start from SharedPreferences using
+          // the SAME key as track_order_page.dart so both timers are always
+          // in perfect sync. Fall back to DB updated_at only if key not found.
           if (isPartialRejection) {
-             deadline = (rejectionTime ?? DateTime.tryParse(createdAtStr ?? '') ?? DateTime.now().toUtc()).add(const Duration(minutes: 5));
+            final timerKey = 'partial_rejection_timer_start_$cartGroupId';
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              final storedStartStr = prefs.getString(timerKey);
+              if (storedStartStr != null) {
+                final storedStart = DateTime.tryParse(storedStartStr);
+                if (storedStart != null) {
+                  deadline = storedStart.add(const Duration(minutes: 5));
+                }
+              }
+            } catch (_) {}
+            // If SharedPrefs key not found, fall back to DB rejection time
+            deadline ??= (rejectionTime ?? DateTime.tryParse(createdAtStr ?? '') ?? DateTime.now().toUtc()).add(const Duration(minutes: 5));
           }
         }
 
@@ -204,6 +220,15 @@ class _CustomerMainPageState extends State<CustomerMainPage>
             }
           }
           
+          // BUG FIX: Immediately show the correct remaining time before first tick
+          final serverNowInit = DateTime.now().toUtc().add(serverTimeOffset);
+          final initialRemaining = deadline.difference(serverNowInit).inSeconds;
+          if (initialRemaining > 0) {
+            _globalPendingTimer.value = initialRemaining;
+          } else {
+            _globalPendingTimer.value = null;
+          }
+
           _globalCountdown?.cancel();
           _globalCountdown = Timer.periodic(const Duration(seconds: 1), (t) {
             if (!mounted) {

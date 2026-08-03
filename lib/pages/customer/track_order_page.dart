@@ -791,6 +791,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     
     final deadline = startTime.add(const Duration(minutes: 5));
 
+    // BUG FIX: Immediately set the correct remaining seconds from the persisted
+    // deadline so the UI never shows a stale 05:00 while waiting for the first tick.
+    if (mounted) {
+      final initialRemaining = deadline.difference(_serverTime).inSeconds;
+      _decisionSecondsLeft.value = initialRemaining.clamp(0, 300);
+    }
+
     _decisionCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
@@ -802,8 +809,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           _decisionSecondsLeft.value = remaining;
         } else {
           t.cancel();
-          prefs.remove(timerKey);
-          _cancelActiveGroupOnTimeout(); // 100x FIX: Force cancel all active siblings on decision timeout
+          // BUG FIX: Remove the prefs key AFTER cancel RPC fires, not before.
+          // Chained so key is only cleaned up once cancel is attempted.
+          _cancelActiveGroupOnTimeout().then((_) => prefs.remove(timerKey));
         }
       });
     });
@@ -2906,8 +2914,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             isDark: isDark,
             loading: false,
             onTap: () {
-              // We will integrate CartProvider pendingCartGroupId here soon
-              Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
+              // BUG FIX: Use pushNamed instead of pushNamedAndRemoveUntil so the
+              // track order page stays alive in the stack — its 5-min decision
+              // timer keeps running and is not destroyed. The global banner in
+              // main_page.dart will show the persistent timer on the home page.
+              Navigator.pushNamed(context, AppRoutes.customerHome);
             },
           ),
         ],
@@ -4080,6 +4091,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _showAlternativesDialog(OrderItem item, OrderModel rejectedOrder) {
     _isSearchingAlternatives = true;
+    // BUG FIX: Reset flag when dialog is dismissed (dialog pop or back press)
     showDialog(
         context: context,
         builder: (ctx) {
@@ -4139,7 +4151,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   child: const Text('Cancel'))
             ],
           );
-        });
+        }).then((_) {
+      _isSearchingAlternatives = false;
+    });
   }
 
   void _replaceRejectedOrderWithAlternative(Map<String, dynamic> newProduct,
