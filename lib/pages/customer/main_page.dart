@@ -206,12 +206,12 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         }
 
         if (!isPartialRejection) {
-          if (deadlineStr != null) {
+          if (status == 'awaiting_payment' && deadlineStr != null) {
             deadline = DateTime.parse(deadlineStr).toLocal();
-          } else if (status == 'awaiting_acceptance' && createdAtStr != null) {
-            // Fallback to 3 minutes from created_at for awaiting_acceptance
-            deadline = DateTime.parse(createdAtStr).toLocal().add(const Duration(minutes: 3));
           }
+          // Do not set a deadline for 'awaiting_acceptance'.
+          // The red urgent banner is for customer actions (payment or partial rejection).
+          // For awaiting_acceptance, the customer is waiting on the shop, so the banner vanishes.
         }
 
         if (deadline != null) {
