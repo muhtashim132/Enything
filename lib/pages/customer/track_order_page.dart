@@ -61,7 +61,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   // Decision countdown (5 minutes) for partial rejections
   Timer? _decisionCountdownTimer;
-  final ValueNotifier<int> _decisionSecondsLeft = ValueNotifier<int>(300);
+  final ValueNotifier<int> _decisionSecondsLeft = ValueNotifier<int>(0);
   bool _partnersNotifiedOfHolding = false;
   bool _wasPartialRejectionTimerStarted = false;
 
@@ -2914,10 +2914,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             isDark: isDark,
             loading: false,
             onTap: () {
-              // BUG FIX: Use pushNamed instead of pushNamedAndRemoveUntil so the
-              // track order page stays alive in the stack — its 5-min decision
-              // timer keeps running and is not destroyed. The global banner in
-              // main_page.dart will show the persistent timer on the home page.
+              // BUG FIX (Issue 3): Store the existing cart group ID so checkout
+              // links the new order to this rejected group, not a brand new group.
+              context.read<CartProvider>().setPendingCartGroupId(
+                    _order?.cartGroupId,
+                  );
+              // Use pushNamed (not pushNamedAndRemoveUntil) so the track page
+              // stays alive — its 5-min timer keeps running in the background.
               Navigator.pushNamed(context, AppRoutes.customerHome);
             },
           ),
@@ -4091,70 +4094,333 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _showAlternativesDialog(OrderItem item, OrderModel rejectedOrder) {
     _isSearchingAlternatives = true;
-    // BUG FIX: Reset flag when dialog is dismissed (dialog pop or back press)
-    showDialog(
-        context: context,
-        builder: (ctx) {
-          return AlertDialog(
-            title: Text('Find Alternative',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-            content: FutureBuilder(
-              future: _supabase
-                  .from('products')
-                  .select('*, shops(*)')
-                  .ilike('name',
-                      '%${item.productName.split(' ').take(2).join(' ')}%')
-                  .eq('is_available', true)
-                  .neq('shop_id', rejectedOrder.shopId ?? '')
-                  .limit(5),
-              builder: (ctx, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
-                      height: 100,
-                      child: Center(child: CircularProgressIndicator()));
-                }
-                if (snapshot.hasError) return Text('Error: ${snapshot.error}');
-                final List<dynamic> products =
-                    snapshot.data as List<dynamic>? ?? [];
-                if (products.isEmpty) {
-                  return const Text('No alternatives found nearby.');
-                }
-                return SizedBox(
-                    width: double.maxFinite,
-                    child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: products.length,
-                        itemBuilder: (ctx, i) {
-                          final p = products[i];
-                          return ListTile(
-                            title: Text(p['name'],
-                                maxLines: 2, overflow: TextOverflow.ellipsis),
-                            subtitle: Text(
-                                '${p['shops']['name']} • ₹${p['price']}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis),
-                            trailing: ElevatedButton(
-                              child: const Text('Add'),
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                _replaceRejectedOrderWithAlternative(
-                                    p, item, rejectedOrder);
-                              },
+
+    // Collect shop IDs that already have ACTIVE orders in the group — we exclude
+    // these from results so the user can't accidentally create a duplicate shop order.
+    final activeShopIds = _groupOrders
+        .where((o) => !['seller_rejected', 'cancelled'].contains(o.status))
+        .map((o) => o.shopId)
+        .whereType<String>()
+        .toSet();
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 4),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Find Alternative',
+                            style: GoogleFonts.outfit(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white : const Color(0xFF1A1A2E),
                             ),
-                          );
-                        }));
-              },
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'))
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Replacing: ${item.productName}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              color: isDark ? Colors.white54 : Colors.grey[600],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Timer badge
+                    ValueListenableBuilder<int>(
+                      valueListenable: _decisionSecondsLeft,
+                      builder: (_, seconds, __) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: seconds < 60 ? AppColors.danger : const Color(0xFFFF6B35),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '⏱ ${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'Tap a product to add it as your replacement',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: isDark ? Colors.white38 : Colors.grey[500],
+                  ),
+                ),
+              ),
+              const Divider(height: 24),
+              // Product list
+              Expanded(
+                child: FutureBuilder<List<dynamic>>(
+                  future: _supabase
+                      .from('products')
+                      .select('*, shops(*)')
+                      .ilike('name', '%${item.productName.split(' ').take(2).join(' ')}%')
+                      .eq('is_available', true)
+                      .neq('shop_id', rejectedOrder.shopId ?? '')
+                      .limit(10)
+                      .then((data) => (data as List<dynamic>)
+                          .where((p) => !activeShopIds.contains(p['shop_id']))
+                          .toList()),
+                  builder: (ctx, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 12),
+                            Text('Searching nearby shops...'),
+                          ],
+                        ),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Error loading alternatives.\nPlease try again.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(color: AppColors.danger),
+                        ),
+                      );
+                    }
+                    final products = snapshot.data ?? [];
+                    if (products.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.search_off_rounded,
+                                size: 48,
+                                color: isDark ? Colors.white24 : Colors.grey[300]),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No alternatives found nearby',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white54 : Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Try "Search for Different Items" to browse all shops',
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                color: isDark ? Colors.white38 : Colors.grey[500],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      itemCount: products.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (ctx, i) {
+                        final p = products[i];
+                        final shopData = p['shops'] as Map<String, dynamic>? ?? {};
+                        final shopName = shopData['name'] as String? ?? 'Shop';
+                        final price = (p['price'] as num?)?.toDouble() ?? 0.0;
+                        final images = (p['images'] as List<dynamic>?) ?? [];
+                        final imageUrl = images.isNotEmpty ? images.first as String? : null;
+
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _replaceRejectedOrderWithAlternative(p, item, rejectedOrder);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF252540) : const Color(0xFFF8F9FF),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : const Color(0xFFE8EAFF),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                // Product image
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: imageUrl != null
+                                      ? Image.network(
+                                          imageUrl,
+                                          width: 72,
+                                          height: 72,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            width: 72,
+                                            height: 72,
+                                            color: isDark
+                                                ? Colors.white10
+                                                : Colors.grey[100],
+                                            child: Icon(Icons.fastfood_rounded,
+                                                color: isDark
+                                                    ? Colors.white24
+                                                    : Colors.grey[300],
+                                                size: 28),
+                                          ),
+                                        )
+                                      : Container(
+                                          width: 72,
+                                          height: 72,
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? Colors.white10
+                                                : Colors.grey[100],
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(Icons.fastfood_rounded,
+                                              color: isDark
+                                                  ? Colors.white24
+                                                  : Colors.grey[300],
+                                              size: 28),
+                                        ),
+                                ),
+                                const SizedBox(width: 14),
+                                // Name, shop, price
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        p['name'] as String? ?? '',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.storefront_rounded,
+                                              size: 13, color: Color(0xFF6366F1)),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              shopName,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 12,
+                                                color: const Color(0xFF6366F1),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '₹${price.toStringAsFixed(0)}',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Add button
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF6366F1).withValues(alpha: 0.35),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    'Add',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
             ],
-          );
-        }).then((_) {
+          ),
+        );
+      },
+    ).then((_) {
       _isSearchingAlternatives = false;
     });
   }
+
 
   void _replaceRejectedOrderWithAlternative(Map<String, dynamic> newProduct,
       OrderItem oldItem, OrderModel rejectedOrder) async {

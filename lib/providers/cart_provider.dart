@@ -108,6 +108,17 @@ class CartProvider extends ChangeNotifier {
   final List<CartItem> _items = [];
   final Set<String> _inFlightRestores = {};
 
+  // ── Partial Rejection: pending group linking ──────────────────────────────
+  // Set this before navigating to home for "Search Different Items" / "Find
+  // Missing Items" so the checkout page knows to link new orders to the
+  // existing cart group instead of starting a brand new one.
+  String? _pendingCartGroupId;
+  String? get pendingCartGroupId => _pendingCartGroupId;
+  void setPendingCartGroupId(String? id) {
+    _pendingCartGroupId = id;
+    // No notifyListeners() needed — this is read at checkout build time
+  }
+
   CartProvider() {
     _safeAddPlatformListener();
     _listenToAuthState();

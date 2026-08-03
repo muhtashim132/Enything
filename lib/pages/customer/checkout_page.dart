@@ -502,7 +502,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Payment method is always 'upi' now (COD removed)
       const paymentMethod = 'upi';
 
-      final cartGroupId = widget.existingCartGroupId ?? const Uuid().v4();
+      // BUG FIX (Issue 3): Read pendingCartGroupId set by track_order_page when
+      // customer taps "Search for Different Items" or "Find Missing Items".
+      // This links the replacement order to the original rejected cart group.
+      final cartProvider = context.read<CartProvider>();
+      final pendingGroupId = cartProvider.pendingCartGroupId;
+      final cartGroupId = widget.existingCartGroupId ?? pendingGroupId ?? const Uuid().v4();
+      final isReplacementOrder = widget.existingCartGroupId != null || pendingGroupId != null;
+      // Clear the pending group ID now that we've consumed it
+      if (pendingGroupId != null) cartProvider.setPendingCartGroupId(null);
       final numShops = cart.shops.length;
 
       // Acceptance deadline: 3 minutes from now (enforces 3-minute cancellation rule)
@@ -757,7 +765,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'p_items': allItems,
         'p_cart_group_id': cartGroupId,
         'p_coupon_id': appliedCouponId,
-        'p_idempotency_key': cartGroupId,
+        // BUG FIX (Issue 2b): When replacing a cancelled/rejected order in an
+        // existing cart group, we MUST use a fresh UUID for the idempotency key.
+        // The old key (= cartGroupId) is already taken by the cancelled order's
+        // row in UNIQUE(idempotency_key, shop_id), causing a 23505 constraint
+        // violation. A fresh UUID lets the new replacement order be inserted
+        // cleanly while still using the SAME cartGroupId to link the group.
+        'p_idempotency_key': isReplacementOrder ? const Uuid().v4() : cartGroupId,
         if (widget.orderIdToCancelOnSuccess != null)
           'p_order_id_to_cancel': widget.orderIdToCancelOnSuccess,
       });
