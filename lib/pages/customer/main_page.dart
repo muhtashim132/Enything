@@ -223,17 +223,11 @@ class _CustomerMainPageState extends State<CustomerMainPage>
             });
           }
           
-          Duration serverTimeOffset = Duration.zero;
-          final updatedAtStr = resp[0]['updated_at'];
-          if (updatedAtStr != null) {
-            final serverUpdatedAt = DateTime.tryParse(updatedAtStr);
-            if (serverUpdatedAt != null) {
-              serverTimeOffset = serverUpdatedAt.toUtc().difference(DateTime.now().toUtc());
-            }
-          }
-          
-          // BUG FIX: Immediately show the correct remaining time before first tick
-          final serverNowInit = DateTime.now().toUtc().add(serverTimeOffset);
+          // BUG FIX: Immediately show the correct remaining time before first tick.
+          // We DO NOT use an offset from updated_at, because updated_at is static
+          // and causes the time difference to inflate as the clock ticks forward.
+          // DateTime.now().toUtc() is exactly what the track order page uses.
+          final serverNowInit = DateTime.now().toUtc();
           final initialRemaining = deadline.difference(serverNowInit).inSeconds;
           if (initialRemaining > 0) {
             _globalPendingTimer.value = initialRemaining;
@@ -247,7 +241,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               t.cancel();
               return;
             }
-            final serverNow = DateTime.now().toUtc().add(serverTimeOffset);
+            final serverNow = DateTime.now().toUtc();
             final remaining = deadline!.difference(serverNow).inSeconds;
             if (remaining > 0) {
               _globalPendingTimer.value = remaining;

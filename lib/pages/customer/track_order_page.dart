@@ -1634,7 +1634,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     if (order.paymentDeadline != null) {
       final remaining =
-          order.paymentDeadline!.difference(_serverTime).inSeconds;
+          order.paymentDeadline!.difference(DateTime.now().toUtc()).inSeconds;
       _paymentSecondsLeft = remaining.clamp(0, 600);
     } else {
       _paymentSecondsLeft = 600;
@@ -1649,7 +1649,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         if (_hasPartialRejection) return; // FREEZE TIMER
         if (order.paymentDeadline != null) {
           final remaining =
-              order.paymentDeadline!.difference(_serverTime).inSeconds;
+              order.paymentDeadline!.difference(DateTime.now().toUtc()).inSeconds;
           _paymentSecondsLeft = remaining;
         } else {
           _paymentSecondsLeft--;
