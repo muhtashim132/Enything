@@ -173,6 +173,18 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                 }
             }
           }
+          // Issue 2 FIX: If customer already placed a replacement order (Fix 3 wrote
+          // this flag), treat as normal awaiting_acceptance — show 3-min countdown,
+          // NOT the stale 5-min partial rejection banner.
+          if (isPartialRejection) {
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              if (prefs.getBool('partial_rejection_resolved_$cartGroupId') ?? false) {
+                isPartialRejection = false; // overridden — decision already made
+              }
+            } catch (_) {}
+          }
+
           // BUG FIX (Bug 4): Read the timer start from SharedPreferences using
           // the SAME key as track_order_page.dart so both timers are always
           // in perfect sync. Fall back to DB updated_at only if key not found.

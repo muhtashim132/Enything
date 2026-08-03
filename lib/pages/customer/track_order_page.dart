@@ -873,10 +873,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // ── Acceptance countdown timer ───────────────────────────────────────────
   void _startAcceptanceCountdown(OrderModel order) {
     _acceptanceCountdownTimer?.cancel();
-    // Calculate how many seconds remain from the stored deadline
+    // ACCEPTANCE TIMER FIX: Use DateTime.now().toUtc() NOT _serverTime.
+    // _serverTime is offset by order.updated_at which can be minutes old,
+    // inflating deadline.difference(_serverTime) → clamped to 180 → 3:00 restart bug.
     if (order.acceptanceDeadline != null) {
       final remaining =
-          order.acceptanceDeadline!.difference(_serverTime).inSeconds;
+          order.acceptanceDeadline!.difference(DateTime.now().toUtc()).inSeconds;
       _acceptanceSecondsLeft = remaining.clamp(0, 180);
     } else {
       _acceptanceSecondsLeft = 180;
