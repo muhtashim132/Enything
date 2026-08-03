@@ -64,6 +64,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   final ValueNotifier<int> _decisionSecondsLeft = ValueNotifier<int>(0);
   bool _partnersNotifiedOfHolding = false;
   bool _wasPartialRejectionTimerStarted = false;
+  // Fix 3: tracks that customer already decided (placed replacement or paid for remaining).
+  // Persisted in SharedPrefs so it survives banner-tap page recreations.
+  bool _partialRejectionResolved = false;
 
   // Acceptance countdown (3 minutes)
   Timer? _acceptanceCountdownTimer;
@@ -268,6 +271,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
         // Compute aggregate status for countdowns/payments
         _handleAggregateStatusChange();
+
+        // Fix 3: Read the resolved flag from SharedPrefs so the panel stays hidden
+        // even when this TrackOrderPage is recreated (e.g. banner tap after replacement).
+        if (order.cartGroupId != null && order.cartGroupId!.isNotEmpty) {
+          final resolvedKey = 'partial_rejection_resolved_${order.cartGroupId}';
+          final prefs = await SharedPreferences.getInstance();
+          final resolved = prefs.getBool(resolvedKey) ?? false;
+          if (resolved && mounted && !_partialRejectionResolved) {
+            setState(() { _partialRejectionResolved = true; });
+          }
+        }
 
         // If already delivered and not yet rated, show rating prompt
         if (order.status == 'delivered' && !order.hasCustomerRated) {
@@ -498,6 +512,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   bool get _isDelivered => _aggregateStatus == 'delivered';
 
   bool get _hasPartialRejection {
+    // Fix 3: customer already made a decision — hide the panel.
+    if (_partialRejectionResolved) return false;
     if (_groupOrders.isEmpty) return false;
     final hasRejected = _groupOrders
         .any((o) => o.status == 'seller_rejected' || o.status == 'cancelled');
@@ -780,21 +796,24 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           rejectionTime = o.updatedAt;
         }
       }
+      // TIMER FIX: Use DateTime.now().toUtc() — NOT _serverTime.
+      // _serverTimeOffset is derived from order.updated_at which can be minutes old,
+      // making _serverTime wrong and inflating deadline.difference() → clamps to 300 → 05:00 bug.
+      final nowUtc = DateTime.now().toUtc();
       // Only trust updatedAt if it's recent (less than 15 mins old), otherwise it might be the creation time
-      if (rejectionTime != null && _serverTime.difference(rejectionTime).inMinutes < 15) {
+      if (rejectionTime != null && nowUtc.difference(rejectionTime).inMinutes.abs() < 15) {
          startTime = rejectionTime;
       } else {
-         startTime = _serverTime;
+         startTime = nowUtc;
       }
       await prefs.setString(timerKey, startTime.toIso8601String());
     }
     
     final deadline = startTime.add(const Duration(minutes: 5));
 
-    // BUG FIX: Immediately set the correct remaining seconds from the persisted
-    // deadline so the UI never shows a stale 05:00 while waiting for the first tick.
+    // TIMER FIX: Use DateTime.now().toUtc() for deadline arithmetic — always accurate.
     if (mounted) {
-      final initialRemaining = deadline.difference(_serverTime).inSeconds;
+      final initialRemaining = deadline.difference(DateTime.now().toUtc()).inSeconds;
       _decisionSecondsLeft.value = initialRemaining.clamp(0, 300);
     }
 
@@ -804,7 +823,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         return;
       }
       setState(() {
-        final remaining = deadline.difference(_serverTime).inSeconds;
+        // TIMER FIX: deadline.difference(DateTime.now().toUtc()) is always accurate.
+        final remaining = deadline.difference(DateTime.now().toUtc()).inSeconds;
         if (remaining > 0) {
           _decisionSecondsLeft.value = remaining;
         } else {
@@ -816,6 +836,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       });
     });
   }
+
 
   Future<void> _notifyPartnersOfHolding() async {
     try {
@@ -4095,13 +4116,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   void _showAlternativesDialog(OrderItem item, OrderModel rejectedOrder) {
     _isSearchingAlternatives = true;
 
-    // Collect shop IDs that already have ACTIVE orders in the group — we exclude
-    // these from results so the user can't accidentally create a duplicate shop order.
-    final activeShopIds = _groupOrders
-        .where((o) => !['seller_rejected', 'cancelled'].contains(o.status))
-        .map((o) => o.shopId)
-        .whereType<String>()
-        .toSet();
+    // FIX: Removed activeShopIds filter — it was incorrectly blocking valid alternatives
+    // from shops already active in the group (e.g. Shop B has pizza AND has an active order).
+    // The idempotency key fix in checkout_page.dart handles any DB-level constraint.
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -4198,16 +4215,30 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               // Product list
               Expanded(
                 child: FutureBuilder<List<dynamic>>(
-                  future: _supabase
-                      .from('products')
-                      .select('*, shops(*)')
-                      .ilike('name', '%${item.productName.split(' ').take(2).join(' ')}%')
-                      .eq('is_available', true)
-                      .neq('shop_id', rejectedOrder.shopId ?? '')
-                      .limit(10)
-                      .then((data) => (data as List<dynamic>)
-                          .where((p) => !activeShopIds.contains(p['shop_id']))
-                          .toList()),
+                  // FIX: Search by first word for broader coverage (e.g. "pizza" finds "pizza margherita"),
+                  // then try 2-word fallback. Removed activeShopIds Dart filter — see comment above.
+                  future: (() async {
+                    final firstWord = item.productName.split(' ').first;
+                    final twoWords = item.productName.split(' ').take(2).join(' ');
+                    // Try 2-word search first (more precise)
+                    final precise = await _supabase
+                        .from('products')
+                        .select('*, shops(*)')
+                        .ilike('name', '%$twoWords%')
+                        .eq('is_available', true)
+                        .neq('shop_id', rejectedOrder.shopId ?? '')
+                        .limit(10);
+                    if ((precise as List).isNotEmpty) return precise as List<dynamic>;
+                    // Fallback: single first-word search (broader)
+                    final broad = await _supabase
+                        .from('products')
+                        .select('*, shops(*)')
+                        .ilike('name', '%$firstWord%')
+                        .eq('is_available', true)
+                        .neq('shop_id', rejectedOrder.shopId ?? '')
+                        .limit(10);
+                    return broad as List<dynamic>;
+                  })(),
                   builder: (ctx, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(

@@ -12,6 +12,7 @@ import '../../widgets/common/enything_map.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../config/payment_config.dart';
 import '../../config/tax_config.dart';
@@ -858,6 +859,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
       // ─────────────────────────────────────────────────────────────────────────
 
+
+      // Fix 3: Mark partial rejection as resolved so TrackOrderPage hides the panel.
+      // Persisted in SharedPrefs so it survives banner-tap page recreations.
+      if (isReplacementOrder && cartGroupId.isNotEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('partial_rejection_resolved_$cartGroupId', true);
+          // Also stop the 5-min decision timer key so it doesn't restart on next load.
+          await prefs.remove('partial_rejection_timer_start_$cartGroupId');
+        } catch (e) {
+          debugPrint('Non-critical: could not write resolved flag: $e');
+        }
+      }
 
       // Cleanup
       cart.clear();
