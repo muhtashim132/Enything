@@ -81,9 +81,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Timer? _magicAutoAcceptTimer;
   bool _magicAutoAcceptFired = false;
 
-  // Server time tracking
-  Duration _serverTimeOffset = Duration.zero;
-  DateTime get _serverTime => DateTime.now().toUtc().add(_serverTimeOffset);
 
   final List<Map<String, dynamic>> _steps = [
     {
@@ -245,13 +242,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         }
 
         setState(() {
-          if (response['updated_at'] != null) {
-            final serverUpdatedAt = DateTime.tryParse(response['updated_at']);
-            if (serverUpdatedAt != null) {
-              _serverTimeOffset =
-                  serverUpdatedAt.toUtc().difference(DateTime.now().toUtc());
-            }
-          }
 
           _order = order;
           _groupOrders = group;
@@ -675,7 +665,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
 
       if (aggStatus == 'awaiting_acceptance') {
-        _startAcceptanceCountdown(_order!);
+        // Find the correct active order that holds the real acceptance deadline
+        final awaitingAcceptOrder = _groupOrders.firstWhere(
+            (o) => o.status == 'awaiting_acceptance',
+            orElse: () => _order!);
+        _startAcceptanceCountdown(awaitingAcceptOrder);
 
         // ── Magic reviewer auto-accept (2 seconds) ────────────────────────────
         // Only fires for the 3 reviewer phone numbers. Zero impact on real orders.
@@ -706,7 +700,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         // 100x FIX: Prevent Razorpay UI Lock if order expired while user was offline
         bool isExpired = false;
         if (awaitingPayOrder.paymentDeadline != null) {
-          isExpired = awaitingPayOrder.paymentDeadline!.isBefore(_serverTime);
+          isExpired = awaitingPayOrder.paymentDeadline!.isBefore(DateTime.now().toUtc());
         }
 
         _startPaymentCountdown(awaitingPayOrder);
