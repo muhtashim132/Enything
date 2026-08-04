@@ -4,6 +4,12 @@ import '../models/rbac/invitation_model.dart';
 import '../repositories/team_repository.dart';
 
 class TeamProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   final _repo = TeamRepository();
 
   List<AdminUserModel> _members = [];
@@ -22,7 +28,7 @@ class TeamProvider extends ChangeNotifier {
   Future<void> loadTeam() async {
     _loading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
     try {
       final results = await Future.wait([
         _repo.fetchTeamMembers(),
@@ -35,14 +41,14 @@ class TeamProvider extends ChangeNotifier {
       _error = e.toString();
     }
     _loading = false;
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   // ── Search ──────────────────────────────────────────────────
   void search(String query) {
     _search = query.toLowerCase();
     _applySearch();
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   void _applySearch() {
@@ -72,7 +78,7 @@ class TeamProvider extends ChangeNotifier {
         actorRole: actorRole,
       );
       _invitations.insert(0, inv);
-      notifyListeners();
+      safeNotifyListeners();
       return null;
     } catch (e) {
       return e.toString();
@@ -164,6 +170,12 @@ class TeamProvider extends ChangeNotifier {
   Future<void> revokeInvitation(String id) async {
     await _repo.revokeInvitation(id);
     _invitations.removeWhere((i) => i.id == id);
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

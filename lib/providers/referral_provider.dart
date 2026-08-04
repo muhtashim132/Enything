@@ -19,6 +19,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ReferralProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   SupabaseClient get _db => Supabase.instance.client;
 
   String? _referralCode;
@@ -36,7 +42,7 @@ class ReferralProvider extends ChangeNotifier {
   Future<void> init(String userId) async {
     if (_loading) return;
     _loading = true;
-    notifyListeners();
+    safeNotifyListeners();
     try {
       await _loadReferralCode(userId);
     } catch (e) {
@@ -44,7 +50,7 @@ class ReferralProvider extends ChangeNotifier {
     } finally {
       _loading = false;
       _initialized = true;
-      notifyListeners();
+      safeNotifyListeners();
     }
   }
 
@@ -83,7 +89,7 @@ class ReferralProvider extends ChangeNotifier {
             'code': code,
           }, onConflict: 'user_id');
           _referralCode = code;
-          notifyListeners();
+          safeNotifyListeners();
           return code;
         } on PostgrestException catch (e) {
           // Unique violation on 'code' column — another user has this code
@@ -138,6 +144,12 @@ class ReferralProvider extends ChangeNotifier {
   void reset() {
     _referralCode = null;
     _initialized = false;
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

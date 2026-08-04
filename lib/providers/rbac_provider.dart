@@ -8,6 +8,12 @@ import '../repositories/roles_repository.dart';
 /// Holds the RBAC state for the currently authenticated admin.
 /// Loaded once after the admin password gate is passed.
 class RbacProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   final _rolesRepo = RolesRepository();
   SupabaseClient get _db => Supabase.instance.client;
 
@@ -39,7 +45,7 @@ class RbacProvider extends ChangeNotifier {
   Future<void> loadCurrentAdmin(String userId) async {
     _loading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
     try {
       // ── TEST MODE: Mock admin bypass ─────────────────────────
       // If the userId matches any magic-number admin pattern
@@ -108,13 +114,13 @@ class RbacProvider extends ChangeNotifier {
       _error = e.toString();
     }
     _loading = false;
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   // ── Reload roles (after create/edit/delete) ─────────────────
   Future<void> reloadRoles() async {
     await _loadRoles();
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   Future<void> _loadRoles() async {
@@ -129,7 +135,7 @@ class RbacProvider extends ChangeNotifier {
   Future<void> refreshPermissions(String userId) async {
     final codes = await _rolesRepo.getUserPermissionCodes(userId);
     _permissionCodes = Set<String>.from(codes);
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   // ── Group permissions by module for UI ─────────────────────
@@ -149,6 +155,12 @@ class RbacProvider extends ChangeNotifier {
     _allPermissions = [];
     _loading = false;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

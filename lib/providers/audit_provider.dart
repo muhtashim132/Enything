@@ -3,6 +3,12 @@ import '../models/rbac/audit_log_model.dart';
 import '../repositories/audit_repository.dart';
 
 class AuditProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   final _repo = AuditRepository();
 
   List<AuditLogModel> _logs = [];
@@ -52,7 +58,7 @@ class AuditProvider extends ChangeNotifier {
   Future<void> _fetch() async {
     _loading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
     try {
       final results = await _repo.fetchLogs(
         actorId: _filterActorId,
@@ -70,7 +76,7 @@ class AuditProvider extends ChangeNotifier {
       _error = e.toString();
     }
     _loading = false;
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   // ── Log an action ───────────────────────────────────────────
@@ -101,6 +107,12 @@ class AuditProvider extends ChangeNotifier {
     _filterEntityType = null;
     _filterFrom = null;
     _filterTo = null;
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

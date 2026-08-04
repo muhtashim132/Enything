@@ -6,7 +6,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'telemetry_service.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // RiderBackgroundService
 //
@@ -181,14 +181,16 @@ Future<void> _onStart(ServiceInstance service) async {
 
       // 1️⃣ Update delivery_partners row and cascade to orders (Stateless RPC)
       try {
-        await db!.rpc('update_rider_location_bg', params: {
-          'p_rider_id': riderId,
-          'p_lat': lat,
-          'p_lng': lng,
-          'p_secret': trackingSecret,
+        await TelemetryService.instance.trackLatency('update_rider_location_bg', () async {
+          await db!.rpc('update_rider_location_bg', params: {
+            'p_rider_id': riderId,
+            'p_lat': lat,
+            'p_lng': lng,
+            'p_secret': trackingSecret,
+          });
         });
-      } catch (e) {
-        print('[RiderBgService] update_rider_location_bg RPC error: $e');
+      } catch (e, st) {
+        TelemetryService.instance.logError('update_rider_location_bg', e, st);
       }
 
       // 2️⃣ [STRESS-TEST FIX] The 'update_rider_location_bg' RPC now atomically cascades
@@ -208,8 +210,8 @@ Future<void> _onStart(ServiceInstance service) async {
       }
 
       print('[RiderBgService] ✅ Location pushed: $lat, $lng');
-    } catch (e) {
-      print('[RiderBgService] pushLocation error: $e');
+    } catch (e, st) {
+      TelemetryService.instance.logError('pushLocation', e, st);
     } finally {
       isPushingLocation = false;
     }
@@ -225,7 +227,7 @@ Future<void> _onStart(ServiceInstance service) async {
     trackingSecret = data['tracking_secret'] as String?;
 
     if (supabaseUrl == null || receivedKey == null || trackingSecret == null) {
-      print('[RiderBgService] Missing Supabase credentials or tracking secret');
+      TelemetryService.instance.logError('set_credentials', 'Missing Supabase credentials or tracking secret');
       return;
     }
 
@@ -247,7 +249,7 @@ Future<void> _onStart(ServiceInstance service) async {
   });
 
   service.on('stop_service').listen((_) async {
-    print('[RiderBgService] Stop signal received');
+    TelemetryService.instance.trackEvent('stop_service');
     gpsTimer?.cancel();
     await service.stopSelf();
   });

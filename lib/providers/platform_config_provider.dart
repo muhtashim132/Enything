@@ -7,6 +7,12 @@ import '../config/app_categories.dart';
 import '../config/tax_config.dart';
 
 class PlatformConfigProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   static PlatformConfigProvider? instance;
 
   SupabaseClient get _db => Supabase.instance.client;
@@ -57,7 +63,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   void _debouncedNotifyListeners() {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-      notifyListeners();
+      safeNotifyListeners();
     });
   }
 
@@ -146,7 +152,7 @@ class PlatformConfigProvider extends ChangeNotifier {
     while (attempts < maxRetries) {
       _loading = true;
       _error = null;
-      notifyListeners();
+      safeNotifyListeners();
 
       try {
         final data = await _db.from('platform_config').select('key, value');
@@ -248,7 +254,7 @@ class PlatformConfigProvider extends ChangeNotifier {
 
         _loading = false;
         _isFirstLoad = false;
-        notifyListeners();
+        safeNotifyListeners();
         return; // Success
       } catch (e) {
         attempts++;
@@ -257,7 +263,7 @@ class PlatformConfigProvider extends ChangeNotifier {
           _error =
               'No internet connection. Using offline pricing. Prices will update automatically when connection is restored.';
           _loading = false;
-          notifyListeners();
+          safeNotifyListeners();
         } else {
           await Future.delayed(const Duration(seconds: 2));
         }
@@ -344,6 +350,7 @@ class PlatformConfigProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _debounceTimer?.cancel();
     if (_platformConfigChannel != null) {
       _db.removeChannel(_platformConfigChannel!);
@@ -388,7 +395,7 @@ class PlatformConfigProvider extends ChangeNotifier {
       } else {
         _disabledCategories.add(categoryName);
       }
-      notifyListeners();
+      safeNotifyListeners();
 
       // Persist to platform_config as JSON array
       final actorId = _db.auth.currentUser?.id;
@@ -411,7 +418,7 @@ class PlatformConfigProvider extends ChangeNotifier {
       } else {
         _disabledCategories.add(categoryName);
       }
-      notifyListeners();
+      safeNotifyListeners();
       return false;
     }
   }
@@ -433,7 +440,7 @@ class PlatformConfigProvider extends ChangeNotifier {
         if (userId != null) 'created_by': userId,
       });
       await _loadCustomCategories();
-      notifyListeners();
+      safeNotifyListeners();
       return true;
     } catch (e) {
       debugPrint('[CategoryMgmt] createCategory error: $e');
@@ -447,7 +454,7 @@ class PlatformConfigProvider extends ChangeNotifier {
       await _db.from('custom_categories').delete().eq('name', name);
       _customCategories.removeWhere((c) => c['name'] == name);
       _disabledCategories.remove(name); // clean up disabled set too
-      notifyListeners();
+      safeNotifyListeners();
       return true;
     } catch (e) {
       debugPrint('[CategoryMgmt] deleteCustomCategory error: $e');
@@ -527,7 +534,7 @@ class PlatformConfigProvider extends ChangeNotifier {
         // Delete key (revert to default)
         final oldVal = _getValue(key);
         _removeValue(key);
-        notifyListeners();
+        safeNotifyListeners();
 
         await _db.from('platform_config').delete().eq('key', key);
 
@@ -559,7 +566,7 @@ class PlatformConfigProvider extends ChangeNotifier {
 
       final oldVal = _getValue(key);
       _setValue(key, doubleVal);
-      notifyListeners();
+      safeNotifyListeners();
 
       // DB update
       await _db.from('platform_config').upsert({
@@ -727,13 +734,13 @@ class PlatformConfigProvider extends ChangeNotifier {
     if (key.startsWith('commission_percent_')) {
       final cat = key.replaceFirst('commission_percent_', '');
       _categoryCommissionOverrides[cat] = val;
-      notifyListeners();
+      safeNotifyListeners();
       return;
     }
     if (key.startsWith('wait_penalty_per_min_')) {
       final cat = key.replaceFirst('wait_penalty_per_min_', '');
       _categoryWaitPenaltyOverrides[cat] = val;
-      notifyListeners();
+      safeNotifyListeners();
       return;
     }
     switch (key) {

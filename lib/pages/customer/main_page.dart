@@ -248,6 +248,10 @@ class _CustomerMainPageState extends State<CustomerMainPage>
             } else {
               _globalPendingTimer.value = null;
               t.cancel();
+              // 100x FIX: Re-check server state when timer hits 0 to avoid silent expiration
+              Future.delayed(const Duration(seconds: 2), () {
+                if (mounted) _checkPendingOrdersTimer();
+              });
             }
           });
         } else {

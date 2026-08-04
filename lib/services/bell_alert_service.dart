@@ -25,9 +25,11 @@ class BellAlertService {
   static final BellAlertService instance = BellAlertService._();
 
   final _pendingOrderIds = <String>{};
+  final _orderDeadlines = <String, DateTime>{};
   AudioPlayer? _player;
   AudioPlayer? _previewPlayer;
   bool _isPlaying = false;
+  Timer? _expirationTimer;
 
   bool get hasPendingOrders => _pendingOrderIds.isNotEmpty;
   int get pendingCount => _pendingOrderIds.length;
@@ -44,9 +46,14 @@ class BellAlertService {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  Future<void> addPendingOrder(String orderId) async {
+  Future<void> addPendingOrder(String orderId, {DateTime? expiration}) async {
     if (_pendingOrderIds.contains(orderId)) return;
     _pendingOrderIds.add(orderId);
+    if (expiration != null) {
+      _orderDeadlines[orderId] = expiration;
+    }
+    
+    _startExpirationTimer();
 
     // STRESS-TEST FIX: Prevent synchronous FFI bottleneck on the main thread during high burst loads.
     if (kDebugMode) {
@@ -72,16 +79,22 @@ class BellAlertService {
   /// Mark an order as resolved. Stops the bell when no pending orders remain.
   Future<void> removePendingOrder(String orderId) async {
     final removed = _pendingOrderIds.remove(orderId);
+    _orderDeadlines.remove(orderId);
     if (!removed) return; // was never tracked — no-op
     debugPrint(
         '[BellAlert] -order: $orderId | pending=${_pendingOrderIds.length}');
-    if (_pendingOrderIds.isEmpty) await stopBell();
+    if (_pendingOrderIds.isEmpty) {
+      _stopExpirationTimer();
+      await stopBell();
+    }
   }
 
   /// Stop the bell immediately and clear all tracked pending orders.
   /// Called on logout or role switch via NotificationProvider.stopListening().
   Future<void> clearAll() async {
     _pendingOrderIds.clear();
+    _orderDeadlines.clear();
+    _stopExpirationTimer();
     await stopBell();
   }
 
@@ -143,6 +156,33 @@ class BellAlertService {
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
+
+  void _startExpirationTimer() {
+    if (_expirationTimer?.isActive ?? false) return;
+    _expirationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (_pendingOrderIds.isEmpty) {
+        timer.cancel();
+        return;
+      }
+      final now = DateTime.now().toUtc();
+      final expired = <String>[];
+      for (final id in _pendingOrderIds) {
+        final deadline = _orderDeadlines[id];
+        if (deadline != null && now.isAfter(deadline)) {
+          expired.add(id);
+        }
+      }
+      for (final id in expired) {
+        debugPrint('[BellAlert] Auto-removing expired order: $id');
+        removePendingOrder(id);
+      }
+    });
+  }
+
+  void _stopExpirationTimer() {
+    _expirationTimer?.cancel();
+    _expirationTimer = null;
+  }
 
   Future<void> _startBell() async {
     if (_pendingOrderIds.isEmpty) return;

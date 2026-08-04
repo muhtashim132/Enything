@@ -52,7 +52,14 @@ class TeamRepository {
     required String actorId,
     required String actorRole,
   }) async {
-    await _db.from('admin_users').update({'role_id': roleId}).eq('id', userId);
+    try {
+      await _db.from('admin_users').update({'role_id': roleId}).eq('id', userId);
+    } on PostgrestException catch (e) {
+      if (e.code == '23503') {
+        throw Exception('The specified role does not exist or is invalid.');
+      }
+      rethrow;
+    }
     await _logAudit(
       actorId: actorId,
       actorRole: actorRole,
@@ -134,18 +141,26 @@ class TeamRepository {
     required String invitedBy,
     required String actorRole,
   }) async {
-    final data = await _db
-        .from('admin_invitations')
-        .insert({
-          'email': email,
-          'role_id': roleId,
-          'invited_by': invitedBy,
-          'status': 'pending',
-          'expires_at':
-              DateTime.now().add(const Duration(days: 7)).toIso8601String(),
-        })
-        .select('*, roles(name)')
-        .single();
+    late final Map<String, dynamic> data;
+    try {
+      data = await _db
+          .from('admin_invitations')
+          .insert({
+            'email': email,
+            'role_id': roleId,
+            'invited_by': invitedBy,
+            'status': 'pending',
+            'expires_at':
+                DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+          })
+          .select('*, roles(name)')
+          .single();
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        throw Exception('An invitation is already pending for this email.');
+      }
+      rethrow;
+    }
 
     await _logAudit(
       actorId: invitedBy,

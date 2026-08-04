@@ -155,6 +155,11 @@ class AppCategories {
     }
   }
 
+  /// Returns whether a category strictly requires the seller to add variants (e.g. sizes).
+  static bool requiresVariant(String categoryName) {
+    return categoryName == 'Clothing' || categoryName == 'Footwear';
+  }
+
   /// Returns a high-quality Unsplash image URL for the given category name.
   /// All images are sourced from Unsplash, which is royalty-free and copyright-free.
   static String getImageUrl(String categoryName) {

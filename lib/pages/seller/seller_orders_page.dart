@@ -39,6 +39,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   // Realtime channel for live order updates
   final List<RealtimeChannel> _realtimeChannels = [];
+  bool _isIntentionalDisconnect = false;
   // FCM foreground message subscription
   StreamSubscription? _fcmSub;
   Timer? _debounceTimer;
@@ -64,9 +65,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _isIntentionalDisconnect = true;
     for (final channel in _realtimeChannels) {
       Supabase.instance.client.removeChannel(channel);
     }
+    _realtimeChannels.clear();
     _fcmSub?.cancel();
     _debounceTimer?.cancel();
     _tabController.dispose();
@@ -88,6 +91,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   void _setupRealtimeAndFcm() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      _isIntentionalDisconnect = true;
+      for (final channel in _realtimeChannels) {
+        Supabase.instance.client.removeChannel(channel);
+      }
+      _realtimeChannels.clear();
+      _fcmSub?.cancel();
+      _isIntentionalDisconnect = false;
+      
       final auth = context.read<AuthProvider>();
       final userId = auth.currentUserId;
       if (userId == null) return;
@@ -130,7 +141,19 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 ),
                 callback: (_) => _debouncedLoadOrders(),
               )
-              .subscribe();
+              .subscribe((status, [error]) {
+            if ((status == RealtimeSubscribeStatus.closed ||
+                    status == RealtimeSubscribeStatus.channelError) &&
+                !_isIntentionalDisconnect) {
+              debugPrint('SellerOrdersPage: Realtime channel disconnected. Reconnecting in 5s...');
+              Future.delayed(const Duration(seconds: 5), () {
+                if (mounted) {
+                   _debouncedLoadOrders();
+                   _setupRealtimeAndFcm();
+                }
+              });
+            }
+          });
           _realtimeChannels.add(channel);
         }
       } catch (e) {
@@ -731,13 +754,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   List<OrderModel> _pendingOrders() => _orders
       .where((o) =>
           (o.status == 'awaiting_acceptance' || o.status == 'pending') &&
-          !o.sellerAccepted)
+          !o.sellerAccepted && !o.isExpired)
       .toList();
 
   List<OrderModel> _activeOrders() => _orders
       .where((o) =>
           ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
-              o.sellerAccepted) ||
+              o.sellerAccepted && !o.isExpired) ||
           [
             'awaiting_payment',
             'confirmed',
@@ -756,7 +779,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             'partner_rejected',
             'verification_failed',
             'pending_verification'
-          ].contains(o.status))
+          ].contains(o.status) || (
+            (o.status == 'awaiting_acceptance' || o.status == 'pending') && o.isExpired
+          ))
       .toList();
 
   @override

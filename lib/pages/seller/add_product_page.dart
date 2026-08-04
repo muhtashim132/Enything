@@ -369,6 +369,19 @@ class _AddProductPageState extends State<AddProductPage> {
                   );
                   return;
                 }
+
+                final isDuplicate = _variants.any(
+                    (v) => v.name.trim().toLowerCase() == n.toLowerCase());
+                if (isDuplicate) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('A variant with this name already exists!'),
+                      backgroundColor: AppColors.danger,
+                    ),
+                  );
+                  return;
+                }
+
                 setState(() {
                   _variants.add(ProductVariant(
                     id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -389,6 +402,16 @@ class _AddProductPageState extends State<AddProductPage> {
 
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (AppCategories.requiresVariant(_productCategory) && _variants.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one variant/size for this category.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
 
     double finalPrice = 0.0;
     double? finalOriginalPrice;
@@ -992,7 +1015,7 @@ class _AddProductPageState extends State<AddProductPage> {
                         prefixIcon: Icon(Icons.fastfood_outlined),
                       ),
                     ),
-                    if (_variants.isEmpty) ...[
+                    if (_variants.isEmpty && !AppCategories.requiresVariant(_productCategory)) ...[
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _priceController,
@@ -1063,16 +1086,20 @@ class _AddProductPageState extends State<AddProductPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Variations (Optional)',
-                                  style: TextStyle(
+                              Text(
+                                  AppCategories.requiresVariant(
+                                          _productCategory)
+                                      ? 'Variations (Required)'
+                                      : 'Variations (Optional)',
+                                  style: const TextStyle(
                                       fontFamily: 'Poppins',
                                       fontWeight: FontWeight.w600,
                                       fontSize: 16)),
-                              Text('e.g., Small, Medium, Large',
+                              const Text('e.g., Small, Medium, Large',
                                   style: TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondary)),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
@@ -17,6 +18,12 @@ import 'referral_provider.dart';
 import 'recently_viewed_provider.dart';
 
 class AuthProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   SupabaseClient get _supabase => Supabase.instance.client;
   UserModel? _user;
   bool _isLoading = false;
@@ -54,8 +61,10 @@ class AuthProvider extends ChangeNotifier {
     _init();
   }
 
+  StreamSubscription<AuthState>? _authSubscription;
+
   void _init() {
-    _supabase.auth.onAuthStateChange.listen((event) {
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
         _fetchProfile();
       } else if (event.event == AuthChangeEvent.signedOut) {
@@ -97,7 +106,7 @@ class AuthProvider extends ChangeNotifier {
           prefs.remove('enything_cart_v1');
         });
 
-        notifyListeners();
+        safeNotifyListeners();
 
         // If it wasn't a manual sign out, it means the session was revoked from another device
         if (!wasManual && navigatorKey.currentState != null) {
@@ -231,7 +240,7 @@ class AuthProvider extends ChangeNotifier {
           debugPrint('Failed to create admin session: $e');
         }
 
-        notifyListeners();
+        safeNotifyListeners();
 
         // Audit log: record login
         try {
@@ -283,7 +292,7 @@ class AuthProvider extends ChangeNotifier {
   void adminSignOut() {
     _isAdminVerified = false;
     _adminData = null;
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   /// Switch from admin mode into another role the user already holds
@@ -305,7 +314,7 @@ class AuthProvider extends ChangeNotifier {
       final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
       if (userId == null) {
         _isProfileFetched = true;
-        notifyListeners();
+        safeNotifyListeners();
         return;
       }
 
@@ -330,7 +339,7 @@ class AuthProvider extends ChangeNotifier {
           // User verified OTP but never completed profile setup!
           _user = null;
           _isProfileFetched = true;
-          notifyListeners();
+          safeNotifyListeners();
           return;
         }
       }
@@ -449,11 +458,11 @@ class AuthProvider extends ChangeNotifier {
         'rider_verification_status': riderVerificationStatus,
       });
       _isProfileFetched = true;
-      notifyListeners();
+      safeNotifyListeners();
     } catch (e) {
       debugPrint('Profile fetch error: $e');
       _isProfileFetched = true;
-      notifyListeners();
+      safeNotifyListeners();
     }
   }
 
@@ -504,7 +513,7 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('last_active_role', role);
 
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   // ─── OTP Auth (Phone) via Supabase Edge Functions + Fast2SMS ───────────
@@ -561,13 +570,13 @@ class AuthProvider extends ChangeNotifier {
     if (_isLoading) return null;
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
 
     // ── Magic number bypass for internal testing ──────────────────────────
     if (_isMagicNumber(phone)) {
       _pendingPhone = phone;
       _isLoading = false;
-      notifyListeners();
+      safeNotifyListeners();
       return null;
     }
 
@@ -582,13 +591,13 @@ class AuthProvider extends ChangeNotifier {
         _error = (data is Map ? data['error'] as String? : null) ??
             'Failed to send OTP. Please try again.';
         _isLoading = false;
-        notifyListeners();
+        safeNotifyListeners();
         return _error;
       }
 
       _pendingPhone = phone;
       _isLoading = false;
-      notifyListeners();
+      safeNotifyListeners();
       return null; // null = success
     } on FunctionException catch (e) {
       final data = e.details;
@@ -608,7 +617,7 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('sendPhoneOtp error: $e');
     }
     _isLoading = false;
-    notifyListeners();
+    safeNotifyListeners();
     return _error;
   }
 
@@ -624,7 +633,7 @@ class AuthProvider extends ChangeNotifier {
     if (_isLoading) return null;
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
 
     // ──────────────────────────────────────────────────────────────────────
 
@@ -641,7 +650,7 @@ class AuthProvider extends ChangeNotifier {
           _error = (data is Map ? data['error'] as String? : null) ??
               'Invalid OTP. Please try again.';
           _isLoading = false;
-          notifyListeners();
+          safeNotifyListeners();
           return null;
         }
       }
@@ -690,7 +699,7 @@ class AuthProvider extends ChangeNotifier {
           } on AuthException catch (e) {
             _error = e.message;
             _isLoading = false;
-            notifyListeners();
+            safeNotifyListeners();
             return null;
           }
         }
@@ -699,7 +708,7 @@ class AuthProvider extends ChangeNotifier {
       if (userId == null) {
         _error = 'Authentication failed. Please try again.';
         _isLoading = false;
-        notifyListeners();
+        safeNotifyListeners();
         return null;
       }
 
@@ -798,7 +807,7 @@ class AuthProvider extends ChangeNotifier {
         // Always treat Razorpay reviewer as an existing user — skip setup page
         await _fetchProfile(preferredRole: assignedRole);
         _isLoading = false;
-        notifyListeners();
+        safeNotifyListeners();
         return 'existing';
       }
 
@@ -824,7 +833,7 @@ class AuthProvider extends ChangeNotifier {
           .maybeSingle();
 
       _isLoading = false;
-      notifyListeners();
+      safeNotifyListeners();
 
       if (existing != null || preferredRole == 'admin' || isAdmin != null) {
         await _fetchProfile(preferredRole: preferredRole);
@@ -854,7 +863,7 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('verifyPhoneOtp error: $e');
     }
     _isLoading = false;
-    notifyListeners();
+    safeNotifyListeners();
     return null;
   }
 
@@ -868,7 +877,7 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
 
     try {
       final user = _supabase.auth.currentUser;
@@ -900,7 +909,7 @@ class AuthProvider extends ChangeNotifier {
           _error =
               'An account with this phone number already exists. If you recently deleted your account, please wait or contact support.';
           _isLoading = false;
-          notifyListeners();
+          safeNotifyListeners();
           return _error;
         }
         if (s.contains('full_name') || s.contains('PGRST204')) {
@@ -921,7 +930,7 @@ class AuthProvider extends ChangeNotifier {
               _error =
                   'An account with this phone number already exists. If you recently deleted your account, please wait or contact support.';
               _isLoading = false;
-              notifyListeners();
+              safeNotifyListeners();
               return _error;
             }
             rethrow;
@@ -1065,13 +1074,13 @@ class AuthProvider extends ChangeNotifier {
 
       await _fetchProfile(preferredRole: role);
       _isLoading = false;
-      notifyListeners();
+      safeNotifyListeners();
       return null;
     } catch (e) {
       _error = 'Profile setup failed: ${e.toString()}';
     }
     _isLoading = false;
-    notifyListeners();
+    safeNotifyListeners();
     return _error;
   }
 
@@ -1086,7 +1095,7 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
     try {
       final response = await _supabase.auth.signUp(
         email: email,
@@ -1097,7 +1106,7 @@ class AuthProvider extends ChangeNotifier {
         await createProfile(
             fullName: fullName, role: role, additionalData: additionalData);
         _isLoading = false;
-        notifyListeners();
+        safeNotifyListeners();
         return null;
       }
       _error = 'Registration failed.';
@@ -1107,7 +1116,7 @@ class AuthProvider extends ChangeNotifier {
       _error = 'Registration failed: ${e.toString()}';
     }
     _isLoading = false;
-    notifyListeners();
+    safeNotifyListeners();
     return _error;
   }
 
@@ -1117,14 +1126,14 @@ class AuthProvider extends ChangeNotifier {
   Future<Map<String, dynamic>?> fetchInviteDetails(String token) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
     try {
       final response = await _supabase
           .rpc('get_invitation_details', params: {'p_token': token});
       final List data = response as List;
       if (data.isNotEmpty) {
         _isLoading = false;
-        notifyListeners();
+        safeNotifyListeners();
         return data.first as Map<String, dynamic>;
       }
       _error = 'Invalid or expired invite code.';
@@ -1132,7 +1141,7 @@ class AuthProvider extends ChangeNotifier {
       _error = 'Error fetching invite: ${e.toString()}';
     }
     _isLoading = false;
-    notifyListeners();
+    safeNotifyListeners();
     return null;
   }
 
@@ -1145,7 +1154,7 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
 
     try {
       // 1. Sign up the user (or if they exist, it might throw, but let's assume new user)
@@ -1173,7 +1182,7 @@ class AuthProvider extends ChangeNotifier {
       await _fetchProfile(preferredRole: 'admin');
 
       _isLoading = false;
-      notifyListeners();
+      safeNotifyListeners();
       return null;
     } on AuthException catch (e) {
       _error = e.message;
@@ -1184,7 +1193,7 @@ class AuthProvider extends ChangeNotifier {
       }
     }
     _isLoading = false;
-    notifyListeners();
+    safeNotifyListeners();
     return _error;
   }
 
@@ -1192,12 +1201,12 @@ class AuthProvider extends ChangeNotifier {
       {required String email, required String password}) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    safeNotifyListeners();
     try {
       await _supabase.auth.signInWithPassword(email: email, password: password);
       await _fetchProfile();
       _isLoading = false;
-      notifyListeners();
+      safeNotifyListeners();
       return null;
     } on AuthException catch (e) {
       _error = e.message;
@@ -1205,7 +1214,7 @@ class AuthProvider extends ChangeNotifier {
       _error = 'Login failed.';
     }
     _isLoading = false;
-    notifyListeners();
+    safeNotifyListeners();
     return _error;
   }
 
@@ -1296,6 +1305,13 @@ class AuthProvider extends ChangeNotifier {
       await prefs.remove('favorite_products');
     } catch (_) {}
 
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    _isDisposed = true;
+    super.dispose();
   }
 }

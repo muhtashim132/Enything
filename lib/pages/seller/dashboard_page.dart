@@ -46,6 +46,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   StreamSubscription? _fcmSub;
   bool _isStatsLoadInProgress = false;
   bool _needsReload = false;
+  bool _noShopFound = false;
+  bool _adminSuspended = false;
 
   void _debouncedLoadStats() {
     _debounceTimer?.cancel();
@@ -154,10 +156,17 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           .eq('seller_id', auth.currentUserId ?? '');
 
       if ((shopsResp as List).isEmpty) {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _noShopFound = true;
+          });
+        }
         _entryCtrl.forward();
         return;
       }
+      
+      if (mounted) setState(() => _noShopFound = false);
 
       // Check verification status of the first shop (assuming all shops share the same status for the seller)
       final firstShopData = shopsResp.first;
@@ -257,17 +266,13 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           };
 
           // Dashboard badge reflects the seller's own toggle (is_accepting_orders).
-          // Auto-fix: Ensure verified/approved shops are active
-          // (Fixes the state where a seller previously disabled it via the old UI)
-          if (firstShopData['is_active'] == false &&
-              (firstShopData['verification_status'] == 'approved' ||
-               firstShopData['verification_status'] == 'verified')) {
-            try {
-              _supabase.from('shops').update({'is_active': true}).eq('id', activeShopIds.first);
-            } catch (e) {
-              debugPrint('Auto-fix failed: $e');
-            }
+          // 100x FIX: Ensure we do NOT bypass Admin suspensions.
+          if (firstShopData['is_active'] == false) {
+             _adminSuspended = true;
+          } else {
+             _adminSuspended = false;
           }
+          // The old auto-fix that forcibly set is_active=true has been removed to respect admin bans.
 
           // NOTE: is_active (admin KYC flag) is already guarded above via
           // verification_status redirect (lines 147-165). If we reach this
@@ -559,7 +564,48 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                           position: _slideAnim,
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                            child: _isLoading
+                            child: _noShopFound
+                                ? Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF9DB),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: const Color(0xFFFCC419)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Setup Incomplete', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFFE67700))),
+                                        const SizedBox(height: 8),
+                                        Text('It looks like your shop creation was interrupted. Please switch roles or contact support.', style: GoogleFonts.outfit(color: const Color(0xFFD9480F))),
+                                        const SizedBox(height: 12),
+                                        ElevatedButton(
+                                           onPressed: () => Navigator.pushNamedAndRemoveUntil(context, AppRoutes.roleSelect, (_) => false),
+                                           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFCC419)),
+                                           child: const Text('Back to Role Selection', style: TextStyle(color: Colors.black)),
+                                        )
+                                      ],
+                                    ),
+                                  )
+                                : _adminSuspended
+                                ? Container(
+                                    padding: const EdgeInsets.all(20),
+                                    margin: const EdgeInsets.only(bottom: 24),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF5F5),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: const Color(0xFFFF8787)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Account Suspended', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFFE03131))),
+                                        const SizedBox(height: 8),
+                                        Text('Your shop has been suspended by the administrator. You cannot accept orders at this time.', style: GoogleFonts.outfit(color: const Color(0xFFC92A2A))),
+                                      ],
+                                    ),
+                                  )
+                                : _isLoading
                                 ? _buildShimmer()
                                 : LayoutBuilder(
                                     builder: (context, constraints) {

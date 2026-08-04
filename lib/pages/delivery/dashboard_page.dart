@@ -599,12 +599,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     if (_isLoading) return;
     setState(() => _isLoading = true);
     int failedCount = 0;
-    for (int i = 0; i < group.orders.length; i++) {
-      final success = await _acceptOrder(group.orders[i],
+    
+    if (group.orders.isNotEmpty) {
+      // 100x FIX: Atomic backend RPC updates the entire cart group.
+      // Calling this on the first valid order accepts all orders in the group.
+      final success = await _acceptOrder(group.orders.first,
           skipReload: true, notifyCustomer: false);
       if (!success) {
-        failedCount += (group.orders.length - i);
-        break; // Prevent cascading errors/dialogs for the rest of the group
+        failedCount = group.orders.length;
       }
     }
 
@@ -2072,11 +2074,24 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         group.orders.fold(0.0, (sum, o) => sum + o.riderEarnings);
     bool isExpanded = !_collapsedAvailableGroups.contains(group.groupId);
 
+    // Calculate distinct shops and their grouped items
+    final shopGroups = <String, List<OrderModel>>{};
+    for (final o in group.orders) {
+      final sId = o.shopId ?? 'unknown';
+      shopGroups.putIfAbsent(sId, () => []).add(o);
+    }
+    final distinctShopCount = shopGroups.length;
+
+    // Find the latest active acceptance deadline
+    final latestDeadline = group.orders
+        .map((o) => o.acceptanceDeadline)
+        .where((d) => d != null)
+        .fold<DateTime?>(null, (prev, curr) => (prev == null || curr!.isAfter(prev)) ? curr : prev);
+
     return StatefulBuilder(builder: (context, setStateBuilder) {
       bool isExpired = false;
-      if (group.orders.isNotEmpty &&
-          group.orders.first.acceptanceDeadline != null) {
-        final remaining = group.orders.first.acceptanceDeadline!
+      if (latestDeadline != null) {
+        final remaining = latestDeadline
             .difference(DateTime.now().toUtc())
             .inSeconds;
         isExpired = remaining <= 0;
@@ -2120,7 +2135,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     color: Colors.white70, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Collected Order (${group.orders.length} Shops)',
+                  child: Text('Collected Order ($distinctShopCount Shops)',
                       style: GoogleFonts.outfit(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -2179,14 +2194,17 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       ),
                     ]),
                     const SizedBox(height: 10),
-                    Text('Contains items from ${group.orders.length} shops',
+                    Text('Contains items from $distinctShopCount shops',
                         style: GoogleFonts.outfit(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                             color: Colors.amber)),
                     const SizedBox(height: 6),
-                    ...group.orders.map((o) {
-                      final shopName = _shopInfoCache[o.shopId]?.name ?? 'Shop';
+                    ...shopGroups.entries.map((entry) {
+                      final shopOrders = entry.value;
+                      final firstShopOrder = shopOrders.first;
+                      final shopName = _shopInfoCache[firstShopOrder.shopId]?.name ?? 'Shop';
+                      final allItems = shopOrders.expand((o) => o.items).toList();
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Column(
@@ -2207,13 +2225,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                                 : Colors.black87))),
                               ],
                             ),
-                            if (o.items.isNotEmpty)
+                            if (allItems.isNotEmpty)
                               Padding(
                                 padding:
                                     const EdgeInsets.only(left: 14, top: 4),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: o.items
+                                  children: allItems
                                       .map((item) => Text(
                                           '${item.quantity}x ${item.productName}',
                                           style: GoogleFonts.outfit(
@@ -2229,8 +2247,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         ),
                       );
                     }),
-                    if (group.orders.isNotEmpty &&
-                        group.orders.first.acceptanceDeadline != null) ...[
+                    if (latestDeadline != null) ...[
                       const SizedBox(height: 14),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -2256,8 +2273,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               ),
                             ),
                             OrderCountdownTimer(
-                              acceptanceDeadline:
-                                  group.orders.first.acceptanceDeadline!,
+                              acceptanceDeadline: latestDeadline,
                               fontSize: 13,
                               onExpire: () {
                                 if (mounted) {
@@ -2353,6 +2369,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             : [const Color(0xFFFF8C42), const Color(0xFFE8590C)];
 
     bool isExpanded = !_collapsedActiveGroups.contains(group.groupId);
+    final distinctShopCount = group.orders.map((o) => o.shopId).toSet().length;
 
     return StatefulBuilder(builder: (context, setStateBuilder) {
       return Container(
@@ -2389,7 +2406,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               ),
               child: Row(children: [
                 Expanded(
-                  child: Text('Collected Order (${group.orders.length})',
+                  child: Text('Collected Order ($distinctShopCount Shops)',
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.outfit(
                           color: Colors.white,

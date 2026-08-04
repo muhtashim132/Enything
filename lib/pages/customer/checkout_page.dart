@@ -399,6 +399,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
+      // Add Shop Open validation
+      final closedShops = cart.shops.where((s) => !s.isOpenRightNow).toList();
+      if (closedShops.isNotEmpty) {
+        throw Exception(
+            "${closedShops.first.name} is currently closed and not accepting orders.");
+      }
+
       // Stock Validation
       final productIds = cart.items.map((i) => i.product.id).toList();
       // Phase 25 Fix: Deep join with shops to verify shop is still active, and fetch variants/price to check spoofing.
@@ -873,18 +880,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
-      // Cleanup
-      cart.clear();
+      // Cleanup (Additive: avoid unmounted leaks and race conditions)
+      await cart.clearAsync();
+      couponProv.clearCoupon();
+      
       if (!mounted) return;
-      context.read<CouponProvider>().clearCoupon();
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(
+      
+      Navigator.pushNamedAndRemoveUntil(
           context,
           AppRoutes.trackOrder,
           (route) => route.isFirst || route.settings.name == AppRoutes.customerHome,
           arguments: {'orderId': orderIds.first},
         );
-      }
     } catch (e) {
       debugPrint('Order placement error: $e');
       if (uploadedPaths.isNotEmpty) {

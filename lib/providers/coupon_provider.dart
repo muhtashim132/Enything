@@ -19,6 +19,12 @@ class AppliedCoupon {
 }
 
 class CouponProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   SupabaseClient get _supabase => Supabase.instance.client;
 
   AppliedCoupon? _appliedCoupon;
@@ -38,13 +44,13 @@ class CouponProvider extends ChangeNotifier {
   }) async {
     if (code.trim().isEmpty) {
       _errorMessage = 'Please enter a coupon code';
-      notifyListeners();
+      safeNotifyListeners();
       return false;
     }
 
     _isValidating = true;
     _errorMessage = null;
-    notifyListeners();
+    safeNotifyListeners();
 
     try {
       final now = DateTime.now().toUtc().toIso8601String();
@@ -61,7 +67,7 @@ class CouponProvider extends ChangeNotifier {
       if (res == null) {
         _errorMessage = 'Coupon "$code" is invalid or expired';
         _isValidating = false;
-        notifyListeners();
+        safeNotifyListeners();
         return false;
       }
 
@@ -71,7 +77,7 @@ class CouponProvider extends ChangeNotifier {
         _errorMessage =
             'Minimum order ₹${minOrder.toStringAsFixed(0)} required for this coupon';
         _isValidating = false;
-        notifyListeners();
+        safeNotifyListeners();
         return false;
       }
 
@@ -81,7 +87,7 @@ class CouponProvider extends ChangeNotifier {
       if (usageLimit != null && usedCount >= usageLimit) {
         _errorMessage = 'This coupon has reached its usage limit';
         _isValidating = false;
-        notifyListeners();
+        safeNotifyListeners();
         return false;
       }
 
@@ -113,12 +119,12 @@ class CouponProvider extends ChangeNotifier {
       );
       _errorMessage = null;
       _isValidating = false;
-      notifyListeners();
+      safeNotifyListeners();
       return true;
     } catch (e) {
       _errorMessage = 'Failed to validate coupon. Please try again.';
       _isValidating = false;
-      notifyListeners();
+      safeNotifyListeners();
       return false;
     }
   }
@@ -126,11 +132,17 @@ class CouponProvider extends ChangeNotifier {
   void clearCoupon() {
     _appliedCoupon = null;
     _errorMessage = null;
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   void clearError() {
     _errorMessage = null;
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

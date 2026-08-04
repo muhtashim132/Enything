@@ -323,6 +323,12 @@ class OrderModel {
     );
   }
 
+  /// True when the acceptance deadline has passed.
+  bool get isExpired {
+    if (acceptanceDeadline == null) return false;
+    return DateTime.now().toUtc().isAfter(acceptanceDeadline!);
+  }
+
   /// True when both the seller and delivery partner have accepted.
   bool get isFullyConfirmed => sellerAccepted && partnerAccepted;
 
@@ -458,6 +464,7 @@ class OrderModel {
       case 'verification_failed':
         return 'Prescription Rejected';
       case 'awaiting_acceptance':
+        if (isExpired) return 'Order Expired';
         return 'Waiting for Confirmation';
       case 'awaiting_payment':
         return 'Pay Now';

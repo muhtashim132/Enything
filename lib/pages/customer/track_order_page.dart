@@ -45,6 +45,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
   RealtimeChannel? _channel;
+  bool _isIntentionalDisconnect = false;
   final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier =
       ValueNotifier({});
   bool _razorpayOpened = false;
@@ -173,7 +174,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _decisionCountdownTimer?.cancel();
     _magicAutoAcceptTimer?.cancel();
     _pollingTimer?.cancel();
-    if (_channel != null) _supabase.removeChannel(_channel!);
+    if (_channel != null) {
+      _isIntentionalDisconnect = true;
+      _supabase.removeChannel(_channel!);
+    }
     _riderLocationsNotifier.dispose();
     _decisionSecondsLeft.dispose();
     super.dispose();
@@ -293,9 +297,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   void _subscribeToOrder() {
     if (_order == null) return;
     if (_channel != null) {
+      _isIntentionalDisconnect = true;
       _supabase.removeChannel(_channel!);
       _channel = null;
     }
+    _isIntentionalDisconnect = false;
 
     final filter = _order!.cartGroupId != null
         ? PostgresChangeFilter(
@@ -410,7 +416,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             }
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+      if ((status == RealtimeSubscribeStatus.closed ||
+              status == RealtimeSubscribeStatus.channelError) &&
+          !_isIntentionalDisconnect) {
+        debugPrint('TrackOrderPage: Realtime channel disconnected. Reconnecting in 5s...');
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted && !_isCancelling && !_isLoading) {
+             _fetchOrder();
+          }
+        });
+      }
+    });
   }
 
   String get _aggregateStatus {

@@ -77,6 +77,10 @@ class AuditRepository {
       'entity_type': entityType,
       'entity_id': entityId,
       'metadata': metadata ?? {},
-    }).catchError((_) => null);
+    }).catchError((e) {
+      // ignore: avoid_print
+      print('Audit log failed: $e');
+      return null;
+    });
   }
 }

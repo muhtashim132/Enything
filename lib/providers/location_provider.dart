@@ -7,12 +7,19 @@ import 'dart:convert';
 import '../models/saved_address_model.dart';
 
 class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   LocationProvider() {
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -114,12 +121,12 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     _matchedAddress = null;
     _selectedAddress = null;
     _permissionGranted = false;
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   Future<bool> requestLocation() async {
     _isLoading = true;
-    notifyListeners();
+    safeNotifyListeners();
 
     try {
       final user = _supabase.auth.currentUser;
@@ -138,7 +145,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
         _pincode = '193502';
         _permissionGranted = true;
         _isLoading = false;
-        notifyListeners();
+        safeNotifyListeners();
         return true;
       }
 
@@ -150,13 +157,13 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       // _pincode = '193502';
       // _permissionGranted = true;
       // _isLoading = false;
-      // notifyListeners();
+      // safeNotifyListeners();
       // return true;
 
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _isLoading = false;
-        notifyListeners();
+        safeNotifyListeners();
         await Geolocator.openLocationSettings();
         return false;
       }
@@ -169,7 +176,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (permission == LocationPermission.deniedForever) {
         _isLoading = false;
         _permissionGranted = false;
-        notifyListeners();
+        safeNotifyListeners();
         await Geolocator.openAppSettings();
         return false;
       }
@@ -193,7 +200,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         if (position == null) {
           _isLoading = false;
-          notifyListeners();
+          safeNotifyListeners();
           return false;
         }
 
@@ -201,7 +208,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
         _permissionGranted = true;
         _currentAddress = 'Fetching address...';
         _isLoading = false;
-        notifyListeners();
+        safeNotifyListeners();
 
         // Reverse geocode in background
         await updateAddress();
@@ -212,7 +219,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     _isLoading = false;
-    notifyListeners();
+    safeNotifyListeners();
     return false;
   }
 
@@ -228,13 +235,13 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     _landmark = addr.landmark ?? '';
     _pincode = addr.pincode ?? '';
     _permissionGranted = true;
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   /// Clear any manual selection (revert to GPS-based auto-match)
   void clearSelectedAddress() {
     _selectedAddress = null;
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   /// Auto-match current GPS against saved addresses
@@ -279,7 +286,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       _savedAddresses =
           (response as List).map((m) => SavedAddress.fromMap(m)).toList();
       _autoMatchSavedAddress();
-      notifyListeners();
+      safeNotifyListeners();
     } catch (e) {
       debugPrint('loadSavedAddresses error: $e');
     }
@@ -369,7 +376,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     _permissionGranted = true;
     _selectedAddress = null; // Clear manual selection on GPS update
     _autoMatchSavedAddress();
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   void setLocalAddressDetails(
@@ -380,7 +387,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (addressText != null && addressText.isNotEmpty) {
       _currentAddress = addressText;
     }
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   Future<void> updateAddressDetails(String userId,
@@ -388,7 +395,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (house != null) _houseNumber = house;
     if (mark != null) _landmark = mark;
     if (pin != null) _pincode = pin;
-    notifyListeners();
+    safeNotifyListeners();
     try {
       final db = _supabase;
       // H5 FIX: Fetch existing address_home to merge rather than overwrite
@@ -433,7 +440,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
         _landmark = response['landmark'] ?? '';
         _pincode = response['pincode'] ?? '';
-        notifyListeners();
+        safeNotifyListeners();
       }
     } catch (e) {
       debugPrint('loadAddressFromDb error: $e');
@@ -480,12 +487,12 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
         } else {
           _currentAddress = data['display_name'] ?? 'Your current location';
         }
-        notifyListeners();
+        safeNotifyListeners();
       }
     } catch (e) {
       debugPrint('Reverse geocoding error: $e');
       _currentAddress = 'Current Location';
-      notifyListeners();
+      safeNotifyListeners();
     }
     // After reverse geocode completes, check for proximity matches
     _autoMatchSavedAddress();

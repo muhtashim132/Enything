@@ -34,6 +34,12 @@ class AppNotification {
 ///   - Call [listenAsCustomer], [listenAsSeller], or [listenAsDelivery]
 ///     once after login to subscribe.
 class NotificationProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   final SupabaseClient? mockClient;
 
   NotificationProvider({this.mockClient});
@@ -42,6 +48,7 @@ class NotificationProvider extends ChangeNotifier {
 
   final List<AppNotification> _notifications = [];
   RealtimeChannel? _channel;
+  bool _isIntentionalDisconnect = false;
   String? _listeningUserId;
   String? _listeningRole;
 
@@ -58,8 +65,37 @@ class NotificationProvider extends ChangeNotifier {
   void _debouncedNotifyListeners() {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-      notifyListeners();
+      safeNotifyListeners();
     });
+  }
+
+  void _onChannelDisconnect(RealtimeSubscribeStatus status) {
+    if ((status == RealtimeSubscribeStatus.closed ||
+            status == RealtimeSubscribeStatus.channelError) &&
+        !_isIntentionalDisconnect) {
+      debugPrint('NotificationProvider: channel disconnected. Reconnecting in 5s...');
+      
+      final oldId = _listeningUserId;
+      final oldRole = _listeningRole;
+      
+      stopListening();
+      
+      Future.delayed(const Duration(seconds: 5), () {
+        if (!_isDisposed && oldId != null) {
+           if (oldRole == 'customer') {
+             listenAsCustomer(oldId);
+           } else if (oldRole == 'seller' && oldId.contains('-')) {
+             listenAsSellerMultiShop(oldId.split('-'));
+           } else if (oldRole == 'seller') {
+             listenAsSeller(oldId);
+           } else if (oldRole == 'delivery') {
+             listenAsDelivery(oldId);
+           } else if (oldRole == 'admin') {
+             listenAsAdmin(oldId);
+           }
+        }
+      });
+    }
   }
 
   final Map<String, String> _lastProcessedStatus = {};
@@ -392,7 +428,7 @@ class NotificationProvider extends ChangeNotifier {
             ));
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) => _onChannelDisconnect(status));
 
     // Restore persisted notification history for this user
     _loadFromDb();
@@ -420,7 +456,7 @@ class NotificationProvider extends ChangeNotifier {
             final orderId = payload.newRecord['id'] as String?;
             final status = payload.newRecord['status'] as String?;
 
-            if (status == 'awaiting_acceptance') {
+              if (status == 'awaiting_acceptance') {
               final amount =
                   (payload.newRecord['total_amount'] ?? 0.0).toDouble();
               _add(AppNotification(
@@ -432,7 +468,9 @@ class NotificationProvider extends ChangeNotifier {
               ));
               // [BELL] Ring alert bell for new pending order
               if (orderId != null) {
-                BellAlertService.instance.addPendingOrder(orderId);
+                final deadlineStr = payload.newRecord['acceptance_deadline'] as String?;
+                final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+                BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
               }
             }
           },
@@ -454,7 +492,7 @@ class NotificationProvider extends ChangeNotifier {
             if (orderId == null || newStatus == null) return;
 
             // [BELL] Handle status progression (e.g., pending_verification -> awaiting_acceptance)
-            if (newStatus == 'awaiting_acceptance' &&
+              if (newStatus == 'awaiting_acceptance' &&
                 oldStatus != 'awaiting_acceptance') {
               final amount =
                   (payload.newRecord['total_amount'] ?? 0.0).toDouble();
@@ -465,7 +503,9 @@ class NotificationProvider extends ChangeNotifier {
                     'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
                 orderId: orderId,
               ));
-              BellAlertService.instance.addPendingOrder(orderId);
+              final deadlineStr = payload.newRecord['acceptance_deadline'] as String?;
+              final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+              BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
             }
 
             // [BELL] Remove order from bell when seller accepts or order is resolved.
@@ -503,7 +543,7 @@ class NotificationProvider extends ChangeNotifier {
             }
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) => _onChannelDisconnect(status));
 
     // Restore persisted notification history for this user
     _loadFromDb();
@@ -553,7 +593,9 @@ class NotificationProvider extends ChangeNotifier {
                 ));
                 // [BELL] Ring alert bell for new pending order
                 if (orderId != null) {
-                  BellAlertService.instance.addPendingOrder(orderId);
+                  final deadlineStr = payload.newRecord['acceptance_deadline'] as String?;
+                  final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+                  BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
                 }
               }
             },
@@ -586,7 +628,9 @@ class NotificationProvider extends ChangeNotifier {
                       'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
                   orderId: orderId,
                 ));
-                BellAlertService.instance.addPendingOrder(orderId);
+                final deadlineStr = payload.newRecord['acceptance_deadline'] as String?;
+                final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+                BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
               }
 
               // [BELL] Remove order from bell when seller accepts or order is resolved.
@@ -624,7 +668,7 @@ class NotificationProvider extends ChangeNotifier {
           );
     }
 
-    _channel = chan.subscribe();
+    _channel = chan.subscribe((status, [error]) => _onChannelDisconnect(status));
 
     // Restore persisted notification history for this user
     _loadFromDb();
@@ -690,7 +734,7 @@ class NotificationProvider extends ChangeNotifier {
             }
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) => _onChannelDisconnect(status));
 
     // Restore persisted notification history for this user
     _loadFromDb();
@@ -752,7 +796,7 @@ class NotificationProvider extends ChangeNotifier {
             ));
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) => _onChannelDisconnect(status));
 
     // Restore persisted notification history for this user
     _loadFromDb();
@@ -762,9 +806,11 @@ class NotificationProvider extends ChangeNotifier {
 
   void stopListening() {
     if (_channel != null) {
+      _isIntentionalDisconnect = true;
       _supabase.removeChannel(_channel!);
     }
     _channel = null;
+    _isIntentionalDisconnect = false;
 
     // [BELL] Stop and clear all pending order bells on role switch / logout
     BellAlertService.instance.clearAll();
@@ -814,7 +860,7 @@ class NotificationProvider extends ChangeNotifier {
     final idx = _notifications.indexWhere((n) => n.id == notificationId);
     if (idx != -1) {
       _notifications[idx].isRead = true;
-      notifyListeners();
+      safeNotifyListeners();
       _markReadInDb(notificationId); // sync to DB (fire and forget)
     }
   }
@@ -823,7 +869,7 @@ class NotificationProvider extends ChangeNotifier {
     for (final n in _notifications) {
       n.isRead = true;
     }
-    notifyListeners();
+    safeNotifyListeners();
     _markAllReadInDb(); // sync to DB (fire and forget)
   }
 
@@ -831,7 +877,7 @@ class NotificationProvider extends ChangeNotifier {
   /// Called when the user taps "Clear All" in the notification panel.
   void clearAll() {
     _notifications.clear();
-    notifyListeners();
+    safeNotifyListeners();
     _clearFromDb(); // delete from DB (fire and forget)
   }
 
@@ -839,7 +885,7 @@ class NotificationProvider extends ChangeNotifier {
   /// Used internally when switching roles so history can be reloaded.
   void _clearMemory() {
     _notifications.clear();
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   void _add(AppNotification notification) {
@@ -913,7 +959,7 @@ class NotificationProvider extends ChangeNotifier {
           _notifications.add(notif);
         }
       }
-      notifyListeners();
+      safeNotifyListeners();
     } catch (e) {
       debugPrint('Failed to load notifications from DB: $e');
     }
@@ -1012,13 +1058,15 @@ class NotificationProvider extends ChangeNotifier {
     try {
       final rows = await _supabase
           .from('orders')
-          .select('id')
+          .select('id, acceptance_deadline')
           .eq('shop_id', shopId)
           .eq('seller_accepted', false)
           .inFilter('status', ['awaiting_acceptance']);
       for (final row in rows) {
         final orderId = row['id'] as String?;
-        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+        final deadlineStr = row['acceptance_deadline'] as String?;
+        final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
       }
     } catch (e) {
       debugPrint('[NotifProvider] _initBellForPendingSeller: $e');
@@ -1031,13 +1079,15 @@ class NotificationProvider extends ChangeNotifier {
     try {
       final rows = await _supabase
           .from('orders')
-          .select('id')
+          .select('id, acceptance_deadline')
           .inFilter('shop_id', shopIds)
           .eq('seller_accepted', false)
           .inFilter('status', ['awaiting_acceptance']);
       for (final row in rows) {
         final orderId = row['id'] as String?;
-        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
+        final deadlineStr = row['acceptance_deadline'] as String?;
+        final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
       }
     } catch (e) {
       debugPrint('[NotifProvider] _initBellForPendingSellerMulti: $e');
@@ -1228,6 +1278,7 @@ class NotificationProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _debounceTimer?.cancel();
     _orderCancelledStreamController.close();
     stopListening();

@@ -41,17 +41,25 @@ class RolesRepository {
         .replaceAll(' ', '_')
         .replaceAll(RegExp(r'[^a-z0-9_]'), '');
 
-    final roleData = await _db
-        .from('roles')
-        .insert({
-          'name': name,
-          'slug': slug,
-          'description': description,
-          'is_system': false,
-          'color': color,
-        })
-        .select()
-        .single();
+    late final Map<String, dynamic> roleData;
+    try {
+      roleData = await _db
+          .from('roles')
+          .insert({
+            'name': name,
+            'slug': slug,
+            'description': description,
+            'is_system': false,
+            'color': color,
+          })
+          .select()
+          .single();
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        throw Exception('A role with this name already exists.');
+      }
+      rethrow;
+    }
 
     final roleId = roleData['id'] as String;
 
@@ -85,15 +93,22 @@ class RolesRepository {
     required List<String> permissionCodes,
   }) async {
     // Only allow editing non-system roles
-    await _db
-        .from('roles')
-        .update({
-          'name': name,
-          'description': description,
-          'color': color,
-        })
-        .eq('id', roleId)
-        .eq('is_system', false);
+    try {
+      await _db
+          .from('roles')
+          .update({
+            'name': name,
+            'description': description,
+            'color': color,
+          })
+          .eq('id', roleId)
+          .eq('is_system', false);
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        throw Exception('A role with this name already exists.');
+      }
+      rethrow;
+    }
 
     // Replace permissions: delete all then re-insert
     await _db.from('role_permissions').delete().eq('role_id', roleId);
@@ -135,7 +150,15 @@ class RolesRepository {
     if (role['is_system'] == true) {
       throw Exception('Cannot delete system roles');
     }
-    await _db.from('roles').delete().eq('id', roleId);
+    
+    try {
+      await _db.from('roles').delete().eq('id', roleId);
+    } on PostgrestException catch (e) {
+      if (e.code == '23503') {
+        throw Exception('Cannot delete role because it is currently assigned to one or more users.');
+      }
+      rethrow;
+    }
   }
 
   // ── Fetch all permissions ───────────────────────────────────

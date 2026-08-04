@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../main.dart';
 import '../config/routes.dart';
-
+import 'telemetry_service.dart';
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -74,8 +74,8 @@ class NotificationService {
                     AppRoutes.customerHome, (route) => false);
               }
             }
-          } catch (e) {
-            debugPrint('Error parsing notification payload: $e');
+          } catch (e, st) {
+            TelemetryService.instance.logError('NotificationTapParser', e, st);
           }
         }
       },

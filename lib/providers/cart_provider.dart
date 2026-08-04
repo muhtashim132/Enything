@@ -102,6 +102,12 @@ class RestoreResult {
 }
 
 class CartProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   static const String _cartKey =
       'enything_cart_v2'; // Bumped for variant support
   static const String _legacyCartKey = 'enything_cart_v1';
@@ -133,8 +139,10 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
+  StreamSubscription? _authSubscription;
+
   void _listenToAuthState() {
-    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedOut) {
         clear();
       }
@@ -143,6 +151,8 @@ class CartProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
+    _isDisposed = true;
     PlatformConfigProvider.instance?.removeListener(notifyListeners);
     super.dispose();
   }
@@ -297,7 +307,7 @@ class CartProvider extends ChangeNotifier {
 
     if (!suppressSave) {
       _saveCart(); // Bug #20
-      notifyListeners();
+      safeNotifyListeners();
     }
     return null;
   }
@@ -335,6 +345,13 @@ class CartProvider extends ChangeNotifier {
               Text(msg, style: const TextStyle(fontSize: 12)),
             ],
           ),
+          action: SnackBarAction(
+            label: 'View Cart',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.pushNamed(context, '/cart');
+            },
+          ),
           backgroundColor:
               const Color(0xFF10B981), // AppColors.success fallback
           behavior: SnackBarBehavior.floating,
@@ -349,7 +366,7 @@ class CartProvider extends ChangeNotifier {
         item.product.id == productId &&
         item.selectedVariant?.name == variantName);
     _saveCart(); // Bug #20
-    notifyListeners();
+    safeNotifyListeners();
   }
 
   void updateQuantity(String productId, int quantity, {String? variantName}) {
@@ -363,14 +380,21 @@ class CartProvider extends ChangeNotifier {
         _items[idx].quantity = quantity;
       }
       _saveCart(); // Bug #20
-      notifyListeners();
+      safeNotifyListeners();
     }
   }
 
   void clear() {
     _items.clear();
     _saveCart(); // Bug #20
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  /// Explicitly await the disk persistence before proceeding to prevent race conditions.
+  Future<void> clearAsync() async {
+    _items.clear();
+    safeNotifyListeners();
+    await _saveCart();
   }
 
   // ---------------------------------------------------------------------------
@@ -452,7 +476,7 @@ class CartProvider extends ChangeNotifier {
       }
       _items.clear();
       _items.addAll(parsedList);
-      notifyListeners();
+      safeNotifyListeners();
     } catch (e) {
       debugPrint('CartProvider: failed to load cart: $e');
       // Corrupted data — wipe it
@@ -629,7 +653,7 @@ class CartProvider extends ChangeNotifier {
 
       if (added > 0) {
         _saveCart();
-        notifyListeners();
+        safeNotifyListeners();
       }
 
       // Mark as processed (re-read to prevent async write-overwrite race condition)

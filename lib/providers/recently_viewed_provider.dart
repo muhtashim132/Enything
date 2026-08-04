@@ -4,6 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/product_model.dart';
 
 class RecentlyViewedProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   static const _key = 'recently_viewed_ids';
   static const _maxItems = 50;
 
@@ -62,12 +68,12 @@ class RecentlyViewedProvider extends ChangeNotifier {
   Future<void> _fetchProducts({bool loadAll = false}) async {
     if (_ids.isEmpty) {
       _products = [];
-      notifyListeners();
+      safeNotifyListeners();
       return;
     }
 
     _isLoading = true;
-    notifyListeners();
+    safeNotifyListeners();
 
     try {
       final idsToFetch = loadAll ? _ids : _ids.take(6).toList();
@@ -113,7 +119,7 @@ class RecentlyViewedProvider extends ChangeNotifier {
       // Non-fatal: silently fail; home page will just not show this section
     } finally {
       _isLoading = false;
-      notifyListeners();
+      safeNotifyListeners();
     }
   }
 
@@ -123,6 +129,12 @@ class RecentlyViewedProvider extends ChangeNotifier {
     _loadedAll = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_key);
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

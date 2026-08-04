@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FavoritesProvider extends ChangeNotifier {
+  bool _isDisposed = false;
+
+  void safeNotifyListeners() {
+    if (!_isDisposed) notifyListeners();
+  }
+
   final SupabaseClient? _mockClient;
 
   FavoritesProvider({SupabaseClient? mockClient}) : _mockClient = mockClient;
@@ -28,7 +34,7 @@ class FavoritesProvider extends ChangeNotifier {
 
   Future<void> fetchFavorites(String userId) async {
     _isLoading = true;
-    notifyListeners();
+    safeNotifyListeners();
 
     try {
       final response = await _supabase
@@ -51,7 +57,7 @@ class FavoritesProvider extends ChangeNotifier {
       debugPrint('Error fetching favorites: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      safeNotifyListeners();
     }
   }
 
@@ -67,7 +73,7 @@ class FavoritesProvider extends ChangeNotifier {
       } else {
         _favoriteProductIds.add(productId);
       }
-      notifyListeners();
+      safeNotifyListeners();
 
       try {
         if (isFav) {
@@ -92,7 +98,7 @@ class FavoritesProvider extends ChangeNotifier {
         } else {
           _favoriteProductIds.remove(productId);
         }
-        notifyListeners();
+        safeNotifyListeners();
       }
     });
 
@@ -111,7 +117,7 @@ class FavoritesProvider extends ChangeNotifier {
       } else {
         _favoriteShopIds.add(shopId);
       }
-      notifyListeners();
+      safeNotifyListeners();
 
       try {
         if (isFav) {
@@ -136,7 +142,7 @@ class FavoritesProvider extends ChangeNotifier {
         } else {
           _favoriteShopIds.remove(shopId);
         }
-        notifyListeners();
+        safeNotifyListeners();
       }
     });
 
@@ -146,6 +152,12 @@ class FavoritesProvider extends ChangeNotifier {
   void clear() {
     _favoriteProductIds.clear();
     _favoriteShopIds.clear();
-    notifyListeners();
+    safeNotifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }
