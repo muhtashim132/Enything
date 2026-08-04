@@ -579,6 +579,46 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     return active.fold(0.0, (sum, o) => sum + o.gstDelivery);
   }
 
+  double _computeGroupSmallCartFee() {
+    final active = _groupOrders.isEmpty
+        ? [_order!]
+        : _groupOrders
+            .where(
+                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
+            .toList();
+    return active.fold(0.0, (sum, o) => sum + o.smallCartFee);
+  }
+
+  double _computeGroupHeavyOrderFee() {
+    final active = _groupOrders.isEmpty
+        ? [_order!]
+        : _groupOrders
+            .where(
+                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
+            .toList();
+    return active.fold(0.0, (sum, o) => sum + o.heavyOrderFee);
+  }
+
+  double _computeGroupMultiShopSurcharge() {
+    final active = _groupOrders.isEmpty
+        ? [_order!]
+        : _groupOrders
+            .where(
+                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
+            .toList();
+    return active.fold(0.0, (sum, o) => sum + o.multiShopSurcharge);
+  }
+
+  double _computeGroupCouponDiscount() {
+    final active = _groupOrders.isEmpty
+        ? [_order!]
+        : _groupOrders
+            .where(
+                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
+            .toList();
+    return active.fold(0.0, (sum, o) => sum + o.couponDiscount);
+  }
+
   double _computeGroupGstPlatform() {
     final active = _groupOrders.isEmpty
         ? [_order!]
@@ -2610,13 +2650,41 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           isDark: isDark),
                       const SizedBox(height: 8),
                       _billRow('Delivery Fee',
-                          '₹${(_computeGroupDeliveryCharges() - _computeGroupGstDelivery()).toStringAsFixed(0)}',
+                          '₹${(_computeGroupDeliveryCharges() - _computeGroupGstDelivery() - _computeGroupSmallCartFee() - _computeGroupHeavyOrderFee() - _computeGroupMultiShopSurcharge()).toStringAsFixed(0)}',
                           isDark: isDark),
+                      if (_computeGroupSmallCartFee() > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow('Small Cart Fee',
+                            '+₹${_computeGroupSmallCartFee().toStringAsFixed(0)}',
+                            isDark: isDark,
+                            valueColor: Colors.orange.shade700),
+                      ],
+                      if (_computeGroupHeavyOrderFee() > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow('Heavy Order Fee',
+                            '+₹${_computeGroupHeavyOrderFee().toStringAsFixed(0)}',
+                            isDark: isDark,
+                            valueColor: Colors.orange.shade700),
+                      ],
+                      if (_computeGroupMultiShopSurcharge() > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow('Multi-shop fee',
+                            '+₹${_computeGroupMultiShopSurcharge().toStringAsFixed(0)}',
+                            isDark: isDark,
+                            valueColor: Colors.orange.shade700),
+                      ],
                       if (_computeGroupPlatformFee() > 0) ...[
                         const SizedBox(height: 8),
                         _billRow('Handling Fee',
                             '₹${(_computeGroupPlatformFee() - _computeGroupGstPlatform()).toStringAsFixed(2)}',
                             isDark: isDark),
+                      ],
+                      if (_computeGroupCouponDiscount() > 0) ...[
+                        const SizedBox(height: 8),
+                        _billRow('Promo',
+                            '-₹${_computeGroupCouponDiscount().toStringAsFixed(2)}',
+                            isDark: isDark,
+                            valueColor: AppColors.success),
                       ],
                       if ((_computeGroupGstItemTotal() +
                               _computeGroupGstDelivery() +
@@ -3092,7 +3160,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           _showAlternativesDialog(
                               item,
                               rejectedOrders
-                                  .firstWhere((o) => o.items.contains(item)));
+                                  .firstWhere((o) => o.items.any((i) => i.productId == item.productId)));
                         },
                         icon: const Icon(Icons.search,
                             size: 16, color: Colors.white),
@@ -3836,7 +3904,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   Widget _billRow(String label, String value,
-      {bool isBold = false, bool isDark = false}) {
+      {bool isBold = false, bool isDark = false, Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -3859,9 +3927,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             style: GoogleFonts.outfit(
               fontWeight: isBold ? FontWeight.w900 : FontWeight.w600,
               fontSize: isBold ? 16 : 13,
-              color: isBold
+              color: valueColor ?? (isBold
                   ? AppColors.primary
-                  : (isDark ? Colors.white70 : AppColors.textPrimary),
+                  : (isDark ? Colors.white70 : AppColors.textPrimary)),
             )),
       ],
     );

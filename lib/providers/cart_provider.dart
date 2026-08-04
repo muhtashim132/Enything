@@ -351,6 +351,9 @@ class CartProvider extends ChangeNotifier {
       
       final currentRoute = ModalRoute.of(context)?.settings.name;
       final isMainPage = currentRoute == AppRoutes.customerHome || currentRoute == '/';
+      final hasBuiltInCart = currentRoute == AppRoutes.allListings ||
+                             currentRoute == AppRoutes.restaurant ||
+                             currentRoute == AppRoutes.restaurantDashboard;
 
       if (isMainPage) {
         final notifId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -364,7 +367,7 @@ class CartProvider extends ChangeNotifier {
             safeNotifyListeners();
           }
         });
-      } else {
+      } else if (!hasBuiltInCart) {
         final bottomPadding = MediaQuery.paddingOf(context).bottom;
         final navBarHeight = 70.0 + (bottomPadding > 0 ? bottomPadding + 8.0 : 20.0);
 

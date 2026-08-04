@@ -1,20 +1,21 @@
-# End-to-End Edge Case Stress Testing & Bug Fixes
+# Goal Description
+Fix UI and backend calculations for partial order rejection and searching alternative items.
 
-As requested, I have performed a rigorous, 100x line-by-line architectural stress test of the entire order placement and fetching flow, simulating the exact database queries and error states that happen after confirming an order.
+## Proposed Changes
+1. **Fix `TrackOrderPage` Search Alternatives Crash**
+   - The user gets an error when searching for different items after a realtime update changes the state.
+   - The crash happens in `_showMissingItemsSheet` when calling `rejectedOrders.firstWhere((o) => o.items.contains(item))`. Since `OrderItem` doesn't override `==` and the list is recreated from the database on reconnect, reference equality fails.
+   - **Fix:** Change `o.items.contains(item)` to `o.items.any((i) => i.productId == item.productId)`.
 
-## Findings from the Architecture Stress Test
-Through simulating the backend logic, I discovered **three critical cascading logic failures** that would cause the order insertion to fail, leading to either app crashes or invisible orders:
+2. **Fix Backend Reallocation Math (`reallocate_cancelled_delivery_fees`)**
+   - In `20290000000001_fix_reallocate_unpaid_grand_total.sql` (and its predecessors), `v_net_delivery` and `rider_earnings` explicitly add `multi_shop_surcharge`, `small_cart_fee`, and `heavy_order_fee`.
+   - However, in `place_orders_transaction.txt`, `delivery_charges` **already includes** all these surcharges.
+   - Adding them again double-counts the surcharges, artificially inflating `grand_total_collected` and `rider_earnings`.
+   - **Fix:** Create a new migration `20290000000013_100x_partial_rejection_math_double_count_fix.sql` to correct `reallocate_cancelled_delivery_fees`. The formulas will simply use `rec.delivery_charges + v_split_delivery` for delivery, and correctly subtract only `small_cart_fee` for rider earnings, matching the checkout logic exactly.
 
-1. **GST Calculation Mismatch**: When a customer ordered items with dynamic GST rates (e.g., non-food items), the backend RPC \place_orders_transaction\ used a flawed variable (\_gst_override\ instead of \_item.gst_rate_override\). This caused a \P0001\ exception due to a mismatch between the Flutter app's calculated grand total and the Postgres server's strict validation total.
-2. **Coupon Processing Crash**: If a customer used a coupon, the RPC crashed because it referenced an undeclared variable \_cart_group_id\ instead of the correct parameter \p_cart_group_id\.
-3. **Foreign Key Violations on Profiles**: If an account did not fully complete their KYC/Profile, the \orders_customer_id_fkey\ constraint would violently reject the order, leaving the database state empty.
-
-## Fixes Implemented
-To rectify this once and for all without altering any other logic, I created a purely **additive** SQL migration (\20271125000011_100x_checkout_gst_override_fix.sql\) that replaces the body of \place_orders_transaction\ with the correct variable references.
-
-- The RLS policies on \orders\ and \order_items\ have been heavily audited and confirmed to correctly grant \SELECT\ access to the customer immediately after insertion.
-- The \TrackOrderPage\ query relies on these policies and will perfectly fetch the order once it is successfully placed by the newly fixed RPC.
+3. **Fix `TrackOrderPage` Bill Summary Display**
+   - The UI Bill Summary does not show `small_cart_fee`, `heavy_order_fee`, and `multi_shop_surcharge` rows, leading to confusion when the math does not add up visually. Wait, if `delivery_charges` includes them, should we separate them out in the UI? 
+   - Actually, in `checkout_page.dart`, they ARE separated out for display! Checkout subtracts them from `effectiveBase` to show them cleanly. I will align `TrackOrderPage`'s Bill Summary to match `checkout_page.dart` exactly so the numbers sum up beautifully.
 
 ## User Review Required
-> [!IMPORTANT]
-> The purely additive SQL fix has already been created. Would you like me to push it to the Supabase database and proceed to verify the final end-to-end flow?
+Please confirm this plan. The SQL fix handles the core backend math, and the UI fixes resolve the visual display and crashes.
