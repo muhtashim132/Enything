@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/order_model.dart';
 import '../../theme/app_colors.dart';
+import '../../services/telemetry_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Colour palette (customer perspective — no pickup leg)
@@ -275,7 +276,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           '&end=${to.longitude},${to.latitude}',
         );
 
-        final resp = await http.get(url).timeout(const Duration(seconds: 10));
+        final resp = await TelemetryService.instance.trackLatency('ors_route_customer', () async {
+          return await http.get(url).timeout(const Duration(seconds: 10));
+        });
         if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');
 
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -293,11 +296,12 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                   (c[0] as num).toDouble(),
                 ))
             .toList();
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('ORS route error (attempt $attempt): $e');
         if (attempt == maxRetries) {
           debugPrint(
               'Falling back to straight line after $maxRetries attempts');
+          TelemetryService.instance.logError('ors_route_customer_fail', e, st);
           return [from, to];
         }
         await Future.delayed(Duration(seconds: retryDelaySeconds));

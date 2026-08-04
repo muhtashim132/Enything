@@ -555,4 +555,40 @@ class OrderItem {
   }
 
   double get totalPrice => price * quantity;
+
+  OrderItem copyWith({
+    String? id,
+    String? productId,
+    String? productName,
+    String? variantName,
+    int? quantity,
+    double? price,
+    double? weightKg,
+    String? specialInstructions,
+    bool? requiresPrescription,
+  }) {
+    return OrderItem(
+      id: id ?? this.id,
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      variantName: variantName ?? this.variantName,
+      quantity: quantity ?? this.quantity,
+      price: price ?? this.price,
+      weightKg: weightKg ?? this.weightKg,
+      specialInstructions: specialInstructions ?? this.specialInstructions,
+      requiresPrescription: requiresPrescription ?? this.requiresPrescription,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'product_id': productId,
+        'product_name': productName,
+        'variant_name': variantName,
+        'quantity': quantity,
+        'price': price,
+        'weight_kg': weightKg,
+        'special_instructions': specialInstructions,
+        'requires_prescription': requiresPrescription,
+      };
 }

@@ -37,4 +37,40 @@ class CartItem {
         return defaultW * quantity;
     }
   }
+
+  CartItem copyWith({
+    ProductModel? product,
+    ShopModel? shop,
+    int? quantity,
+    String? specialInstructions,
+    ProductVariant? selectedVariant,
+  }) {
+    return CartItem(
+      product: product ?? this.product,
+      shop: shop ?? this.shop,
+      quantity: quantity ?? this.quantity,
+      specialInstructions: specialInstructions ?? this.specialInstructions,
+      selectedVariant: selectedVariant ?? this.selectedVariant,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'product': product.toMap(),
+        'shop': shop.toMap(),
+        'quantity': quantity,
+        'special_instructions': specialInstructions,
+        'selected_variant': selectedVariant?.toMap(),
+      };
+
+  factory CartItem.fromMap(Map<String, dynamic> map) {
+    return CartItem(
+      product: ProductModel.fromMap(map['product'] as Map<String, dynamic>),
+      shop: ShopModel.fromMap(map['shop'] as Map<String, dynamic>),
+      quantity: map['quantity'] as int? ?? 1,
+      specialInstructions: map['special_instructions'] as String?,
+      selectedVariant: map['selected_variant'] != null
+          ? ProductVariant.fromMap(map['selected_variant'] as Map<String, dynamic>)
+          : null,
+    );
+  }
 }

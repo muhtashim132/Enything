@@ -11,6 +11,16 @@ import '../config/tax_config.dart';
 import '../providers/platform_config_provider.dart';
 import '../utils/delivery_calculator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../main.dart' show scaffoldMessengerKey, navigatorKey;
+import '../config/routes.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+class CartNotification {
+  final String id;
+  final String title;
+  final String message;
+  CartNotification({required this.id, required this.title, required this.message});
+}
 
 // ---------------------------------------------------------------------------
 // Serialization helpers (Bug #20)
@@ -124,6 +134,10 @@ class CartProvider extends ChangeNotifier {
     _pendingCartGroupId = id;
     // No notifyListeners() needed — this is read at checkout build time
   }
+
+  CartNotification? _recentNotification;
+  CartNotification? get recentNotification => _recentNotification;
+  Timer? _notificationTimer;
 
   CartProvider() {
     _safeAddPlatformListener();
@@ -317,10 +331,10 @@ class CartProvider extends ChangeNotifier {
       {int quantity = 1, ProductVariant? selectedVariant}) {
     final err = addItem(product, shop,
         quantity: quantity, selectedVariant: selectedVariant);
-    ScaffoldMessenger.of(context).clearSnackBars();
+    scaffoldMessengerKey.currentState?.clearSnackBars();
 
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(err),
           backgroundColor: const Color(0xFFEF4444), // AppColors.danger fallback
@@ -333,31 +347,69 @@ class CartProvider extends ChangeNotifier {
           ? '${shops.length} shop${shops.length > 1 ? 's' : ''} selected, $remaining remaining if needed'
           : 'Added successfully. Cart is full (Max 3 shops).';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${product.name} added to cart! 🛒',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(msg, style: const TextStyle(fontSize: 12)),
-            ],
+      final title = '${product.name} added to cart!';
+      
+      final currentRoute = ModalRoute.of(context)?.settings.name;
+      final isMainPage = currentRoute == AppRoutes.customerHome || currentRoute == '/';
+
+      if (isMainPage) {
+        final notifId = DateTime.now().millisecondsSinceEpoch.toString();
+        _recentNotification = CartNotification(id: notifId, title: title, message: msg);
+        safeNotifyListeners();
+
+        _notificationTimer?.cancel();
+        _notificationTimer = Timer(const Duration(seconds: 3), () {
+          if (_recentNotification?.id == notifId) {
+            _recentNotification = null;
+            safeNotifyListeners();
+          }
+        });
+      } else {
+        final bottomPadding = MediaQuery.paddingOf(context).bottom;
+        final navBarHeight = 70.0 + (bottomPadding > 0 ? bottomPadding + 8.0 : 20.0);
+
+        final controller = scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(msg, style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70)),
+              ],
+            ),
+            action: SnackBarAction(
+              label: 'View Cart',
+              textColor: Colors.white,
+              onPressed: () {
+                navigatorKey.currentState?.pushNamed(AppRoutes.cart);
+              },
+            ),
+            backgroundColor: const Color(0xFF1E3FD8).withValues(alpha: 0.95), // theme blue
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: navBarHeight + 16.0,
+              left: 16.0,
+              right: 16.0,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            elevation: 8,
+            duration: const Duration(seconds: 3),
           ),
-          action: SnackBarAction(
-            label: 'View Cart',
-            textColor: Colors.white,
-            onPressed: () {
-              Navigator.pushNamed(context, '/cart');
-            },
-          ),
-          backgroundColor:
-              const Color(0xFF10B981), // AppColors.success fallback
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+        );
+
+        // Additive fix: Force close after duration to bypass sticky SnackBar bug
+        Future.delayed(const Duration(seconds: 3), () {
+          try {
+            controller?.close();
+          } catch (_) {}
+        });
+      }
     }
   }
 
@@ -365,6 +417,7 @@ class CartProvider extends ChangeNotifier {
     _items.removeWhere((item) =>
         item.product.id == productId &&
         item.selectedVariant?.name == variantName);
+    scaffoldMessengerKey.currentState?.clearSnackBars();
     _saveCart(); // Bug #20
     safeNotifyListeners();
   }
@@ -376,6 +429,7 @@ class CartProvider extends ChangeNotifier {
     if (idx != -1) {
       if (quantity <= 0) {
         _items.removeAt(idx);
+        scaffoldMessengerKey.currentState?.clearSnackBars();
       } else {
         _items[idx].quantity = quantity;
       }
@@ -386,6 +440,7 @@ class CartProvider extends ChangeNotifier {
 
   void clear() {
     _items.clear();
+    scaffoldMessengerKey.currentState?.clearSnackBars();
     _saveCart(); // Bug #20
     safeNotifyListeners();
   }
@@ -393,6 +448,7 @@ class CartProvider extends ChangeNotifier {
   /// Explicitly await the disk persistence before proceeding to prevent race conditions.
   Future<void> clearAsync() async {
     _items.clear();
+    scaffoldMessengerKey.currentState?.clearSnackBars();
     safeNotifyListeners();
     await _saveCart();
   }

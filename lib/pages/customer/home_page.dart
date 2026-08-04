@@ -634,7 +634,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     arguments: {'orderId': activeOrder['id']})
                 .then((_) => _isActiveOrderNavigating = false);
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            final controller = ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: const Text('You have an active order in progress.'),
               action: SnackBarAction(
                 label: 'Track',
@@ -650,6 +650,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               backgroundColor: AppColors.primary,
               duration: const Duration(seconds: 10),
             ));
+
+            // Additive fix: Force close after duration to bypass sticky SnackBar bug
+            Future.delayed(const Duration(seconds: 10), () {
+              try {
+                controller.close();
+              } catch (_) {}
+            });
           }
         }
       } catch (e) {

@@ -106,6 +106,22 @@ void main() async {
     pendingNotificationData = initialMessage.data;
   }
 
+  // Also check if the app was launched by tapping a *local* notification 
+  // (e.g. from the background handler).
+  if (pendingNotificationData == null) {
+    try {
+      final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+      final launchDetails = await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+      if (launchDetails != null && 
+          launchDetails.didNotificationLaunchApp && 
+          launchDetails.notificationResponse?.payload != null) {
+        pendingNotificationData = jsonDecode(launchDetails.notificationResponse!.payload!) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('Failed to parse local notification launch payload: $e');
+    }
+  }
+
   runApp(EnythingApp(
     cartProvider: cartProvider,
     configProvider: configProvider,
@@ -114,6 +130,7 @@ void main() async {
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 /// Holds the FCM notification data from a terminated-app launch so that the
 /// SplashPage can process it AFTER its own navigation completes — preventing
@@ -292,6 +309,7 @@ class EnythingApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
           return MaterialApp(
+            scaffoldMessengerKey: scaffoldMessengerKey,
             navigatorKey: navigatorKey,
             navigatorObservers: [GlobalRouteObserver()],
             builder: (context, child) =>

@@ -37,6 +37,22 @@ class ProductVariant {
     }
     return null;
   }
+
+  ProductVariant copyWith({
+    String? id,
+    String? name,
+    double? price,
+    double? originalPrice,
+    bool? isAvailable,
+  }) {
+    return ProductVariant(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      price: price ?? this.price,
+      originalPrice: originalPrice ?? this.originalPrice,
+      isAvailable: isAvailable ?? this.isAvailable,
+    );
+  }
 }
 
 class ProductModel {
@@ -174,5 +190,59 @@ class ProductModel {
       return ((originalPrice! - price) / originalPrice! * 100);
     }
     return null;
+  }
+
+  ProductModel copyWith({
+    String? id,
+    String? shopId,
+    String? name,
+    String? category,
+    String? subCategory,
+    String? brand,
+    double? price,
+    double? originalPrice,
+    int? totalQuantity,
+    double? weightPerUnit,
+    String? unitType,
+    String? description,
+    List<String>? images,
+    bool? isVeg,
+    String? menuCategory,
+    int? prepTimeMinutes,
+    List<String>? specialTags,
+    bool? isAvailable,
+    double? rating,
+    int? totalReviews,
+    bool? requiresPrescription,
+    String? medicineType,
+    List<ProductVariant>? variants,
+    double? gstRateOverride,
+  }) {
+    return ProductModel(
+      id: id ?? this.id,
+      shopId: shopId ?? this.shopId,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      subCategory: subCategory ?? this.subCategory,
+      brand: brand ?? this.brand,
+      price: price ?? this.price,
+      originalPrice: originalPrice ?? this.originalPrice,
+      totalQuantity: totalQuantity ?? this.totalQuantity,
+      weightPerUnit: weightPerUnit ?? this.weightPerUnit,
+      unitType: unitType ?? this.unitType,
+      description: description ?? this.description,
+      images: images ?? this.images,
+      isVeg: isVeg ?? this.isVeg,
+      menuCategory: menuCategory ?? this.menuCategory,
+      prepTimeMinutes: prepTimeMinutes ?? this.prepTimeMinutes,
+      specialTags: specialTags ?? this.specialTags,
+      isAvailable: isAvailable ?? this.isAvailable,
+      rating: rating ?? this.rating,
+      totalReviews: totalReviews ?? this.totalReviews,
+      requiresPrescription: requiresPrescription ?? this.requiresPrescription,
+      medicineType: medicineType ?? this.medicineType,
+      variants: variants ?? this.variants,
+      gstRateOverride: gstRateOverride ?? this.gstRateOverride,
+    );
   }
 }

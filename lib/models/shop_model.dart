@@ -157,4 +157,78 @@ class ShopModel {
       return isActive;
     }
   }
+
+  ShopModel copyWith({
+    String? id,
+    String? sellerId,
+    String? name,
+    String? shopType,
+    String? cuisineType,
+    String? fssaiNumber,
+    int? prepTimeMinutes,
+    bool? isVegOnly,
+    String? openingHours,
+    String? openTime,
+    String? closeTime,
+    String? address,
+    LatLng? location,
+    String? category,
+    List<String>? categories,
+    bool? isActive,
+    double? rating,
+    int? totalReviews,
+    int? totalOrders,
+    String? bannerImage,
+    double? distanceKm,
+  }) {
+    return ShopModel(
+      id: id ?? this.id,
+      sellerId: sellerId ?? this.sellerId,
+      name: name ?? this.name,
+      shopType: shopType ?? this.shopType,
+      cuisineType: cuisineType ?? this.cuisineType,
+      fssaiNumber: fssaiNumber ?? this.fssaiNumber,
+      prepTimeMinutes: prepTimeMinutes ?? this.prepTimeMinutes,
+      isVegOnly: isVegOnly ?? this.isVegOnly,
+      openingHours: openingHours ?? this.openingHours,
+      openTime: openTime ?? this.openTime,
+      closeTime: closeTime ?? this.closeTime,
+      address: address ?? this.address,
+      location: location ?? this.location,
+      category: category ?? this.category,
+      categories: categories ?? this.categories,
+      isActive: isActive ?? this.isActive,
+      rating: rating ?? this.rating,
+      totalReviews: totalReviews ?? this.totalReviews,
+      totalOrders: totalOrders ?? this.totalOrders,
+      bannerImage: bannerImage ?? this.bannerImage,
+      distanceKm: distanceKm ?? this.distanceKm,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'seller_id': sellerId,
+        'name': name,
+        'shop_type': shopType,
+        'cuisine_type': cuisineType,
+        'fssai_number': fssaiNumber,
+        'prep_time_minutes': prepTimeMinutes,
+        'is_veg_only': isVegOnly,
+        'opening_hours': openingHours,
+        'open_time': openTime,
+        'close_time': closeTime,
+        'address': address,
+        'location': {
+          'type': 'Point',
+          'coordinates': [location.longitude, location.latitude],
+        },
+        'category': category,
+        'categories': categories,
+        'is_active': isActive,
+        'rating': rating,
+        'total_reviews': totalReviews,
+        'total_orders': totalOrders,
+        'banner_image': bannerImage,
+      };
 }

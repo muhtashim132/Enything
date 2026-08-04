@@ -132,7 +132,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
           : '$added items added to cart!';
 
       ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
+      final controller = ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             msg,
@@ -156,6 +156,13 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
           ),
         ),
       );
+
+      // Additive fix: Force close after duration to bypass sticky SnackBar bug
+      Future.delayed(const Duration(seconds: 3), () {
+        try {
+          controller.close();
+        } catch (_) {}
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

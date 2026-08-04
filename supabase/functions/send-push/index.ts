@@ -248,7 +248,7 @@ Deno.serve(async (req: Request) => {
                       title: title,
                       body: body,
                     },
-                    sound: 'default',
+                    sound: soundFile ? `${soundFile}.wav` : 'default',
                     badge: 1,
                     // NOTE: 'content-available': 1 has been REMOVED.
                     // That flag marks the message as a SILENT background update,

@@ -489,85 +489,159 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               ],
             ),
             padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: CustomerHomeViewState.globalIsFiltering,
-                  builder: (context, isFiltering, _) {
-                    return _buildNavItem(
-                        0, Icons.home_rounded, Icons.home_outlined, 'Home',
-                        overrideSelected: isFiltering ? false : null);
-                  },
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeInBack,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.9, end: 1.0).animate(animation),
+                  child: child,
                 ),
-                _buildNavItem(1, Icons.favorite_rounded,
-                    Icons.favorite_border_rounded, 'Favs'),
-
-                // Prominent Cart inside the pill
-                GestureDetector(
-                  onTap: () => Navigator.pushNamed(context, AppRoutes.cart),
-                  child: Container(
-                    height: 64, // Increased size
-                    width: 64, // Increased size
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.secondary,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.secondary.withValues(alpha: 0.5),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        )
-                      ],
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.none,
+              ),
+              child: cart.recentNotification != null
+                  ? _buildNotificationView(context, cart.recentNotification!)
+                  : Row(
+                      key: const ValueKey('nav_row'),
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        const Icon(Icons.shopping_cart_outlined,
-                            color: Colors.white,
-                            size: 28), // Increased icon size
-                        if (cart.totalItemCount > 0)
-                          Positioned(
-                            right: -2,
-                            top: -2,
-                            child: Container(
-                              constraints: const BoxConstraints(
-                                minWidth: 18,
-                                minHeight: 18,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 4, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.danger,
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                              child: Text(
-                                cart.totalItemCount > 99
-                                    ? '99+'
-                                    : '${cart.totalItemCount}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: CustomerHomeViewState.globalIsFiltering,
+                          builder: (context, isFiltering, _) {
+                            return _buildNavItem(
+                                0, Icons.home_rounded, Icons.home_outlined, 'Home',
+                                overrideSelected: isFiltering ? false : null);
+                          },
+                        ),
+                        _buildNavItem(1, Icons.favorite_rounded,
+                            Icons.favorite_border_rounded, 'Favs'),
+
+                        // Prominent Cart inside the pill
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(context, AppRoutes.cart),
+                          child: Container(
+                            height: 64, // Increased size
+                            width: 64, // Increased size
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.secondary,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.secondary.withValues(alpha: 0.5),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                )
+                              ],
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              clipBehavior: Clip.none,
+                              children: [
+                                const Icon(Icons.shopping_cart_outlined,
+                                    color: Colors.white,
+                                    size: 28), // Increased icon size
+                                if (cart.totalItemCount > 0)
+                                  Positioned(
+                                    right: -2,
+                                    top: -2,
+                                    child: Container(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 18,
+                                        minHeight: 18,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 4, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.danger,
+                                        borderRadius: BorderRadius.circular(9),
+                                      ),
+                                      child: Text(
+                                        cart.totalItemCount > 99
+                                            ? '99+'
+                                            : '${cart.totalItemCount}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
+                        ),
+
+                        _buildNavItem(2, Icons.receipt_long_rounded,
+                            Icons.receipt_long_outlined, 'Orders'),
+                        _buildNavItem(3, Icons.person_rounded,
+                            Icons.person_outline_rounded, 'Profile'),
                       ],
                     ),
-                  ),
-                ),
-
-                _buildNavItem(2, Icons.receipt_long_rounded,
-                    Icons.receipt_long_outlined, 'Orders'),
-                _buildNavItem(3, Icons.person_rounded,
-                    Icons.person_outline_rounded, 'Profile'),
-              ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationView(BuildContext context, CartNotification notification) {
+    return Container(
+      key: const ValueKey('notification_view'),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  notification.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  notification.message,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pushNamed(context, AppRoutes.cart);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              minimumSize: const Size(0, 36),
+            ),
+            child: Text(
+              'View Cart',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

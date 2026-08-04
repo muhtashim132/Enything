@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/order_model.dart';
 import '../../theme/app_colors.dart';
+import '../../services/telemetry_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Colour palette (seller perspective — both legs visible)
@@ -132,37 +133,52 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
   // ── ORS Route Fetching ───────────────────────────────────────────────────
 
   Future<List<LatLng>> _fetchORSRoute(LatLng from, LatLng to) async {
-    try {
-      final key = dotenv.maybeGet('ORS_API_KEY') ?? '';
-      if (key.isEmpty) throw Exception('ORS_API_KEY not set');
+    int maxRetries = 3;
+    int retryDelaySeconds = 2;
 
-      final url = Uri.parse(
-        'https://api.openrouteservice.org/v2/directions/driving-car'
-        '?api_key=$key'
-        '&start=${from.longitude},${from.latitude}'
-        '&end=${to.longitude},${to.latitude}',
-      );
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final key = dotenv.maybeGet('ORS_API_KEY') ?? '';
+        if (key.isEmpty) throw Exception('ORS_API_KEY not set');
 
-      final resp = await http.get(url).timeout(const Duration(seconds: 10));
-      if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');
+        final url = Uri.parse(
+          'https://api.openrouteservice.org/v2/directions/driving-car'
+          '?api_key=$key'
+          '&start=${from.longitude},${from.latitude}'
+          '&end=${to.longitude},${to.latitude}',
+        );
 
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      final features = data['features'] as List?;
-      if (features == null || features.isEmpty) throw Exception('No features');
+        final resp = await TelemetryService.instance.trackLatency('ors_route_seller', () async {
+          return await http.get(url).timeout(const Duration(seconds: 10));
+        });
+        if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');
 
-      final geometry = features.first['geometry'] as Map<String, dynamic>;
-      final coords = geometry['coordinates'] as List;
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final features = data['features'] as List?;
+        if (features == null || features.isEmpty) throw Exception('No features');
 
-      return coords
-          .map((c) => LatLng(
-                (c[1] as num).toDouble(),
-                (c[0] as num).toDouble(),
-              ))
-          .toList();
-    } catch (e) {
-      debugPrint('ORS route error: $e — falling back to straight line');
-      return [from, to];
+        final geometry = features.first['geometry'] as Map<String, dynamic>;
+        final coords = geometry['coordinates'] as List;
+
+        return coords
+            .map((c) => LatLng(
+                  (c[1] as num).toDouble(),
+                  (c[0] as num).toDouble(),
+                ))
+            .toList();
+      } catch (e, st) {
+        debugPrint('ORS route error (attempt $attempt): $e');
+        if (attempt == maxRetries) {
+          debugPrint(
+              'Falling back to straight line after $maxRetries attempts');
+          TelemetryService.instance.logError('ors_route_seller_fail', e, st);
+          return [from, to];
+        }
+        await Future.delayed(Duration(seconds: retryDelaySeconds));
+        retryDelaySeconds *= 2; // exponential backoff
+      }
     }
+    return [from, to];
   }
 
   double _routeKm(List<LatLng> route) {

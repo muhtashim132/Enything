@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../main.dart';
-import '../config/routes.dart';
+
 import 'telemetry_service.dart';
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -38,42 +38,9 @@ class NotificationService {
         if (response.payload != null && response.payload!.isNotEmpty) {
           try {
             final data = jsonDecode(response.payload!) as Map<String, dynamic>;
-            final role = data['role'] as String?;
-            final action = data['action'] as String?;
-            final orderId = data['order_id'] as String?;
-
-            if (role == 'seller') {
-              // Seller tap: go to seller dashboard then push orders on top.
-              navigatorKey.currentState?.pushNamedAndRemoveUntil(
-                  AppRoutes.sellerDashboard, (route) => false);
-              Future.microtask(() {
-                navigatorKey.currentState?.pushNamed(AppRoutes.sellerOrders);
-              });
-            } else if (role == 'rider' ||
-                role == 'delivery' ||
-                action == 'new_order') {
-              // Rider tap: go to delivery dashboard.
-              navigatorKey.currentState?.pushNamedAndRemoveUntil(
-                  AppRoutes.deliveryDashboard, (route) => false);
-            } else if (role == 'customer' ||
-                (role == null && orderId != null)) {
-              // Customer tap: establish customerHome as base, then push
-              // trackOrder on top so the back button works correctly.
-              if (orderId != null) {
-                navigatorKey.currentState?.pushNamedAndRemoveUntil(
-                    AppRoutes.customerHome, (route) => false);
-                Future.microtask(() {
-                  navigatorKey.currentState?.pushNamed(
-                    AppRoutes.trackOrder,
-                    arguments: {'orderId': orderId},
-                  );
-                });
-              } else {
-                // No order_id — fall back to customer home.
-                navigatorKey.currentState?.pushNamedAndRemoveUntil(
-                    AppRoutes.customerHome, (route) => false);
-              }
-            }
+            // Centralize routing logic in main.dart. If navigator is not ready 
+            // (e.g. terminated launch), this safely no-ops and SplashPage takes over.
+            handleNotificationClick(data);
           } catch (e, st) {
             TelemetryService.instance.logError('NotificationTapParser', e, st);
           }
