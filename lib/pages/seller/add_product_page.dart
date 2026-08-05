@@ -53,6 +53,7 @@ class _AddProductPageState extends State<AddProductPage> {
   List<XFile> _images = [];
   List<String> _existingImageUrls = [];
   List<ProductVariant> _variants = [];
+  Map<String, File> _variantImageFiles = {};
 
   // ── GST Recommendation Engine ────────────────────────────────────────────
   GstRecommendation? _gstRecommendation;
@@ -293,6 +294,8 @@ class _AddProductPageState extends State<AddProductPage> {
     final priceCtrl = TextEditingController();
     final originalPriceCtrl = TextEditingController();
 
+    _variantImageFiles.remove('temp_dialog');
+
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -349,12 +352,50 @@ class _AddProductPageState extends State<AddProductPage> {
                   hintText: 'Optional',
                 ),
               ),
+              const SizedBox(height: 16),
+              StatefulBuilder(
+                builder: (context, setDialogState) {
+                  return Column(
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.image),
+                        label: Text(_variantImageFiles['temp_dialog'] == null
+                            ? 'Add Variant Image (Optional)'
+                            : 'Image Selected!'),
+                        onPressed: () async {
+                          final picker = ImagePicker();
+                          final xfile = await picker.pickImage(
+                              source: ImageSource.gallery);
+                          if (xfile != null) {
+                            setDialogState(() {
+                              _variantImageFiles['temp_dialog'] = File(xfile.path);
+                            });
+                          }
+                        },
+                      ),
+                      if (_variantImageFiles['temp_dialog'] != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(_variantImageFiles['temp_dialog']!,
+                                height: 80, width: 80, fit: BoxFit.cover),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              onPressed: () {
+                _variantImageFiles.remove('temp_dialog');
+                Navigator.pop(ctx);
+              },
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               final n = nameCtrl.text.trim();
@@ -382,14 +423,19 @@ class _AddProductPageState extends State<AddProductPage> {
                   return;
                 }
 
+                final vId = DateTime.now().millisecondsSinceEpoch.toString();
                 setState(() {
                   _variants.add(ProductVariant(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    id: vId,
                     name: n,
                     price: p,
                     originalPrice: op,
                   ));
+                  if (_variantImageFiles['temp_dialog'] != null) {
+                    _variantImageFiles[vId] = _variantImageFiles['temp_dialog']!;
+                  }
                 });
+                _variantImageFiles.remove('temp_dialog');
                 Navigator.pop(ctx);
               }
             },
@@ -465,6 +511,31 @@ class _AddProductPageState extends State<AddProductPage> {
         await _supabase.storage.from(uploadBucket).uploadBinary(path, bytes);
         uploadedUrls
             .add(_supabase.storage.from(uploadBucket).getPublicUrl(path));
+      }
+
+      // Upload variant images
+      for (var i = 0; i < _variants.length; i++) {
+        final variantId = _variants[i].id;
+        if (_variantImageFiles.containsKey(variantId)) {
+          final file = _variantImageFiles[variantId]!;
+          if (!file.existsSync()) continue;
+          try {
+            final bytes = await file.readAsBytes();
+            final ext = file.path.split('.').last;
+            final filename =
+                'variant_${DateTime.now().millisecondsSinceEpoch}.$ext';
+            final path = '$_shopId/$filename';
+            await _supabase.storage
+                .from(uploadBucket)
+                .uploadBinary(path, bytes);
+            final url =
+                _supabase.storage.from(uploadBucket).getPublicUrl(path);
+            _variants[i] = _variants[i].copyWith(imageUrl: url);
+          } catch (e) {
+            // Log or ignore gracefully to prevent product save crash
+            debugPrint('Failed to upload variant image: $e');
+          }
+        }
       }
 
       uploadedUrls.addAll(_existingImageUrls);
@@ -1120,9 +1191,19 @@ class _AddProductPageState extends State<AddProductPage> {
                         final v = entry.value;
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text(v.name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          title: Row(
+                            children: [
+                              Text(v.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                              if (v.imageUrl != null ||
+                                  _variantImageFiles.containsKey(v.id)) ...[
+                                const SizedBox(width: 8),
+                                const Icon(Icons.image,
+                                    size: 16, color: AppColors.primary),
+                              ],
+                            ],
+                          ),
                           subtitle: Row(
                             children: [
                               Text('₹${v.price}'),
@@ -1143,8 +1224,11 @@ class _AddProductPageState extends State<AddProductPage> {
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline,
                                 color: AppColors.danger),
-                            onPressed: () =>
-                                setState(() => _variants.removeAt(idx)),
+                            onPressed: () => setState(() {
+                              final variantId = _variants[idx].id;
+                              _variants.removeAt(idx);
+                              _variantImageFiles.remove(variantId);
+                            }),
                           ),
                         );
                       }),

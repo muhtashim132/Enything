@@ -68,6 +68,13 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   int _currentImageIndex = 0;
   ProductVariant? _selectedVariant;
   final GlobalKey _variantKey = GlobalKey();
+  final PageController _pageController = PageController();
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -145,10 +152,17 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                           setState(() => _currentImageIndex = i),
                       isDark: isDark,
                       selectedVariant: _selectedVariant,
-                      onVariantChanged: (v) =>
-                          setState(() => _selectedVariant = v),
+                      onVariantChanged: (v) {
+                        setState(() => _selectedVariant = v);
+                        if (_pageController.hasClients) {
+                          _pageController.animateToPage(0,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut);
+                        }
+                      },
                       highlightVariants: widget.highlightVariants,
                       variantKey: _variantKey,
+                      pageController: _pageController,
                     ),
         );
       },
@@ -170,6 +184,7 @@ class _SheetContent extends StatelessWidget {
   final ValueChanged<ProductVariant?> onVariantChanged;
   final bool highlightVariants;
   final GlobalKey? variantKey;
+  final PageController? pageController;
 
   const _SheetContent({
     required this.product,
@@ -182,6 +197,7 @@ class _SheetContent extends StatelessWidget {
     required this.onVariantChanged,
     this.highlightVariants = false,
     this.variantKey,
+    this.pageController,
   });
 
   static Widget _trustItem(String emoji, String label, bool isDark) {
@@ -245,20 +261,45 @@ class _SheetContent extends StatelessWidget {
                     children: [
                       // Image carousel
                       PageView.builder(
-                        itemCount:
-                            product.images.isEmpty ? 1 : product.images.length,
+                        controller: pageController,
+                        itemCount: (selectedVariant != null &&
+                                selectedVariant!.imageUrl != null &&
+                                selectedVariant!.imageUrl!.isNotEmpty)
+                            ? product.images.length + 1
+                            : (product.images.isEmpty ? 1 : product.images.length),
                         onPageChanged: onImageChanged,
                         itemBuilder: (ctx, i) {
-                          final url = product.images.isEmpty
-                              ? ''
-                              : (i == 0
-                                  ? product.displayImage
-                                  : product.images[i]);
+                          String url = '';
+                          if (selectedVariant != null &&
+                              selectedVariant!.imageUrl != null &&
+                              selectedVariant!.imageUrl!.isNotEmpty) {
+                            if (i == 0) {
+                              url = selectedVariant!.imageUrl!;
+                            } else {
+                              int imgIndex = i - 1;
+                              if (imgIndex < product.images.length) {
+                                url = product.images[imgIndex];
+                              }
+                            }
+                          } else {
+                            url = product.images.isEmpty
+                                ? ''
+                                : (i == 0
+                                    ? product.displayImage
+                                    : product.images[i]);
+                          }
                           return url.isNotEmpty
                               ? GestureDetector(
                                   onTap: () {
                                     List<String> allImages = [];
-                                    if (product.images.isEmpty) {
+                                    if (selectedVariant != null &&
+                                        selectedVariant!.imageUrl != null &&
+                                        selectedVariant!.imageUrl!.isNotEmpty) {
+                                      allImages = [
+                                        selectedVariant!.imageUrl!,
+                                        ...product.images
+                                      ];
+                                    } else if (product.images.isEmpty) {
                                       if (product.displayImage.isNotEmpty) {
                                         allImages = [product.displayImage];
                                       }

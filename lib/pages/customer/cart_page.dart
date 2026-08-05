@@ -132,10 +132,15 @@ class CartPage extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.06),
               ),
               clipBehavior: Clip.antiAlias,
-              child: item.product.displayImage.isNotEmpty
+              child: (item.selectedVariant?.imageUrl?.isNotEmpty == true ||
+                      item.product.displayImage.isNotEmpty)
                   ? CachedNetworkImage(
-                      imageUrl: item.product.displayImage,
+                      imageUrl: item.selectedVariant?.imageUrl?.isNotEmpty == true
+                          ? item.selectedVariant!.imageUrl!
+                          : item.product.displayImage,
                       fit: BoxFit.cover,
+                      width: 60,
+                      height: 60,
                       errorWidget: (c, e, s) => const _CartImageFallback(),
                     )
                   : const _CartImageFallback(),

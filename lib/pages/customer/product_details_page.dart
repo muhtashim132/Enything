@@ -36,6 +36,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   bool _isLoading = true;
   int _currentImageIndex = 0;
   ProductVariant? _selectedVariant;
+  final PageController _pageController = PageController();
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -200,6 +207,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     ? Stack(
                         children: [
                           PageView.builder(
+                            controller: _pageController,
                             itemCount: _product!.images.length,
                             onPageChanged: (i) =>
                                 setState(() => _currentImageIndex = i),
@@ -420,7 +428,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         children: _product!.variants.map((v) {
                           final isSelected = _selectedVariant?.name == v.name;
                           return GestureDetector(
-                            onTap: () => setState(() => _selectedVariant = v),
+                            onTap: () {
+                              setState(() => _selectedVariant = v);
+                              if (_pageController.hasClients) {
+                                _pageController.animateToPage(0,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut);
+                              }
+                            },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 10),

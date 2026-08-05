@@ -1137,6 +1137,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             OrderCountdownTimer(
                               acceptanceDeadline: order.acceptanceDeadline!,
                               fontSize: 13,
+                              onExpire: () {
+                                if (mounted) {
+                                  setState(() {});
+                                  _debouncedLoadOrders();
+                                }
+                              },
                             ),
                           ],
                         ),

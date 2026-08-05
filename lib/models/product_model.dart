@@ -4,6 +4,7 @@ class ProductVariant {
   final double price;
   final double? originalPrice;
   final bool isAvailable;
+  final String? imageUrl;
 
   ProductVariant({
     required this.id,
@@ -11,6 +12,7 @@ class ProductVariant {
     required this.price,
     this.originalPrice,
     this.isAvailable = true,
+    this.imageUrl,
   });
 
   factory ProductVariant.fromMap(Map<String, dynamic> map) {
@@ -20,6 +22,7 @@ class ProductVariant {
       price: (map['price'] ?? 0.0).toDouble(),
       originalPrice: map['original_price']?.toDouble(),
       isAvailable: map['is_available'] ?? true,
+      imageUrl: map['image_url'],
     );
   }
 
@@ -29,6 +32,7 @@ class ProductVariant {
         'price': price,
         'original_price': originalPrice,
         'is_available': isAvailable,
+        if (imageUrl != null) 'image_url': imageUrl,
       };
 
   double? get discountPercent {
@@ -44,6 +48,7 @@ class ProductVariant {
     double? price,
     double? originalPrice,
     bool? isAvailable,
+    String? imageUrl,
   }) {
     return ProductVariant(
       id: id ?? this.id,
@@ -51,6 +56,7 @@ class ProductVariant {
       price: price ?? this.price,
       originalPrice: originalPrice ?? this.originalPrice,
       isAvailable: isAvailable ?? this.isAvailable,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 }

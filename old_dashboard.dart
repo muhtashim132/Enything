@@ -26,7 +26,6 @@ import 'order_route_map_page.dart';
 import '../../models/order_group.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../services/rider_background_service.dart';
-import '../../services/notification_service.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
   const DeliveryDashboardPage({super.key});
@@ -80,7 +79,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   final Set<String> _ignoredAvailableGroups = {};
   DateTime? _lastBackPressTime;
   final ScrollController _scrollController = ScrollController();
-  Set<String> _knownAvailableGroupIds = {};
 
   // FCM foreground message subscription — triggers _loadOrders() on push
   StreamSubscription? _fcmForegroundSub;
@@ -556,33 +554,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       if (mounted) {
         setState(() {
-          _availableGroups = _groupOrders(filtered).where((g) {
-            if (_ignoredAvailableGroups.contains(g.groupId)) return false;
-            
-            final latestDeadline = g.orders
-                .map((o) => o.acceptanceDeadline)
-                .where((d) => d != null)
-                .fold<DateTime?>(null, (prev, curr) => 
-                    (prev == null || curr!.isAfter(prev)) ? curr : prev);
-                    
-            if (latestDeadline != null) {
-              final remaining = latestDeadline.difference(DateTime.now().toUtc()).inSeconds;
-              if (remaining <= 0) return false;
-            }
-            return true;
-          }).toList();
-
-          final newGroupIds = _availableGroups.map((g) => g.groupId).toSet();
-          if (_knownAvailableGroupIds.isNotEmpty) {
-            final newlyAdded = newGroupIds.difference(_knownAvailableGroupIds);
-            if (newlyAdded.isNotEmpty) {
-              NotificationService().showNotification(
-                title: 'New Delivery Available! 🛵',
-                body: 'A new order was placed near you. Check your dashboard.',
-              );
-            }
-          }
-          _knownAvailableGroupIds = newGroupIds;
+          _availableGroups = _groupOrders(filtered)
+              .where((g) => !_ignoredAvailableGroups.contains(g.groupId))
+              .toList();
 
           final myRawOrders = (myOrders as List).map((o) {
             final model = OrderModel.fromMap(o);
@@ -654,7 +628,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
            }
         }
         
-        if (!mounted) return;
         final notifProv = context.read<NotificationProvider>();
         final firstOrder = group.orders.first;
         
