@@ -22,6 +22,7 @@ import '../../utils/responsive_layout.dart';
 import '../../services/image_compression_service.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../providers/coupon_provider.dart';
+import '../../models/shop_model.dart';
 import 'dart:math' as math;
 
 import '../../widgets/coupon_input_widget.dart';
@@ -52,6 +53,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // ignore: unused_field
   double _activeHeavyOrderFee = 0.0;
   Set<String> _activeShopIds = {};
+  double _activeWeight = 0.0;
+  // ignore: unused_field
+  double _activeSurchargePaid = 0.0;
+  List<ShopModel> _activeShops = [];
 
   @override
   void initState() {
@@ -73,7 +78,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final supabase = Supabase.instance.client;
       final response = await supabase
           .from('orders')
-          .select('total_amount, small_cart_fee, heavy_order_fee, shop_id')
+          .select('total_amount, small_cart_fee, heavy_order_fee, shop_id, weight_kg, multi_shop_surcharge')
           .eq('cart_group_id', cartGroupId)
           .inFilter('status', [
         'awaiting_acceptance',
@@ -90,14 +95,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
       double subtotal = 0.0;
       double smallCartFee = 0.0;
       double heavyFee = 0.0;
+      double weight = 0.0;
+      double surchargePaid = 0.0;
       Set<String> shopIds = {};
 
       for (var row in (response as List)) {
         subtotal += (row['total_amount'] as num?)?.toDouble() ?? 0.0;
         smallCartFee += (row['small_cart_fee'] as num?)?.toDouble() ?? 0.0;
         heavyFee += (row['heavy_order_fee'] as num?)?.toDouble() ?? 0.0;
+        weight += (row['weight_kg'] as num?)?.toDouble() ?? 0.0;
+        surchargePaid += (row['multi_shop_surcharge'] as num?)?.toDouble() ?? 0.0;
         if (row['shop_id'] != null) {
           shopIds.add(row['shop_id'].toString());
+        }
+      }
+
+      List<ShopModel> fetchedShops = [];
+      if (shopIds.isNotEmpty) {
+        final shopsResponse = await supabase
+            .from('shops')
+            .select()
+            .inFilter('id', shopIds.toList());
+        for (var shopData in shopsResponse) {
+          fetchedShops.add(ShopModel.fromMap(shopData));
         }
       }
 
@@ -106,7 +126,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           _activeSubtotal = subtotal;
           _activeSmallCartFee = smallCartFee;
           _activeHeavyOrderFee = heavyFee;
+          _activeWeight = weight;
+          _activeSurchargePaid = surchargePaid;
           _activeShopIds = shopIds;
+          _activeShops = fetchedShops;
         });
       }
     } catch (e) {
@@ -573,9 +596,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
         // Replacement order fees
         effectiveBase = 0.0;
         
-        // Surcharge only for NEW shops not in the existing active group
-        int newShops = cart.shops.where((s) => !_activeShopIds.contains(s.id)).length;
-        surcharge = newShops * (PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10.0);
+        // Surcharge calculates actual distance from active shops to new shops
+        final combinedShops = [..._activeShops];
+        for (final s in cart.shops) {
+          if (!_activeShopIds.contains(s.id)) {
+            combinedShops.add(s);
+          }
+        }
+        final aggregateSurcharge = DeliveryCalculator.calculateMultiShopSurcharge(combinedShops);
+        surcharge = math.max(0.0, aggregateSurcharge - _activeSurchargePaid);
         
         // Small cart fee (aggregate check)
         final smallCartThreshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
@@ -586,8 +615,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
         // Heavy order fee (aggregate check)
         final heavyThreshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
-        if (cart.totalWeight > heavyThreshold) { 
-          heavyFee = cart.heavyOrderFee;
+        final aggregateWeight = _activeWeight + cart.totalWeight;
+        if (aggregateWeight > heavyThreshold) { 
+          final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
+          final aggregateHeavyFee = feePerKg * (aggregateWeight - heavyThreshold).ceil();
+          heavyFee = math.max(0.0, aggregateHeavyFee - _activeHeavyOrderFee);
         }
       } else {
         effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
@@ -1074,8 +1106,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (isReplacementOrder) {
       effectiveBase = 0.0;
-      int newShops = cart.shops.where((s) => !_activeShopIds.contains(s.id)).length;
-      surcharge = newShops * (PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10.0);
+      
+      final combinedShops = [..._activeShops];
+      for (final s in cart.shops) {
+        if (!_activeShopIds.contains(s.id)) {
+          combinedShops.add(s);
+        }
+      }
+      final aggregateSurcharge = DeliveryCalculator.calculateMultiShopSurcharge(combinedShops);
+      surcharge = math.max(0.0, aggregateSurcharge - _activeSurchargePaid);
       
       final smallCartThreshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
       if ((_activeSubtotal + cart.subtotal) < smallCartThreshold && (_activeSubtotal + cart.subtotal) > 0) {
@@ -1084,8 +1123,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       final heavyThreshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
-      if (cart.totalWeight > heavyThreshold) {
-        heavyFee = cart.heavyOrderFee;
+      final aggregateWeight = _activeWeight + cart.totalWeight;
+      if (aggregateWeight > heavyThreshold) { 
+        final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
+        final aggregateHeavyFee = feePerKg * (aggregateWeight - heavyThreshold).ceil();
+        heavyFee = math.max(0.0, aggregateHeavyFee - _activeHeavyOrderFee);
       }
     } else {
       effectiveBase = baseCharge >= 0 ? baseCharge : 25.0;
