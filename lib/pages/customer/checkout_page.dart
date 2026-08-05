@@ -513,6 +513,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // BUG FIX (Issue 3): Read pendingCartGroupId set by track_order_page when
       // customer taps "Search for Different Items" or "Find Missing Items".
       // This links the replacement order to the original rejected cart group.
+      if (!mounted) return;
       final cartProvider = context.read<CartProvider>();
       final pendingGroupId = cartProvider.pendingCartGroupId;
       final cartGroupId = widget.existingCartGroupId ?? pendingGroupId ?? const Uuid().v4();

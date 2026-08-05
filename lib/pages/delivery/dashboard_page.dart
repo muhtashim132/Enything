@@ -2124,6 +2124,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         isExpired = remaining <= 0;
       }
 
+      final isLinkedAddon = _myGroups.any((myG) => myG.groupId == group.groupId);
+
       return Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
@@ -2141,6 +2143,31 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   : Colors.transparent),
         ),
         child: Column(children: [
+          if (isLinkedAddon)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFF4C6EF5),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.link_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'ADD-ON TO YOUR ACCEPTED ORDER',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           GestureDetector(
             onTap: () {
               setStateBuilder(() => isExpanded = !isExpanded);
@@ -2152,10 +2179,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
                     colors: [Color(0xFF0D2137), Color(0xFF1A3A5C)]),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+                borderRadius: isLinkedAddon
+                    ? BorderRadius.zero
+                    : const BorderRadius.vertical(top: Radius.circular(22)),
               ),
               child: Row(children: [
                 const Icon(Icons.storefront_outlined,
