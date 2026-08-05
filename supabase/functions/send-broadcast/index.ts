@@ -211,9 +211,10 @@ Deno.serve(async (req: Request) => {
                 android: {
                   priority: 'high',
                   notification: {
-                    channel_id: 'enything_push_channel',
+                    channel_id: 'enything_bell_channel',
                     icon: 'ic_notification',
-                    default_sound: true,
+                    default_sound: false,
+                    sound: 'enything_bell',
                     default_vibrate_timings: true,
                     notification_priority: 'PRIORITY_MAX',
                     visibility: 'PUBLIC',
@@ -226,7 +227,7 @@ Deno.serve(async (req: Request) => {
                   },
                   payload: {
                     aps: {
-                      sound: 'default',
+                      sound: 'enything_bell.wav',
                       badge: 1,
                       'content-available': 1,
                     },

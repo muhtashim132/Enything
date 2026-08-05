@@ -65,12 +65,10 @@
              No secret needed in the manifest — see Firebase Console > App Check > Debug tokens. -->
 
         <!-- Default FCM notification channel — routes all FCM pushes through
-             order_alert_loop_channel which plays the custom enything_bell.wav sound.
-             NOTE: The old enything_push_channel still exists on existing devices
-             for backward compat, but new installs will use this channel. -->
+             enything_bell_channel which plays the custom enything_bell.wav sound. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="order_alert_loop_channel"/>
+            android:value="enything_bell_channel"/>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_color"/>

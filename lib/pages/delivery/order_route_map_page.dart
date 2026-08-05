@@ -12,6 +12,7 @@ import '../../models/order_group.dart';
 import '../../theme/app_colors.dart';
 import '../../services/telemetry_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:async';
 
 const _kPickupColor = Color(0xFF2ECC71); // green  — rider → shop
 const _kDeliveryColor = Color(0xFFFF8C42); // orange — shop  → customer
@@ -50,10 +51,38 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
   double? _totalKm;
 
+  double? _currentRiderLat;
+  double? _currentRiderLng;
+  StreamSubscription<Position>? _positionStreamSub;
+
   @override
   void initState() {
     super.initState();
+    _currentRiderLat = widget.riderLat;
+    _currentRiderLng = widget.riderLng;
     _fetchRoutes();
+    
+    _positionStreamSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen((Position position) {
+      if (mounted) {
+        setState(() {
+          _currentRiderLat = position.latitude;
+          _currentRiderLng = position.longitude;
+        });
+      }
+    }, onError: (e, st) {
+      debugPrint('Geolocator stream error: $e');
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionStreamSub?.cancel();
+    super.dispose();
   }
 
   Future<List<LatLng>> _fetchORSRoute(LatLng from, LatLng to) async {
@@ -131,8 +160,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     List<LatLng> shopPts = [];
     if (widget.shops.isNotEmpty) {
       final unvisited = widget.shops.map((s) => LatLng(s.lat, s.lng)).toList();
-      LatLng currentPos = (widget.riderLat != null && widget.riderLng != null)
-          ? LatLng(widget.riderLat!, widget.riderLng!)
+      LatLng currentPos = (_currentRiderLat != null && _currentRiderLng != null)
+          ? LatLng(_currentRiderLat!, _currentRiderLng!)
           : unvisited.first;
 
       while (unvisited.isNotEmpty) {
@@ -153,10 +182,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
         (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
             ? LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!)
             : null;
-    final riderPt = (widget.riderLat != null &&
-            widget.riderLng != null &&
-            widget.riderLat != 0.0)
-        ? LatLng(widget.riderLat!, widget.riderLng!)
+    final riderPt = (_currentRiderLat != null &&
+            _currentRiderLng != null &&
+            _currentRiderLat != 0.0)
+        ? LatLng(_currentRiderLat!, _currentRiderLng!)
         : null;
 
     if (riderPt != null && shopPts.isNotEmpty) {
@@ -191,10 +220,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
   void _fitMapBounds() {
     final allPoints = [
-      if (widget.riderLat != null &&
-          widget.riderLng != null &&
-          widget.riderLat != 0.0)
-        LatLng(widget.riderLat!, widget.riderLng!),
+      if (_currentRiderLat != null &&
+          _currentRiderLng != null &&
+          _currentRiderLat != 0.0)
+        LatLng(_currentRiderLat!, _currentRiderLng!),
       ...widget.shops
           .where((s) => s.lat != 0.0)
           .map((s) => LatLng(s.lat, s.lng)),
@@ -227,10 +256,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   }
 
   Future<void> _openInExternalMap() async {
-    final origin = (widget.riderLat != null &&
-            widget.riderLng != null &&
-            widget.riderLat != 0.0)
-        ? '${widget.riderLat},${widget.riderLng}'
+    final origin = (_currentRiderLat != null &&
+            _currentRiderLng != null &&
+            _currentRiderLat != 0.0)
+        ? '$_currentRiderLat,$_currentRiderLng'
         : widget.shops.isNotEmpty
             ? '${widget.shops.first.lat},${widget.shops.first.lng}'
             : '';
@@ -336,9 +365,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
           child: _mapMarker(
               _kCustomerMarker, Icons.location_on_rounded, 'Customer'),
         ),
-      if (widget.riderLat != null && widget.riderLng != null)
+      if (_currentRiderLat != null && _currentRiderLng != null)
         Marker(
-          point: applyJitter(widget.riderLat!, widget.riderLng!),
+          point: applyJitter(_currentRiderLat!, _currentRiderLng!),
           width: 80,
           height: 70,
           child: _mapMarker(_kRiderMarker, Icons.navigation_rounded, 'You'),

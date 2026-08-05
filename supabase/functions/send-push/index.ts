@@ -201,13 +201,13 @@ Deno.serve(async (req: Request) => {
     for (const batch of tokenChunks) {
       await Promise.all(batch.map(async ({ token, role }) => {
         try {
-          // Additive check: Use custom bell channel for sellers and riders receiving new orders or payment confirmations
+          // Additive check: Use unified custom bell channel for all pushes to maintain Enything brand sound.
           const isUrgentOrderAlert = (role === 'seller' || role === 'delivery') && 
                                      (String(title).toLowerCase().includes('new order') || 
                                       String(title).toLowerCase().includes('payment done'));
                                       
-          const channelId = isUrgentOrderAlert ? 'order_alert_loop_channel' : 'enything_push_channel';
-          const soundFile = isUrgentOrderAlert ? 'enything_bell' : undefined;
+          const channelId = 'enything_bell_channel';
+          const soundFile = 'enything_bell';
           
 
           const message = {
@@ -226,8 +226,8 @@ Deno.serve(async (req: Request) => {
                 notification: {
                   channel_id: channelId,
                   icon: 'ic_notification',
-                  default_sound: !isUrgentOrderAlert,
-                  ...(soundFile ? { sound: soundFile } : {}),
+                  default_sound: false,
+                  sound: soundFile,
                   default_vibrate_timings: true,
                   notification_priority: 'PRIORITY_MAX',
                   visibility: 'PUBLIC',

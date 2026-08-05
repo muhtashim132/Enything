@@ -710,14 +710,10 @@ class NotificationProvider extends ChangeNotifier {
               return;
             }
 
-            // [BELL] Ring bell when payment confirmed (rider must go pick up).
-            // Stop when rider picks up, order is cancelled, delivered, or any other terminal/waiting state.
-            if (newStatus == 'confirmed') {
-              BellAlertService.instance.addPendingOrder(orderId);
-            } else if (!const ['confirmed', 'preparing', 'ready_for_pickup']
-                .contains(newStatus)) {
-              BellAlertService.instance.removePendingOrder(orderId);
-            }
+            // [BELL] Riders no longer get a continuous looping bell for active orders.
+            // A continuous bell is only for sellers who must take urgent action to accept an order.
+            // Just ensure it's removed if it somehow got in.
+            BellAlertService.instance.removePendingOrder(orderId);
 
             final lastStatus = _lastProcessedStatus[orderId];
             if (newStatus == lastStatus) return;
@@ -738,8 +734,7 @@ class NotificationProvider extends ChangeNotifier {
 
     // Restore persisted notification history for this user
     _loadFromDb();
-    // [BELL] Re-ring bell if rider already has confirmed orders pending pickup
-    _initBellForPendingRider(partnerId);
+    // Rider continuous bell for confirmed orders has been disabled.
   }
 
   /// Admin: watches for new KYC applications and complaints.
@@ -1094,23 +1089,7 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  /// Query DB for rider orders in 'confirmed' status (payment done, pick-up needed).
-  /// Called when the rider subscribes so the bell re-rings after app restart.
-  Future<void> _initBellForPendingRider(String partnerId) async {
-    try {
-      final rows = await _supabase
-          .from('orders')
-          .select('id')
-          .eq('delivery_partner_id', partnerId)
-          .inFilter('status', ['confirmed', 'preparing', 'ready_for_pickup']);
-      for (final row in rows) {
-        final orderId = row['id'] as String?;
-        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId);
-      }
-    } catch (e) {
-      debugPrint('[NotifProvider] _initBellForPendingRider: $e');
-    }
-  }
+  // _initBellForPendingRider has been removed to stop the continuous bell spam for active riders.
 
   // ── Status message helpers ────────────────────────────────────────────────
 

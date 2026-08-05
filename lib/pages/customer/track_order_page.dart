@@ -1479,7 +1479,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     orderIdToUpdate: widget.orderId,
                   );
                 }
-                if (mounted) Navigator.pop(context);
               },
             ),
           );

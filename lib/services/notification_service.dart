@@ -56,8 +56,8 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'enything_push_channel', // must match AndroidManifest.xml
-        'Enything Notifications',
+        'enything_bell_channel', // must match AndroidManifest.xml
+        'Enything Order Alerts',
         description: 'Push notifications for orders and updates',
         importance: Importance.max,
         playSound: true,
@@ -73,7 +73,7 @@ class NotificationService {
     // limitation). A fresh channel name guarantees the WAV is applied correctly.
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'order_alert_loop_channel',
+        'enything_bell_channel',
         'Order Alert Bell',
         description:
             'Custom bell sound for order notifications (Enything Bell)',
@@ -141,14 +141,14 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
-    // Use order_alert_loop_channel which has the custom enything_bell.wav sound.
+    // Use enything_bell_channel which has the custom enything_bell.wav sound.
     // This ensures ALL in-app buzz notifications (sellers, riders, customers)
     // play the Enything Bell regardless of role.
     const androidDetails = AndroidNotificationDetails(
-      'order_alert_loop_channel',
-      'Order Alert Bell',
+      'enything_bell_channel',
+      'Enything Order Alerts',
       channelDescription:
-          'Custom bell sound for order notifications (Enything Bell)',
+          'Push notifications for orders and updates',
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
