@@ -17,6 +17,7 @@ import '../../providers/platform_config_provider.dart';
 
 import '../../providers/recently_viewed_provider.dart';
 import '../../providers/referral_provider.dart';
+import '../../providers/cart_provider.dart';
 
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
@@ -628,6 +629,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           }
 
           if (status == 'awaiting_payment') {
+            // FIX (Issue 3): Do not auto-redirect if the customer is actively
+            // searching for replacement items after a partial order rejection.
+            final cartProvider = context.read<CartProvider>();
+            if (cartProvider.pendingCartGroupId != null) {
+              return;
+            }
+
             if (_isActiveOrderNavigating) return;
             _isActiveOrderNavigating = true;
             Navigator.pushNamed(context, AppRoutes.trackOrder,

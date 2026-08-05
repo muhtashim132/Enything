@@ -812,10 +812,30 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final configRadius =
             PlatformConfigProvider.instance?.riderNotificationRadiusKm ?? 15.0;
 
-        // Collect unique shop locations to query riders near each shop.
+         // Collect unique shop locations to query riders near each shop.
         // For multi-shop carts, we notify riders near ALL shops so none is missed.
         Future(() async {
           final notifiedRiderIds = <String>{};
+          
+          // FIX 1: Exclusive Rider Affinity check
+          String? exclusiveRiderId;
+          if (isReplacementOrder) {
+            try {
+              final activeOrder = await supabase
+                  .from('orders')
+                  .select('delivery_partner_id')
+                  .eq('cart_group_id', cartGroupId)
+                  .not('delivery_partner_id', 'is', null)
+                  .limit(1)
+                  .maybeSingle();
+              if (activeOrder != null && activeOrder['delivery_partner_id'] != null) {
+                exclusiveRiderId = activeOrder['delivery_partner_id'] as String;
+              }
+            } catch (e) {
+              debugPrint('Error finding exclusive rider: $e');
+            }
+          }
+
           for (final data in notificationData) {
             if (data['isMagic'] as bool) continue; // Skip test orders
             final shop = data['shop'] as dynamic;
@@ -825,8 +845,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
             // Skip shops with no location (data integrity guard)
             if (shopLat == 0.0 && shopLng == 0.0) continue;
 
+            if (exclusiveRiderId != null) {
+                if (!notifiedRiderIds.contains(exclusiveRiderId)) {
+                   notifiedRiderIds.add(exclusiveRiderId);
+                   notifProv.sendBackgroundPush(
+                     targetUserId: exclusiveRiderId,
+                     title: '🆕 Shop Replacement Added!',
+                     body: 'The customer replaced a shop in your active delivery! Open the app to accept it.',
+                     data: {
+                       'role': 'delivery',
+                       'action': 'new_order',
+                       'order_id': data['orderId'] as String,
+                     },
+                   );
+                }
+                continue; 
+            }
+
             try {
-              // Query nearby online riders using the new additive RPC
+              // Query nearby online riders using the additive RPC
               final nearbyRiders = await supabase.rpc(
                 'get_nearby_online_riders',
                 params: {
@@ -864,6 +901,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           }
         });
       }
+      // ─────────────────────────────────────────────────────────────────────────
+
+      // Fix 3: Mark partial rejection as resolved so TrackOrderPage hides the panel.      }
       // ─────────────────────────────────────────────────────────────────────────
 
 

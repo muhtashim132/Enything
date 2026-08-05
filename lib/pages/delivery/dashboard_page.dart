@@ -554,9 +554,21 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       if (mounted) {
         setState(() {
-          _availableGroups = _groupOrders(filtered)
-              .where((g) => !_ignoredAvailableGroups.contains(g.groupId))
-              .toList();
+          _availableGroups = _groupOrders(filtered).where((g) {
+            if (_ignoredAvailableGroups.contains(g.groupId)) return false;
+            
+            final latestDeadline = g.orders
+                .map((o) => o.acceptanceDeadline)
+                .where((d) => d != null)
+                .fold<DateTime?>(null, (prev, curr) => 
+                    (prev == null || curr!.isAfter(prev)) ? curr : prev);
+                    
+            if (latestDeadline != null) {
+              final remaining = latestDeadline.difference(DateTime.now().toUtc()).inSeconds;
+              if (remaining <= 0) return false;
+            }
+            return true;
+          }).toList();
 
           final myRawOrders = (myOrders as List).map((o) {
             final model = OrderModel.fromMap(o);
