@@ -44,12 +44,76 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final _notesController = TextEditingController();
   final List<XFile> _prescriptions = [];
 
+  // --- 100x Replacment Order Aggregate State ---
+  // ignore: unused_field
+  bool _isLoadingActiveGroup = false;
+  double _activeSubtotal = 0.0;
+  double _activeSmallCartFee = 0.0;
+  // ignore: unused_field
+  double _activeHeavyOrderFee = 0.0;
+  Set<String> _activeShopIds = {};
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _validateStockPreCheckout();
+      _fetchActiveGroupState();
     });
+  }
+
+  Future<void> _fetchActiveGroupState() async {
+    final cartProvider = context.read<CartProvider>();
+    final pendingGroupId = cartProvider.pendingCartGroupId;
+    final cartGroupId = widget.existingCartGroupId ?? pendingGroupId;
+    if (cartGroupId == null) return;
+
+    setState(() => _isLoadingActiveGroup = true);
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase
+          .from('orders')
+          .select('total_amount, small_cart_fee, heavy_order_fee, shop_id')
+          .eq('cart_group_id', cartGroupId)
+          .inFilter('status', [
+        'awaiting_acceptance',
+        'awaiting_payment',
+        'pending_pickup',
+        'accepted',
+        'preparing',
+        'ready_for_pickup',
+        'picked_up',
+        'out_for_delivery',
+        'delivered'
+      ]);
+
+      double subtotal = 0.0;
+      double smallCartFee = 0.0;
+      double heavyFee = 0.0;
+      Set<String> shopIds = {};
+
+      for (var row in (response as List)) {
+        subtotal += (row['total_amount'] as num?)?.toDouble() ?? 0.0;
+        smallCartFee += (row['small_cart_fee'] as num?)?.toDouble() ?? 0.0;
+        heavyFee += (row['heavy_order_fee'] as num?)?.toDouble() ?? 0.0;
+        if (row['shop_id'] != null) {
+          shopIds.add(row['shop_id'].toString());
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _activeSubtotal = subtotal;
+          _activeSmallCartFee = smallCartFee;
+          _activeHeavyOrderFee = heavyFee;
+          _activeShopIds = shopIds;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching active group state: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingActiveGroup = false);
+    }
   }
 
   Future<void> _validateStockPreCheckout() async {
@@ -498,14 +562,46 @@ class _CheckoutPageState extends State<CheckoutPage> {
         throw Exception('Your delivery address is outside our delivery zone.');
       }
 
-      final surcharge = cart.multiShopSurcharge;
-      final heavyFee = cart.heavyOrderFee;
-      final smallCartFee = cart.smallCartFee;
-      final effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
+      final isReplacementOrder = widget.existingCartGroupId != null || context.read<CartProvider>().pendingCartGroupId != null;
+
+      double surcharge = 0.0;
+      double heavyFee = 0.0;
+      double smallCartFee = 0.0;
+      double effectiveBase = 25.0;
+
+      if (isReplacementOrder) {
+        // Replacement order fees
+        effectiveBase = 0.0;
+        
+        // Surcharge only for NEW shops not in the existing active group
+        int newShops = cart.shops.where((s) => !_activeShopIds.contains(s.id)).length;
+        surcharge = newShops * (PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10.0);
+        
+        // Small cart fee (aggregate check)
+        final smallCartThreshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
+        if ((_activeSubtotal + cart.subtotal) < smallCartThreshold && (_activeSubtotal + cart.subtotal) > 0) {
+          final standardSmallCartFee = PlatformConfigProvider.instance?.smallCartFee ?? PaymentConfig.smallCartFee;
+          smallCartFee = math.max(0, standardSmallCartFee - _activeSmallCartFee);
+        }
+
+        // Heavy order fee (aggregate check)
+        final heavyThreshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
+        if (cart.totalWeight > heavyThreshold) { 
+          heavyFee = cart.heavyOrderFee;
+        }
+      } else {
+        effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
+        surcharge = cart.multiShopSurcharge;
+        heavyFee = cart.heavyOrderFee;
+        smallCartFee = cart.smallCartFee;
+      }
+
       final riderBase = effectiveBase + surcharge + heavyFee;
       final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
-      double totalDelivery = cart.totalDeliveryCharges(maxDistanceKm);
+      double totalWithoutGst = effectiveBase + surcharge + heavyFee + smallCartFee;
+      if (totalWithoutGst < 0) totalWithoutGst = 0.0;
+      double totalDelivery = totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
 
       // Payment method is always 'upi' now (COD removed)
       const paymentMethod = 'upi';
@@ -517,7 +613,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final cartProvider = context.read<CartProvider>();
       final pendingGroupId = cartProvider.pendingCartGroupId;
       final cartGroupId = widget.existingCartGroupId ?? pendingGroupId ?? const Uuid().v4();
-      final isReplacementOrder = widget.existingCartGroupId != null || pendingGroupId != null;
+      
       // Clear the pending group ID now that we've consumed it
       if (pendingGroupId != null) cartProvider.setPendingCartGroupId(null);
       final numShops = cart.shops.length;
@@ -969,16 +1065,43 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
 
-    final surcharge = cart.multiShopSurcharge;
-    final heavyFee = cart.heavyOrderFee;
-    final smallCartFee = cart.smallCartFee;
-    final effectiveBase = baseCharge >= 0 ? baseCharge : 25.0;
+    final isReplacementOrder = widget.existingCartGroupId != null || context.read<CartProvider>().pendingCartGroupId != null;
+
+    double surcharge = 0.0;
+    double heavyFee = 0.0;
+    double smallCartFee = 0.0;
+    double effectiveBase = 25.0;
+
+    if (isReplacementOrder) {
+      effectiveBase = 0.0;
+      int newShops = cart.shops.where((s) => !_activeShopIds.contains(s.id)).length;
+      surcharge = newShops * (PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10.0);
+      
+      final smallCartThreshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
+      if ((_activeSubtotal + cart.subtotal) < smallCartThreshold && (_activeSubtotal + cart.subtotal) > 0) {
+        final standardSmallCartFee = PlatformConfigProvider.instance?.smallCartFee ?? PaymentConfig.smallCartFee;
+        smallCartFee = math.max(0, standardSmallCartFee - _activeSmallCartFee);
+      }
+
+      final heavyThreshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
+      if (cart.totalWeight > heavyThreshold) {
+        heavyFee = cart.heavyOrderFee;
+      }
+    } else {
+      effectiveBase = baseCharge >= 0 ? baseCharge : 25.0;
+      surcharge = cart.multiShopSurcharge;
+      heavyFee = cart.heavyOrderFee;
+      smallCartFee = cart.smallCartFee;
+    }
+
     final riderBase = effectiveBase + surcharge + heavyFee;
     final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
 
     // BUG-H3 FIX: Compute the breakdown ONCE so UI display and DB insertion
     // use the exact same figures.
-    double totalDelivery = cart.totalDeliveryCharges(distanceKm);
+    double totalWithoutGst = effectiveBase + surcharge + heavyFee + smallCartFee;
+    if (totalWithoutGst < 0) totalWithoutGst = 0.0;
+    double totalDelivery = totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
 
     // ── ADD-ON GST model: GST is a real charge on top of base prices ─────────
     final gstBreakdown = OrderTaxBreakdown.calculate(
