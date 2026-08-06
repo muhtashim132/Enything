@@ -206,7 +206,7 @@ Deno.serve(async (req: Request) => {
                                      (String(title).toLowerCase().includes('new order') || 
                                       String(title).toLowerCase().includes('payment done'));
                                       
-          const channelId = 'enything_bell_channel';
+          const channelId = 'enything_bell_channel_v2';
           const soundFile = 'enything_bell';
           
 

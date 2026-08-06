@@ -211,7 +211,7 @@ Deno.serve(async (req: Request) => {
                 android: {
                   priority: 'high',
                   notification: {
-                    channel_id: 'enything_bell_channel',
+                    channel_id: 'enything_bell_channel_v2',
                     icon: 'ic_notification',
                     default_sound: false,
                     sound: 'enything_bell',

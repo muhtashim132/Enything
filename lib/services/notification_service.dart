@@ -48,24 +48,11 @@ class NotificationService {
       },
     );
 
-    // CRITICAL: Create the notification channel that FCM uses when app is killed.
-    // Must match the channel ID in AndroidManifest.xml and in the Edge Function.
-    // Without this channel created with HIGH importance, Android shows notifications silently.
+
     final androidPlugin =
         _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        'enything_bell_channel', // must match AndroidManifest.xml
-        'Enything Order Alerts',
-        description: 'Push notifications for orders and updates',
-        importance: Importance.max,
-        playSound: true,
-        enableVibration: true,
-        showBadge: true,
-      ),
-    );
-
+            
     // CRITICAL: Create the order alert bell channel — used for all foreground
     // buzz notifications for sellers, riders, and customers.
     // Sound: enything_bell.wav from android/app/src/main/res/raw/
@@ -73,7 +60,7 @@ class NotificationService {
     // limitation). A fresh channel name guarantees the WAV is applied correctly.
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'enything_bell_channel',
+        'enything_bell_channel_v2', // Migrated to v2 to bypass Android channel immutability bug
         'Order Alert Bell',
         description:
             'Custom bell sound for order notifications (Enything Bell)',
@@ -141,11 +128,11 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
-    // Use enything_bell_channel which has the custom enything_bell.wav sound.
+    // Use enything_bell_channel_v2 which has the custom enything_bell.wav sound.
     // This ensures ALL in-app buzz notifications (sellers, riders, customers)
     // play the Enything Bell regardless of role.
     const androidDetails = AndroidNotificationDetails(
-      'enything_bell_channel',
+      'enything_bell_channel_v2',
       'Enything Order Alerts',
       channelDescription:
           'Push notifications for orders and updates',

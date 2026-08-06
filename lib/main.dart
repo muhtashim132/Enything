@@ -221,10 +221,10 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   final androidPlugin = plugin.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
 
-  await androidPlugin?.createNotificationChannel(
-    const AndroidNotificationChannel(
-      'enything_bell_channel',
-      'Enything Order Alerts',
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'enything_bell_channel_v2',
+        'Enything Order Alerts',
       description: 'Push notifications for orders and updates',
       importance: Importance.max,
       playSound: true,
@@ -240,7 +240,7 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     body,
     const NotificationDetails(
       android: AndroidNotificationDetails(
-        'enything_bell_channel',
+        'enything_bell_channel_v2',
         'Enything Order Alerts',
         channelDescription:
             'Push notifications for orders and updates',
