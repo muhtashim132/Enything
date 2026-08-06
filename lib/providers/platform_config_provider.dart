@@ -571,7 +571,7 @@ class PlatformConfigProvider extends ChangeNotifier {
       // DB update
       await _db.from('platform_config').upsert({
         'key': key,
-        'value': value,
+        'value': doubleVal,
         'updated_by': actorId,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'key');

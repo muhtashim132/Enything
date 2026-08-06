@@ -593,19 +593,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
       double effectiveBase = 25.0;
 
       if (isReplacementOrder) {
-        // Replacement order fees
+        // Replacement order fees:
+        // • effectiveBase = 0.0 — delivery charge stays the SAME because it's
+        //   still one rider delivering to one address. We don't double-charge.
+        // • Multi-shop surcharge uses the flat admin rate, NOT distance-based calc,
+        //   because the SQL validation checks: flatRate × (shopCount − 1).
+        //   Rule (confirmed): 2 total active shops at end = ₹20, 3 = ₹40.
+        //   If new items are from an already-accepted shop → ₹0 extra surcharge.
         effectiveBase = 0.0;
-        
-        // Surcharge calculates actual distance from active shops to new shops
-        final combinedShops = [..._activeShops];
-        for (final s in cart.shops) {
-          if (!_activeShopIds.contains(s.id)) {
-            combinedShops.add(s);
-          }
-        }
-        final aggregateSurcharge = DeliveryCalculator.calculateMultiShopSurcharge(combinedShops);
-        surcharge = math.max(0.0, aggregateSurcharge - _activeSurchargePaid);
-        
+
+        // Count total unique active shops at the end of this replacement:
+        //   existing active shops + new shops from this checkout (if different)
+        final newUniqueShopIds = cart.shops
+            .map((s) => s.id)
+            .where((id) => !_activeShopIds.contains(id))
+            .toSet();
+        final totalShopsAtEnd = _activeShopIds.length + newUniqueShopIds.length;
+
+        // Flat admin surcharge rate (₹20 by default, admin-configurable)
+        final flatSurchargeRate =
+            PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
+
+        // Total surcharge for all shops at end = rate × (totalShops − 1)
+        // Subtract what's already been paid so we only charge the DELTA.
+        final totalSurchargeAtEnd = totalShopsAtEnd > 1
+            ? flatSurchargeRate * (totalShopsAtEnd - 1)
+            : 0.0;
+        surcharge = math.max(0.0, totalSurchargeAtEnd - _activeSurchargePaid);
+
         // Small cart fee (aggregate check)
         final smallCartThreshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
         if ((_activeSubtotal + cart.subtotal) < smallCartThreshold && (_activeSubtotal + cart.subtotal) > 0) {
@@ -616,7 +631,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         // Heavy order fee (aggregate check)
         final heavyThreshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
         final aggregateWeight = _activeWeight + cart.totalWeight;
-        if (aggregateWeight > heavyThreshold) { 
+        if (aggregateWeight > heavyThreshold) {
           final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
           final aggregateHeavyFee = feePerKg * (aggregateWeight - heavyThreshold).ceil();
           heavyFee = math.max(0.0, aggregateHeavyFee - _activeHeavyOrderFee);
@@ -644,10 +659,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (!mounted) return;
       final cartProvider = context.read<CartProvider>();
       final pendingGroupId = cartProvider.pendingCartGroupId;
+      final pendingCancelId = cartProvider.pendingOrderIdToCancel;
       final cartGroupId = widget.existingCartGroupId ?? pendingGroupId ?? const Uuid().v4();
       
       // Clear the pending group ID now that we've consumed it
       if (pendingGroupId != null) cartProvider.setPendingCartGroupId(null);
+      if (pendingCancelId != null) cartProvider.setPendingOrderIdToCancel(null);
       final numShops = cart.shops.length;
 
       // Acceptance deadline: 3 minutes from now (enforces 3-minute cancellation rule)
@@ -859,7 +876,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'tcs_amount': shopTcs,
           'tds_amount': shopTds,
           'grand_total_collected': math.max(
-              0.0, shopGrandTotal - (appliedCouponDiscount * proportion)),
+              0.0,
+              shopGrandTotal +
+                  (surcharge * proportion) +
+                  (smallCartFee * proportion) +
+                  (heavyFee * proportion) -
+                  (appliedCouponDiscount * proportion)),
           'gst_rate_snapshot': rateSnapshot,
           'prescription_urls': shopItems.any((item) => item.product.requiresPrescription)
               ? uploadedPrescriptionUrls
@@ -909,8 +931,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         // violation. A fresh UUID lets the new replacement order be inserted
         // cleanly while still using the SAME cartGroupId to link the group.
         'p_idempotency_key': isReplacementOrder ? const Uuid().v4() : cartGroupId,
-        if (widget.orderIdToCancelOnSuccess != null)
-          'p_order_id_to_cancel': widget.orderIdToCancelOnSuccess,
+        if (widget.orderIdToCancelOnSuccess != null || pendingCancelId != null)
+          'p_order_id_to_cancel': widget.orderIdToCancelOnSuccess ?? pendingCancelId,
       });
 
       // Notify sellers AFTER successful atomic insertion
@@ -1106,16 +1128,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (isReplacementOrder) {
       effectiveBase = 0.0;
-      
-      final combinedShops = [..._activeShops];
-      for (final s in cart.shops) {
-        if (!_activeShopIds.contains(s.id)) {
-          combinedShops.add(s);
-        }
-      }
-      final aggregateSurcharge = DeliveryCalculator.calculateMultiShopSurcharge(combinedShops);
-      surcharge = math.max(0.0, aggregateSurcharge - _activeSurchargePaid);
-      
+
+      // Issue 4 Fix: Use flat admin rate for surcharge — same rule as SQL validation.
+      // totalShopsAtEnd = existing active shops + new unique shops in this checkout.
+      final newUniqueShopIdsDisplay = cart.shops
+          .map((s) => s.id)
+          .where((id) => !_activeShopIds.contains(id))
+          .toSet();
+      final totalShopsAtEndDisplay =
+          _activeShopIds.length + newUniqueShopIdsDisplay.length;
+      final flatSurchargeRateDisplay =
+          PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
+      final totalSurchargeAtEndDisplay = totalShopsAtEndDisplay > 1
+          ? flatSurchargeRateDisplay * (totalShopsAtEndDisplay - 1)
+          : 0.0;
+      surcharge = math.max(0.0, totalSurchargeAtEndDisplay - _activeSurchargePaid);
+
       final smallCartThreshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
       if ((_activeSubtotal + cart.subtotal) < smallCartThreshold && (_activeSubtotal + cart.subtotal) > 0) {
         final standardSmallCartFee = PlatformConfigProvider.instance?.smallCartFee ?? PaymentConfig.smallCartFee;
@@ -1124,7 +1152,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final heavyThreshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
       final aggregateWeight = _activeWeight + cart.totalWeight;
-      if (aggregateWeight > heavyThreshold) { 
+      if (aggregateWeight > heavyThreshold) {
         final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
         final aggregateHeavyFee = feePerKg * (aggregateWeight - heavyThreshold).ceil();
         heavyFee = math.max(0.0, aggregateHeavyFee - _activeHeavyOrderFee);

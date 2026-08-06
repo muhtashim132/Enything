@@ -135,6 +135,12 @@ class CartProvider extends ChangeNotifier {
     // No notifyListeners() needed — this is read at checkout build time
   }
 
+  String? _pendingOrderIdToCancel;
+  String? get pendingOrderIdToCancel => _pendingOrderIdToCancel;
+  void setPendingOrderIdToCancel(String? id) {
+    _pendingOrderIdToCancel = id;
+  }
+
   CartNotification? _recentNotification;
   CartNotification? get recentNotification => _recentNotification;
   Timer? _notificationTimer;

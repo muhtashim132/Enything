@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -272,6 +273,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   // Phase 25 Fix: Atomic State Tracking to prevent Tab Desync and Overload
   int _fetchId = 0;
   bool _isFetching = false;
+
+  // ── Industrial-standard retry state (Issue 2 fix) ────────────────────────
+  // Tracks consecutive transient failures so we can backoff exponentially.
+  // Resets to 0 on any successful data load.
+  int _loadRetryCount = 0;
+  static const int _maxLoadRetries = 3;
+  Timer? _retryTimer;
 
   // Banner carousel
   final PageController _bannerController = PageController();
@@ -745,6 +753,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _locationDebounceTimer?.cancel();
     _searchDebounce?.cancel();
     _trendingScrollTimer?.cancel();
+    _retryTimer?.cancel(); // Issue 2: Cancel any pending retry on dispose
     _mainScrollController.dispose();
     _trendingScrollController.dispose();
     // Remove live location listener to avoid memory leaks
@@ -1407,20 +1416,76 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           _productShops = prodShops;
           _isLoading = false;
           _hasLoadedOnce = true;
+          _loadRetryCount = 0; // Reset retry counter on success
         });
       }
     } catch (e, st) {
       // Log full error so we can debug exactly what Supabase query failed
       debugPrint('_loadAllData ERROR: $e\n$st');
-      if (mounted && _fetchId == currentFetchId) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: $e', maxLines: 5),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 10),
-          ),
-        );
+      if (!mounted || _fetchId != currentFetchId) return;
+
+      // ── Industrial-standard error classification ─────────────────────────
+      // Transient: SocketException, TimeoutException, ClientException — safe to retry
+      // Permanent: auth errors, query errors — fail fast, show actionable message
+      final isTransient = e is SocketException ||
+          e is TimeoutException ||
+          (e.toString().contains('ClientException') &&
+              !e.toString().contains('403') &&
+              !e.toString().contains('401'));
+
+      setState(() => _isLoading = false);
+
+      if (isTransient && _loadRetryCount < _maxLoadRetries) {
+        _loadRetryCount++;
+        // Exponential backoff with jitter: 1s → 2s → 4s + up to 500ms random jitter
+        final backoffSeconds = (1 << (_loadRetryCount - 1)); // 1, 2, 4
+        final jitterMs = (500 * (DateTime.now().millisecondsSinceEpoch % 100) / 100).round();
+        final delay = Duration(seconds: backoffSeconds, milliseconds: jitterMs);
+        debugPrint('_loadAllData: transient error, retry $_loadRetryCount/$_maxLoadRetries in ${delay.inSeconds}s');
+
+        // Show silent inline status — no alarming red banner for network blips
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(children: [
+                const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                const SizedBox(width: 10),
+                Text('Connection issue — retrying in ${backoffSeconds}s…'),
+              ]),
+              backgroundColor: const Color(0xFF2A2A2A),
+              duration: delay + const Duration(milliseconds: 200),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        _retryTimer?.cancel();
+        _retryTimer = Timer(delay, () {
+          if (mounted) _loadAllData();
+        });
+      } else {
+        // Permanent error or retries exhausted — show friendly actionable message
+        _loadRetryCount = 0;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Couldn\'t load shops. Check your connection and pull down to refresh.'),
+              backgroundColor: const Color(0xFF1A1A1A),
+              duration: const Duration(seconds: 6),
+              behavior: SnackBarBehavior.floating,
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: AppColors.primary,
+                onPressed: () {
+                  _loadRetryCount = 0;
+                  _loadAllData();
+                },
+              ),
+            ),
+          );
+        }
       }
     } finally {
       if (_fetchId == currentFetchId) {
@@ -1560,19 +1625,69 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           _productShops = prodShops;
           _isLoading = false;
           _hasLoadedOnce = true;
+          _loadRetryCount = 0; // Reset retry counter on success
         });
       }
     } catch (e, st) {
       debugPrint('_loadData ERROR: $e\n$st');
-      if (mounted && _fetchId == currentFetchId) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: $e', maxLines: 5),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 10),
-          ),
-        );
+      if (!mounted || _fetchId != currentFetchId) return;
+
+      // ── Same error classification as _loadAllData ──────────────────────
+      final isTransient = e is SocketException ||
+          e is TimeoutException ||
+          (e.toString().contains('ClientException') &&
+              !e.toString().contains('403') &&
+              !e.toString().contains('401'));
+
+      setState(() => _isLoading = false);
+
+      if (isTransient && _loadRetryCount < _maxLoadRetries) {
+        _loadRetryCount++;
+        final backoffSeconds = (1 << (_loadRetryCount - 1));
+        final jitterMs = (500 * (DateTime.now().millisecondsSinceEpoch % 100) / 100).round();
+        final delay = Duration(seconds: backoffSeconds, milliseconds: jitterMs);
+        debugPrint('_loadData: transient error, retry $_loadRetryCount/$_maxLoadRetries in ${delay.inSeconds}s');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(children: [
+                const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                const SizedBox(width: 10),
+                Text('Connection issue — retrying in ${backoffSeconds}s…'),
+              ]),
+              backgroundColor: const Color(0xFF2A2A2A),
+              duration: delay + const Duration(milliseconds: 200),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        _retryTimer?.cancel();
+        _retryTimer = Timer(delay, () {
+          if (mounted) _loadData(tabName);
+        });
+      } else {
+        _loadRetryCount = 0;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Couldn\'t load shops. Check your connection and pull down to refresh.'),
+              backgroundColor: const Color(0xFF1A1A1A),
+              duration: const Duration(seconds: 6),
+              behavior: SnackBarBehavior.floating,
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: AppColors.primary,
+                onPressed: () {
+                  _loadRetryCount = 0;
+                  _loadData(tabName);
+                },
+              ),
+            ),
+          );
+        }
       }
     } finally {
       if (_fetchId == currentFetchId) {

@@ -1416,7 +1416,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               slivers: [
                 // ── Animated Header ───────────────────────────────────────────
                 SliverAppBar(
-                  expandedHeight: 240,
+                  expandedHeight: 180,
                   pinned: true,
                   elevation: 0,
                   backgroundColor: const Color(0xFF0D2137),
@@ -1658,7 +1658,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
                 // ── Content ────────────────────────────────────────────────────
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       // Location Required Alert
@@ -1872,7 +1872,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
                       if (_myGroups.isNotEmpty) ...[
                         _sectionHeader(

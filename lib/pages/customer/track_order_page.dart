@@ -2883,6 +2883,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         o.sellerAccepted == true &&
         o.status != 'cancelled' &&
         o.status != 'seller_rejected');
+    final hasPendingShops = _groupOrders.any((o) =>
+        o.status == 'awaiting_acceptance' && o.sellerAccepted != true);
 
     return Container(
       key: _partialRejectionKey,
@@ -2981,14 +2983,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 title: Text(
                                     hasReadyToPayShops
                                         ? 'Skip Waiting Shops?'
-                                        : 'Cancel Pending Shops?',
+                                        : (hasPendingShops ? 'Cancel Pending Shops?' : 'Continue with Accepted Items?'),
                                     style: GoogleFonts.outfit(
                                         color: isDark
                                             ? Colors.white
                                             : Colors.black,
                                         fontWeight: FontWeight.bold)),
                                 content: Text(
-                                    'Some shops haven\'t accepted their items yet. If you proceed now, those pending items will be cancelled. Do you want to continue?',
+                                    hasPendingShops
+                                        ? 'Some shops haven\'t accepted their items yet. If you proceed now, those pending items will be cancelled. Do you want to continue?'
+                                        : 'You have accepted the partial rejection. We will continue processing the accepted items.',
                                     style: GoogleFonts.outfit(
                                         color: isDark
                                             ? Colors.white70
@@ -3051,11 +3055,26 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       }
                       if (mounted) setState(() => _isProcessingPayment = false);
 
+                      if (mounted) setState(() => _isProcessingPayment = false);
+
+                      // FIX: The user has made their decision. Stop the timer and hide the banner!
+                      _decisionCountdownTimer?.cancel();
+                      final prefs = await SharedPreferences.getInstance();
+                      final cartGroupId = _order?.cartGroupId ?? _order?.id ?? 'unknown';
+                      await prefs.setBool('partial_rejection_resolved_$cartGroupId', true);
+                      if (mounted) {
+                        setState(() {
+                          _partialRejectionResolved = true;
+                        });
+                      }
+
                       if (_aggregateStatus != 'awaiting_payment') {
-                        if (mounted)
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                              content: Text(
-                                  'Pending shops cancelled! Waiting for a rider for the remaining accepted shops...')));
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(hasPendingShops 
+                                  ? 'Pending shops cancelled! Waiting for a rider for the remaining accepted shops...'
+                                  : 'Continuing with accepted shops... Waiting for a rider.')));
+                        }
                         return;
                       }
                     }
@@ -3110,9 +3129,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             onTap: () {
               // BUG FIX (Issue 3): Store the existing cart group ID so checkout
               // links the new order to this rejected group, not a brand new group.
-              context.read<CartProvider>().setPendingCartGroupId(
-                    _order?.cartGroupId,
-                  );
+              final cartProvider = context.read<CartProvider>();
+              cartProvider.setPendingCartGroupId(_order?.cartGroupId);
+              // FIX: Also set the first seller_rejected order ID so that SQL
+              // place_orders_transaction recognises this as a valid replacement
+              // and bypasses the delivery floor check (floor check only runs on
+              // brand-new orders, not on orders replacing a rejected one).
+              final firstRejected = _groupOrders.firstWhere(
+                (o) => o.status == 'seller_rejected',
+                orElse: () => _groupOrders.first,
+              );
+              cartProvider.setPendingOrderIdToCancel(firstRejected.id);
               // Use pushNamed (not pushNamedAndRemoveUntil) so the track page
               // stays alive — its 5-min timer keeps running in the background.
               Navigator.pushNamed(context, AppRoutes.customerHome);

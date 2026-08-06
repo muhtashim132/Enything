@@ -369,7 +369,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                   slivers: [
                     // ── Animated Hero Header ──────────────────────────────────────
                     SliverAppBar(
-                      expandedHeight: 230,
+                      expandedHeight: 180,
                       pinned: true,
                       elevation: 0,
                       backgroundColor: const Color(0xFF0A1260),
@@ -563,7 +563,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                         child: SlideTransition(
                           position: _slideAnim,
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                             child: _noShopFound
                                 ? Container(
                                     padding: const EdgeInsets.all(20),
@@ -730,7 +730,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                       child: FadeTransition(
                         opacity: _fadeAnim,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                           child: Text('Quick Actions',
                               style: GoogleFonts.outfit(
                                   fontSize: 18,
