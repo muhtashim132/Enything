@@ -2768,6 +2768,41 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               ),
             ],
           ),
+          if (order.items.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: order.items.map((i) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${i.quantity}x ',
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: AppColors.accent)),
+                        Expanded(
+                          child: Text(
+                            i.productName,
+                            style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                color: isDark ? Colors.white70 : Colors.black87),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
           if (order.shopPhone != null && order.shopPhone!.isNotEmpty) ...[
             const SizedBox(height: 6),
             InkWell(
