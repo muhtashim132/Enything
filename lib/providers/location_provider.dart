@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 import '../models/saved_address_model.dart';
-
+import '../utils/permission_utils.dart';
 class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _isDisposed = false;
 
@@ -170,7 +170,9 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+        permission = await PermissionUtils.requestLocationPermissionWithDisclosure(
+          customReason: 'Enything uses your location to discover nearby products, calculate accurate delivery times, and guide delivery partners to your exact address.',
+        );
       }
 
       if (permission == LocationPermission.deniedForever) {

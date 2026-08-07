@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:supabase/supabase.dart';
-import '../lib/config/supabase_config.dart';
+import 'package:enythingmobilenew/config/supabase_config.dart';
 
 void main() async {
   final client = SupabaseClient(SupabaseConfig.url, SupabaseConfig.anonKey);

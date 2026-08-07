@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
@@ -27,6 +28,7 @@ import '../../models/order_group.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../services/rider_background_service.dart';
 import '../../services/notification_service.dart';
+import '../../utils/permission_utils.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
   const DeliveryDashboardPage({super.key});
@@ -114,9 +116,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
     _loadOrders();
     _initNotifications();
-    // Initialize background GPS service (registers the isolate entry point).
-    // Must be called once per app session before startService() can be used.
-    RiderBackgroundService.instance.initialize();
   }
 
   void _initNotifications() {
@@ -247,22 +246,6 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (mounted) _loadOrders();
-      // App came back to foreground — stop background service so the
-      // existing foreground timer takes over (avoids double GPS polling).
-      if (_isOnline) {
-        RiderBackgroundService.instance.stopService();
-      }
-    } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      // App went to background / screen locked — start background service
-      // so GPS keeps updating for the customer map even when screen is off.
-      if (_isOnline) {
-        final auth = context.read<AuthProvider>();
-        final riderId = auth.currentUserId;
-        if (riderId != null) {
-          _launchBackgroundService(riderId);
-        }
-      }
     }
   }
 
@@ -289,6 +272,47 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       anonKey: anonKey,
       trackingSecret: _bgTrackingSecret!,
     );
+  }
+
+  Future<void> _setOnlineStatus(bool val, {StateSetter? setSheetState}) async {
+    if (val && _locationUnavailable) {
+      _promptEnableLocation();
+      return;
+    }
+    if (setSheetState != null) setSheetState(() => _isOnline = val);
+    setState(() => _isOnline = val);
+    
+    if (val) {
+      _startLocationBroadcast();
+    } else {
+      _stopLocationBroadcast();
+      RiderBackgroundService.instance.stopService();
+    }
+
+    final auth = context.read<AuthProvider>();
+    if (auth.currentUserId != null) {
+      try {
+        String? newSecret;
+        if (val) {
+          // Android 13+ requires explicit notification permission to show foreground services
+          final notifStatus = await Permission.notification.status;
+          if (notifStatus.isDenied) {
+            await Permission.notification.request();
+          }
+
+          newSecret = const Uuid().v4();
+          _bgTrackingSecret = newSecret;
+          _launchBackgroundService(auth.currentUserId!);
+        }
+        await _supabase.from('delivery_partners').update({
+          'is_accepting_orders': val,
+          if (newSecret != null) 'bg_tracking_secret': newSecret,
+        }).eq('id', auth.currentUserId!);
+      } catch (e) {
+        debugPrint('Error updating duty status: $e');
+      }
+    }
+    if (val) _loadOrders();
   }
 
   // Starts pushing GPS location to DB with dynamic intervals
@@ -378,7 +402,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       LocationPermission perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
+        perm = await PermissionUtils.requestLocationPermissionWithDisclosure();
       }
       if (perm == LocationPermission.deniedForever) return false;
 
@@ -601,8 +625,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
 
       // Auto-start broadcast if rider is online
-      if (_isOnline && _locationBroadcastTimer == null) {
-        _startLocationBroadcast();
+      if (_isOnline) {
+        if (_locationBroadcastTimer == null) _startLocationBroadcast();
+        if (auth.currentUserId != null) {
+          _launchBackgroundService(auth.currentUserId!);
+        }
       }
     } catch (e, stacktrace) {
       debugPrint('Error loading rider orders: $e');
@@ -1669,36 +1696,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       // Full-width Online Toggle Card
                       GestureDetector(
                         onTap: () async {
-                          if (_locationUnavailable) {
-                            _promptEnableLocation();
-                            return;
-                          }
-                          final newVal = !_isOnline;
-                          setState(() => _isOnline = newVal);
-                          if (newVal) {
-                            _startLocationBroadcast();
-                          } else {
-                            _stopLocationBroadcast();
-                            RiderBackgroundService.instance.stopService();
-                          }
-                          final auth = context.read<AuthProvider>();
-                          if (auth.currentUserId != null) {
-                            try {
-                              String? newSecret;
-                              if (newVal) {
-                                newSecret = const Uuid().v4();
-                                _bgTrackingSecret = newSecret;
-                              }
-                              await _supabase.from('delivery_partners').update({
-                                'is_accepting_orders': newVal,
-                                if (newSecret != null)
-                                  'bg_tracking_secret': newSecret,
-                              }).eq('id', auth.currentUserId!);
-                            } catch (e) {
-                              debugPrint('Error updating duty status: $e');
-                            }
-                          }
-                          if (newVal) _loadOrders();
+                          await _setOnlineStatus(!_isOnline);
                         },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
@@ -1793,35 +1791,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               Switch(
                                 value: _isOnline,
                                 onChanged: (val) async {
-                                  setState(() => _isOnline = val);
-                                  if (val) {
-                                    _startLocationBroadcast();
-                                  } else {
-                                    _stopLocationBroadcast();
-                                    RiderBackgroundService.instance
-                                        .stopService();
-                                  }
-                                  final auth = context.read<AuthProvider>();
-                                  if (auth.currentUserId != null) {
-                                    try {
-                                      String? newSecret;
-                                      if (val) {
-                                        newSecret = const Uuid().v4();
-                                        _bgTrackingSecret = newSecret;
-                                      }
-                                      await _supabase
-                                          .from('delivery_partners')
-                                          .update({
-                                        'is_accepting_orders': val,
-                                        if (newSecret != null)
-                                          'bg_tracking_secret': newSecret,
-                                      }).eq('id', auth.currentUserId!);
-                                    } catch (e) {
-                                      debugPrint(
-                                          'Error updating duty status: $e');
-                                    }
-                                  }
-                                  if (val) _loadOrders();
+                                  await _setOnlineStatus(val);
                                 },
                                 activeThumbColor: Colors.white,
                                 activeTrackColor:
@@ -3174,25 +3144,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   secondary: Icon(Icons.power_settings_new_rounded,
                       color: _isOnline ? AppColors.success : Colors.grey),
                   onChanged: (val) async {
-                    setSheetState(() => _isOnline = val);
-                    setState(() => _isOnline = val);
-                    if (val) {
-                      _startLocationBroadcast();
-                    } else {
-                      _stopLocationBroadcast();
-                    }
-                    final auth = context.read<AuthProvider>();
-                    if (auth.currentUserId != null) {
-                      try {
-                        await _supabase
-                            .from('delivery_partners')
-                            .update({'is_accepting_orders': val}).eq(
-                                'id', auth.currentUserId!);
-                      } catch (e) {
-                        debugPrint('Error updating duty status: $e');
-                      }
-                    }
-                    if (val) _loadOrders();
+                    await _setOnlineStatus(val, setSheetState: setSheetState);
                   },
                 ),
               ),

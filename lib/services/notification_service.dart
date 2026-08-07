@@ -17,7 +17,7 @@ class NotificationService {
 
   Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('ic_notification');
+        AndroidInitializationSettings('@mipmap/ic_launcher');
 
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
@@ -60,7 +60,7 @@ class NotificationService {
     // limitation). A fresh channel name guarantees the WAV is applied correctly.
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'enything_bell_channel_v2', // Migrated to v2 to bypass Android channel immutability bug
+        'enything_bell_channel_v3', // Migrated to v2 to bypass Android channel immutability bug
         'Order Alert Bell',
         description:
             'Custom bell sound for order notifications (Enything Bell)',
@@ -132,7 +132,7 @@ class NotificationService {
     // This ensures ALL in-app buzz notifications (sellers, riders, customers)
     // play the Enything Bell regardless of role.
     const androidDetails = AndroidNotificationDetails(
-      'enything_bell_channel_v2',
+      'enything_bell_channel_v3',
       'Enything Order Alerts',
       channelDescription:
           'Push notifications for orders and updates',
@@ -142,7 +142,9 @@ class NotificationService {
       sound: RawResourceAndroidNotificationSound('enything_bell'),
       enableVibration: true,
       fullScreenIntent: true,
-      icon: 'ic_notification',
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+      icon: '@mipmap/ic_launcher',
     );
     
     // Additive Fix: Define iOS foreground notification details so the banner actually appears locally on iOS.

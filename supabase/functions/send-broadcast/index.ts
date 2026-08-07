@@ -206,32 +206,30 @@ Deno.serve(async (req: Request) => {
             const message = {
               message: {
                 token,
-                notification: { title, body },
-                data: safeData,
-                android: {
-                  priority: 'high',
-                  notification: {
-                    channel_id: 'enything_bell_channel_v2',
-                    icon: 'ic_notification',
-                    default_sound: false,
-                    sound: 'enything_bell',
-                    default_vibrate_timings: true,
-                    notification_priority: 'PRIORITY_MAX',
-                    visibility: 'PUBLIC',
-                    click_action: 'FLUTTER_NOTIFICATION_CLICK',
+              // Removed top-level notification to force data-only message on Android
+              data: {
+                title: String(title),
+                body: String(body),
+                ...(safeData ? Object.fromEntries(Object.entries(safeData).map(([k, v]) => [k, String(v)])) : {}),
+              },
+              android: {
+                priority: 'high',
+                // Removed android.notification block to ensure Android OS doesn't intercept
+              },
+              apns: {
+                headers: {
+                  'apns-priority': '10',
+                },
+                payload: {
+                  aps: {
+                    alert: {
+                      title: title,
+                      body: body,
+                    },
+                    sound: 'enything_bell.wav',
+                    badge: 1,
                   },
                 },
-                apns: {
-                  headers: {
-                    'apns-priority': '10',
-                  },
-                  payload: {
-                    aps: {
-                      sound: 'enything_bell.wav',
-                      badge: 1,
-                      'content-available': 1,
-                    },
-                  },
                 },
               },
             };

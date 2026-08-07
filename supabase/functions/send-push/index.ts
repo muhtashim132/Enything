@@ -206,33 +206,22 @@ Deno.serve(async (req: Request) => {
                                      (String(title).toLowerCase().includes('new order') || 
                                       String(title).toLowerCase().includes('payment done'));
                                       
-          const channelId = 'enything_bell_channel_v2';
+          const channelId = 'enything_bell_channel_v3';
           const soundFile = 'enything_bell';
           
 
           const message = {
             message: {
               token,
-              // CRITICAL FOR SAMSUNG/ANDROID 12: Including 'notification' forces Google
-              // Play Services to draw it on the system tray regardless of app state.
-              notification: { title, body },
+              // Removed top-level notification to force data-only message on Android
               data: {
-                title,
-                body,
-                ...(data ?? {}),
+                title: String(title),
+                body: String(body),
+                ...(data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {}),
               },
               android: {
                 priority: 'high',
-                notification: {
-                  channel_id: channelId,
-                  icon: 'ic_notification',
-                  default_sound: false,
-                  sound: soundFile,
-                  default_vibrate_timings: true,
-                  notification_priority: 'PRIORITY_MAX',
-                  visibility: 'PUBLIC',
-                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                },
+                // Removed android.notification block to ensure Android OS doesn't intercept
               },
               apns: {
                 headers: {

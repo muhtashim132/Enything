@@ -1,7 +1,7 @@
 void main() {
   final now = DateTime(2026, 8, 1, 15, 30); // 3:30 PM
-  final openTime = "09:00";
-  final closeTime = "04:30";
+  const openTime = "09:00";
+  const closeTime = "04:30";
 
   final openParts = openTime.split(':');
   final closeParts = closeTime.split(':');

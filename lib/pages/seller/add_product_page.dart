@@ -53,7 +53,7 @@ class _AddProductPageState extends State<AddProductPage> {
   List<XFile> _images = [];
   List<String> _existingImageUrls = [];
   List<ProductVariant> _variants = [];
-  Map<String, File> _variantImageFiles = {};
+  final Map<String, File> _variantImageFiles = {};
 
   // ── GST Recommendation Engine ────────────────────────────────────────────
   GstRecommendation? _gstRecommendation;

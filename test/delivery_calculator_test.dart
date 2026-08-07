@@ -19,19 +19,19 @@ void main() {
       // 1 degree latitude = ~111km, so 0.01 degree = ~1.11km
       final shop1 = ShopModel(
         id: '1', sellerId: 's1', name: 'S1', category: 'Cat', 
-        categories: [], location: LatLng(0, 0), isActive: true, 
+        categories: [], location: const LatLng(0, 0), isActive: true, 
         rating: 4.5, totalReviews: 10, totalOrders: 10, address: 'a1',
         shopType: 'shop'
       );
       final shop2 = ShopModel(
         id: '2', sellerId: 's2', name: 'S2', category: 'Cat', 
-        categories: [], location: LatLng(0, 0.01), isActive: true, 
+        categories: [], location: const LatLng(0, 0.01), isActive: true, 
         rating: 4.5, totalReviews: 10, totalOrders: 10, address: 'a2',
         shopType: 'shop'
       );
       final shop3 = ShopModel(
         id: '3', sellerId: 's3', name: 'S3', category: 'Cat', 
-        categories: [], location: LatLng(0, 0.02), isActive: true, 
+        categories: [], location: const LatLng(0, 0.02), isActive: true, 
         rating: 4.5, totalReviews: 10, totalOrders: 10, address: 'a3',
         shopType: 'shop'
       );

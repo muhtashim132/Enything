@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/user_model.dart';
 import '../main.dart';
+import '../services/rider_background_service.dart';
 import 'package:provider/provider.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
@@ -99,6 +100,9 @@ class AuthProvider extends ChangeNotifier {
         _mockUserId = null;
         _pendingPhone = null;
         _isProfileFetched = false;
+
+        // Ensure sticky background service stops if OS restarted it
+        RiderBackgroundService.instance.stopService();
 
         // C1 FIX: Clear cart from shared preferences on logout to prevent dirty state
         SharedPreferences.getInstance().then((prefs) {
@@ -478,6 +482,7 @@ class AuthProvider extends ChangeNotifier {
         await _supabase
             .from('delivery_partners')
             .update({'is_active': false}).eq('id', _user!.id);
+        RiderBackgroundService.instance.stopService();
       } catch (e) {
         debugPrint('Failed to deactivate delivery partner: $e');
       }
@@ -1236,6 +1241,7 @@ class AuthProvider extends ChangeNotifier {
           await _supabase
               .from('delivery_partners')
               .update({'is_active': false}).eq('id', userId);
+          RiderBackgroundService.instance.stopService();
         }
       } catch (_) {} // Never block logout on deactivation failure
     }

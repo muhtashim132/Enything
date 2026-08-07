@@ -8,7 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../theme/app_colors.dart';
-
+import '../utils/permission_utils.dart';
 // ─── Result model ─────────────────────────────────────────────────────────────
 
 /// Returned by [MapPinPickerPage] when the user confirms a location.
@@ -343,7 +343,9 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
     try {
       LocationPermission perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
+        perm = await PermissionUtils.requestLocationPermissionWithDisclosure(
+          customReason: 'Enything needs location access to pinpoint your exact delivery address on the map.',
+        );
       }
       if (perm == LocationPermission.deniedForever) {
         if (mounted) setState(() => _isFetchingGps = false);

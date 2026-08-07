@@ -26,6 +26,7 @@ import 'providers/recently_viewed_provider.dart';
 import 'providers/referral_provider.dart';
 
 import 'services/notification_service.dart';
+import 'services/rider_background_service.dart';
 import 'config/route_observer.dart';
 import 'widgets/customer/multi_shop_cart_bubble.dart';
 
@@ -89,6 +90,9 @@ void main() async {
 
   // Initialize Notification Service async to prevent Android channel creation deadlocks
   NotificationService().init(); // DO NOT AWAIT
+
+  // Initialize Background Service synchronously to ensure it's ready before login
+  await RiderBackgroundService.instance.initialize();
 
   // Deep linking: Handle notification tap when app is in background
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
@@ -192,24 +196,15 @@ void handleNotificationClick(Map<String, dynamic> data) {
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 
-  // If the message contains a notification payload, Google Play Services will automatically
-  // display a system notification. We should NOT create a duplicate local notification.
-  if (message.notification != null) {
-    debugPrint('FCM background: OS handling notification');
-    return;
-  }
-
   // For data-only messages, title/body come from message.data
-  final title = message.data['title'] as String? ??
-      message.notification?.title ??
-      'Enything';
+  final title = message.data['title'] as String? ?? 'Enything';
   final body =
       message.data['body'] as String? ?? message.notification?.body ?? '';
 
   if (title.isEmpty || body.isEmpty) return;
 
   final plugin = FlutterLocalNotificationsPlugin();
-  const androidSettings = AndroidInitializationSettings('ic_notification');
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosSettings = DarwinInitializationSettings();
   await plugin.initialize(const InitializationSettings(
     android: androidSettings,
@@ -223,16 +218,16 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
 
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'enything_bell_channel_v2',
+        'enything_bell_channel_v3',
         'Enything Order Alerts',
-      description: 'Push notifications for orders and updates',
-      importance: Importance.max,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound('enything_bell'),
-      enableVibration: true,
-      showBadge: true,
-    ),
-  );
+        description: 'Push notifications for orders and updates',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('enything_bell'),
+        enableVibration: true,
+        showBadge: true,
+      ),
+    );
 
   await plugin.show(
     DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -240,7 +235,7 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     body,
     const NotificationDetails(
       android: AndroidNotificationDetails(
-        'enything_bell_channel_v2',
+        'enything_bell_channel_v3',
         'Enything Order Alerts',
         channelDescription:
             'Push notifications for orders and updates',
@@ -249,7 +244,10 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
         playSound: true,
         sound: RawResourceAndroidNotificationSound('enything_bell'),
         enableVibration: true,
-        icon: 'ic_notification',
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+        icon: '@mipmap/ic_launcher',
       ),
       iOS: DarwinNotificationDetails(
         presentSound: true,

@@ -50,8 +50,12 @@ class RiderBackgroundService {
 
     // Create the persistent foreground notification channel (Android 8+).
     final notif = FlutterLocalNotificationsPlugin();
-    const androidInit = AndroidInitializationSettings('ic_notification');
-    await notif.initialize(const InitializationSettings(android: androidInit));
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    try {
+      await notif.initialize(const InitializationSettings(android: androidInit));
+    } catch (e) {
+      debugPrint('Local notifications init failed: $e');
+    }
 
     final androidPlugin = notif.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
