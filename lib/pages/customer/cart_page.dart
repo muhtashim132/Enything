@@ -365,7 +365,10 @@ class CartPage extends StatelessWidget {
     final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
     final totalDelivery = cart.totalDeliveryCharges(distanceKm);
     final riderBase = effectiveBase + surcharge + heavyFee;
-    final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
+    // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
+    // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
+    final riderPayoutRatio = (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) / 100.0;
+    final riderEarnings = riderBase * riderPayoutRatio;
 
     final gstBreakdown = OrderTaxBreakdown.calculate(
       items: cart.taxBreakdownItems,

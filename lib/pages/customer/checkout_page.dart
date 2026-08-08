@@ -644,7 +644,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       final riderBase = effectiveBase + surcharge + heavyFee;
-      final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
+      // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
+      // Admin can change rider_commission_percent in Admin → Commission & Fees.
+      // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
+      final riderPayoutRatio = (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) / 100.0;
+      final riderEarnings = riderBase * riderPayoutRatio;
 
       double totalWithoutGst = effectiveBase + surcharge + heavyFee + smallCartFee;
       if (totalWithoutGst < 0) totalWithoutGst = 0.0;
@@ -1165,7 +1169,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     final riderBase = effectiveBase + surcharge + heavyFee;
-    final riderEarnings = riderBase * TaxConfig.riderPayoutRatio;
+    // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
+    // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
+    final riderPayoutRatio = (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) / 100.0;
+    final riderEarnings = riderBase * riderPayoutRatio;
 
     // BUG-H3 FIX: Compute the breakdown ONCE so UI display and DB insertion
     // use the exact same figures.
