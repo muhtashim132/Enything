@@ -117,7 +117,8 @@ class _AddProductPageState extends State<AddProductPage> {
         );
       }
       for (final tag in p.specialTags) {
-        if (['#Men', '#Women', '#Boys', '#Girls', '#Kids', '#Unisex'].contains(tag)) {
+        if (['#Men', '#Women', '#Boys', '#Girls', '#Kids', '#Unisex']
+            .contains(tag)) {
           _selectedDemographic = tag.replaceAll('#', '');
         }
       }
@@ -368,7 +369,8 @@ class _AddProductPageState extends State<AddProductPage> {
                               source: ImageSource.gallery);
                           if (xfile != null) {
                             setDialogState(() {
-                              _variantImageFiles['temp_dialog'] = File(xfile.path);
+                              _variantImageFiles['temp_dialog'] =
+                                  File(xfile.path);
                             });
                           }
                         },
@@ -378,8 +380,11 @@ class _AddProductPageState extends State<AddProductPage> {
                           padding: const EdgeInsets.only(top: 8.0),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.file(_variantImageFiles['temp_dialog']!,
-                                height: 80, width: 80, fit: BoxFit.cover),
+                            child: Image.file(
+                                _variantImageFiles['temp_dialog']!,
+                                height: 80,
+                                width: 80,
+                                fit: BoxFit.cover),
                           ),
                         ),
                     ],
@@ -411,8 +416,8 @@ class _AddProductPageState extends State<AddProductPage> {
                   return;
                 }
 
-                final isDuplicate = _variants.any(
-                    (v) => v.name.trim().toLowerCase() == n.toLowerCase());
+                final isDuplicate = _variants
+                    .any((v) => v.name.trim().toLowerCase() == n.toLowerCase());
                 if (isDuplicate) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -432,7 +437,8 @@ class _AddProductPageState extends State<AddProductPage> {
                     originalPrice: op,
                   ));
                   if (_variantImageFiles['temp_dialog'] != null) {
-                    _variantImageFiles[vId] = _variantImageFiles['temp_dialog']!;
+                    _variantImageFiles[vId] =
+                        _variantImageFiles['temp_dialog']!;
                   }
                 });
                 _variantImageFiles.remove('temp_dialog');
@@ -452,7 +458,8 @@ class _AddProductPageState extends State<AddProductPage> {
     if (AppCategories.requiresVariant(_productCategory) && _variants.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please add at least one variant/size for this category.'),
+          content:
+              Text('Please add at least one variant/size for this category.'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -528,8 +535,7 @@ class _AddProductPageState extends State<AddProductPage> {
             await _supabase.storage
                 .from(uploadBucket)
                 .uploadBinary(path, bytes);
-            final url =
-                _supabase.storage.from(uploadBucket).getPublicUrl(path);
+            final url = _supabase.storage.from(uploadBucket).getPublicUrl(path);
             _variants[i] = _variants[i].copyWith(imageUrl: url);
           } catch (e) {
             // Log or ignore gracefully to prevent product save crash
@@ -573,8 +579,21 @@ class _AddProductPageState extends State<AddProductPage> {
         'gst_rate_override': _gstRateOverride,
         'special_tags': () {
           var tags = widget.existingProduct?.specialTags.toList() ?? [];
-          tags.removeWhere((t) => ['#Men', '#Women', '#Boys', '#Girls', '#Kids', '#Unisex'].contains(t));
-          if (['Clothing', 'Footwear', 'Jewellery', 'Cosmetics & Beauty', 'Salon & Beauty'].contains(_productCategory)) {
+          tags.removeWhere((t) => [
+                '#Men',
+                '#Women',
+                '#Boys',
+                '#Girls',
+                '#Kids',
+                '#Unisex'
+              ].contains(t));
+          if ([
+            'Clothing',
+            'Footwear',
+            'Jewellery',
+            'Cosmetics & Beauty',
+            'Salon & Beauty'
+          ].contains(_productCategory)) {
             tags.add('#$_selectedDemographic');
           }
           return tags;
@@ -1086,7 +1105,8 @@ class _AddProductPageState extends State<AddProductPage> {
                         prefixIcon: Icon(Icons.fastfood_outlined),
                       ),
                     ),
-                    if (_variants.isEmpty && !AppCategories.requiresVariant(_productCategory)) ...[
+                    if (_variants.isEmpty &&
+                        !AppCategories.requiresVariant(_productCategory)) ...[
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _priceController,
@@ -1298,8 +1318,14 @@ class _AddProductPageState extends State<AddProductPage> {
                           }
                         },
                       ),
-                    
-                    if (['Clothing', 'Footwear', 'Jewellery', 'Cosmetics & Beauty', 'Salon & Beauty'].contains(_productCategory)) ...[
+
+                    if ([
+                      'Clothing',
+                      'Footwear',
+                      'Jewellery',
+                      'Cosmetics & Beauty',
+                      'Salon & Beauty'
+                    ].contains(_productCategory)) ...[
                       const SizedBox(height: 20),
                       const Text(
                         'Target Demographic',
@@ -1312,25 +1338,26 @@ class _AddProductPageState extends State<AddProductPage> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: ['Unisex', 'Men', 'Women', 'Boys', 'Girls', 'Kids']
-                            .map((demo) => ChoiceChip(
-                                  label: Text(demo),
-                                  selected: _selectedDemographic == demo,
-                                  onSelected: (selected) {
-                                    if (selected) {
-                                      setState(() {
-                                        _selectedDemographic = demo;
-                                      });
-                                    }
-                                  },
-                                  selectedColor: AppColors.primary,
-                                  labelStyle: TextStyle(
-                                    color: _selectedDemographic == demo
-                                        ? Colors.white
-                                        : AppColors.textPrimary,
-                                  ),
-                                ))
-                            .toList(),
+                        children:
+                            ['Unisex', 'Men', 'Women', 'Boys', 'Girls', 'Kids']
+                                .map((demo) => ChoiceChip(
+                                      label: Text(demo),
+                                      selected: _selectedDemographic == demo,
+                                      onSelected: (selected) {
+                                        if (selected) {
+                                          setState(() {
+                                            _selectedDemographic = demo;
+                                          });
+                                        }
+                                      },
+                                      selectedColor: AppColors.primary,
+                                      labelStyle: TextStyle(
+                                        color: _selectedDemographic == demo
+                                            ? Colors.white
+                                            : AppColors.textPrimary,
+                                      ),
+                                    ))
+                                .toList(),
                       ),
                     ],
 

@@ -133,7 +133,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       backgroundColor: const Color(0xFF0D1440),
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
+      builder: (sheetContext) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -172,7 +172,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                 trailing: const Icon(Icons.arrow_forward_ios_rounded,
                     color: Colors.white38, size: 16),
                 onTap: () {
-                  Navigator.pop(context); // close sheet
+                  Navigator.pop(sheetContext); // close sheet
                   _switchRole(role);
                 },
               );

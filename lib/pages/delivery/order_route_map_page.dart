@@ -61,7 +61,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     _currentRiderLat = widget.riderLat;
     _currentRiderLng = widget.riderLng;
     _fetchRoutes();
-    
+
     _positionStreamSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
@@ -101,7 +101,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
           '&end=${to.longitude},${to.latitude}',
         );
 
-        final resp = await TelemetryService.instance.trackLatency('ors_route_delivery', () async {
+        final resp = await TelemetryService.instance
+            .trackLatency('ors_route_delivery', () async {
           return await http.get(url).timeout(const Duration(seconds: 10));
         });
         if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');

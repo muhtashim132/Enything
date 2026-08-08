@@ -87,6 +87,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       final productData = await _supabase
           .from('products')
           .select()
+          .eq('is_deleted', false)
           .eq('id', widget.productId)
           .single();
 
@@ -266,7 +267,9 @@ class _SheetContent extends StatelessWidget {
                                 selectedVariant!.imageUrl != null &&
                                 selectedVariant!.imageUrl!.isNotEmpty)
                             ? product.images.length + 1
-                            : (product.images.isEmpty ? 1 : product.images.length),
+                            : (product.images.isEmpty
+                                ? 1
+                                : product.images.length),
                         onPageChanged: onImageChanged,
                         itemBuilder: (ctx, i) {
                           String url = '';

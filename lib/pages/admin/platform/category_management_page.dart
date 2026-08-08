@@ -126,8 +126,7 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
                     style: AdminStyles.body(size: 14),
                     items: const [
                       DropdownMenuItem(
-                          value: 'food',
-                          child: Text('🍔 Food & Restaurant')),
+                          value: 'food', child: Text('🍔 Food & Restaurant')),
                       DropdownMenuItem(
                           value: 'perishable',
                           child: Text('🛒 Grocery / Perishable')),
@@ -135,8 +134,7 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
                           value: 'pharmacy',
                           child: Text('💊 Pharmacy / Medical')),
                       DropdownMenuItem(
-                          value: 'retail',
-                          child: Text('🏪 Retail / General')),
+                          value: 'retail', child: Text('🏪 Retail / General')),
                     ],
                     onChanged: (v) {
                       if (v != null) setSheet(() => selectedGroup = v);
@@ -186,8 +184,8 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
                           if (config.allCategoryNames
                               .map((n) => n.toLowerCase())
                               .contains(name.toLowerCase())) {
-                            _showSnack(ctx,
-                                '"$name" already exists as a category.',
+                            _showSnack(
+                                ctx, '"$name" already exists as a category.',
                                 isError: true);
                             return;
                           }
@@ -214,9 +212,8 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
                                     : 'Failed to create category.',
                                 style: AdminStyles.body(size: 13),
                               ),
-                              backgroundColor: ok
-                                  ? AdminColors.success
-                                  : AdminColors.danger,
+                              backgroundColor:
+                                  ok ? AdminColors.success : AdminColors.danger,
                               behavior: SnackBarBehavior.floating,
                             ));
                             if (ok) _loadCounts();
@@ -310,8 +307,7 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
               const SizedBox(height: 8),
               Text(
                 'Disabling it will hide this category from customers. Existing shops\' data is untouched.',
-                style:
-                    AdminStyles.caption(color: AdminColors.textMuted),
+                style: AdminStyles.caption(color: AdminColors.textMuted),
               ),
             ],
           ),
@@ -321,11 +317,10 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
                 child: Text('Cancel',
                     style: AdminStyles.body(color: Colors.white54))),
             FilledButton(
-              style: FilledButton.styleFrom(
-                  backgroundColor: AdminColors.danger),
+              style:
+                  FilledButton.styleFrom(backgroundColor: AdminColors.danger),
               onPressed: () => Navigator.pop(dCtx, true),
-              child:
-                  Text('Disable', style: AdminStyles.body(size: 13)),
+              child: Text('Disable', style: AdminStyles.body(size: 13)),
             ),
           ],
         ),
@@ -366,11 +361,10 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dCtx, false),
-              child:
-                  Text('Cancel', style: AdminStyles.body(color: Colors.white54))),
+              child: Text('Cancel',
+                  style: AdminStyles.body(color: Colors.white54))),
           FilledButton(
-            style:
-                FilledButton.styleFrom(backgroundColor: AdminColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: AdminColors.danger),
             onPressed: () => Navigator.pop(dCtx, true),
             child: Text('Delete', style: AdminStyles.body(size: 13)),
           ),
@@ -426,7 +420,8 @@ class _CategoryManagementPageState extends State<CategoryManagementPage>
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                 ),
-                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                icon: const Icon(Icons.add_rounded,
+                    size: 18, color: Colors.white),
                 label: Text('New', style: AdminStyles.body(size: 13)),
                 onPressed: _showCreateSheet,
               ),
@@ -572,8 +567,7 @@ class _CategoryTile extends StatelessWidget {
         ),
       ),
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           width: 48,
           height: 48,
@@ -593,8 +587,7 @@ class _CategoryTile extends StatelessWidget {
             const SizedBox(width: 8),
             if (!isBuiltIn)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: AdminColors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),

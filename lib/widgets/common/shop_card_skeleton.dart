@@ -46,7 +46,8 @@ class ShopCardSkeleton extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildSkeletonLine(width: double.infinity, height: 16),
+                        child: _buildSkeletonLine(
+                            width: double.infinity, height: 16),
                       ),
                       const SizedBox(width: 8),
                       // Mock arrow icon
@@ -58,7 +59,7 @@ class ShopCardSkeleton extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  
+
                   // Cuisine / Type
                   _buildSkeletonLine(width: 100, height: 12),
                   const SizedBox(height: 12),

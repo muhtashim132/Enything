@@ -68,276 +68,281 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
     final savedAddresses = locProv.savedAddresses;
 
     return Material(
-      color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.75,
-        ),
-        child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white24 : Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
+        color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
           ),
-
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-            child: Row(
-              children: [
-                Text(
-                  'Choose delivery location',
-                  style: GoogleFonts.outfit(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(Icons.close_rounded,
-                      color: isDark ? Colors.white54 : Colors.grey),
+              ),
+
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                child: Row(
+                  children: [
+                    Text(
+                      'Choose delivery location',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Icons.close_rounded,
+                          color: isDark ? Colors.white54 : Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(height: 1),
+
+              // Use current location
+              _buildUseCurrentLocation(isDark, locProv),
+
+              if (savedAddresses.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'SAVED ADDRESSES',
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: isDark ? Colors.white38 : Colors.grey.shade500,
+                      ),
+                    ),
+                  ),
                 ),
               ],
-            ),
-          ),
 
-          const Divider(height: 1),
-
-          // Use current location
-          _buildUseCurrentLocation(isDark, locProv),
-
-          if (savedAddresses.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'SAVED ADDRESSES',
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: isDark ? Colors.white38 : Colors.grey.shade500,
+              // Saved addresses list
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: savedAddresses.length,
+                  separatorBuilder: (_, __) => Divider(
+                    height: 1,
+                    indent: 56,
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
                   ),
-                ),
-              ),
-            ),
-          ],
+                  itemBuilder: (context, index) {
+                    final addr = savedAddresses[index];
+                    final isActive = locProv.selectedAddress?.id == addr.id ||
+                        (locProv.selectedAddress == null &&
+                            locProv.matchedAddress?.id == addr.id);
 
-          // Saved addresses list
-          Flexible(
-            child: ListView.separated(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: savedAddresses.length,
-              separatorBuilder: (_, __) => Divider(
-                height: 1,
-                indent: 56,
-                color: isDark ? Colors.white10 : Colors.grey.shade200,
-              ),
-              itemBuilder: (context, index) {
-                final addr = savedAddresses[index];
-                final isActive = locProv.selectedAddress?.id == addr.id ||
-                    (locProv.selectedAddress == null &&
-                        locProv.matchedAddress?.id == addr.id);
-
-                return Dismissible(
-                  key: Key(addr.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    color: Colors.redAccent,
-                    child: const Icon(Icons.delete_outline,
-                        color: Colors.white, size: 22),
-                  ),
-                  confirmDismiss: (_) async {
-                    return await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: Text('Delete ${addr.displayLabel} address?',
-                            style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.w700)),
-                        content: Text('This cannot be undone.',
-                            style: GoogleFonts.outfit()),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
+                    return Dismissible(
+                      key: Key(addr.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        color: Colors.redAccent,
+                        child: const Icon(Icons.delete_outline,
+                            color: Colors.white, size: 22),
+                      ),
+                      confirmDismiss: (_) async {
+                        return await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: Text('Delete ${addr.displayLabel} address?',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w700)),
+                            content: Text('This cannot be undone.',
+                                style: GoogleFonts.outfit()),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Delete',
+                                    style: TextStyle(color: Colors.red)),
+                              ),
+                            ],
                           ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Delete',
-                                style: TextStyle(color: Colors.red)),
+                        );
+                      },
+                      onDismissed: (_) {
+                        locProv.deleteSavedAddress(addr.id, widget.userId);
+                      },
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? Theme.of(context)
+                                    .primaryColor
+                                    .withValues(alpha: 0.12)
+                                : (isDark
+                                    ? Colors.white.withValues(alpha: 0.06)
+                                    : Colors.grey.shade100),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        ],
+                          child: Center(
+                            child: Text(addr.icon,
+                                style: const TextStyle(fontSize: 18)),
+                          ),
+                        ),
+                        title: Row(
+                          children: [
+                            Text(
+                              addr.displayLabel,
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                            if (addr.isDefault) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .primaryColor
+                                      .withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text('DEFAULT',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: Theme.of(context).primaryColor)),
+                              ),
+                            ],
+                            if (isActive) ...[
+                              const SizedBox(width: 6),
+                              Icon(Icons.check_circle_rounded,
+                                  size: 16,
+                                  color: Theme.of(context).primaryColor),
+                            ],
+                          ],
+                        ),
+                        subtitle: Text(
+                          addr.fullAddress,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color:
+                                isDark ? Colors.white54 : Colors.grey.shade600,
+                          ),
+                        ),
+                        trailing: GestureDetector(
+                          onTap: () {
+                            // Close picker first, then open 2-step edit flow
+                            // Use widget.rootContext (parent scaffold context) so the
+                            // mounted check inside showAddEditAddressDialog passes
+                            // even after this sheet's context is disposed.
+                            Navigator.pop(context);
+                            showAddEditAddressDialog(
+                              widget.rootContext,
+                              existingAddress: addr,
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.edit_location_alt_outlined,
+                                size: 18,
+                                color: isDark
+                                    ? Colors.white54
+                                    : Colors.grey.shade600),
+                          ),
+                        ),
+                        onTap: () {
+                          locProv.selectSavedAddress(addr);
+                          Navigator.pop(context);
+                        },
                       ),
                     );
                   },
-                  onDismissed: (_) {
-                    locProv.deleteSavedAddress(addr.id, widget.userId);
-                  },
-                  child: ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: isActive
-                            ? Theme.of(context)
-                                .primaryColor
-                                .withValues(alpha: 0.12)
-                            : (isDark
-                                ? Colors.white.withValues(alpha: 0.06)
-                                : Colors.grey.shade100),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: Text(addr.icon,
-                            style: const TextStyle(fontSize: 18)),
-                      ),
-                    ),
-                    title: Row(
-                      children: [
-                        Text(
-                          addr.displayLabel,
-                          style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            color: isDark ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                        if (addr.isDefault) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .primaryColor
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text('DEFAULT',
-                                style: GoogleFonts.outfit(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: Theme.of(context).primaryColor)),
-                          ),
-                        ],
-                        if (isActive) ...[
-                          const SizedBox(width: 6),
-                          Icon(Icons.check_circle_rounded,
-                              size: 16, color: Theme.of(context).primaryColor),
-                        ],
-                      ],
-                    ),
-                    subtitle: Text(
-                      addr.fullAddress,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
-                        fontSize: 12,
-                        color: isDark ? Colors.white54 : Colors.grey.shade600,
-                      ),
-                    ),
-                    trailing: GestureDetector(
-                      onTap: () {
-                        // Close picker first, then open 2-step edit flow
-                        // Use widget.rootContext (parent scaffold context) so the
-                        // mounted check inside showAddEditAddressDialog passes
-                        // even after this sheet's context is disposed.
-                        Navigator.pop(context);
-                        showAddEditAddressDialog(
-                          widget.rootContext,
-                          existingAddress: addr,
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.06)
-                              : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(Icons.edit_location_alt_outlined,
-                            size: 18,
-                            color:
-                                isDark ? Colors.white54 : Colors.grey.shade600),
-                      ),
-                    ),
-                    onTap: () {
-                      locProv.selectSavedAddress(addr);
-                      Navigator.pop(context);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
+                ),
+              ),
 
-          // Add new address button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: SafeArea(
-              child: SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: locProv.savedAddresses.length >= 4
-                      ? () {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(
-                            content: Text(
-                                'Maximum 4 addresses allowed. Please edit or delete an existing one.'),
-                            backgroundColor: Colors.red,
-                            behavior: SnackBarBehavior.floating,
-                          ));
-                        }
-                      : () {
-                          // Use rootContext (parent scaffold context) for the same
-                          // reason as in the edit flow above.
-                          Navigator.pop(context);
-                          showAddEditAddressDialog(widget.rootContext);
-                        },
-                  icon: const Icon(Icons.add_location_alt_outlined, size: 18),
-                  label: Text(
-                      locProv.savedAddresses.length >= 4
-                          ? 'Maximum 4 addresses'
-                          : 'Add new address',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    side: BorderSide(
-                      color: isDark
-                          ? Colors.white24
-                          : Theme.of(context)
-                              .primaryColor
-                              .withValues(alpha: 0.4),
+              // Add new address button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SafeArea(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: locProv.savedAddresses.length >= 4
+                          ? () {
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(const SnackBar(
+                                content: Text(
+                                    'Maximum 4 addresses allowed. Please edit or delete an existing one.'),
+                                backgroundColor: Colors.red,
+                                behavior: SnackBarBehavior.floating,
+                              ));
+                            }
+                          : () {
+                              // Use rootContext (parent scaffold context) for the same
+                              // reason as in the edit flow above.
+                              Navigator.pop(context);
+                              showAddEditAddressDialog(widget.rootContext);
+                            },
+                      icon:
+                          const Icon(Icons.add_location_alt_outlined, size: 18),
+                      label: Text(
+                          locProv.savedAddresses.length >= 4
+                              ? 'Maximum 4 addresses'
+                              : 'Add new address',
+                          style:
+                              GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.white24
+                              : Theme.of(context)
+                                  .primaryColor
+                                  .withValues(alpha: 0.4),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-    ));
+        ));
   }
 
   Widget _buildUseCurrentLocation(bool isDark, LocationProvider locProv) {

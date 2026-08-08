@@ -19,15 +19,18 @@ class PermissionUtils {
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
-              Icon(Icons.location_on_rounded, color: AppColors.primary, size: 28),
+              Icon(Icons.location_on_rounded,
+                  color: AppColors.primary, size: 28),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Location Access',
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 20),
+                  style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold, fontSize: 20),
                 ),
               ),
             ],
@@ -44,7 +47,8 @@ class PermissionUtils {
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               child: Text(
                 'I Understand',

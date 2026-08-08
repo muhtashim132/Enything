@@ -98,7 +98,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       _realtimeChannels.clear();
       _fcmSub?.cancel();
       _isIntentionalDisconnect = false;
-      
+
       final auth = context.read<AuthProvider>();
       final userId = auth.currentUserId;
       if (userId == null) return;
@@ -145,11 +145,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             if ((status == RealtimeSubscribeStatus.closed ||
                     status == RealtimeSubscribeStatus.channelError) &&
                 !_isIntentionalDisconnect) {
-              debugPrint('SellerOrdersPage: Realtime channel disconnected. Reconnecting in 5s...');
+              debugPrint(
+                  'SellerOrdersPage: Realtime channel disconnected. Reconnecting in 5s...');
               Future.delayed(const Duration(seconds: 5), () {
                 if (mounted) {
-                   _debouncedLoadOrders();
-                   _setupRealtimeAndFcm();
+                  _debouncedLoadOrders();
+                  _setupRealtimeAndFcm();
                 }
               });
             }
@@ -754,13 +755,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   List<OrderModel> _pendingOrders() => _orders
       .where((o) =>
           (o.status == 'awaiting_acceptance' || o.status == 'pending') &&
-          !o.sellerAccepted && !o.isExpired)
+          !o.sellerAccepted &&
+          !o.isExpired)
       .toList();
 
   List<OrderModel> _activeOrders() => _orders
       .where((o) =>
           ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
-              o.sellerAccepted && !o.isExpired) ||
+              o.sellerAccepted &&
+              !o.isExpired) ||
           [
             'awaiting_payment',
             'confirmed',
@@ -772,16 +775,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       .toList();
 
   List<OrderModel> _doneOrders() => _orders
-      .where((o) => [
+      .where((o) =>
+          [
             'delivered',
             'cancelled',
             'seller_rejected',
             'partner_rejected',
             'verification_failed',
             'pending_verification'
-          ].contains(o.status) || (
-            (o.status == 'awaiting_acceptance' || o.status == 'pending') && o.isExpired
-          ))
+          ].contains(o.status) ||
+          ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
+              o.isExpired))
       .toList();
 
   @override
@@ -1039,16 +1043,19 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              DateFormat('hh:mm a').format(order.createdAt.toIST()),
+                              DateFormat('hh:mm a')
+                                  .format(order.createdAt.toIST()),
                               style: GoogleFonts.outfit(
                                   color: AppColors.textSecondary, fontSize: 12),
                             ),
                             if (tab == 'active' &&
-                                ['confirmed', 'preparing', 'ready_for_pickup'].contains(order.status))
+                                ['confirmed', 'preparing', 'ready_for_pickup']
+                                    .contains(order.status))
                               PopupMenuButton<String>(
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
-                                icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                                icon: const Icon(Icons.more_vert,
+                                    size: 20, color: AppColors.textSecondary),
                                 onSelected: (value) {
                                   if (value == 'cancel') {
                                     _sellerReject(order);
@@ -1059,9 +1066,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                     value: 'cancel',
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.cancel_outlined, color: AppColors.danger, size: 18),
+                                        const Icon(Icons.cancel_outlined,
+                                            color: AppColors.danger, size: 18),
                                         const SizedBox(width: 8),
-                                        Text('Cancel Order', style: GoogleFonts.outfit(color: AppColors.danger, fontWeight: FontWeight.w600)),
+                                        Text('Cancel Order',
+                                            style: GoogleFonts.outfit(
+                                                color: AppColors.danger,
+                                                fontWeight: FontWeight.w600)),
                                       ],
                                     ),
                                   ),
@@ -1517,7 +1528,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.danger,
                               side: const BorderSide(color: AppColors.danger),
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
@@ -1536,7 +1548,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             onPressed: () => _sellerAccept(order),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.success,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
@@ -1562,7 +1575,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 _updateOrderStatus(order, 'preparing'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
@@ -1588,7 +1602,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 _updateOrderStatus(order, 'ready_for_pickup'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.accent,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),

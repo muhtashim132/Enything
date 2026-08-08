@@ -19,7 +19,8 @@ class CartNotification {
   final String id;
   final String title;
   final String message;
-  CartNotification({required this.id, required this.title, required this.message});
+  CartNotification(
+      {required this.id, required this.title, required this.message});
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +163,8 @@ class CartProvider extends ChangeNotifier {
   StreamSubscription? _authSubscription;
 
   void _listenToAuthState() {
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    _authSubscription =
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedOut) {
         clear();
       }
@@ -206,7 +208,8 @@ class CartProvider extends ChangeNotifier {
   // PlatformConfigProvider.instance now safely attaches its listener even if it's delayed.
   // This ensures UI rebuilds instantly when admin updates platform fee or rates.
   double get platformFee {
-    final baseFee = PlatformConfigProvider.instance?.platformFee ?? PaymentConfig.platformFee;
+    final baseFee = PlatformConfigProvider.instance?.platformFee ??
+        PaymentConfig.platformFee;
     return baseFee * (shops.isEmpty ? 1 : shops.length);
   }
 
@@ -354,16 +357,18 @@ class CartProvider extends ChangeNotifier {
           : 'Added successfully. Cart is full (Max 3 shops).';
 
       final title = '${product.name} added to cart!';
-      
+
       final currentRoute = ModalRoute.of(context)?.settings.name;
-      final isMainPage = currentRoute == AppRoutes.customerHome || currentRoute == '/';
+      final isMainPage =
+          currentRoute == AppRoutes.customerHome || currentRoute == '/';
       final hasBuiltInCart = currentRoute == AppRoutes.allListings ||
-                             currentRoute == AppRoutes.restaurant ||
-                             currentRoute == AppRoutes.restaurantDashboard;
+          currentRoute == AppRoutes.restaurant ||
+          currentRoute == AppRoutes.restaurantDashboard;
 
       if (isMainPage) {
         final notifId = DateTime.now().millisecondsSinceEpoch.toString();
-        _recentNotification = CartNotification(id: notifId, title: title, message: msg);
+        _recentNotification =
+            CartNotification(id: notifId, title: title, message: msg);
         safeNotifyListeners();
 
         _notificationTimer?.cancel();
@@ -375,7 +380,8 @@ class CartProvider extends ChangeNotifier {
         });
       } else if (!hasBuiltInCart) {
         final bottomPadding = MediaQuery.paddingOf(context).bottom;
-        final navBarHeight = 70.0 + (bottomPadding > 0 ? bottomPadding + 8.0 : 20.0);
+        final navBarHeight =
+            70.0 + (bottomPadding > 0 ? bottomPadding + 8.0 : 20.0);
 
         final controller = scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
@@ -384,9 +390,14 @@ class CartProvider extends ChangeNotifier {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
+                    style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 14)),
                 const SizedBox(height: 4),
-                Text(msg, style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70)),
+                Text(msg,
+                    style: GoogleFonts.outfit(
+                        fontSize: 12, color: Colors.white70)),
               ],
             ),
             action: SnackBarAction(
@@ -396,7 +407,8 @@ class CartProvider extends ChangeNotifier {
                 navigatorKey.currentState?.pushNamed(AppRoutes.cart);
               },
             ),
-            backgroundColor: const Color(0xFF1E3FD8).withValues(alpha: 0.95), // theme blue
+            backgroundColor:
+                const Color(0xFF1E3FD8).withValues(alpha: 0.95), // theme blue
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
               bottom: navBarHeight + 16.0,
@@ -595,8 +607,10 @@ class CartProvider extends ChangeNotifier {
 
   /// Restores items from a cancelled or rejected order back into the cart via RPC.
   /// Idempotent. Tracks processed orders in SharedPreferences. Returns RestoreResult.
-  Future<RestoreResult> restoreOrderToCart(String orderId, {bool force = false}) async {
-    if (!force && _inFlightRestores.contains(orderId)) return const RestoreResult(0);
+  Future<RestoreResult> restoreOrderToCart(String orderId,
+      {bool force = false}) async {
+    if (!force && _inFlightRestores.contains(orderId))
+      return const RestoreResult(0);
     _inFlightRestores.add(orderId);
 
     try {

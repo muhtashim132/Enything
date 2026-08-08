@@ -135,9 +135,10 @@ class CartPage extends StatelessWidget {
               child: (item.selectedVariant?.imageUrl?.isNotEmpty == true ||
                       item.product.displayImage.isNotEmpty)
                   ? CachedNetworkImage(
-                      imageUrl: item.selectedVariant?.imageUrl?.isNotEmpty == true
-                          ? item.selectedVariant!.imageUrl!
-                          : item.product.displayImage,
+                      imageUrl:
+                          item.selectedVariant?.imageUrl?.isNotEmpty == true
+                              ? item.selectedVariant!.imageUrl!
+                              : item.product.displayImage,
                       fit: BoxFit.cover,
                       width: 60,
                       height: 60,
@@ -367,7 +368,9 @@ class CartPage extends StatelessWidget {
     final riderBase = effectiveBase + surcharge + heavyFee;
     // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
     // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
-    final riderPayoutRatio = (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) / 100.0;
+    final riderPayoutRatio =
+        (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) /
+            100.0;
     final riderEarnings = riderBase * riderPayoutRatio;
 
     final gstBreakdown = OrderTaxBreakdown.calculate(

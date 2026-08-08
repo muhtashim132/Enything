@@ -45,6 +45,7 @@ class _RestaurantPageState extends State<RestaurantPage> {
       final productsData = await _supabase
           .from('products')
           .select()
+          .eq('is_deleted', false)
           .eq('shop_id', widget.shopId)
           .eq('is_available', true)
           .limit(2000);
@@ -82,269 +83,274 @@ class _RestaurantPageState extends State<RestaurantPage> {
             CustomScrollView(
               slivers: [
                 SliverAppBar(
-              expandedHeight: 220,
-              pinned: true,
-              stretch: true,
-              leading: GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  margin: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.arrow_back, color: Colors.white),
-                ),
-              ),
-              actions: [
-                GestureDetector(
-                  onTap: () {
-                    if (auth.currentUserId != null) {
-                      favs.toggleShopFavorite(auth.currentUserId!, _shop!.id);
-                    }
-                  },
-                  child: Container(
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        isFav
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        color: isFav ? Colors.red : AppColors.textSecondary,
+                  expandedHeight: 220,
+                  pinned: true,
+                  stretch: true,
+                  leading: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        shape: BoxShape.circle,
                       ),
+                      child: const Icon(Icons.arrow_back, color: Colors.white),
                     ),
                   ),
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                title: Text(
-                  _shop!.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Poppins',
-                    shadows: [Shadow(blurRadius: 12, color: Colors.black)],
-                  ),
-                ),
-                background: _shop!.bannerImage != null
-                    ? CachedNetworkImage(
-                        imageUrl: _shop!.bannerImage!,
-                        fit: BoxFit.cover,
-                        errorWidget: (c, e, s) => Container(
-                          decoration: const BoxDecoration(
-                              gradient: AppColors.foodGradient),
-                          child: const Center(
-                              child:
-                                  Text('🛍️', style: TextStyle(fontSize: 64))),
-                        ),
-                      )
-                    : Container(
+                  actions: [
+                    GestureDetector(
+                      onTap: () {
+                        if (auth.currentUserId != null) {
+                          favs.toggleShopFavorite(
+                              auth.currentUserId!, _shop!.id);
+                        }
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 16),
                         decoration: const BoxDecoration(
-                            gradient: AppColors.foodGradient),
-                        child: const Center(
-                            child: Text('🛍️', style: TextStyle(fontSize: 64))),
-                      ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Container(
-                color: Colors.white,
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(8),
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            isFav
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            color: isFav ? Colors.red : AppColors.textSecondary,
                           ),
-                          child: Row(
-                            children: [
-                              Text(
-                                _shop!.totalOrders > 0
-                                    ? _shop!.rating.toStringAsFixed(1)
-                                    : 'New',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
+                  flexibleSpace: FlexibleSpaceBar(
+                    title: Text(
+                      _shop!.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Poppins',
+                        shadows: [Shadow(blurRadius: 12, color: Colors.black)],
+                      ),
+                    ),
+                    background: _shop!.bannerImage != null
+                        ? CachedNetworkImage(
+                            imageUrl: _shop!.bannerImage!,
+                            fit: BoxFit.cover,
+                            errorWidget: (c, e, s) => Container(
+                              decoration: const BoxDecoration(
+                                  gradient: AppColors.foodGradient),
+                              child: const Center(
+                                  child: Text('🛍️',
+                                      style: TextStyle(fontSize: 64))),
+                            ),
+                          )
+                        : Container(
+                            decoration: const BoxDecoration(
+                                gradient: AppColors.foodGradient),
+                            child: const Center(
+                                child: Text('🛍️',
+                                    style: TextStyle(fontSize: 64))),
+                          ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              if (_shop!.totalOrders > 0)
-                                const Icon(Icons.star,
-                                    color: Colors.white, size: 12),
-                            ],
+                              child: Row(
+                                children: [
+                                  Text(
+                                    _shop!.totalOrders > 0
+                                        ? _shop!.rating.toStringAsFixed(1)
+                                        : 'New',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13),
+                                  ),
+                                  if (_shop!.totalOrders > 0)
+                                    const Icon(Icons.star,
+                                        color: Colors.white, size: 12),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '${_shop!.totalOrders}+ orders',
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary, fontSize: 13),
+                            ),
+                            const Spacer(),
+                            const Icon(Icons.timer_outlined,
+                                size: 16, color: AppColors.textSecondary),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${_shop!.prepTimeMinutes} mins',
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_outlined,
+                                size: 14, color: AppColors.textSecondary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                _shop!.address,
+                                style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (_shop!.location.latitude != 0 &&
+                            _shop!.location.longitude != 0)
+                          Container(
+                            height: 150,
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: EnythingMap(
+                                center: _shop!.location,
+                                zoom: 15,
+                                interactive: false,
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          '${_shop!.totalOrders}+ orders',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13),
-                        ),
-                        const Spacer(),
-                        const Icon(Icons.timer_outlined,
-                            size: 16, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${_shop!.prepTimeMinutes} mins',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13),
-                        ),
+                        if (_shop!.cuisineType != null) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.foodRed.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              _shop!.cuisineType!,
+                              style: const TextStyle(
+                                color: AppColors.foodRed,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Row(
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Row(
                       children: [
-                        const Icon(Icons.location_on_outlined,
-                            size: 14, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            _shop!.address,
-                            style: const TextStyle(
-                                color: AppColors.textSecondary, fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (_shop!.location.latitude != 0 &&
-                        _shop!.location.longitude != 0)
-                      Container(
-                        height: 150,
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.divider),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: EnythingMap(
-                            center: _shop!.location,
-                            zoom: 15,
-                            interactive: false,
-                          ),
-                        ),
-                      ),
-                    if (_shop!.cuisineType != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.foodRed.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _shop!.cuisineType!,
-                          style: const TextStyle(
-                            color: AppColors.foodRed,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                        const Text(
+                          'Products',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
                             fontFamily: 'Poppins',
                           ),
                         ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Products',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_products.length} items',
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (_products.isEmpty)
-              const SliverToBoxAdapter(
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Column(
-                      children: [
-                        Text('🛍️', style: TextStyle(fontSize: 48)),
-                        SizedBox(height: 12),
-                        Text('No products available',
-                            style: TextStyle(color: AppColors.textSecondary)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${_products.length} items',
+                            style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverLayoutBuilder(
-                  builder: (context, constraints) {
-                    const crossAxisCount = 2;
-                    const crossAxisSpacing = 14.0;
-                    final availableWidth = constraints.crossAxisExtent;
-                    final itemWidth = (availableWidth -
-                            (crossAxisSpacing * (crossAxisCount - 1))) /
-                        crossAxisCount;
-                    final itemHeight = itemWidth + 178;
-                    final childAspectRatio = itemWidth / itemHeight;
-
-                    return SliverGrid(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        childAspectRatio: childAspectRatio,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: crossAxisSpacing,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => ProductCard(
-                          product: _products[index],
-                          shop: _shop,
+                if (_products.isEmpty)
+                  const SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Column(
+                          children: [
+                            Text('🛍️', style: TextStyle(fontSize: 48)),
+                            SizedBox(height: 12),
+                            Text('No products available',
+                                style:
+                                    TextStyle(color: AppColors.textSecondary)),
+                          ],
                         ),
-                        childCount: _products.length,
                       ),
-                    );
-                  },
-                ),
-              ),
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
-        ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    sliver: SliverLayoutBuilder(
+                      builder: (context, constraints) {
+                        const crossAxisCount = 2;
+                        const crossAxisSpacing = 14.0;
+                        final availableWidth = constraints.crossAxisExtent;
+                        final itemWidth = (availableWidth -
+                                (crossAxisSpacing * (crossAxisCount - 1))) /
+                            crossAxisCount;
+                        final itemHeight = itemWidth + 178;
+                        final childAspectRatio = itemWidth / itemHeight;
+
+                        return SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            childAspectRatio: childAspectRatio,
+                            mainAxisSpacing: 14,
+                            crossAxisSpacing: crossAxisSpacing,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => ProductCard(
+                              product: _products[index],
+                              shop: _shop,
+                            ),
+                            childCount: _products.length,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
+            ),
             if (cart.totalItemCount > 0)
               Positioned(
                 bottom: 0,
@@ -379,7 +385,8 @@ class _RestaurantPageState extends State<RestaurantPage> {
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),

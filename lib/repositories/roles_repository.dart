@@ -150,12 +150,13 @@ class RolesRepository {
     if (role['is_system'] == true) {
       throw Exception('Cannot delete system roles');
     }
-    
+
     try {
       await _db.from('roles').delete().eq('id', roleId);
     } on PostgrestException catch (e) {
       if (e.code == '23503') {
-        throw Exception('Cannot delete role because it is currently assigned to one or more users.');
+        throw Exception(
+            'Cannot delete role because it is currently assigned to one or more users.');
       }
       rethrow;
     }

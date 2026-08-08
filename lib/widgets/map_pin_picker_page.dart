@@ -344,7 +344,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
       LocationPermission perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
         perm = await PermissionUtils.requestLocationPermissionWithDisclosure(
-          customReason: 'Enything needs location access to pinpoint your exact delivery address on the map.',
+          customReason:
+              'Enything needs location access to pinpoint your exact delivery address on the map.',
         );
       }
       if (perm == LocationPermission.deniedForever) {

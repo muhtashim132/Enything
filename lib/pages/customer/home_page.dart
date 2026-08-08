@@ -611,14 +611,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         if (activeOrder != null && mounted) {
           final status = activeOrder['status'];
           bool isExpired = false;
-          
-          if (status == 'awaiting_payment' && activeOrder['payment_deadline'] != null) {
-            final deadline = DateTime.parse(activeOrder['payment_deadline']).toLocal();
+
+          if (status == 'awaiting_payment' &&
+              activeOrder['payment_deadline'] != null) {
+            final deadline =
+                DateTime.parse(activeOrder['payment_deadline']).toLocal();
             if (DateTime.now().isAfter(deadline)) {
               isExpired = true;
             }
           } else if (status == 'pending' && activeOrder['created_at'] != null) {
-            final createdAt = DateTime.parse(activeOrder['created_at']).toLocal();
+            final createdAt =
+                DateTime.parse(activeOrder['created_at']).toLocal();
             // If stuck in payment processing for more than 30 mins, treat as expired
             if (DateTime.now().difference(createdAt).inMinutes > 30) {
               isExpired = true;
@@ -650,7 +653,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     arguments: {'orderId': activeOrder['id']})
                 .then((_) => _isActiveOrderNavigating = false);
           } else {
-            final controller = ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            final controller =
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: const Text('You have an active order in progress.'),
               action: SnackBarAction(
                 label: 'Track',
@@ -837,7 +841,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       String? specialTag;
       if (_selectedSearchDemographic != 'All') {
-         specialTag = '#$_selectedSearchDemographic';
+        specialTag = '#$_selectedSearchDemographic';
       }
 
       List<String>? effectiveCategories;
@@ -859,7 +863,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // Phase 24: Mathematically pure ST_DWithin geospatial search via Additive RPC
         final maxRadius = DeliveryCalculator.maxRadiusKm;
 
-        debugPrint('[Search] Step 1/4: search_shops_geospatial (byName) q="$query" lat=$lat lng=$lng radius=$maxRadius');
+        debugPrint(
+            '[Search] Step 1/4: search_shops_geospatial (byName) q="$query" lat=$lat lng=$lng radius=$maxRadius');
         try {
           shopsByName = await _supabase.rpc('search_shops_geospatial', params: {
             'p_lat': lat,
@@ -871,18 +876,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           });
           debugPrint('[Search] Step 1/4 OK: ${shopsByName.length} shops found');
         } catch (e) {
-          debugPrint('[Search] Step 1/4 FAILED (search_shops_geospatial byName): $e');
+          debugPrint(
+              '[Search] Step 1/4 FAILED (search_shops_geospatial byName): $e');
           rethrow;
         }
 
         // Phase 26 Fix: Fetch products without .select('*, shops(*)')  which
         // causes PostgREST to reject embedded-resource requests on SETOF RPCs.
         // Instead, we batch-fetch shops separately and reconstruct the map.
-        debugPrint('[Search] Step 2/4: search_products_geospatial (byName) BYPASS q="$query"');
+        debugPrint(
+            '[Search] Step 2/4: search_products_geospatial (byName) BYPASS q="$query"');
         List<dynamic> rawProductsByName = [];
         try {
           // Offload geospatial ST_DWithin and ST_Distance to the working shops RPC
-          final nearbyShops = await _supabase.rpc('search_shops_geospatial', params: {
+          final nearbyShops =
+              await _supabase.rpc('search_shops_geospatial', params: {
             'p_lat': lat,
             'p_lng': lng,
             'p_query': null, // All shops in radius to search their products
@@ -891,26 +899,29 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             'p_limit': 150
           });
 
-          final shopIds = (nearbyShops as List).map((s) => s['id'] as String).toList();
-          
+          final shopIds =
+              (nearbyShops as List).map((s) => s['id'] as String).toList();
+
           if (shopIds.isNotEmpty) {
             var q = _supabase
                 .from('products')
                 .select()
+                .eq('is_deleted', false)
                 .eq('is_available', true)
                 .inFilter('shop_id', shopIds);
-            
-            final terms = query.trim().split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+
+            final terms =
+                query.trim().split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
             for (final term in terms) {
               q = q.ilike('name', '%$term%');
             }
-            
+
             if (specialTag != null) {
               q = q.contains('special_tags', [specialTag]);
             }
-            
+
             final allProducts = await q;
-            
+
             // Phase 31 Fix: Pre-truncation Local Size Filter (Solves JSONB + Pagination Edge Cases)
             final filteredProducts = _selectedSizes.isEmpty
                 ? allProducts
@@ -921,14 +932,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       return _selectedSizes.contains(name);
                     });
                   }).toList();
-            
+
             // Group, sort by rating, limit 5 per shop
             final productsByShop = <String, List<dynamic>>{};
             for (final p in filteredProducts) {
               final sid = p['shop_id'] as String;
               productsByShop.putIfAbsent(sid, () => []).add(p);
             }
-            
+
             // Iterate through sorted shops to maintain distance ordering
             for (final shop in nearbyShops) {
               final sid = shop['id'] as String;
@@ -943,9 +954,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 if (rawProductsByName.length >= 50) break;
               }
             }
-            if (rawProductsByName.length > 50) rawProductsByName = rawProductsByName.sublist(0, 50);
+            if (rawProductsByName.length > 50)
+              rawProductsByName = rawProductsByName.sublist(0, 50);
           }
-          debugPrint('[Search] Step 2/4 OK: ${rawProductsByName.length} products found');
+          debugPrint(
+              '[Search] Step 2/4 OK: ${rawProductsByName.length} products found');
         } catch (e) {
           debugPrint('[Search] Step 2/4 FAILED (byName bypass): $e');
           rethrow;
@@ -953,33 +966,39 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         List<dynamic> rawProductsByCat = [];
         if (matchedSubcategories.isNotEmpty && !skipNLP) {
-          debugPrint('[Search] Step 3/4: search_shops_geospatial (byCat) cats=$matchedSubcategories');
+          debugPrint(
+              '[Search] Step 3/4: search_shops_geospatial (byCat) cats=$matchedSubcategories');
           try {
-            shopsByCat = await _supabase.rpc('search_shops_geospatial', params: {
+            shopsByCat =
+                await _supabase.rpc('search_shops_geospatial', params: {
               'p_lat': lat,
               'p_lng': lng,
               'p_categories': matchedSubcategories,
               'p_radius_km': maxRadius,
               'p_limit': 50
             });
-            debugPrint('[Search] Step 3/4 OK: ${shopsByCat.length} shops found');
+            debugPrint(
+                '[Search] Step 3/4 OK: ${shopsByCat.length} shops found');
           } catch (e) {
-            debugPrint('[Search] Step 3/4 FAILED (search_shops_geospatial byCat): $e');
+            debugPrint(
+                '[Search] Step 3/4 FAILED (search_shops_geospatial byCat): $e');
             rethrow;
           }
 
-          debugPrint('[Search] Step 4/4: search_products_geospatial (byCat) BYPASS cats=$matchedSubcategories');
+          debugPrint(
+              '[Search] Step 4/4: search_products_geospatial (byCat) BYPASS cats=$matchedSubcategories');
           try {
             // Leverage shopsByCat from Step 3 which is already distance sorted
             final shopIds = shopsByCat.map((s) => s['id'] as String).toList();
-            
+
             if (shopIds.isNotEmpty) {
               final allProducts = await _supabase
                   .from('products')
                   .select()
+                  .eq('is_deleted', false)
                   .eq('is_available', true)
                   .inFilter('shop_id', shopIds);
-                  
+
               // Phase 31 Fix: Pre-truncation Local Size Filter
               final filteredProducts = _selectedSizes.isEmpty
                   ? allProducts
@@ -990,13 +1009,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         return _selectedSizes.contains(name);
                       });
                     }).toList();
-              
+
               final productsByShop = <String, List<dynamic>>{};
               for (final p in filteredProducts) {
                 final sid = p['shop_id'] as String;
                 productsByShop.putIfAbsent(sid, () => []).add(p);
               }
-              
+
               for (final shop in shopsByCat) {
                 final sid = shop['id'] as String;
                 if (productsByShop.containsKey(sid)) {
@@ -1010,15 +1029,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   if (rawProductsByCat.length >= 100) break;
                 }
               }
-              if (rawProductsByCat.length > 100) rawProductsByCat = rawProductsByCat.sublist(0, 100);
+              if (rawProductsByCat.length > 100)
+                rawProductsByCat = rawProductsByCat.sublist(0, 100);
             }
-            debugPrint('[Search] Step 4/4 OK: ${rawProductsByCat.length} products found');
+            debugPrint(
+                '[Search] Step 4/4 OK: ${rawProductsByCat.length} products found');
           } catch (e) {
             debugPrint('[Search] Step 4/4 FAILED (byCat bypass): $e');
             rethrow;
           }
         } else {
-          debugPrint('[Search] Steps 3-4 skipped: no NLP-matched subcategories for "$query"');
+          debugPrint(
+              '[Search] Steps 3-4 skipped: no NLP-matched subcategories for "$query"');
         }
 
         // Collect all unique shop_ids from both product lists so we can
@@ -1036,7 +1058,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // Single batch query for all shops referenced by the product results.
         final Map<String, Map<String, dynamic>> shopById = {};
         if (productShopIds.isNotEmpty) {
-          debugPrint('[Search] Batch-fetching ${productShopIds.length} shop(s) for product results');
+          debugPrint(
+              '[Search] Batch-fetching ${productShopIds.length} shop(s) for product results');
           final shopRows = await _supabase
               .from('shops')
               .select('*')
@@ -1178,16 +1201,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           errStr.contains('Connection closed') ||
           errStr.contains('Network is unreachable')) {
         userMessage = 'Please check your internet connection.';
-      } else if (errStr.contains('42883') || errStr.contains('function') && errStr.contains('does not exist')) {
-        userMessage = 'Search service unavailable. DB function missing — contact support.';
-        debugPrint('[Search] ⚠ PostgREST 42883: search function not found. Migrations may not be applied.');
+      } else if (errStr.contains('42883') ||
+          errStr.contains('function') && errStr.contains('does not exist')) {
+        userMessage =
+            'Search service unavailable. DB function missing — contact support.';
+        debugPrint(
+            '[Search] ⚠ PostgREST 42883: search function not found. Migrations may not be applied.');
       } else if (errStr.contains('42725') || errStr.contains('is not unique')) {
-        userMessage = 'Search service error. DB function ambiguity — contact support.';
+        userMessage =
+            'Search service error. DB function ambiguity — contact support.';
         debugPrint('[Search] ⚠ PostgREST 42725: ambiguous function overload.');
       } else if (errStr.contains('PGRST')) {
         userMessage = 'Search service error: $errStr';
       } else {
-        userMessage = 'Search failed: ${errStr.length > 120 ? '${errStr.substring(0, 120)}...' : errStr}';
+        userMessage =
+            'Search failed: ${errStr.length > 120 ? '${errStr.substring(0, 120)}...' : errStr}';
       }
 
       if (mounted) {
@@ -1318,8 +1346,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // By passing an exhaustive array of ALL categories instead of null, PostgREST correctly types it as a string array.
         final allTabCats = _tabCategories.values.expand((e) => e);
         final allAppCats = AppCategories.all.map((c) => c['name']!);
-        final allAppCatsLower = AppCategories.all.map((c) => c['name']!.toLowerCase());
-        effectiveCategories = {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
+        final allAppCatsLower =
+            AppCategories.all.map((c) => c['name']!.toLowerCase());
+        effectiveCategories =
+            {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
       }
 
       // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
@@ -1439,9 +1469,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _loadRetryCount++;
         // Exponential backoff with jitter: 1s → 2s → 4s + up to 500ms random jitter
         final backoffSeconds = (1 << (_loadRetryCount - 1)); // 1, 2, 4
-        final jitterMs = (500 * (DateTime.now().millisecondsSinceEpoch % 100) / 100).round();
+        final jitterMs =
+            (500 * (DateTime.now().millisecondsSinceEpoch % 100) / 100).round();
         final delay = Duration(seconds: backoffSeconds, milliseconds: jitterMs);
-        debugPrint('_loadAllData: transient error, retry $_loadRetryCount/$_maxLoadRetries in ${delay.inSeconds}s');
+        debugPrint(
+            '_loadAllData: transient error, retry $_loadRetryCount/$_maxLoadRetries in ${delay.inSeconds}s');
 
         // Show silent inline status — no alarming red banner for network blips
         if (mounted) {
@@ -1449,8 +1481,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             SnackBar(
               content: Row(children: [
                 const SizedBox(
-                  width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 ),
                 const SizedBox(width: 10),
                 Text('Connection issue — retrying in ${backoffSeconds}s…'),
@@ -1471,7 +1505,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Couldn\'t load shops. Check your connection and pull down to refresh.'),
+              content: const Text(
+                  'Couldn\'t load shops. Check your connection and pull down to refresh.'),
               backgroundColor: const Color(0xFF1A1A1A),
               duration: const Duration(seconds: 6),
               behavior: SnackBarBehavior.floating,
@@ -1501,7 +1536,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   Future<void> _loadData(String tabName) async {
     final currentFetchId = ++_fetchId;
     _isFetching = true;
-    
+
     if (mounted) {
       setState(() {
         _comingSoonMessage = null;
@@ -1528,13 +1563,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       } else {
         final allTabCats = _tabCategories.values.expand((e) => e);
         final allAppCats = AppCategories.all.map((c) => c['name']!);
-        final allAppCatsLower = AppCategories.all.map((c) => c['name']!.toLowerCase());
-        effectiveCategories = {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
+        final allAppCatsLower =
+            AppCategories.all.map((c) => c['name']!.toLowerCase());
+        effectiveCategories =
+            {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
       }
 
-      final finalCategories = subcategories
-          .where((c) => effectiveCategories.contains(c))
-          .toList();
+      final finalCategories =
+          subcategories.where((c) => effectiveCategories.contains(c)).toList();
 
       // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
       final shopsResponse =
@@ -1644,16 +1680,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       if (isTransient && _loadRetryCount < _maxLoadRetries) {
         _loadRetryCount++;
         final backoffSeconds = (1 << (_loadRetryCount - 1));
-        final jitterMs = (500 * (DateTime.now().millisecondsSinceEpoch % 100) / 100).round();
+        final jitterMs =
+            (500 * (DateTime.now().millisecondsSinceEpoch % 100) / 100).round();
         final delay = Duration(seconds: backoffSeconds, milliseconds: jitterMs);
-        debugPrint('_loadData: transient error, retry $_loadRetryCount/$_maxLoadRetries in ${delay.inSeconds}s');
+        debugPrint(
+            '_loadData: transient error, retry $_loadRetryCount/$_maxLoadRetries in ${delay.inSeconds}s');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(children: [
                 const SizedBox(
-                  width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 ),
                 const SizedBox(width: 10),
                 Text('Connection issue — retrying in ${backoffSeconds}s…'),
@@ -1673,7 +1713,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Couldn\'t load shops. Check your connection and pull down to refresh.'),
+              content: const Text(
+                  'Couldn\'t load shops. Check your connection and pull down to refresh.'),
               backgroundColor: const Color(0xFF1A1A1A),
               duration: const Duration(seconds: 6),
               behavior: SnackBarBehavior.floating,
@@ -1738,7 +1779,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   child: SingleChildScrollView(
                     physics: const NeverScrollableScrollPhysics(),
                     child: Container(
-                      padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 10, 16, 0),
+                      padding: EdgeInsets.fromLTRB(
+                          16, MediaQuery.of(context).padding.top + 10, 16, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -2698,7 +2740,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 ),
                               ),
                             ),
-                          ] else if (_comingSoonMessage != null && !_isLoading) ...[
+                          ] else if (_comingSoonMessage != null &&
+                              !_isLoading) ...[
                             SliverToBoxAdapter(
                               child: Padding(
                                 padding:
@@ -2740,7 +2783,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       if (_comingSoonSubMessage != null) ...[
                                         const SizedBox(height: 8),
                                         Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 32),
                                           child: Text(
                                             _comingSoonSubMessage!,
                                             textAlign: TextAlign.center,
@@ -2858,7 +2902,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       },
     ];
 
-    final hasDemographicCategories = _searchProductResults.any((p) => ['Clothing', 'Footwear', 'Jewellery', 'Cosmetics & Beauty', 'Salon & Beauty'].contains(p.category)) || _selectedSearchDemographic != 'All';
+    final hasDemographicCategories = _searchProductResults.any((p) => [
+              'Clothing',
+              'Footwear',
+              'Jewellery',
+              'Cosmetics & Beauty',
+              'Salon & Beauty'
+            ].contains(p.category)) ||
+        _selectedSearchDemographic != 'All';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -2877,7 +2928,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: isSelected ? AppColors.primary : Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
@@ -2906,7 +2958,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               isSelected ? FontWeight.w700 : FontWeight.w500,
                           color: isSelected
                               ? Colors.white
-                              : (isDark ? Colors.white70 : AppColors.textPrimary),
+                              : (isDark
+                                  ? Colors.white70
+                                  : AppColors.textPrimary),
                         ),
                       ),
                     ],
@@ -2923,7 +2977,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             child: Row(
               children: ['All', 'Men', 'Women', 'Boys', 'Girls', 'Kids']
                   .map((demo) => Padding(
-                        padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+                        padding:
+                            const EdgeInsets.only(right: 8, top: 8, bottom: 8),
                         child: ChoiceChip(
                           label: Text(demo),
                           selected: _selectedSearchDemographic == demo,
@@ -2939,15 +2994,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           labelStyle: TextStyle(
                             color: _selectedSearchDemographic == demo
                                 ? Colors.white
-                                : (isDark ? Colors.white : AppColors.textPrimary),
+                                : (isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary),
                             fontFamily: 'Poppins',
                             fontSize: 13,
                           ),
-                          backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                          backgroundColor:
+                              isDark ? const Color(0xFF1E1E2E) : Colors.white,
                           side: BorderSide(
                             color: _selectedSearchDemographic == demo
                                 ? AppColors.primary
-                                : (isDark ? Colors.white24 : Colors.grey.shade300),
+                                : (isDark
+                                    ? Colors.white24
+                                    : Colors.grey.shade300),
                           ),
                         ),
                       ))
@@ -3074,7 +3134,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               _selectedTabIndex = -1;
               _selectedFilterCategories.clear();
               _comingSoonMessage = 'Food Delivery Coming Soon!';
-              _comingSoonSubMessage = 'We are partnering with the best local restaurants. Stay tuned!';
+              _comingSoonSubMessage =
+                  'We are partnering with the best local restaurants. Stay tuned!';
               _shops = [];
               _products = [];
               _isLoading = false;
@@ -3105,14 +3166,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             _promptEnableLocation();
             return;
           }
-          final hasGrocery = _categories.any((c) => c['name'] == 'Supermarket / Hypermarket');
+          final hasGrocery =
+              _categories.any((c) => c['name'] == 'Supermarket / Hypermarket');
           final hasPharmacy = _categories.any((c) => c['name'] == 'Pharmacy');
           if (!hasGrocery && !hasPharmacy) {
             setState(() {
               _selectedTabIndex = -1;
               _selectedFilterCategories.clear();
               _comingSoonMessage = 'Groceries & Medicines Coming Soon!';
-              _comingSoonSubMessage = 'Daily essentials delivered to your doorstep, launching soon.';
+              _comingSoonSubMessage =
+                  'Daily essentials delivered to your doorstep, launching soon.';
               _shops = [];
               _products = [];
               _isLoading = false;
@@ -3149,7 +3212,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               _selectedTabIndex = -1;
               _selectedFilterCategories.clear();
               _comingSoonMessage = 'Fashion & Clothing Coming Soon!';
-              _comingSoonSubMessage = 'Your favorite local apparel stores will be here shortly.';
+              _comingSoonSubMessage =
+                  'Your favorite local apparel stores will be here shortly.';
               _shops = [];
               _products = [];
               _isLoading = false;
@@ -3804,7 +3868,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     // Cache available sizes if no size filter is currently active
     if (_selectedSizes.isEmpty) {
       _cachedAvailableSizes.clear();
-      final productsToCheck = _searchQuery.isNotEmpty ? _searchProductResults : _products;
+      final productsToCheck =
+          _searchQuery.isNotEmpty ? _searchProductResults : _products;
       for (final p in productsToCheck) {
         for (final v in p.variants) {
           if (v.name.trim().isNotEmpty && v.isAvailable) {
@@ -3814,7 +3879,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }
     }
     final sortedAvailableSizes = _cachedAvailableSizes.toList()..sort();
-    
+
     // Create localized state copies to prevent desync on sheet dismissal
     final Set<String> tempSelectedSizes = Set.from(_selectedSizes);
     final Set<String> tempCategories = Set.from(_selectedFilterCategories);
@@ -3932,13 +3997,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               style: GoogleFonts.outfit(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white70 : Colors.black54)),
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.black54)),
                           const SizedBox(height: 12),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
                             children: sortedAvailableSizes.map((size) {
-                              final isSelected = tempSelectedSizes.contains(size);
+                              final isSelected =
+                                  tempSelectedSizes.contains(size);
                               return ChoiceChip(
                                 label: Text(size),
                                 selected: isSelected,
@@ -3951,15 +4019,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     }
                                   });
                                 },
-                                selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                                backgroundColor:
-                                    isDark ? const Color(0xFF2A2A3E) : Colors.grey.shade100,
+                                selectedColor:
+                                    AppColors.primary.withValues(alpha: 0.15),
+                                backgroundColor: isDark
+                                    ? const Color(0xFF2A2A3E)
+                                    : Colors.grey.shade100,
                                 labelStyle: TextStyle(
                                     color: isSelected
                                         ? AppColors.primary
-                                        : (isDark ? Colors.white70 : Colors.black)),
+                                        : (isDark
+                                            ? Colors.white70
+                                            : Colors.black)),
                                 side: BorderSide(
-                                    color: isSelected ? AppColors.primary : Colors.transparent),
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : Colors.transparent),
                               );
                             }).toList(),
                           ),
@@ -3977,13 +4051,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     onPressed: () {
                       if (isApplying) return;
                       isApplying = true;
-                      
+
                       // Apply temp localized state to parent state
                       _selectedSizes.clear();
                       _selectedSizes.addAll(tempSelectedSizes);
                       _selectedFilterCategories.clear();
                       _selectedFilterCategories.addAll(tempCategories);
-                      
+
                       Navigator.pop(context);
                       setState(() {});
                       if (_searchQuery.isNotEmpty) {
@@ -4270,7 +4344,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               final cat = mainCats[index];
               final grad = cat['grad'] as List<Color>;
               final catName = cat['name'] as String;
-              final displayLabel = catName == 'Supermarket / Hypermarket' ? 'Supermarket\nHypermarket' : catName;
+              final displayLabel = catName == 'Supermarket / Hypermarket'
+                  ? 'Supermarket\nHypermarket'
+                  : catName;
               final imageUrl = AppCategories.getImageUrl(catName);
               final isSelected = _selectedTabIndex == index;
 

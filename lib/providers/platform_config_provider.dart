@@ -296,10 +296,12 @@ class PlatformConfigProvider extends ChangeNotifier {
                   final decoded = jsonDecode(valRaw.toString());
                   if (decoded is List) {
                     _disabledCategories.clear();
-                    _disabledCategories.addAll(decoded.map((e) => e.toString()));
+                    _disabledCategories
+                        .addAll(decoded.map((e) => e.toString()));
                   }
                 } catch (e) {
-                  debugPrint('[CategoryMgmt] realtime disabled_categories parse error: $e');
+                  debugPrint(
+                      '[CategoryMgmt] realtime disabled_categories parse error: $e');
                 }
               } else {
                 final val = double.tryParse(valRaw.toString()) ?? 0.0;

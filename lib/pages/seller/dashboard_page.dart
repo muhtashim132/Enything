@@ -65,7 +65,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
+
     _fcmSub = FirebaseMessaging.onMessage.listen((_) {
       if (mounted) _debouncedLoadStats();
     });
@@ -165,7 +165,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         _entryCtrl.forward();
         return;
       }
-      
+
       if (mounted) setState(() => _noShopFound = false);
 
       // Check verification status of the first shop (assuming all shops share the same status for the seller)
@@ -225,13 +225,21 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
             .neq('status', 'delivered')
             .neq('status', 'cancelled')
             .neq('status', 'seller_rejected');
-        
+
         int shopActiveCount = 0;
         for (var o in activeResp) {
           final status = o['status'];
           final sellerAccepted = o['seller_accepted'] == true;
-          if (((status == 'awaiting_acceptance' || status == 'pending') && sellerAccepted) ||
-              ['awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].contains(status)) {
+          if (((status == 'awaiting_acceptance' || status == 'pending') &&
+                  sellerAccepted) ||
+              [
+                'awaiting_payment',
+                'confirmed',
+                'preparing',
+                'ready_for_pickup',
+                'picked_up',
+                'out_for_delivery'
+              ].contains(status)) {
             shopActiveCount++;
           }
         }
@@ -268,9 +276,9 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
           // Dashboard badge reflects the seller's own toggle (is_accepting_orders).
           // 100x FIX: Ensure we do NOT bypass Admin suspensions.
           if (firstShopData['is_active'] == false) {
-             _adminSuspended = true;
+            _adminSuspended = true;
           } else {
-             _adminSuspended = false;
+            _adminSuspended = false;
           }
           // The old auto-fix that forcibly set is_active=true has been removed to respect admin bans.
 
@@ -570,156 +578,210 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFFFF9DB),
                                       borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: const Color(0xFFFCC419)),
+                                      border: Border.all(
+                                          color: const Color(0xFFFCC419)),
                                     ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text('Setup Incomplete', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFFE67700))),
+                                        Text('Setup Incomplete',
+                                            style: GoogleFonts.outfit(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 18,
+                                                color:
+                                                    const Color(0xFFE67700))),
                                         const SizedBox(height: 8),
-                                        Text('It looks like your shop creation was interrupted. Please switch roles or contact support.', style: GoogleFonts.outfit(color: const Color(0xFFD9480F))),
+                                        Text(
+                                            'It looks like your shop creation was interrupted. Please switch roles or contact support.',
+                                            style: GoogleFonts.outfit(
+                                                color:
+                                                    const Color(0xFFD9480F))),
                                         const SizedBox(height: 12),
                                         ElevatedButton(
-                                           onPressed: () => Navigator.pushNamedAndRemoveUntil(context, AppRoutes.roleSelect, (_) => false),
-                                           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFCC419)),
-                                           child: const Text('Back to Role Selection', style: TextStyle(color: Colors.black)),
+                                          onPressed: () =>
+                                              Navigator.pushNamedAndRemoveUntil(
+                                                  context,
+                                                  AppRoutes.roleSelect,
+                                                  (_) => false),
+                                          style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  const Color(0xFFFCC419)),
+                                          child: const Text(
+                                              'Back to Role Selection',
+                                              style: TextStyle(
+                                                  color: Colors.black)),
                                         )
                                       ],
                                     ),
                                   )
                                 : _adminSuspended
-                                ? Container(
-                                    padding: const EdgeInsets.all(20),
-                                    margin: const EdgeInsets.only(bottom: 24),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFF5F5),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: const Color(0xFFFF8787)),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('Account Suspended', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFFE03131))),
-                                        const SizedBox(height: 8),
-                                        Text('Your shop has been suspended by the administrator. You cannot accept orders at this time.', style: GoogleFonts.outfit(color: const Color(0xFFC92A2A))),
-                                      ],
-                                    ),
-                                  )
-                                : _isLoading
-                                ? _buildShimmer()
-                                : LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final isWide = constraints.maxWidth > 500;
-                                      if (isWide) {
-                                        return Row(
+                                    ? Container(
+                                        padding: const EdgeInsets.all(20),
+                                        margin:
+                                            const EdgeInsets.only(bottom: 24),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFF5F5),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          border: Border.all(
+                                              color: const Color(0xFFFF8787)),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            Expanded(
-                                                child: _statCard(
-                                                    'Rating',
-                                                    '⭐ $_shopRating',
-                                                    Icons.star_rounded,
-                                                    const Color(0xFF51CF66),
-                                                    const Color(0xFF2F9E44))),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                                child: _statCard(
-                                                    'Pending',
-                                                    '${_stats['pending_orders']}',
-                                                    Icons
-                                                        .pending_actions_rounded,
-                                                    const Color(0xFFFF8C42),
-                                                    const Color(0xFFE8590C),
-                                                    onTap: () =>
-                                                        Navigator.pushNamed(
-                                                            context,
-                                                            AppRoutes
-                                                                .sellerOrders))),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                                child: _statCard(
-                                                    'Active Orders',
-                                                    '${_stats['active_orders'] ?? 0}',
-                                                    Icons.receipt_long_rounded,
-                                                    const Color(0xFF4C6EF5),
-                                                    const Color(0xFF364FC7),
-                                                    onTap: () =>
-                                                        Navigator.pushNamed(
-                                                            context,
-                                                            AppRoutes
-                                                                .sellerOrders))),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                                child: _statCard(
-                                                    'Products',
-                                                    '${_stats['products']}',
-                                                    Icons.inventory_2_rounded,
-                                                    const Color(0xFFCC5DE8),
-                                                    const Color(0xFF9C36B5),
-                                                    onTap: () =>
-                                                        Navigator.pushNamed(
-                                                            context,
-                                                            AppRoutes
-                                                                .manageProducts))),
+                                            Text('Account Suspended',
+                                                style: GoogleFonts.outfit(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 18,
+                                                    color: const Color(
+                                                        0xFFE03131))),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                                'Your shop has been suspended by the administrator. You cannot accept orders at this time.',
+                                                style: GoogleFonts.outfit(
+                                                    color: const Color(
+                                                        0xFFC92A2A))),
                                           ],
-                                        );
-                                      }
-                                      return Column(
-                                        children: [
-                                          Row(children: [
-                                            Expanded(
-                                                child: _statCard(
-                                                    'Rating',
-                                                    '⭐ $_shopRating',
-                                                    Icons.star_rounded,
-                                                    const Color(0xFF51CF66),
-                                                    const Color(0xFF2F9E44))),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                                child: _statCard(
-                                                    'Pending',
-                                                    '${_stats['pending_orders']}',
-                                                    Icons
-                                                        .pending_actions_rounded,
-                                                    const Color(0xFFFF8C42),
-                                                    const Color(0xFFE8590C),
-                                                    onTap: () =>
-                                                        Navigator.pushNamed(
-                                                            context,
-                                                            AppRoutes
-                                                                .sellerOrders))),
-                                          ]),
-                                          const SizedBox(height: 14),
-                                          Row(children: [
-                                            Expanded(
-                                                child: _statCard(
-                                                    'Active Orders',
-                                                    '${_stats['active_orders'] ?? 0}',
-                                                    Icons.receipt_long_rounded,
-                                                    const Color(0xFF4C6EF5),
-                                                    const Color(0xFF364FC7),
-                                                    onTap: () =>
-                                                        Navigator.pushNamed(
-                                                            context,
-                                                            AppRoutes
-                                                                .sellerOrders))),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                                child: _statCard(
-                                                    'Products',
-                                                    '${_stats['products']}',
-                                                    Icons.inventory_2_rounded,
-                                                    const Color(0xFFCC5DE8),
-                                                    const Color(0xFF9C36B5),
-                                                    onTap: () =>
-                                                        Navigator.pushNamed(
-                                                            context,
-                                                            AppRoutes
-                                                                .manageProducts))),
-                                          ]),
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                        ),
+                                      )
+                                    : _isLoading
+                                        ? _buildShimmer()
+                                        : LayoutBuilder(
+                                            builder: (context, constraints) {
+                                              final isWide =
+                                                  constraints.maxWidth > 500;
+                                              if (isWide) {
+                                                return Row(
+                                                  children: [
+                                                    Expanded(
+                                                        child: _statCard(
+                                                            'Rating',
+                                                            '⭐ $_shopRating',
+                                                            Icons.star_rounded,
+                                                            const Color(
+                                                                0xFF51CF66),
+                                                            const Color(
+                                                                0xFF2F9E44))),
+                                                    const SizedBox(width: 14),
+                                                    Expanded(
+                                                        child: _statCard(
+                                                            'Pending',
+                                                            '${_stats['pending_orders']}',
+                                                            Icons
+                                                                .pending_actions_rounded,
+                                                            const Color(
+                                                                0xFFFF8C42),
+                                                            const Color(
+                                                                0xFFE8590C),
+                                                            onTap: () => Navigator
+                                                                .pushNamed(
+                                                                    context,
+                                                                    AppRoutes
+                                                                        .sellerOrders))),
+                                                    const SizedBox(width: 14),
+                                                    Expanded(
+                                                        child: _statCard(
+                                                            'Active Orders',
+                                                            '${_stats['active_orders'] ?? 0}',
+                                                            Icons
+                                                                .receipt_long_rounded,
+                                                            const Color(
+                                                                0xFF4C6EF5),
+                                                            const Color(
+                                                                0xFF364FC7),
+                                                            onTap: () => Navigator
+                                                                .pushNamed(
+                                                                    context,
+                                                                    AppRoutes
+                                                                        .sellerOrders))),
+                                                    const SizedBox(width: 14),
+                                                    Expanded(
+                                                        child: _statCard(
+                                                            'Products',
+                                                            '${_stats['products']}',
+                                                            Icons
+                                                                .inventory_2_rounded,
+                                                            const Color(
+                                                                0xFFCC5DE8),
+                                                            const Color(
+                                                                0xFF9C36B5),
+                                                            onTap: () => Navigator
+                                                                .pushNamed(
+                                                                    context,
+                                                                    AppRoutes
+                                                                        .manageProducts))),
+                                                  ],
+                                                );
+                                              }
+                                              return Column(
+                                                children: [
+                                                  Row(children: [
+                                                    Expanded(
+                                                        child: _statCard(
+                                                            'Rating',
+                                                            '⭐ $_shopRating',
+                                                            Icons.star_rounded,
+                                                            const Color(
+                                                                0xFF51CF66),
+                                                            const Color(
+                                                                0xFF2F9E44))),
+                                                    const SizedBox(width: 14),
+                                                    Expanded(
+                                                        child: _statCard(
+                                                            'Pending',
+                                                            '${_stats['pending_orders']}',
+                                                            Icons
+                                                                .pending_actions_rounded,
+                                                            const Color(
+                                                                0xFFFF8C42),
+                                                            const Color(
+                                                                0xFFE8590C),
+                                                            onTap: () => Navigator
+                                                                .pushNamed(
+                                                                    context,
+                                                                    AppRoutes
+                                                                        .sellerOrders))),
+                                                  ]),
+                                                  const SizedBox(height: 14),
+                                                  Row(children: [
+                                                    Expanded(
+                                                        child: _statCard(
+                                                            'Active Orders',
+                                                            '${_stats['active_orders'] ?? 0}',
+                                                            Icons
+                                                                .receipt_long_rounded,
+                                                            const Color(
+                                                                0xFF4C6EF5),
+                                                            const Color(
+                                                                0xFF364FC7),
+                                                            onTap: () => Navigator
+                                                                .pushNamed(
+                                                                    context,
+                                                                    AppRoutes
+                                                                        .sellerOrders))),
+                                                    const SizedBox(width: 14),
+                                                    Expanded(
+                                                        child: _statCard(
+                                                            'Products',
+                                                            '${_stats['products']}',
+                                                            Icons
+                                                                .inventory_2_rounded,
+                                                            const Color(
+                                                                0xFFCC5DE8),
+                                                            const Color(
+                                                                0xFF9C36B5),
+                                                            onTap: () => Navigator
+                                                                .pushNamed(
+                                                                    context,
+                                                                    AppRoutes
+                                                                        .manageProducts))),
+                                                  ]),
+                                                ],
+                                              );
+                                            },
+                                          ),
                           ),
                         ),
                       ),

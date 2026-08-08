@@ -68,6 +68,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
       final productsData = await _supabase
           .from('products')
           .select()
+          .eq('is_deleted', false)
           .eq('shop_id', widget.shopId)
           .eq('is_available', true)
           .limit(2000);

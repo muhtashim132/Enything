@@ -748,13 +748,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
                                 child: Row(
                                   children: [
                                     Text(cat['emoji'] ?? '',
-                                        style:
-                                            const TextStyle(fontSize: 18)),
+                                        style: const TextStyle(fontSize: 18)),
                                     const SizedBox(width: 10),
                                     Text(cat['name']!,
                                         style: GoogleFonts.outfit(
-                                            color: Colors.white,
-                                            fontSize: 14)),
+                                            color: Colors.white, fontSize: 14)),
                                   ],
                                 ),
                               ))

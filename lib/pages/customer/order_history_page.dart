@@ -66,6 +66,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
       final productsData = await _supabase
           .from('products')
           .select('*, shops(*)')
+          .eq('is_deleted', false)
           .inFilter('id', productIds)
           .eq('is_available', true);
 
@@ -243,7 +244,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
   void _handleBack() {
     final isFirst = ModalRoute.of(context)?.isFirst ?? false;
     if (isFirst) {
-      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
+      Navigator.pushNamedAndRemoveUntil(
+          context, AppRoutes.customerHome, (route) => false);
     } else {
       Navigator.pop(context);
     }
@@ -495,74 +497,76 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final isFirst = ModalRoute.of(context)?.isFirst ?? false;
     return PopScope(
-      canPop: !isFirst,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
-        }
-      },
-      child: Scaffold(
-        backgroundColor:
-            isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: Navigator.canPop(context)
-            ? GestureDetector(
-                onTap: _handleBack,
-                child: Container(
-                  margin: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.07)
-                        : const Color(0xFFF0F0F8),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.arrow_back_ios_new_rounded,
-                      size: 16,
-                      color: isDark ? Colors.white70 : AppColors.textPrimary),
-                ),
-              )
-            : null,
-        title: Text(
-          'My Orders',
-          style: GoogleFonts.outfit(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: isDark ? Colors.white : AppColors.textPrimary,
-          ),
-        ),
-      ),
-      body: MaxWidthContainer(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _orders.isEmpty
-                ? _buildEmptyState(isDark)
-                : RefreshIndicator(
-                    onRefresh: _fetchOrders,
-                    color: AppColors.primary,
-                    backgroundColor:
-                        isDark ? AppColors.darkSurface : Colors.white,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                      itemCount: _orders.length + (_hasMoreOrders ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == _orders.length) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20),
-                            child: Center(
-                                child: CircularProgressIndicator(
-                                    color: AppColors.primary)),
-                          );
-                        }
-                        return _buildOrderCard(_orders[index], isDark);
-                      },
+        canPop: !isFirst,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) {
+            Navigator.pushNamedAndRemoveUntil(
+                context, AppRoutes.customerHome, (route) => false);
+          }
+        },
+        child: Scaffold(
+          backgroundColor:
+              isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
+          appBar: AppBar(
+            backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            leading: Navigator.canPop(context)
+                ? GestureDetector(
+                    onTap: _handleBack,
+                    child: Container(
+                      margin: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.07)
+                            : const Color(0xFFF0F0F8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.arrow_back_ios_new_rounded,
+                          size: 16,
+                          color:
+                              isDark ? Colors.white70 : AppColors.textPrimary),
                     ),
-                  ),
-      ),
-    ));
+                  )
+                : null,
+            title: Text(
+              'My Orders',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+          ),
+          body: MaxWidthContainer(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _orders.isEmpty
+                    ? _buildEmptyState(isDark)
+                    : RefreshIndicator(
+                        onRefresh: _fetchOrders,
+                        color: AppColors.primary,
+                        backgroundColor:
+                            isDark ? AppColors.darkSurface : Colors.white,
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                          itemCount: _orders.length + (_hasMoreOrders ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == _orders.length) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 20),
+                                child: Center(
+                                    child: CircularProgressIndicator(
+                                        color: AppColors.primary)),
+                              );
+                            }
+                            return _buildOrderCard(_orders[index], isDark);
+                          },
+                        ),
+                      ),
+          ),
+        ));
   }
 
   Widget _buildOrderCard(OrderModel order, bool isDark) {

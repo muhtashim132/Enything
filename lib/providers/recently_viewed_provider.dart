@@ -81,6 +81,7 @@ class RecentlyViewedProvider extends ChangeNotifier {
       final data = await _supabase
           .from('products')
           .select()
+          .eq('is_deleted', false)
           .inFilter('id', idsToFetch)
           .eq('is_available', true)
           .limit(loadAll ? 50 : 6);

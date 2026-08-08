@@ -52,7 +52,7 @@ class BellAlertService {
     if (expiration != null) {
       _orderDeadlines[orderId] = expiration;
     }
-    
+
     _startExpirationTimer();
 
     // STRESS-TEST FIX: Prevent synchronous FFI bottleneck on the main thread during high burst loads.

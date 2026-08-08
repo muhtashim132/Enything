@@ -10,7 +10,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
 
-
 import 'theme/app_theme.dart';
 import 'config/routes.dart';
 import 'providers/auth_provider.dart';
@@ -114,16 +113,19 @@ void main() async {
     pendingNotificationData = initialMessage.data;
   }
 
-  // Also check if the app was launched by tapping a *local* notification 
+  // Also check if the app was launched by tapping a *local* notification
   // (e.g. from the background handler).
   if (pendingNotificationData == null) {
     try {
       final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-      final launchDetails = await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-      if (launchDetails != null && 
-          launchDetails.didNotificationLaunchApp && 
+      final launchDetails = await flutterLocalNotificationsPlugin
+          .getNotificationAppLaunchDetails();
+      if (launchDetails != null &&
+          launchDetails.didNotificationLaunchApp &&
           launchDetails.notificationResponse?.payload != null) {
-        pendingNotificationData = jsonDecode(launchDetails.notificationResponse!.payload!) as Map<String, dynamic>;
+        pendingNotificationData =
+            jsonDecode(launchDetails.notificationResponse!.payload!)
+                as Map<String, dynamic>;
       }
     } catch (e) {
       debugPrint('Failed to parse local notification launch payload: $e');
@@ -135,7 +137,7 @@ void main() async {
     configProvider: configProvider,
     recentlyViewedProvider: recentlyViewedProvider,
   ));
-  
+
   // REMOVED: cancelAll() was here but it was killing background FCM notifications
   // the instant the user tapped them. The background handler creates a notification
   // with FSI + sound, but when the app launches (via tap or FSI), main() runs and
@@ -146,7 +148,8 @@ void main() async {
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 /// Holds the FCM notification data from a terminated-app launch so that the
 /// SplashPage can process it AFTER its own navigation completes — preventing
@@ -204,30 +207,33 @@ void handleNotificationClick(Map<String, dynamic> data) {
 
 /// Top-level background handler for action button taps (e.g. Decline) on the lock screen
 @pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse notificationResponse) async {
+void notificationTapBackground(
+    NotificationResponse notificationResponse) async {
   // Fix #1: Connect isolate to OS before doing any platform channel work
   WidgetsFlutterBinding.ensureInitialized();
-  
-  if (notificationResponse.actionId == 'decline' && notificationResponse.payload != null) {
+
+  if (notificationResponse.actionId == 'decline' &&
+      notificationResponse.payload != null) {
     try {
       await dotenv.load(fileName: '.env');
       final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
       final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
-      await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
-      
-      final data = jsonDecode(notificationResponse.payload!) as Map<String, dynamic>;
+      await Supabase.initialize(
+          url: supabaseUrl, publishableKey: supabaseAnonKey);
+
+      final data =
+          jsonDecode(notificationResponse.payload!) as Map<String, dynamic>;
       final orderId = data['order_id'] as String?;
       final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-      
+
       if (orderId != null && currentUserId != null) {
-        await Supabase.instance.client.rpc('rider_reject_order', params: {
-          'p_order_id': orderId,
-          'p_rider_id': currentUserId
-        });
+        await Supabase.instance.client.rpc('rider_reject_order',
+            params: {'p_order_id': orderId, 'p_rider_id': currentUserId});
         debugPrint('Order $orderId explicitly declined from lock screen.');
       }
       // Cancel the notification after declining
-      await FlutterLocalNotificationsPlugin().cancel(notificationResponse.id ?? 0);
+      await FlutterLocalNotificationsPlugin()
+          .cancel(notificationResponse.id ?? 0);
     } catch (e) {
       debugPrint('Failed to handle background decline: $e');
     }
@@ -254,9 +260,10 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   final orderId = message.data['order_id'] as String?;
 
   final plugin = FlutterLocalNotificationsPlugin();
-  
+
   // Additive: Kill ghost notifications if order cancelled or reassigned
-  if ((action == 'cancel_order' || action == 'order_reassigned') && orderId != null) {
+  if ((action == 'cancel_order' || action == 'order_reassigned') &&
+      orderId != null) {
     await plugin.cancel(orderId.hashCode);
     return;
   }
@@ -279,18 +286,23 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   // 1. Use a SILENT channel (playSound: false) so Samsung doesn't play its bell
   // 2. Play enything_bell.wav via AudioPlayer — same approach as BellAlertService
   // To revert: switch back to enything_bell_channel_v4 with playSound: true
-  final bool isUrgent = (role == 'rider' || role == 'delivery' || role == 'seller' || action == 'new_order');
+  final bool isUrgent = (role == 'rider' ||
+      role == 'delivery' ||
+      role == 'seller' ||
+      role == 'delivery_partner' ||
+      action == 'new_order');
   const String channelId = 'enything_bg_silent_v1';
   const String channelName = 'Order Alerts (Background)';
-  const String channelDesc = 'Background order notifications — sound handled by AudioPlayer';
+  const String channelDesc =
+      'Background order notifications — sound handled by AudioPlayer';
 
   await androidPlugin?.createNotificationChannel(
     const AndroidNotificationChannel(
       channelId,
       channelName,
       description: channelDesc,
-      importance: Importance.max,   // max = heads-up + FSI support
-      playSound: false,             // SILENT — AudioPlayer handles the bell
+      importance: Importance.max, // max = heads-up + FSI support
+      playSound: false, // SILENT — AudioPlayer handles the bell
       enableVibration: true,
       showBadge: true,
     ),
@@ -302,17 +314,22 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     channelDescription: channelDesc,
     importance: Importance.max,
     priority: Priority.high,
-    playSound: false,               // SILENT — AudioPlayer handles the bell
+    playSound: false, // SILENT — AudioPlayer handles the bell
     enableVibration: true,
-    fullScreenIntent: isUrgent,     // THIS WAKES THE SCREEN AND BYPASSES LOCKSCREEN!
+    fullScreenIntent:
+        isUrgent, // THIS WAKES THE SCREEN AND BYPASSES LOCKSCREEN!
     category: AndroidNotificationCategory.alarm,
     visibility: NotificationVisibility.public,
     icon: '@mipmap/ic_launcher',
     timeoutAfter: isUrgent ? 30000 : null,
-    actions: isUrgent ? <AndroidNotificationAction>[
-      const AndroidNotificationAction('accept', 'Accept', showsUserInterface: true),
-      const AndroidNotificationAction('decline', 'Decline', showsUserInterface: false),
-    ] : null,
+    actions: isUrgent
+        ? <AndroidNotificationAction>[
+            const AndroidNotificationAction('accept', 'Accept',
+                showsUserInterface: true),
+            const AndroidNotificationAction('decline', 'Decline',
+                showsUserInterface: false),
+          ]
+        : null,
   );
 
   await plugin.show(
@@ -342,12 +359,14 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     // Auto-dispose player after bell finishes (max 15s safety net)
     player.onPlayerComplete.listen((_) => player.dispose());
     Future.delayed(const Duration(seconds: 15), () {
-      try { player.dispose(); } catch (_) {}
+      try {
+        player.dispose();
+      } catch (_) {}
     });
   } catch (e) {
     debugPrint('FCM background: AudioPlayer bell failed: $e');
   }
-  
+
   if (isUrgent) {
     debugPrint('FCM background shown via Full-Screen Intent: $title');
   } else {

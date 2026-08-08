@@ -2883,8 +2883,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         o.sellerAccepted == true &&
         o.status != 'cancelled' &&
         o.status != 'seller_rejected');
-    final hasPendingShops = _groupOrders.any((o) =>
-        o.status == 'awaiting_acceptance' && o.sellerAccepted != true);
+    final hasPendingShops = _groupOrders.any(
+        (o) => o.status == 'awaiting_acceptance' && o.sellerAccepted != true);
 
     return Container(
       key: _partialRejectionKey,
@@ -2983,7 +2983,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 title: Text(
                                     hasReadyToPayShops
                                         ? 'Skip Waiting Shops?'
-                                        : (hasPendingShops ? 'Cancel Pending Shops?' : 'Continue with Accepted Items?'),
+                                        : (hasPendingShops
+                                            ? 'Cancel Pending Shops?'
+                                            : 'Continue with Accepted Items?'),
                                     style: GoogleFonts.outfit(
                                         color: isDark
                                             ? Colors.white
@@ -3060,8 +3062,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       // FIX: The user has made their decision. Stop the timer and hide the banner!
                       _decisionCountdownTimer?.cancel();
                       final prefs = await SharedPreferences.getInstance();
-                      final cartGroupId = _order?.cartGroupId ?? _order?.id ?? 'unknown';
-                      await prefs.setBool('partial_rejection_resolved_$cartGroupId', true);
+                      final cartGroupId =
+                          _order?.cartGroupId ?? _order?.id ?? 'unknown';
+                      await prefs.setBool(
+                          'partial_rejection_resolved_$cartGroupId', true);
                       if (mounted) {
                         setState(() {
                           _partialRejectionResolved = true;
@@ -3071,7 +3075,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       if (_aggregateStatus != 'awaiting_payment') {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text(hasPendingShops 
+                              content: Text(hasPendingShops
                                   ? 'Pending shops cancelled! Waiting for a rider for the remaining accepted shops...'
                                   : 'Continuing with accepted shops... Waiting for a rider.')));
                         }
@@ -4432,6 +4436,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     final precise = await _supabase
                         .from('products')
                         .select('*, shops(*)')
+                        .eq('is_deleted', false)
                         .ilike('name', '%$twoWords%')
                         .eq('is_available', true)
                         .neq('shop_id', rejectedOrder.shopId ?? '')
@@ -4442,6 +4447,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     final broad = await _supabase
                         .from('products')
                         .select('*, shops(*)')
+                        .eq('is_deleted', false)
                         .ilike('name', '%$firstWord%')
                         .eq('is_available', true)
                         .neq('shop_id', rejectedOrder.shopId ?? '')

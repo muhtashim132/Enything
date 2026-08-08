@@ -69,7 +69,8 @@ class CartItem {
       quantity: map['quantity'] as int? ?? 1,
       specialInstructions: map['special_instructions'] as String?,
       selectedVariant: map['selected_variant'] != null
-          ? ProductVariant.fromMap(map['selected_variant'] as Map<String, dynamic>)
+          ? ProductVariant.fromMap(
+              map['selected_variant'] as Map<String, dynamic>)
           : null,
     );
   }

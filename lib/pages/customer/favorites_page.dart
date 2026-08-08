@@ -56,6 +56,7 @@ class _FavoritesPageState extends State<FavoritesPage>
         final productRes = await _supabase
             .from('products')
             .select()
+            .eq('is_deleted', false)
             .filter('id', 'in', '($productIds)')
             .limit(100);
         _favoriteProducts =

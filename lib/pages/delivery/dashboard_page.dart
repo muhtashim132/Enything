@@ -282,7 +282,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }
     if (setSheetState != null) setSheetState(() => _isOnline = val);
     setState(() => _isOnline = val);
-    
+
     if (val) {
       _startLocationBroadcast();
     } else {
@@ -300,7 +300,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           if (notifStatus.isDenied) {
             await Permission.notification.request();
           }
-          
+
           if (Platform.isAndroid) {
             final alertStatus = await Permission.systemAlertWindow.status;
             if (alertStatus.isDenied) {
@@ -576,13 +576,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (!mounted) return;
 
       // The RPC already filters geographically and prevents Data Overload!
-      final filtered = (available as List).map((o) {
-        final model = OrderModel.fromMap(o);
-        model.items = (o['order_items'] as List? ?? [])
-            .map((i) => OrderItem.fromMap(i))
-            .toList();
-        return model;
-      }).where((o) => DateTime.now().difference(o.createdAt).inHours < 24).toList();
+      final filtered = (available as List)
+          .map((o) {
+            final model = OrderModel.fromMap(o);
+            model.items = (o['order_items'] as List? ?? [])
+                .map((i) => OrderItem.fromMap(i))
+                .toList();
+            return model;
+          })
+          .where((o) => DateTime.now().difference(o.createdAt).inHours < 24)
+          .toList();
 
       if (filtered.isEmpty) {
         _supabase.from('app_logs').insert({
@@ -614,15 +617,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         setState(() {
           _availableGroups = _groupOrders(filtered).where((g) {
             if (_ignoredAvailableGroups.contains(g.groupId)) return false;
-            
+
             final latestDeadline = g.orders
                 .map((o) => o.acceptanceDeadline)
                 .where((d) => d != null)
-                .fold<DateTime?>(null, (prev, curr) => 
-                    (prev == null || curr!.isAfter(prev)) ? curr : prev);
-                    
+                .fold<DateTime?>(
+                    null,
+                    (prev, curr) =>
+                        (prev == null || curr!.isAfter(prev)) ? curr : prev);
+
             if (latestDeadline != null) {
-              final remaining = latestDeadline.difference(DateTime.now().toUtc()).inSeconds;
+              final remaining =
+                  latestDeadline.difference(DateTime.now().toUtc()).inSeconds;
               if (remaining <= 0) return false;
             }
             return true;
@@ -684,7 +690,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     if (_isLoading) return;
     setState(() => _isLoading = true);
     int failedCount = 0;
-    
+
     if (group.orders.isNotEmpty) {
       // 100x FIX: Atomic backend RPC updates the entire cart group.
       // Calling this on the first valid order accepts all orders in the group.
@@ -703,36 +709,38 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             .from('orders')
             .select('status')
             .inFilter('id', orderIds);
-            
+
         bool allShopsAccepted = true;
         for (final o in groupStatusData) {
-           final st = o['status'] as String?;
-           if (st == 'pending' || st == 'awaiting_acceptance') {
-             allShopsAccepted = false;
-             break;
-           }
+          final st = o['status'] as String?;
+          if (st == 'pending' || st == 'awaiting_acceptance') {
+            allShopsAccepted = false;
+            break;
+          }
         }
-        
+
         if (!mounted) return;
         final notifProv = context.read<NotificationProvider>();
         final firstOrder = group.orders.first;
-        
+
         if (allShopsAccepted) {
-            notifProv.sendBackgroundPush(
-              targetUserId: firstOrder.customerId,
-              title: 'Ready for Payment! 💳',
-              body: 'Both the shop(s) and rider accepted your order. Open the app and complete payment within 10 minutes.',
-              data: {
-                'route': '/track_order',
-                'order_id': firstOrder.id,
-              },
-            );
+          notifProv.sendBackgroundPush(
+            targetUserId: firstOrder.customerId,
+            title: 'Ready for Payment! 💳',
+            body:
+                'Both the shop(s) and rider accepted your order. Open the app and complete payment within 10 minutes.',
+            data: {
+              'route': '/track_order',
+              'order_id': firstOrder.id,
+            },
+          );
         } else {
-            notifProv.sendBackgroundPush(
-              targetUserId: firstOrder.customerId,
-              title: '🛵 Rider is Ready!',
-              body: 'A rider accepted your order and is on standby. Waiting for the shop(s) to also confirm.',
-            );
+          notifProv.sendBackgroundPush(
+            targetUserId: firstOrder.customerId,
+            title: '🛵 Rider is Ready!',
+            body:
+                'A rider accepted your order and is on standby. Waiting for the shop(s) to also confirm.',
+          );
         }
       } catch (e) {
         debugPrint('Error fetching group status after rider accept: $e');
@@ -2115,18 +2123,21 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final latestDeadline = group.orders
         .map((o) => o.acceptanceDeadline)
         .where((d) => d != null)
-        .fold<DateTime?>(null, (prev, curr) => (prev == null || curr!.isAfter(prev)) ? curr : prev);
+        .fold<DateTime?>(
+            null,
+            (prev, curr) =>
+                (prev == null || curr!.isAfter(prev)) ? curr : prev);
 
     return StatefulBuilder(builder: (context, setStateBuilder) {
       bool isExpired = false;
       if (latestDeadline != null) {
-        final remaining = latestDeadline
-            .difference(DateTime.now().toUtc())
-            .inSeconds;
+        final remaining =
+            latestDeadline.difference(DateTime.now().toUtc()).inSeconds;
         isExpired = remaining <= 0;
       }
 
-      final isLinkedAddon = _myGroups.any((myG) => myG.groupId == group.groupId);
+      final isLinkedAddon =
+          _myGroups.any((myG) => myG.groupId == group.groupId);
 
       return Container(
         margin: const EdgeInsets.only(bottom: 14),
@@ -2261,8 +2272,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     ...shopGroups.entries.map((entry) {
                       final shopOrders = entry.value;
                       final firstShopOrder = shopOrders.first;
-                      final shopName = _shopInfoCache[firstShopOrder.shopId]?.name ?? 'Shop';
-                      final allItems = shopOrders.expand((o) => o.items).toList();
+                      final shopName =
+                          _shopInfoCache[firstShopOrder.shopId]?.name ?? 'Shop';
+                      final allItems =
+                          shopOrders.expand((o) => o.items).toList();
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Column(
@@ -2396,7 +2409,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               ? null
                               : () => _acceptOrderGroup(group),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isExpired ? Colors.grey : AppColors.success,
+                            backgroundColor:
+                                isExpired ? Colors.grey : AppColors.success,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
@@ -2632,14 +2646,17 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         if (_riderLat == null || _riderLng == null) {
                           await _fetchRiderLocation();
                           if (_riderLat == null || _riderLng == null) {
-                            _showSnack('⚠️ Cannot fetch your GPS to verify delivery.', isError: true);
+                            _showSnack(
+                                '⚠️ Cannot fetch your GPS to verify delivery.',
+                                isError: true);
                             return;
                           }
                         }
 
                         bool allSuccess = true;
                         for (int i = 0; i < group.orders.length; i++) {
-                          final success = await _updateStatus(group.orders[i], 'delivered',
+                          final success = await _updateStatus(
+                              group.orders[i], 'delivered',
                               skipReload: true,
                               skipRating: true,
                               notifyCustomer: i == 0);
@@ -2648,12 +2665,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             break;
                           }
                         }
-                        
+
                         if (allSuccess) {
                           // Optimistic update for UI feel
                           if (mounted) {
                             setState(() {
-                              _myGroups.removeWhere((g) => g.groupId == group.groupId);
+                              _myGroups.removeWhere(
+                                  (g) => g.groupId == group.groupId);
                             });
                           }
                           _loadOrders();
@@ -2775,7 +2793,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+                color: (isDark ? Colors.white : Colors.black)
+                    .withValues(alpha: 0.03),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -2795,7 +2814,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             i.productName,
                             style: GoogleFonts.outfit(
                                 fontSize: 13,
-                                color: isDark ? Colors.white70 : Colors.black87),
+                                color:
+                                    isDark ? Colors.white70 : Colors.black87),
                           ),
                         ),
                       ],

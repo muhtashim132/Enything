@@ -73,26 +73,27 @@ class NotificationProvider extends ChangeNotifier {
     if ((status == RealtimeSubscribeStatus.closed ||
             status == RealtimeSubscribeStatus.channelError) &&
         !_isIntentionalDisconnect) {
-      debugPrint('NotificationProvider: channel disconnected. Reconnecting in 5s...');
-      
+      debugPrint(
+          'NotificationProvider: channel disconnected. Reconnecting in 5s...');
+
       final oldId = _listeningUserId;
       final oldRole = _listeningRole;
-      
+
       stopListening();
-      
+
       Future.delayed(const Duration(seconds: 5), () {
         if (!_isDisposed && oldId != null) {
-           if (oldRole == 'customer') {
-             listenAsCustomer(oldId);
-           } else if (oldRole == 'seller' && oldId.contains('-')) {
-             listenAsSellerMultiShop(oldId.split('-'));
-           } else if (oldRole == 'seller') {
-             listenAsSeller(oldId);
-           } else if (oldRole == 'delivery') {
-             listenAsDelivery(oldId);
-           } else if (oldRole == 'admin') {
-             listenAsAdmin(oldId);
-           }
+          if (oldRole == 'customer') {
+            listenAsCustomer(oldId);
+          } else if (oldRole == 'seller' && oldId.contains('-')) {
+            listenAsSellerMultiShop(oldId.split('-'));
+          } else if (oldRole == 'seller') {
+            listenAsSeller(oldId);
+          } else if (oldRole == 'delivery') {
+            listenAsDelivery(oldId);
+          } else if (oldRole == 'admin') {
+            listenAsAdmin(oldId);
+          }
         }
       });
     }
@@ -163,7 +164,8 @@ class NotificationProvider extends ChangeNotifier {
               'skipping FCM registration. Will retry on next app launch.');
           return;
         }
-        debugPrint('FCM [iOS]: APNS token ready → proceeding with FCM token request.');
+        debugPrint(
+            'FCM [iOS]: APNS token ready → proceeding with FCM token request.');
       }
 
       final token = await messaging.getToken();
@@ -456,7 +458,7 @@ class NotificationProvider extends ChangeNotifier {
             final orderId = payload.newRecord['id'] as String?;
             final status = payload.newRecord['status'] as String?;
 
-              if (status == 'awaiting_acceptance') {
+            if (status == 'awaiting_acceptance') {
               final amount =
                   (payload.newRecord['total_amount'] ?? 0.0).toDouble();
               _add(AppNotification(
@@ -468,9 +470,12 @@ class NotificationProvider extends ChangeNotifier {
               ));
               // [BELL] Ring alert bell for new pending order
               if (orderId != null) {
-                final deadlineStr = payload.newRecord['acceptance_deadline'] as String?;
-                final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
-                BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
+                final deadlineStr =
+                    payload.newRecord['acceptance_deadline'] as String?;
+                final deadline =
+                    deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+                BellAlertService.instance
+                    .addPendingOrder(orderId, expiration: deadline);
               }
             }
           },
@@ -492,7 +497,7 @@ class NotificationProvider extends ChangeNotifier {
             if (orderId == null || newStatus == null) return;
 
             // [BELL] Handle status progression (e.g., pending_verification -> awaiting_acceptance)
-              if (newStatus == 'awaiting_acceptance' &&
+            if (newStatus == 'awaiting_acceptance' &&
                 oldStatus != 'awaiting_acceptance') {
               final amount =
                   (payload.newRecord['total_amount'] ?? 0.0).toDouble();
@@ -503,9 +508,12 @@ class NotificationProvider extends ChangeNotifier {
                     'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
                 orderId: orderId,
               ));
-              final deadlineStr = payload.newRecord['acceptance_deadline'] as String?;
-              final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
-              BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
+              final deadlineStr =
+                  payload.newRecord['acceptance_deadline'] as String?;
+              final deadline =
+                  deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+              BellAlertService.instance
+                  .addPendingOrder(orderId, expiration: deadline);
             }
 
             // [BELL] Remove order from bell when seller accepts or order is resolved.
@@ -593,9 +601,13 @@ class NotificationProvider extends ChangeNotifier {
                 ));
                 // [BELL] Ring alert bell for new pending order
                 if (orderId != null) {
-                  final deadlineStr = payload.newRecord['acceptance_deadline'] as String?;
-                  final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
-                  BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
+                  final deadlineStr =
+                      payload.newRecord['acceptance_deadline'] as String?;
+                  final deadline = deadlineStr != null
+                      ? DateTime.tryParse(deadlineStr)
+                      : null;
+                  BellAlertService.instance
+                      .addPendingOrder(orderId, expiration: deadline);
                 }
               }
             },
@@ -628,9 +640,12 @@ class NotificationProvider extends ChangeNotifier {
                       'You have a new order of ₹${amount.toStringAsFixed(0)} waiting for your acceptance.',
                   orderId: orderId,
                 ));
-                final deadlineStr = payload.newRecord['acceptance_deadline'] as String?;
-                final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
-                BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
+                final deadlineStr =
+                    payload.newRecord['acceptance_deadline'] as String?;
+                final deadline =
+                    deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+                BellAlertService.instance
+                    .addPendingOrder(orderId, expiration: deadline);
               }
 
               // [BELL] Remove order from bell when seller accepts or order is resolved.
@@ -668,7 +683,8 @@ class NotificationProvider extends ChangeNotifier {
           );
     }
 
-    _channel = chan.subscribe((status, [error]) => _onChannelDisconnect(status));
+    _channel =
+        chan.subscribe((status, [error]) => _onChannelDisconnect(status));
 
     // Restore persisted notification history for this user
     _loadFromDb();
@@ -818,7 +834,8 @@ class NotificationProvider extends ChangeNotifier {
     _listeningUserId = null;
     _listeningRole = null;
     _lastProcessedStatus.clear();
-    _shopAcceptedCount.clear(); // Reset per-shop acceptance counters on role switch
+    _shopAcceptedCount
+        .clear(); // Reset per-shop acceptance counters on role switch
     _clearMemory(); // Clear RAM only — DB history is preserved per user
   }
 
@@ -1060,8 +1077,11 @@ class NotificationProvider extends ChangeNotifier {
       for (final row in rows) {
         final orderId = row['id'] as String?;
         final deadlineStr = row['acceptance_deadline'] as String?;
-        final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
-        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
+        final deadline =
+            deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+        if (orderId != null)
+          BellAlertService.instance
+              .addPendingOrder(orderId, expiration: deadline);
       }
     } catch (e) {
       debugPrint('[NotifProvider] _initBellForPendingSeller: $e');
@@ -1081,8 +1101,11 @@ class NotificationProvider extends ChangeNotifier {
       for (final row in rows) {
         final orderId = row['id'] as String?;
         final deadlineStr = row['acceptance_deadline'] as String?;
-        final deadline = deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
-        if (orderId != null) BellAlertService.instance.addPendingOrder(orderId, expiration: deadline);
+        final deadline =
+            deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
+        if (orderId != null)
+          BellAlertService.instance
+              .addPendingOrder(orderId, expiration: deadline);
       }
     } catch (e) {
       debugPrint('[NotifProvider] _initBellForPendingSellerMulti: $e');

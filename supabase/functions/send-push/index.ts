@@ -238,6 +238,7 @@ Deno.serve(async (req: Request) => {
               data: {
                 title: String(title),
                 body: String(body),
+                role: String(role),
                 ...(data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {}),
               },
               android: {

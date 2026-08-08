@@ -189,7 +189,8 @@ Future<void> _onStart(ServiceInstance service) async {
 
       // 1️⃣ Update delivery_partners row and cascade to orders (Stateless RPC)
       try {
-        await TelemetryService.instance.trackLatency('update_rider_location_bg', () async {
+        await TelemetryService.instance.trackLatency('update_rider_location_bg',
+            () async {
           await db!.rpc('update_rider_location_bg', params: {
             'p_rider_id': riderId,
             'p_lat': lat,
@@ -235,7 +236,8 @@ Future<void> _onStart(ServiceInstance service) async {
     trackingSecret = data['tracking_secret'] as String?;
 
     if (supabaseUrl == null || receivedKey == null || trackingSecret == null) {
-      TelemetryService.instance.logError('set_credentials', 'Missing Supabase credentials or tracking secret');
+      TelemetryService.instance.logError(
+          'set_credentials', 'Missing Supabase credentials or tracking secret');
       return;
     }
 

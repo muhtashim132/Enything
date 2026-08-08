@@ -55,6 +55,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       final productData = await _supabase
           .from('products')
           .select()
+          .eq('is_deleted', false)
           .eq('id', widget.productId)
           .single();
 

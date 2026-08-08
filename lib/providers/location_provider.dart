@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 import '../models/saved_address_model.dart';
 import '../utils/permission_utils.dart';
+
 class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _isDisposed = false;
 
@@ -75,7 +76,8 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     final parts = <String>[];
     if (_houseNumber.isNotEmpty) parts.add(_houseNumber);
-    if (_currentAddress.isNotEmpty && _currentAddress != 'Fetching address...') {
+    if (_currentAddress.isNotEmpty &&
+        _currentAddress != 'Fetching address...') {
       parts.add(_currentAddress);
     }
     if (_landmark.isNotEmpty) parts.add(_landmark);
@@ -170,8 +172,10 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        permission = await PermissionUtils.requestLocationPermissionWithDisclosure(
-          customReason: 'Enything uses your location to discover nearby products, calculate accurate delivery times, and guide delivery partners to your exact address.',
+        permission =
+            await PermissionUtils.requestLocationPermissionWithDisclosure(
+          customReason:
+              'Enything uses your location to discover nearby products, calculate accurate delivery times, and guide delivery partners to your exact address.',
         );
       }
 

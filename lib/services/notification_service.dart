@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../main.dart';
 
 import 'telemetry_service.dart';
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -38,7 +39,7 @@ class NotificationService {
         if (response.payload != null && response.payload!.isNotEmpty) {
           try {
             final data = jsonDecode(response.payload!) as Map<String, dynamic>;
-            // Centralize routing logic in main.dart. If navigator is not ready 
+            // Centralize routing logic in main.dart. If navigator is not ready
             // (e.g. terminated launch), this safely no-ops and SplashPage takes over.
             handleNotificationClick(data);
           } catch (e, st) {
@@ -48,11 +49,10 @@ class NotificationService {
       },
     );
 
-
     final androidPlugin =
         _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
-            
+
     // CRITICAL: Create the order alert bell channel — used for all foreground
     // buzz notifications for sellers, riders, and customers.
     // Sound: enything_bell.wav from android/app/src/main/res/raw/
@@ -109,7 +109,8 @@ class NotificationService {
       ongoing: true, // This makes it persistent
       autoCancel: false,
       color: const Color(0xFF9C27B0), // Purple color to match theme
-      icon: '@mipmap/ic_launcher', // Fixed: was 'ic_notification' which doesn't exist. To revert: 'ic_notification'
+      icon:
+          '@mipmap/ic_launcher', // Fixed: was 'ic_notification' which doesn't exist. To revert: 'ic_notification'
     );
 
     final NotificationDetails platformChannelSpecifics =
@@ -134,8 +135,7 @@ class NotificationService {
     const androidDetails = AndroidNotificationDetails(
       'enything_bell_channel_v4',
       'Enything Order Alerts',
-      channelDescription:
-          'Push notifications for orders and updates',
+      channelDescription: 'Push notifications for orders and updates',
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
@@ -146,7 +146,7 @@ class NotificationService {
       visibility: NotificationVisibility.public,
       icon: '@mipmap/ic_launcher',
     );
-    
+
     // Additive Fix: Define iOS foreground notification details so the banner actually appears locally on iOS.
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,

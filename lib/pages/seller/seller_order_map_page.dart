@@ -148,14 +148,16 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
           '&end=${to.longitude},${to.latitude}',
         );
 
-        final resp = await TelemetryService.instance.trackLatency('ors_route_seller', () async {
+        final resp = await TelemetryService.instance
+            .trackLatency('ors_route_seller', () async {
           return await http.get(url).timeout(const Duration(seconds: 10));
         });
         if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');
 
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final features = data['features'] as List?;
-        if (features == null || features.isEmpty) throw Exception('No features');
+        if (features == null || features.isEmpty)
+          throw Exception('No features');
 
         final geometry = features.first['geometry'] as Map<String, dynamic>;
         final coords = geometry['coordinates'] as List;

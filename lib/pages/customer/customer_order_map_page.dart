@@ -276,7 +276,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           '&end=${to.longitude},${to.latitude}',
         );
 
-        final resp = await TelemetryService.instance.trackLatency('ors_route_customer', () async {
+        final resp = await TelemetryService.instance
+            .trackLatency('ors_route_customer', () async {
           return await http.get(url).timeout(const Duration(seconds: 10));
         });
         if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');

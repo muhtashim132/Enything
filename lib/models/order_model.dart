@@ -246,7 +246,9 @@ class OrderModel {
       platformFee: _parseDouble(map['platform_fee']),
       createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ??
           DateTime.now(),
-      updatedAt: map['updated_at'] != null ? DateTime.tryParse(map['updated_at'].toString()) : null,
+      updatedAt: map['updated_at'] != null
+          ? DateTime.tryParse(map['updated_at'].toString())
+          : null,
       deliveryPartnerId: map['delivery_partner_id']?.toString(),
       shopId: map['shop_id']?.toString(),
       address: map['address']?.toString(),

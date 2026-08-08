@@ -78,7 +78,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final supabase = Supabase.instance.client;
       final response = await supabase
           .from('orders')
-          .select('total_amount, small_cart_fee, heavy_order_fee, shop_id, weight_kg, multi_shop_surcharge')
+          .select(
+              'total_amount, small_cart_fee, heavy_order_fee, shop_id, weight_kg, multi_shop_surcharge')
           .eq('cart_group_id', cartGroupId)
           .inFilter('status', [
         'awaiting_acceptance',
@@ -104,7 +105,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         smallCartFee += (row['small_cart_fee'] as num?)?.toDouble() ?? 0.0;
         heavyFee += (row['heavy_order_fee'] as num?)?.toDouble() ?? 0.0;
         weight += (row['weight_kg'] as num?)?.toDouble() ?? 0.0;
-        surchargePaid += (row['multi_shop_surcharge'] as num?)?.toDouble() ?? 0.0;
+        surchargePaid +=
+            (row['multi_shop_surcharge'] as num?)?.toDouble() ?? 0.0;
         if (row['shop_id'] != null) {
           shopIds.add(row['shop_id'].toString());
         }
@@ -150,6 +152,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .from('products')
           .select(
               'id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
+          .eq('is_deleted', false)
           .inFilter('id', productIds);
 
       final issues = <String>[];
@@ -423,7 +426,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed: $e'),
+            content: Text(_classifyCheckoutError(e.toString())),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
             shape:
@@ -435,6 +438,28 @@ class _CheckoutPageState extends State<CheckoutPage> {
         _isProcessing.value = false;
       }
     }
+  }
+
+  String _classifyCheckoutError(String errorStr) {
+    final e = errorStr.toLowerCase();
+    if (e.contains('socketexception') ||
+        e.contains('timeoutexception') ||
+        e.contains('clientexception')) {
+      return 'Network issue detected. Please check your internet connection and try again.';
+    } else if (e.contains('delivery charge spoofing') ||
+        e.contains('commission mismatch')) {
+      return 'Price synchronization failed. Please refresh your cart and try again.';
+    } else if (e.contains('invalid replacement') ||
+        e.contains('cannot change status')) {
+      return 'This order cannot be modified at this time. Please pull down to refresh the page.';
+    } else if (e.contains('unauthorized') || e.contains('ghost order')) {
+      return 'Session expired or unauthorized request. Please restart the app.';
+    } else if (e.contains('coupon')) {
+      return 'The applied coupon is no longer valid or applicable to this order.';
+    } else if (e.contains('postgrestexception')) {
+      return 'Our servers are currently busy. Please wait a moment and try again.';
+    }
+    return 'An unexpected error occurred while placing your order. Please try again.';
   }
 
   // Verification & payment completion is now handled in TrackOrderPage.
@@ -500,6 +525,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .from('products')
           .select(
               'id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
+          .eq('is_deleted', false)
           .inFilter('id', productIds);
 
       // Aggregated Inventory Guard to prevent Quantity Accumulation Bypass
@@ -585,7 +611,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         throw Exception('Your delivery address is outside our delivery zone.');
       }
 
-      final isReplacementOrder = widget.existingCartGroupId != null || context.read<CartProvider>().pendingCartGroupId != null;
+      final isReplacementOrder = widget.existingCartGroupId != null ||
+          context.read<CartProvider>().pendingCartGroupId != null;
 
       double surcharge = 0.0;
       double heavyFee = 0.0;
@@ -622,18 +649,28 @@ class _CheckoutPageState extends State<CheckoutPage> {
         surcharge = math.max(0.0, totalSurchargeAtEnd - _activeSurchargePaid);
 
         // Small cart fee (aggregate check)
-        final smallCartThreshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
-        if ((_activeSubtotal + cart.subtotal) < smallCartThreshold && (_activeSubtotal + cart.subtotal) > 0) {
-          final standardSmallCartFee = PlatformConfigProvider.instance?.smallCartFee ?? PaymentConfig.smallCartFee;
-          smallCartFee = math.max(0, standardSmallCartFee - _activeSmallCartFee);
+        final smallCartThreshold =
+            PlatformConfigProvider.instance?.smallCartThreshold ??
+                PaymentConfig.smallCartThreshold;
+        if ((_activeSubtotal + cart.subtotal) < smallCartThreshold &&
+            (_activeSubtotal + cart.subtotal) > 0) {
+          final standardSmallCartFee =
+              PlatformConfigProvider.instance?.smallCartFee ??
+                  PaymentConfig.smallCartFee;
+          smallCartFee =
+              math.max(0, standardSmallCartFee - _activeSmallCartFee);
         }
 
         // Heavy order fee (aggregate check)
-        final heavyThreshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
+        final heavyThreshold =
+            PlatformConfigProvider.instance?.heavyOrderThresholdKg ??
+                PaymentConfig.heavyOrderThreshold;
         final aggregateWeight = _activeWeight + cart.totalWeight;
         if (aggregateWeight > heavyThreshold) {
-          final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
-          final aggregateHeavyFee = feePerKg * (aggregateWeight - heavyThreshold).ceil();
+          final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ??
+              PaymentConfig.heavyOrderFee;
+          final aggregateHeavyFee =
+              feePerKg * (aggregateWeight - heavyThreshold).ceil();
           heavyFee = math.max(0.0, aggregateHeavyFee - _activeHeavyOrderFee);
         }
       } else {
@@ -647,10 +684,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
       // Admin can change rider_commission_percent in Admin → Commission & Fees.
       // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
-      final riderPayoutRatio = (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) / 100.0;
+      final riderPayoutRatio =
+          (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) /
+              100.0;
       final riderEarnings = riderBase * riderPayoutRatio;
 
-      double totalWithoutGst = effectiveBase + surcharge + heavyFee + smallCartFee;
+      double totalWithoutGst =
+          effectiveBase + surcharge + heavyFee + smallCartFee;
       if (totalWithoutGst < 0) totalWithoutGst = 0.0;
       double totalDelivery = totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
 
@@ -664,8 +704,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final cartProvider = context.read<CartProvider>();
       final pendingGroupId = cartProvider.pendingCartGroupId;
       final pendingCancelId = cartProvider.pendingOrderIdToCancel;
-      final cartGroupId = widget.existingCartGroupId ?? pendingGroupId ?? const Uuid().v4();
-      
+      final cartGroupId =
+          widget.existingCartGroupId ?? pendingGroupId ?? const Uuid().v4();
+
       // Clear the pending group ID now that we've consumed it
       if (pendingGroupId != null) cartProvider.setPendingCartGroupId(null);
       if (pendingCancelId != null) cartProvider.setPendingOrderIdToCancel(null);
@@ -887,9 +928,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   (heavyFee * proportion) -
                   (appliedCouponDiscount * proportion)),
           'gst_rate_snapshot': rateSnapshot,
-          'prescription_urls': shopItems.any((item) => item.product.requiresPrescription)
-              ? uploadedPrescriptionUrls
-              : [],
+          'prescription_urls':
+              shopItems.any((item) => item.product.requiresPrescription)
+                  ? uploadedPrescriptionUrls
+                  : [],
           'estimated_distance_km': shopDistanceKm,
           'shop_prep_time_snapshot': shop.prepTimeMinutes,
           'coupon_id': appliedCouponId,
@@ -934,9 +976,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         // row in UNIQUE(idempotency_key, shop_id), causing a 23505 constraint
         // violation. A fresh UUID lets the new replacement order be inserted
         // cleanly while still using the SAME cartGroupId to link the group.
-        'p_idempotency_key': isReplacementOrder ? const Uuid().v4() : cartGroupId,
+        'p_idempotency_key':
+            isReplacementOrder ? const Uuid().v4() : cartGroupId,
         if (widget.orderIdToCancelOnSuccess != null || pendingCancelId != null)
-          'p_order_id_to_cancel': widget.orderIdToCancelOnSuccess ?? pendingCancelId,
+          'p_order_id_to_cancel':
+              widget.orderIdToCancelOnSuccess ?? pendingCancelId,
       });
 
       // Notify sellers AFTER successful atomic insertion
@@ -967,11 +1011,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final configRadius =
             PlatformConfigProvider.instance?.riderNotificationRadiusKm ?? 15.0;
 
-         // Collect unique shop locations to query riders near each shop.
+        // Collect unique shop locations to query riders near each shop.
         // For multi-shop carts, we notify riders near ALL shops so none is missed.
         Future(() async {
           final notifiedRiderIds = <String>{};
-          
+
           // FIX 1: Exclusive Rider Affinity check
           String? exclusiveRiderId;
           if (isReplacementOrder) {
@@ -983,7 +1027,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   .not('delivery_partner_id', 'is', null)
                   .limit(1)
                   .maybeSingle();
-              if (activeOrder != null && activeOrder['delivery_partner_id'] != null) {
+              if (activeOrder != null &&
+                  activeOrder['delivery_partner_id'] != null) {
                 exclusiveRiderId = activeOrder['delivery_partner_id'] as String;
               }
             } catch (e) {
@@ -1001,20 +1046,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
             if (shopLat == 0.0 && shopLng == 0.0) continue;
 
             if (exclusiveRiderId != null) {
-                if (!notifiedRiderIds.contains(exclusiveRiderId)) {
-                   notifiedRiderIds.add(exclusiveRiderId);
-                   notifProv.sendBackgroundPush(
-                     targetUserId: exclusiveRiderId,
-                     title: '🆕 Shop Replacement Added!',
-                     body: 'The customer replaced a shop in your active delivery! Open the app to accept it.',
-                     data: {
-                       'role': 'delivery',
-                       'action': 'new_order',
-                       'order_id': data['orderId'] as String,
-                     },
-                   );
-                }
-                continue; 
+              if (!notifiedRiderIds.contains(exclusiveRiderId)) {
+                notifiedRiderIds.add(exclusiveRiderId);
+                notifProv.sendBackgroundPush(
+                  targetUserId: exclusiveRiderId,
+                  title: '🆕 Shop Replacement Added!',
+                  body:
+                      'The customer replaced a shop in your active delivery! Open the app to accept it.',
+                  data: {
+                    'role': 'delivery',
+                    'action': 'new_order',
+                    'order_id': data['orderId'] as String,
+                  },
+                );
+              }
+              continue;
             }
 
             try {
@@ -1061,7 +1107,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Fix 3: Mark partial rejection as resolved so TrackOrderPage hides the panel.      }
       // ─────────────────────────────────────────────────────────────────────────
 
-
       // Fix 3: Mark partial rejection as resolved so TrackOrderPage hides the panel.
       // Persisted in SharedPrefs so it survives banner-tap page recreations.
       if (isReplacementOrder && cartGroupId.isNotEmpty) {
@@ -1078,15 +1123,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Cleanup (Additive: avoid unmounted leaks and race conditions)
       await cart.clearAsync();
       couponProv.clearCoupon();
-      
+
       if (!mounted) return;
-      
+
       Navigator.pushNamedAndRemoveUntil(
-          context,
-          AppRoutes.trackOrder,
-          (route) => route.isFirst || route.settings.name == AppRoutes.customerHome,
-          arguments: {'orderId': orderIds.first},
-        );
+        context,
+        AppRoutes.trackOrder,
+        (route) =>
+            route.isFirst || route.settings.name == AppRoutes.customerHome,
+        arguments: {'orderId': orderIds.first},
+      );
     } catch (e) {
       debugPrint('Order placement error: $e');
       if (uploadedPaths.isNotEmpty) {
@@ -1123,7 +1169,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
 
-    final isReplacementOrder = widget.existingCartGroupId != null || context.read<CartProvider>().pendingCartGroupId != null;
+    final isReplacementOrder = widget.existingCartGroupId != null ||
+        context.read<CartProvider>().pendingCartGroupId != null;
 
     double surcharge = 0.0;
     double heavyFee = 0.0;
@@ -1146,19 +1193,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final totalSurchargeAtEndDisplay = totalShopsAtEndDisplay > 1
           ? flatSurchargeRateDisplay * (totalShopsAtEndDisplay - 1)
           : 0.0;
-      surcharge = math.max(0.0, totalSurchargeAtEndDisplay - _activeSurchargePaid);
+      surcharge =
+          math.max(0.0, totalSurchargeAtEndDisplay - _activeSurchargePaid);
 
-      final smallCartThreshold = PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold;
-      if ((_activeSubtotal + cart.subtotal) < smallCartThreshold && (_activeSubtotal + cart.subtotal) > 0) {
-        final standardSmallCartFee = PlatformConfigProvider.instance?.smallCartFee ?? PaymentConfig.smallCartFee;
+      final smallCartThreshold =
+          PlatformConfigProvider.instance?.smallCartThreshold ??
+              PaymentConfig.smallCartThreshold;
+      if ((_activeSubtotal + cart.subtotal) < smallCartThreshold &&
+          (_activeSubtotal + cart.subtotal) > 0) {
+        final standardSmallCartFee =
+            PlatformConfigProvider.instance?.smallCartFee ??
+                PaymentConfig.smallCartFee;
         smallCartFee = math.max(0, standardSmallCartFee - _activeSmallCartFee);
       }
 
-      final heavyThreshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold;
+      final heavyThreshold =
+          PlatformConfigProvider.instance?.heavyOrderThresholdKg ??
+              PaymentConfig.heavyOrderThreshold;
       final aggregateWeight = _activeWeight + cart.totalWeight;
       if (aggregateWeight > heavyThreshold) {
-        final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ?? PaymentConfig.heavyOrderFee;
-        final aggregateHeavyFee = feePerKg * (aggregateWeight - heavyThreshold).ceil();
+        final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ??
+            PaymentConfig.heavyOrderFee;
+        final aggregateHeavyFee =
+            feePerKg * (aggregateWeight - heavyThreshold).ceil();
         heavyFee = math.max(0.0, aggregateHeavyFee - _activeHeavyOrderFee);
       }
     } else {
@@ -1171,12 +1228,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final riderBase = effectiveBase + surcharge + heavyFee;
     // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
     // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
-    final riderPayoutRatio = (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) / 100.0;
+    final riderPayoutRatio =
+        (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) /
+            100.0;
     final riderEarnings = riderBase * riderPayoutRatio;
 
     // BUG-H3 FIX: Compute the breakdown ONCE so UI display and DB insertion
     // use the exact same figures.
-    double totalWithoutGst = effectiveBase + surcharge + heavyFee + smallCartFee;
+    double totalWithoutGst =
+        effectiveBase + surcharge + heavyFee + smallCartFee;
     if (totalWithoutGst < 0) totalWithoutGst = 0.0;
     double totalDelivery = totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
 

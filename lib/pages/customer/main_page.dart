@@ -40,7 +40,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   Timer? _globalCountdown;
   String? _pendingOrderId;
   bool _isGlobalPartialRejection = false;
-  
+
   void _onRouteChanged() {
     if (currentRouteNotifier.value == AppRoutes.customerHome) {
       _checkPendingOrdersTimer();
@@ -106,7 +106,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         totalAdded += result.added;
         if (result.error != null) {
           if (result.added == 0) {
-            if (!fatalErrors.contains(result.error!) && fatalErrors.length < 2) {
+            if (!fatalErrors.contains(result.error!) &&
+                fatalErrors.length < 2) {
               fatalErrors.add(result.error!);
             }
           } else {
@@ -139,14 +140,16 @@ class _CustomerMainPageState extends State<CustomerMainPage>
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
-      
-      final resp = await supabase.from('orders')
-         .select('id, payment_deadline, created_at, status, cart_group_id, updated_at')
-         .eq('customer_id', userId)
-         .inFilter('status', ['awaiting_payment', 'awaiting_acceptance'])
-         .order('created_at', ascending: false)
-         .limit(1);
-      
+
+      final resp = await supabase
+          .from('orders')
+          .select(
+              'id, payment_deadline, created_at, status, cart_group_id, updated_at')
+          .eq('customer_id', userId)
+          .inFilter('status', ['awaiting_payment', 'awaiting_acceptance'])
+          .order('created_at', ascending: false)
+          .limit(1);
+
       if (!mounted) return;
       if (resp.isNotEmpty) {
         final status = resp[0]['status'];
@@ -159,18 +162,23 @@ class _CustomerMainPageState extends State<CustomerMainPage>
 
         // POINT 6: Check sibling orders to determine true partial rejection state and 5-min timer
         if (cartGroupId != null) {
-          final siblings = await supabase.from('orders')
+          final siblings = await supabase
+              .from('orders')
               .select('status, updated_at')
               .eq('cart_group_id', cartGroupId);
-           
+
           DateTime? rejectionTime;
           for (var s in siblings) {
-            if (s['status'] == 'seller_rejected' || s['status'] == 'cancelled') {
-                isPartialRejection = true;
-                final u = s['updated_at'] != null ? DateTime.tryParse(s['updated_at']) : null;
-                if (u != null && (rejectionTime == null || u.isBefore(rejectionTime))) {
-                   rejectionTime = u;
-                }
+            if (s['status'] == 'seller_rejected' ||
+                s['status'] == 'cancelled') {
+              isPartialRejection = true;
+              final u = s['updated_at'] != null
+                  ? DateTime.tryParse(s['updated_at'])
+                  : null;
+              if (u != null &&
+                  (rejectionTime == null || u.isBefore(rejectionTime))) {
+                rejectionTime = u;
+              }
             }
           }
           // Issue 2 FIX: If customer already placed a replacement order (Fix 3 wrote
@@ -179,8 +187,10 @@ class _CustomerMainPageState extends State<CustomerMainPage>
           if (isPartialRejection) {
             try {
               final prefs = await SharedPreferences.getInstance();
-              if (prefs.getBool('partial_rejection_resolved_$cartGroupId') ?? false) {
-                isPartialRejection = false; // overridden — decision already made
+              if (prefs.getBool('partial_rejection_resolved_$cartGroupId') ??
+                  false) {
+                isPartialRejection =
+                    false; // overridden — decision already made
               }
             } catch (_) {}
           }
@@ -201,7 +211,10 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               }
             } catch (_) {}
             // If SharedPrefs key not found, fall back to DB rejection time
-            deadline ??= (rejectionTime ?? DateTime.tryParse(createdAtStr ?? '') ?? DateTime.now().toUtc()).add(const Duration(minutes: 5));
+            deadline ??= (rejectionTime ??
+                    DateTime.tryParse(createdAtStr ?? '') ??
+                    DateTime.now().toUtc())
+                .add(const Duration(minutes: 5));
           }
         }
 
@@ -216,13 +229,13 @@ class _CustomerMainPageState extends State<CustomerMainPage>
 
         if (deadline != null) {
           _pendingOrderId = resp[0]['id'];
-          
+
           if (mounted) {
             setState(() {
               _isGlobalPartialRejection = isPartialRejection;
             });
           }
-          
+
           // BUG FIX: Immediately show the correct remaining time before first tick.
           // We DO NOT use an offset from updated_at, because updated_at is static
           // and causes the time difference to inflate as the clock ticks forward.
@@ -373,7 +386,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
       },
       child: Scaffold(
         extendBody: true, // Let body extend behind bottom nav
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Prevent black flash on back nav
+        backgroundColor: Theme.of(context)
+            .scaffoldBackgroundColor, // Prevent black flash on back nav
         body: Stack(
           children: [
             IndexedStack(
@@ -401,7 +415,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                       }
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: AppColors.danger,
                         borderRadius: BorderRadius.circular(12),
@@ -415,11 +430,12 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.timer, color: Colors.white, size: 20),
+                          const Icon(Icons.timer,
+                              color: Colors.white, size: 20),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              _isGlobalPartialRejection 
+                              _isGlobalPartialRejection
                                   ? 'Finish replacing items for your pending order!'
                                   : 'Complete your pending order before time runs out!',
                               style: GoogleFonts.outfit(
@@ -430,7 +446,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: Colors.white24,
                               borderRadius: BorderRadius.circular(8),
@@ -465,7 +482,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   Widget _buildFloatingBottomNav(BuildContext context, CartProvider cart) {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPadding > 0 ? bottomPadding + 8.0 : 20.0),
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, bottomPadding > 0 ? bottomPadding + 8.0 : 20.0),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(
@@ -507,10 +525,11 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         ValueListenableBuilder<bool>(
-                          valueListenable: CustomerHomeViewState.globalIsFiltering,
+                          valueListenable:
+                              CustomerHomeViewState.globalIsFiltering,
                           builder: (context, isFiltering, _) {
-                            return _buildNavItem(
-                                0, Icons.home_rounded, Icons.home_outlined, 'Home',
+                            return _buildNavItem(0, Icons.home_rounded,
+                                Icons.home_outlined, 'Home',
                                 overrideSelected: isFiltering ? false : null);
                           },
                         ),
@@ -519,7 +538,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
 
                         // Prominent Cart inside the pill
                         GestureDetector(
-                          onTap: () => Navigator.pushNamed(context, AppRoutes.cart),
+                          onTap: () =>
+                              Navigator.pushNamed(context, AppRoutes.cart),
                           child: Container(
                             height: 64, // Increased size
                             width: 64, // Increased size
@@ -528,7 +548,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                               color: AppColors.secondary,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.secondary.withValues(alpha: 0.5),
+                                  color: AppColors.secondary
+                                      .withValues(alpha: 0.5),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 )
@@ -587,7 +608,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
     );
   }
 
-  Widget _buildNotificationView(BuildContext context, CartNotification notification) {
+  Widget _buildNotificationView(
+      BuildContext context, CartNotification notification) {
     return Container(
       key: const ValueKey('notification_view'),
       padding: const EdgeInsets.symmetric(horizontal: 20),

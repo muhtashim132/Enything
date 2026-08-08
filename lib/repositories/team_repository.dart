@@ -53,7 +53,9 @@ class TeamRepository {
     required String actorRole,
   }) async {
     try {
-      await _db.from('admin_users').update({'role_id': roleId}).eq('id', userId);
+      await _db
+          .from('admin_users')
+          .update({'role_id': roleId}).eq('id', userId);
     } on PostgrestException catch (e) {
       if (e.code == '23503') {
         throw Exception('The specified role does not exist or is invalid.');
