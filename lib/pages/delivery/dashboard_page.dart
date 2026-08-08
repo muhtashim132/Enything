@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -298,6 +299,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           final notifStatus = await Permission.notification.status;
           if (notifStatus.isDenied) {
             await Permission.notification.request();
+          }
+          
+          if (Platform.isAndroid) {
+            final alertStatus = await Permission.systemAlertWindow.status;
+            if (alertStatus.isDenied) {
+              await Permission.systemAlertWindow.request();
+            }
           }
 
           newSecret = const Uuid().v4();

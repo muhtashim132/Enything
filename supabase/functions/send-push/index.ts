@@ -202,18 +202,38 @@ Deno.serve(async (req: Request) => {
       await Promise.all(batch.map(async ({ token, role }) => {
         try {
           // Additive check: Use unified custom bell channel for all pushes to maintain Enything brand sound.
-          const isUrgentOrderAlert = (role === 'seller' || role === 'delivery') && 
+          const isUrgentOrderAlert = (role === 'seller' || role === 'delivery' || role === 'delivery_partner') && 
                                      (String(title).toLowerCase().includes('new order') || 
                                       String(title).toLowerCase().includes('payment done'));
                                       
-          const channelId = 'enything_bell_channel_v3';
+          const channelId = 'enything_bell_channel_v4';
           const soundFile = 'enything_bell';
           
+
+          // FSI FIX: For seller/rider, send DATA-ONLY message (no notification block).
+          // This lets the Dart _fcmBackgroundHandler fire and create a local
+          // notification WITH fullScreenIntent:true that wakes the screen.
+          // The rider's foreground service (RiderBackgroundService) keeps the
+          // process alive so the handler fires reliably.
+          //
+          // For customers (no foreground service), include the notification block
+          // so Android OS displays the notification natively — guaranteed delivery.
+          //
+          // To revert: remove the conditional and always include notification block.
+          const isSellerOrRider = (role === 'seller' || role === 'delivery' || role === 'delivery_partner');
 
           const message = {
             message: {
               token,
-              // Removed top-level notification to force data-only message on Android
+              // Conditionally include notification block:
+              // - Customer: notification+data → OS handles display (guaranteed)
+              // - Seller/Rider: data-only → background handler fires (FSI works)
+              ...(isSellerOrRider ? {} : {
+                notification: {
+                  title: String(title),
+                  body: String(body),
+                },
+              }),
               data: {
                 title: String(title),
                 body: String(body),
@@ -221,7 +241,16 @@ Deno.serve(async (req: Request) => {
               },
               android: {
                 priority: 'high',
-                // Removed android.notification block to ensure Android OS doesn't intercept
+                // For customers: routes OS-displayed notification through our channel.
+                // For sellers/riders: ignored (data-only), but harmless to include.
+                ...(isSellerOrRider ? {} : {
+                  notification: {
+                    channel_id: channelId,
+                    sound: soundFile,
+                    notification_priority: 'PRIORITY_MAX',
+                    visibility: 'PUBLIC',
+                  },
+                }),
               },
               apns: {
                 headers: {

@@ -8,6 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:audioplayers/audioplayers.dart';
+
 
 import 'theme/app_theme.dart';
 import 'config/routes.dart';
@@ -99,6 +101,8 @@ void main() async {
     handleNotificationClick(message.data);
   });
 
+  // CallKit has been removed.
+
   // Deep linking: Handle notification tap when app is terminated.
   // We do NOT call _handleNotificationClick() directly here because the
   // navigator isn't ready yet and the SplashPage's own async navigation
@@ -131,6 +135,14 @@ void main() async {
     configProvider: configProvider,
     recentlyViewedProvider: recentlyViewedProvider,
   ));
+  
+  // REMOVED: cancelAll() was here but it was killing background FCM notifications
+  // the instant the user tapped them. The background handler creates a notification
+  // with FSI + sound, but when the app launches (via tap or FSI), main() runs and
+  // cancelAll() fires — killing the notification before the user can interact.
+  // Individual notification cancellation (e.g. for cancelled orders) still works
+  // via plugin.cancel(orderId.hashCode) in _fcmBackgroundHandler.
+  // To restore: await FlutterLocalNotificationsPlugin().cancelAll();
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -190,10 +202,44 @@ void handleNotificationClick(Map<String, dynamic> data) {
   }
 }
 
+/// Top-level background handler for action button taps (e.g. Decline) on the lock screen
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) async {
+  // Fix #1: Connect isolate to OS before doing any platform channel work
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  if (notificationResponse.actionId == 'decline' && notificationResponse.payload != null) {
+    try {
+      await dotenv.load(fileName: '.env');
+      final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+      final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+      await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
+      
+      final data = jsonDecode(notificationResponse.payload!) as Map<String, dynamic>;
+      final orderId = data['order_id'] as String?;
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+      
+      if (orderId != null && currentUserId != null) {
+        await Supabase.instance.client.rpc('rider_reject_order', params: {
+          'p_order_id': orderId,
+          'p_rider_id': currentUserId
+        });
+        debugPrint('Order $orderId explicitly declined from lock screen.');
+      }
+      // Cancel the notification after declining
+      await FlutterLocalNotificationsPlugin().cancel(notificationResponse.id ?? 0);
+    } catch (e) {
+      debugPrint('Failed to handle background decline: $e');
+    }
+  }
+}
+
 /// Background FCM handler — MUST be a top-level function (not a closure).
 /// Called by FCM when a DATA-ONLY message arrives and the app is killed/backgrounded.
 @pragma('vm:entry-point')
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
+  // Fix #1: Connect isolate to OS before doing any platform channel work
+  WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
   // For data-only messages, title/body come from message.data
@@ -203,61 +249,110 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
 
   if (title.isEmpty || body.isEmpty) return;
 
+  final role = message.data['role'] as String?;
+  final action = message.data['action'] as String?;
+  final orderId = message.data['order_id'] as String?;
+
   final plugin = FlutterLocalNotificationsPlugin();
+  
+  // Additive: Kill ghost notifications if order cancelled or reassigned
+  if ((action == 'cancel_order' || action == 'order_reassigned') && orderId != null) {
+    await plugin.cancel(orderId.hashCode);
+    return;
+  }
+
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosSettings = DarwinInitializationSettings();
-  await plugin.initialize(const InitializationSettings(
-    android: androidSettings,
-    iOS: iosSettings,
-  ));
+  await plugin.initialize(
+    const InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    ),
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+  );
 
-  // Create unified channel in the background isolate:
-  // • enything_bell_channel: primary channel with enything_bell.wav sound for ALL Enything pushes
   final androidPlugin = plugin.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
 
-    await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        'enything_bell_channel_v3',
-        'Enything Order Alerts',
-        description: 'Push notifications for orders and updates',
-        importance: Importance.max,
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound('enything_bell'),
-        enableVibration: true,
-        showBadge: true,
-      ),
-    );
+  // SAMSUNG FIX: Samsung ignores RawResourceAndroidNotificationSound on channels
+  // and always plays the default system notification sound. The solution:
+  // 1. Use a SILENT channel (playSound: false) so Samsung doesn't play its bell
+  // 2. Play enything_bell.wav via AudioPlayer — same approach as BellAlertService
+  // To revert: switch back to enything_bell_channel_v4 with playSound: true
+  final bool isUrgent = (role == 'rider' || role == 'delivery' || role == 'seller' || action == 'new_order');
+  const String channelId = 'enything_bg_silent_v1';
+  const String channelName = 'Order Alerts (Background)';
+  const String channelDesc = 'Background order notifications — sound handled by AudioPlayer';
+
+  await androidPlugin?.createNotificationChannel(
+    const AndroidNotificationChannel(
+      channelId,
+      channelName,
+      description: channelDesc,
+      importance: Importance.max,   // max = heads-up + FSI support
+      playSound: false,             // SILENT — AudioPlayer handles the bell
+      enableVibration: true,
+      showBadge: true,
+    ),
+  );
+
+  final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    channelId,
+    channelName,
+    channelDescription: channelDesc,
+    importance: Importance.max,
+    priority: Priority.high,
+    playSound: false,               // SILENT — AudioPlayer handles the bell
+    enableVibration: true,
+    fullScreenIntent: isUrgent,     // THIS WAKES THE SCREEN AND BYPASSES LOCKSCREEN!
+    category: AndroidNotificationCategory.alarm,
+    visibility: NotificationVisibility.public,
+    icon: '@mipmap/ic_launcher',
+    timeoutAfter: isUrgent ? 30000 : null,
+    actions: isUrgent ? <AndroidNotificationAction>[
+      const AndroidNotificationAction('accept', 'Accept', showsUserInterface: true),
+      const AndroidNotificationAction('decline', 'Decline', showsUserInterface: false),
+    ] : null,
+  );
 
   await plugin.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    orderId?.hashCode ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
     title,
     body,
-    const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'enything_bell_channel_v3',
-        'Enything Order Alerts',
-        channelDescription:
-            'Push notifications for orders and updates',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
-        sound: RawResourceAndroidNotificationSound('enything_bell'),
-        enableVibration: true,
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.alarm,
-        visibility: NotificationVisibility.public,
-        icon: '@mipmap/ic_launcher',
-      ),
-      iOS: DarwinNotificationDetails(
+    NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(
         presentSound: true,
         presentBadge: true,
         presentAlert: true,
+        sound: 'enything_bell.wav',
       ),
     ),
     payload: jsonEncode(message.data),
   );
-  debugPrint('FCM background shown: $title');
+
+  // SAMSUNG FIX: Play the bell sound via AudioPlayer (bypasses broken channel sound).
+  // This is the same approach BellAlertService uses when the app is in the foreground.
+  // DartPluginRegistrant is already initialized via WidgetsFlutterBinding above.
+  try {
+    final player = AudioPlayer();
+    await player.setReleaseMode(ReleaseMode.release); // play once, then stop
+    await player.play(AssetSource('sounds/enything_bell.wav'));
+    debugPrint('FCM background: enything_bell.wav playing via AudioPlayer');
+    // Auto-dispose player after bell finishes (max 15s safety net)
+    player.onPlayerComplete.listen((_) => player.dispose());
+    Future.delayed(const Duration(seconds: 15), () {
+      try { player.dispose(); } catch (_) {}
+    });
+  } catch (e) {
+    debugPrint('FCM background: AudioPlayer bell failed: $e');
+  }
+  
+  if (isUrgent) {
+    debugPrint('FCM background shown via Full-Screen Intent: $title');
+  } else {
+    debugPrint('FCM background shown via LocalNotifications: $title');
+  }
 }
 
 class EnythingApp extends StatelessWidget {

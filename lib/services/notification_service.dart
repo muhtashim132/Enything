@@ -60,7 +60,7 @@ class NotificationService {
     // limitation). A fresh channel name guarantees the WAV is applied correctly.
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'enything_bell_channel_v3', // Migrated to v2 to bypass Android channel immutability bug
+        'enything_bell_channel_v4', // Migrated to v2 to bypass Android channel immutability bug
         'Order Alert Bell',
         description:
             'Custom bell sound for order notifications (Enything Bell)',
@@ -109,7 +109,7 @@ class NotificationService {
       ongoing: true, // This makes it persistent
       autoCancel: false,
       color: const Color(0xFF9C27B0), // Purple color to match theme
-      icon: 'ic_notification',
+      icon: '@mipmap/ic_launcher', // Fixed: was 'ic_notification' which doesn't exist. To revert: 'ic_notification'
     );
 
     final NotificationDetails platformChannelSpecifics =
@@ -132,7 +132,7 @@ class NotificationService {
     // This ensures ALL in-app buzz notifications (sellers, riders, customers)
     // play the Enything Bell regardless of role.
     const androidDetails = AndroidNotificationDetails(
-      'enything_bell_channel_v3',
+      'enything_bell_channel_v4',
       'Enything Order Alerts',
       channelDescription:
           'Push notifications for orders and updates',
