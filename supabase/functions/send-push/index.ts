@@ -222,6 +222,7 @@ Deno.serve(async (req: Request) => {
           // To revert: remove the conditional and always include notification block.
           const isSellerOrRider = (role === 'seller' || role === 'delivery' || role === 'delivery_partner');
 
+
           const message = {
             message: {
               token,

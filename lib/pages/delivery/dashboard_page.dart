@@ -314,6 +314,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
         await _supabase.from('delivery_partners').update({
           'is_accepting_orders': val,
+          // ADDITIVE FIX: Also sync is_active with the online toggle.
+          // is_active gets set to false by switchSessionRole() when a dual-role
+          // account switches from rider → seller. Without this, the rider can
+          // appear online on their dashboard but get_nearby_online_riders returns
+          // empty (it requires is_active=true), so no push notifications are sent.
+          // is_active here = "available for new orders", not a KYC/ban flag.
+          // To revert: remove this line.
+          'is_active': val,
           if (newSecret != null) 'bg_tracking_secret': newSecret,
         }).eq('id', auth.currentUserId!);
       } catch (e) {
@@ -484,6 +492,22 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         if (partnerResp != null) {
           if (partnerResp['is_accepting_orders'] != null) {
             _isOnline = partnerResp['is_accepting_orders'] as bool;
+
+            // ADDITIVE FIX: Re-sync is_active on dashboard load.
+            // switchSessionRole() sets is_active=false when switching seller→rider.
+            // If the rider was already online before switching, _isOnline reads true
+            // from is_accepting_orders, but is_active stays false → push notifications
+            // are never sent (get_nearby_online_riders requires is_active=true).
+            // This fire-and-forget write re-activates the rider silently on dashboard open.
+            // To revert: remove this unawaited block.
+            if (_isOnline && auth.currentUserId != null) {
+              _supabase
+                  .from('delivery_partners')
+                  .update({'is_active': true})
+                  .eq('id', auth.currentUserId!)
+                  .then((_) {})
+                  .catchError((_) {});
+            }
           }
           if (partnerResp['preferred_nav_app'] != null) {
             _navApp = partnerResp['preferred_nav_app'] as String;
