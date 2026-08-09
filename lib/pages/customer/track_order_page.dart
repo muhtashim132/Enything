@@ -2686,7 +2686,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 isDark: isDark),
                             const SizedBox(height: 8),
                             _billRow('Delivery Fee',
-                                '₹${(_computeGroupDeliveryCharges() - _computeGroupGstDelivery() - _computeGroupSmallCartFee() - _computeGroupHeavyOrderFee() - _computeGroupMultiShopSurcharge()).toStringAsFixed(0)}',
+                                '₹${(_computeGroupDeliveryCharges() - _computeGroupGstDelivery()).clamp(0.0, double.infinity).toStringAsFixed(0)}',
                                 isDark: isDark),
                             if (_computeGroupSmallCartFee() > 0) ...[
                               const SizedBox(height: 8),
@@ -3055,8 +3055,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         }
                         return;
                       }
-                      if (mounted) setState(() => _isProcessingPayment = false);
-
+                      // BUG-2 FIX (step A): Only one reset here (was duplicated on next line).
                       if (mounted) setState(() => _isProcessingPayment = false);
 
                       // FIX: The user has made their decision. Stop the timer and hide the banner!
@@ -3083,6 +3082,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       }
                     }
 
+                    // BUG-2 FIX: The primary double-payment protection is in the
+                    // edge function (create-razorpay-order now filters to only
+                    // 'awaiting_payment' orders). The Dart-side guard here prevents
+                    // the race window from opening two Razorpay sheets.
                     setState(() => _isProcessingPayment = true);
                     try {
                       if (_order?.cartGroupId != null) {
@@ -3090,6 +3093,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                             params: {'p_cart_group_id': _order!.cartGroupId});
                       }
 
+                      // Reset before calling _openRazorpay() because it has an
+                      // internal guard: `if (_isProcessingPayment) return;`
                       if (mounted) setState(() => _isProcessingPayment = false);
                       if (mounted) _openRazorpay();
                     } catch (e) {

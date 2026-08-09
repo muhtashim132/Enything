@@ -100,15 +100,18 @@ Deno.serve(async (req) => {
 
     let dbAmount = 0;
     if (cart_group_id) {
+      // ── BUG-2 FIX: Mirror the same filter as create-razorpay-order ──
+      // Only sum awaiting_payment orders so verification matches the exact amount
+      // that was charged. Confirmed / delivered orders are already captured and
+      // must NOT be included in the expected total.
       const { data: orders, error } = await supabaseAdmin
         .from('orders')
         .select('grand_total_collected, status, customer_id')
         .eq('cart_group_id', cart_group_id)
-        .neq('status', 'cancelled')
-        .neq('status', 'seller_rejected');
+        .eq('status', 'awaiting_payment');
       
       if (error) throw new Error("Database error: " + JSON.stringify(error));
-      if (!orders || orders.length === 0) throw new Error("Orders not found for cart_group_id: " + cart_group_id);
+      if (!orders || orders.length === 0) throw new Error("No awaiting_payment orders found for cart_group_id: " + cart_group_id);
       if (orders[0].customer_id !== user.id) throw new Error("Unauthorized order access");
       
       dbAmount = orders.reduce((sum, o) => sum + (o.grand_total_collected || 0), 0);

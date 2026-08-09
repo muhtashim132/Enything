@@ -636,17 +636,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
             .where((id) => !_activeShopIds.contains(id))
             .toSet();
         final totalShopsAtEnd = _activeShopIds.length + newUniqueShopIds.length;
-
-        // Flat admin surcharge rate (₹20 by default, admin-configurable)
         final flatSurchargeRate =
             PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
-
-        // Total surcharge for all shops at end = rate × (totalShops − 1)
-        // Subtract what's already been paid so we only charge the DELTA.
         final totalSurchargeAtEnd = totalShopsAtEnd > 1
             ? flatSurchargeRate * (totalShopsAtEnd - 1)
             : 0.0;
-        surcharge = math.max(0.0, totalSurchargeAtEnd - _activeSurchargePaid);
+
+        // 100x FIX: Anticipate the database's reallocation.
+        // The DB will reduce the old payment pool's surcharge to match its active count.
+        final oldActiveCount = _activeShopIds.length;
+        final expectedOldSurchargePaid = math.min(
+            _activeSurchargePaid,
+            oldActiveCount > 1 ? flatSurchargeRate * (oldActiveCount - 1) : 0.0
+        );
+
+        surcharge =
+            math.max(0.0, totalSurchargeAtEnd - expectedOldSurchargePaid);
 
         // Small cart fee (aggregate check)
         final smallCartThreshold =
@@ -823,8 +828,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopDelivery = totalDelivery * distanceProportion;
         final shopRiderEarnings = riderEarnings * distanceProportion;
 
-        // Platform fee is still split by food value
-        final shopPlatformFee = cart.platformFee * proportion;
+        // 100x FIX: Handling Fee (Platform Fee) is a flat rate PER SHOP.
+        // It must NOT be split proportionally by food value, otherwise when a shop cancels,
+        // the remaining shops retain an inflated/deflated fee instead of exactly ₹20.
+        final basePlatformFee = PlatformConfigProvider.instance?.platformFee ??
+            PaymentConfig.platformFee;
+        final shopPlatformFee = basePlatformFee;
 
         final shopTaxBreakdownItems = shopItems.map((i) {
           return {

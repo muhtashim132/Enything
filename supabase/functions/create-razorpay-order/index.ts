@@ -62,27 +62,33 @@ Deno.serve(async (req) => {
 
     let dbAmount = 0;
     if (cart_group_id) {
+      // ── BUG-2 FIX: Only sum orders that are AWAITING PAYMENT (not yet captured). ──
+      // Previously `.neq('status','cancelled').neq('status','seller_rejected')` also
+      // included confirmed / preparing / delivered orders whose payment was already
+      // captured, causing the new Razorpay order amount to double-count prior charges.
+      // Filtering strictly to 'awaiting_payment' ensures we only charge for
+      // the current outstanding balance.
       const { data: orders, error } = await supabaseAdmin
         .from('orders')
         .select('grand_total_collected, customer_id')
         .eq('cart_group_id', cart_group_id)
-        .neq('status', 'cancelled')
-        .neq('status', 'seller_rejected');
+        .eq('status', 'awaiting_payment');
       
       if (error) throw new Error("Database error: " + JSON.stringify(error));
-      if (!orders || orders.length === 0) throw new Error("Orders not found for cart_group_id: " + cart_group_id);
+      if (!orders || orders.length === 0) throw new Error("No awaiting_payment orders found for cart_group_id: " + cart_group_id);
       if (orders[0].customer_id !== user.id) throw new Error("Unauthorized");
       
       dbAmount = orders.reduce((sum, o) => sum + (o.grand_total_collected || 0), 0);
     } else {
       const { data: order, error } = await supabaseAdmin
         .from('orders')
-        .select('grand_total_collected, customer_id')
+        .select('grand_total_collected, customer_id, status')
         .eq('id', order_id)
         .maybeSingle();
 
       if (error || !order) throw new Error("Order not found");
       if (order.customer_id !== user.id) throw new Error("Unauthorized");
+      if (order.status !== 'awaiting_payment') throw new Error("Order is not in awaiting_payment status. Cannot create payment.");
 
       dbAmount = order.grand_total_collected || 0;
     }
