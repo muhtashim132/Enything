@@ -647,8 +647,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final oldActiveCount = _activeShopIds.length;
         final expectedOldSurchargePaid = math.min(
             _activeSurchargePaid,
-            oldActiveCount > 1 ? flatSurchargeRate * (oldActiveCount - 1) : 0.0
-        );
+            oldActiveCount > 1
+                ? flatSurchargeRate * (oldActiveCount - 1)
+                : 0.0);
 
         surcharge =
             math.max(0.0, totalSurchargeAtEnd - expectedOldSurchargePaid);

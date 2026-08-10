@@ -348,7 +348,25 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         updatedOrder.hasCustomerRated &&
                     oldOrder.hasSellerRated == updatedOrder.hasSellerRated &&
                     oldOrder.hasDeliveryRated ==
-                        updatedOrder.hasDeliveryRated) {
+                        updatedOrder.hasDeliveryRated &&
+                    // BILL SUMMARY FIX: Detect financial field changes from
+                    // reallocate_cancelled_delivery_fees so bill summary
+                    // refreshes immediately when a shop declines.
+                    oldOrder.grandTotalCollected ==
+                        updatedOrder.grandTotalCollected &&
+                    oldOrder.deliveryCharges ==
+                        updatedOrder.deliveryCharges &&
+                    oldOrder.platformFee == updatedOrder.platformFee &&
+                    oldOrder.smallCartFee == updatedOrder.smallCartFee &&
+                    oldOrder.heavyOrderFee == updatedOrder.heavyOrderFee &&
+                    oldOrder.multiShopSurcharge ==
+                        updatedOrder.multiShopSurcharge &&
+                    oldOrder.gstDelivery == updatedOrder.gstDelivery &&
+                    oldOrder.gstPlatform == updatedOrder.gstPlatform &&
+                    oldOrder.gstItemTotal == updatedOrder.gstItemTotal &&
+                    oldOrder.riderEarnings == updatedOrder.riderEarnings &&
+                    oldOrder.waitTimePenalty ==
+                        updatedOrder.waitTimePenalty) {
                   needsSetState = false;
                 }
               }
