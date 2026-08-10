@@ -319,7 +319,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _channel = _supabase
         .channel('group-${_order!.cartGroupId ?? widget.orderId}')
         .onPostgresChanges(
-          event: PostgresChangeEvent.update,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
           filter: filter,
@@ -327,48 +327,56 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             if (mounted && payload.newRecord.isNotEmpty) {
               final updatedOrder = OrderModel.fromMap(payload.newRecord);
 
-              // STRESS-TEST FIX (Pixel Overloading): Delta comparison to prevent full widget tree rebuilds for GPS updates
+              // REPLACEMENT ORDER FIX: When a new order is INSERT-ed into
+              // the same cart_group_id (e.g. via "Search for Different Items"),
+              // the order ID won't be in _groupOrders. Do a full refetch to
+              // load the new order's items and recalculated financials.
               final oldOrder =
                   _groupOrders.firstWhereOrNull((o) => o.id == updatedOrder.id);
+
+              if (oldOrder == null) {
+                // This is a new order (INSERT) — full reload needed
+                _fetchOrder();
+                return;
+              }
+
+              // STRESS-TEST FIX (Pixel Overloading): Delta comparison to prevent full widget tree rebuilds for GPS updates
               bool needsSetState = true;
 
-              if (oldOrder != null) {
-                // If only location or timestamp changed, these fields will remain identical
-                if (oldOrder.status == updatedOrder.status &&
-                    oldOrder.paymentMethod == updatedOrder.paymentMethod &&
-                    oldOrder.sellerAccepted == updatedOrder.sellerAccepted &&
-                    oldOrder.partnerAccepted == updatedOrder.partnerAccepted &&
-                    oldOrder.deliveryPartnerId ==
-                        updatedOrder.deliveryPartnerId &&
-                    oldOrder.cancelledReason == updatedOrder.cancelledReason &&
-                    oldOrder.riderPhone == updatedOrder.riderPhone &&
-                    oldOrder.rejectionMessage ==
-                        updatedOrder.rejectionMessage &&
-                    oldOrder.hasCustomerRated ==
-                        updatedOrder.hasCustomerRated &&
-                    oldOrder.hasSellerRated == updatedOrder.hasSellerRated &&
-                    oldOrder.hasDeliveryRated ==
-                        updatedOrder.hasDeliveryRated &&
-                    // BILL SUMMARY FIX: Detect financial field changes from
-                    // reallocate_cancelled_delivery_fees so bill summary
-                    // refreshes immediately when a shop declines.
-                    oldOrder.grandTotalCollected ==
-                        updatedOrder.grandTotalCollected &&
-                    oldOrder.deliveryCharges ==
-                        updatedOrder.deliveryCharges &&
-                    oldOrder.platformFee == updatedOrder.platformFee &&
-                    oldOrder.smallCartFee == updatedOrder.smallCartFee &&
-                    oldOrder.heavyOrderFee == updatedOrder.heavyOrderFee &&
-                    oldOrder.multiShopSurcharge ==
-                        updatedOrder.multiShopSurcharge &&
-                    oldOrder.gstDelivery == updatedOrder.gstDelivery &&
-                    oldOrder.gstPlatform == updatedOrder.gstPlatform &&
-                    oldOrder.gstItemTotal == updatedOrder.gstItemTotal &&
-                    oldOrder.riderEarnings == updatedOrder.riderEarnings &&
-                    oldOrder.waitTimePenalty ==
-                        updatedOrder.waitTimePenalty) {
-                  needsSetState = false;
-                }
+              if (oldOrder.status == updatedOrder.status &&
+                  oldOrder.paymentMethod == updatedOrder.paymentMethod &&
+                  oldOrder.sellerAccepted == updatedOrder.sellerAccepted &&
+                  oldOrder.partnerAccepted == updatedOrder.partnerAccepted &&
+                  oldOrder.deliveryPartnerId ==
+                      updatedOrder.deliveryPartnerId &&
+                  oldOrder.cancelledReason == updatedOrder.cancelledReason &&
+                  oldOrder.riderPhone == updatedOrder.riderPhone &&
+                  oldOrder.rejectionMessage ==
+                      updatedOrder.rejectionMessage &&
+                  oldOrder.hasCustomerRated ==
+                      updatedOrder.hasCustomerRated &&
+                  oldOrder.hasSellerRated == updatedOrder.hasSellerRated &&
+                  oldOrder.hasDeliveryRated ==
+                      updatedOrder.hasDeliveryRated &&
+                  // BILL SUMMARY FIX: Detect financial field changes from
+                  // reallocate_cancelled_delivery_fees so bill summary
+                  // refreshes immediately when a shop declines.
+                  oldOrder.grandTotalCollected ==
+                      updatedOrder.grandTotalCollected &&
+                  oldOrder.deliveryCharges ==
+                      updatedOrder.deliveryCharges &&
+                  oldOrder.platformFee == updatedOrder.platformFee &&
+                  oldOrder.smallCartFee == updatedOrder.smallCartFee &&
+                  oldOrder.heavyOrderFee == updatedOrder.heavyOrderFee &&
+                  oldOrder.multiShopSurcharge ==
+                      updatedOrder.multiShopSurcharge &&
+                  oldOrder.gstDelivery == updatedOrder.gstDelivery &&
+                  oldOrder.gstPlatform == updatedOrder.gstPlatform &&
+                  oldOrder.gstItemTotal == updatedOrder.gstItemTotal &&
+                  oldOrder.riderEarnings == updatedOrder.riderEarnings &&
+                  oldOrder.waitTimePenalty ==
+                      updatedOrder.waitTimePenalty) {
+                needsSetState = false;
               }
 
               void updateLocalModels() {
