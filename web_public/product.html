@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Details - Enything</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .menu-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 3rem;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .menu-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .product-detail-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .product-detail-image {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .product-detail-info {
+            padding: 2.5rem;
+        }
+
+        .product-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .product-detail-title {
+            font-size: 2.5rem;
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .product-detail-shop {
+            color: var(--accent-color);
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            display: inline-block;
+        }
+
+        .product-detail-price {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .product-detail-original-price {
+            font-size: 1.2rem;
+            text-decoration: line-through;
+            color: var(--text-muted);
+            margin-right: 10px;
+        }
+
+        .product-detail-description {
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+
+        .veg-icon {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #22c55e;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 3px;
+        }
+
+        .veg-icon::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+        }
+
+        .veg-icon.non-veg-icon {
+            border-color: #ef4444;
+        }
+
+        .veg-icon.non-veg-icon::after {
+            background: #ef4444;
+        }
+
+        .add-btn-large {
+            width: 100%;
+            padding: 1.2rem;
+            font-size: 1.2rem;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .add-btn-large:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .add-btn-large:disabled {
+            background: #4b5563;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .variants-container {
+            margin-bottom: 2rem;
+        }
+        
+        .variants-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .variant-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .variant-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .variant-option:hover {
+            border-color: var(--accent-color);
+            background: rgba(91, 139, 255, 0.1);
+        }
+
+        .variant-option.selected {
+            border-color: var(--accent-color);
+            background: rgba(91, 139, 255, 0.2);
+        }
+
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="logo.png" alt="Enything Logo" class="logo-img">
+            <span class="logo-text">Enything</span>
+        </a>
+        <nav class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="#contact">Contact</a>
+            <div class="dropdown">
+                <a href="#" class="dropbtn">Policies <i class="fas fa-chevron-down"></i></a>
+                <div class="dropdown-content">
+                    <a href="privacy.html">Privacy Policy</a>
+                    <a href="terms.html">Terms & Conditions</a>
+                    <a href="refunds.html">Refund & Cancellation</a>
+                    <a href="shipping.html">Shipping Policy</a>
+                </div>
+            </div>
+            <span id="auth-container" style="margin-left: 2rem;"></span>
+        </nav>
+    </header>
+
+    <main>
+        <div class="menu-container">
+            <!-- Left: Product Details -->
+            <div id="product-container">
+                <div style="text-align: center; padding: 4rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-color);"></i>
+                    <p style="margin-top: 1rem; color: var(--text-muted);">Loading product details...</p>
+                </div>
+            </div>
+            
+            <!-- Right: Cart Sidebar -->
+            <div class="cart-sidebar">
+                <div class="cart-header">Your Cart</div>
+                <div id="cart-items" class="cart-items-container">
+                    <!-- Cart items will be injected here -->
+                </div>
+                <div class="cart-footer">
+                    <div class="cart-total-row" style="display: block;">
+                        <div id="cart-total" style="width: 100%;">₹0.00</div>
+                    </div>
+                    <button id="checkout-btn" class="checkout-btn" onclick="window.location.href='checkout.html'" disabled>Proceed to Checkout</button>
+                </div>
+            </div>
+        </div>
+
+        <section id="contact" class="contact-section" style="margin-top: 5rem; border-top: 1px solid var(--glass-border); padding-top: 5rem;">
+            <h2 class="section-title">Contact Us</h2>
+            <div class="contact-card">
+                <h3>Enything Technologies (Muhtaashim Kamran Nazki)</h3>
+                <div class="contact-info">
+                    <p><strong><i class="fas fa-map-marker-alt"></i> Registered Address:</strong> Plan Bandipora, Ward No. 2, Bandipora, J&K — 193502, India</p>
+                    <p><strong><i class="fas fa-envelope"></i> Email:</strong> <a href="mailto:support@enything.in">support@enything.in</a></p>
+                    <p><strong><i class="fas fa-phone"></i> Phone:</strong> +91 7006464241</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-info">
+                <h3>Contact Support</h3>
+                <p>Email: <a href="mailto:support@enything.in" style="color: var(--accent-color); text-decoration: none;">support@enything.in</a></p>
+                <p>Phone: +91 7006464241</p>
+                <p>Address: Plan Bandipora, Ward No. 2, Bandipora, J&K — 193502, India</p>
+            </div>
+            <div class="footer-legal">
+                <h3>Grievance Officer</h3>
+                <p>Muhtaashim Kamran Nazki (Nodal Contact)</p>
+                <p>Email: support@enything.in</p>
+                <p>Phone: +91 7006464241</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 Enything Technologies. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/tax_config.js"></script>
+    <script src="js/cart.js"></script>
+    
+    <script>
+        window.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get('id');
+            const container = document.getElementById('product-container');
+
+            if (!productId) {
+                container.innerHTML = '<p style="color: #ef4444; text-align: center; padding: 2rem;">Product ID not provided in URL.</p>';
+                return;
+            }
+
+            try {
+                if (window.supabaseInitError) {
+                    throw window.supabaseInitError;
+                }
+
+                // Fetch Product Details
+                const { data: product, error } = await supabaseClient
+                    .from('products')
+                    .select('id, name, description, price, original_price, is_available, is_veg, images, shop_id, category, gst_rate_override, variants')
+                    .eq('id', productId)
+                    .single();
+
+                if (error || !product) {
+                    throw new Error("Product not found");
+                }
+                // Fetch Shop to get its category
+                const shopDetail = await getShopDetails(product.shop_id);
+                const shopName = shopDetail ? shopDetail.name : 'Unknown Restaurant';
+                product.shop_category = shopDetail ? shopDetail.category : 'Other';
+
+                // Image handling
+                let imageUrl = 'https://via.placeholder.com/600x400?text=No+Image';
+                if (product.images && product.images.length > 0) {
+                    imageUrl = product.images[0];
+                }
+
+                const price = product.price;
+                const originalPriceHtml = product.original_price ? `<span class="product-detail-original-price">₹${product.original_price}</span>` : '';
+                const vegIcon = product.is_veg === true ? '<div class="veg-icon"></div>' : (product.is_veg === false ? '<div class="veg-icon non-veg-icon"></div>' : '');
+
+                document.title = `${product.name} - Enything`;
+
+                let variantsHtml = '';
+                const hasVariants = product.variants && Array.isArray(product.variants) && product.variants.length > 0;
+                
+                if (hasVariants) {
+                    variantsHtml = `
+                        <div class="variants-container">
+                            <div class="variants-title">Select Variant</div>
+                            <div class="variant-list" id="variant-list">
+                                ${product.variants.map((v, idx) => `
+                                    <div class="variant-option ${idx === 0 ? 'selected' : ''}" data-index="${idx}">
+                                        <div>
+                                            <input type="radio" name="variant" value="${idx}" ${idx === 0 ? 'checked' : ''} style="margin-right: 10px; cursor: pointer;">
+                                            <span style="font-weight: 500;">${v.name}</span>
+                                        </div>
+                                        <div style="font-weight: 600;">₹${v.price}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = `
+                    <div class="product-detail-card">
+                        <img src="${imageUrl}" alt="${product.name}" class="product-detail-image">
+                        <div class="product-detail-info">
+                            <span class="product-detail-shop">${shopName}</span>
+                            <div class="product-detail-header">
+                                <h1 class="product-detail-title">${vegIcon} ${product.name}</h1>
+                                <div class="product-detail-price" id="display-price">
+                                    ${originalPriceHtml}₹${hasVariants ? product.variants[0].price : price}
+                                </div>
+                            </div>
+                            
+                            <p class="product-detail-description">
+                                ${product.description || 'No description available for this item.'}
+                            </p>
+                            
+                            ${variantsHtml}
+                            
+                            <button class="add-btn-large" id="add-to-cart-btn" ${!product.is_available ? 'disabled' : ''}>
+                                ${product.is_available ? 'Add to Cart' : 'Out of Stock'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                // Add to Cart Button Logic
+                if (product.is_available) {
+                    let selectedVariantIndex = 0;
+                    
+                    if (hasVariants) {
+                        const variantOptions = document.querySelectorAll('.variant-option');
+                        variantOptions.forEach(opt => {
+                            opt.addEventListener('click', function() {
+                                variantOptions.forEach(o => o.classList.remove('selected'));
+                                this.classList.add('selected');
+                                
+                                const radio = this.querySelector('input[type="radio"]');
+                                radio.checked = true;
+                                
+                                selectedVariantIndex = parseInt(this.getAttribute('data-index'));
+                                const selectedVariant = product.variants[selectedVariantIndex];
+                                
+                                // Update displayed price
+                                const originalHtml = selectedVariant.original_price ? `<span class="product-detail-original-price">₹${selectedVariant.original_price}</span>` : '';
+                                document.getElementById('display-price').innerHTML = `${originalHtml}₹${selectedVariant.price}`;
+                            });
+                        });
+                    }
+
+                    document.getElementById('add-to-cart-btn').addEventListener('click', () => {
+                        if (hasVariants) {
+                            const variant = product.variants[selectedVariantIndex];
+                            // Construct a variant cart item
+                            const variantProduct = {
+                                ...product,
+                                id: `${product.id}_${variant.id || selectedVariantIndex}`,
+                                name: `${product.name} - ${variant.name}`,
+                                price: variant.price
+                            };
+                            cart.addItem(variantProduct, product.shop_id);
+                        } else {
+                            cart.addItem(product, product.shop_id);
+                        }
+                    });
+                }
+
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `<div style="color: #f87171; text-align: center; padding: 2rem; background: rgba(255,0,0,0.1); border-radius: 12px; margin: 2rem;">
+                    Failed to load product details. ${err.message || 'Please try again later.'}
+                </div>`;
+            }
+        });
+    </script>
+</body>
+</html>

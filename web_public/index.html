@@ -7,6 +7,333 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
+    <style>
+        .hero-mini {
+            text-align: center;
+            padding: 2rem 0;
+        }
+
+        .hero-mini h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .filter-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 1rem;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+            scrollbar-width: none; /* Firefox */
+        }
+        .filter-scroll::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+
+        .filter-bubble {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 30px;
+            padding: 0.5rem 1.5rem;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filter-bubble img {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .filter-bubble:hover {
+            border-color: var(--accent-color);
+        }
+
+        .filter-bubble.active {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        .menu-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 3rem;
+        }
+
+        @media (max-width: 900px) {
+            .menu-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .product-card {
+            background-color: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 15px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-color);
+        }
+
+        .product-image {
+            width: 100%;
+            height: 180px;
+            border-radius: 10px;
+            object-fit: cover;
+            margin-bottom: 1rem;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .product-info {
+            flex: 1;
+        }
+
+        .product-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .product-shop-name {
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            display: block;
+        }
+
+        .product-desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .product-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+        }
+
+        .price-container {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .price {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            background: none;
+            padding: 0;
+        }
+
+        .original-price {
+            text-decoration: line-through;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .add-to-cart {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s ease;
+        }
+
+        .add-to-cart:hover {
+            transform: scale(1.05);
+        }
+
+        .add-to-cart:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Cart Sidebar */
+        .cart-sidebar {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2rem;
+            position: sticky;
+            top: 100px;
+            height: fit-content;
+            max-height: calc(100vh - 120px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cart-header {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 1rem;
+        }
+
+        .cart-items-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 1.5rem;
+        }
+
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .cart-item-details h4 {
+            font-size: 1rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .cart-item-details span {
+            color: var(--accent-color);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .cart-item-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 4px;
+        }
+
+        .cart-item-actions button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .cart-item-actions button:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .cart-footer {
+            border-top: 1px solid var(--glass-border);
+            padding-top: 1.5rem;
+        }
+
+        .cart-total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .checkout-btn {
+            width: 100%;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .checkout-btn:hover:not(:disabled) {
+            opacity: 0.9;
+        }
+        
+        .checkout-btn:disabled {
+            background: #444;
+            cursor: not-allowed;
+            color: #888;
+        }
+
+        .veg-icon {
+            width: 12px;
+            height: 12px;
+            display: inline-block;
+            border: 1px solid #4ade80;
+            margin-right: 6px;
+            position: relative;
+        }
+        .veg-icon::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px; right: 2px; bottom: 2px;
+            background: #4ade80;
+            border-radius: 50%;
+        }
+        .non-veg-icon {
+            border-color: #f87171;
+        }
+        .non-veg-icon::after {
+            background: #f87171;
+        }
+
+        .loader-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 300px;
+            width: 100%;
+            grid-column: 1/-1;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid var(--glass-border);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -16,7 +343,6 @@
         </a>
         <nav>
             <a href="index.html" class="active">Home</a>
-            <a href="#about">About</a>
             <a href="#contact">Contact</a>
             <div class="dropdown">
                 <span class="dropbtn">Policies ▾</span>
@@ -27,118 +353,58 @@
                     <a href="shipping.html">Shipping & Delivery</a>
                 </div>
             </div>
+            <div style="position: relative; margin-left: 2rem; display: inline-block;">
+                <a href="checkout.html" style="margin-left:0; color:var(--text-main);"><i class="fas fa-shopping-cart"></i></a>
+                <span id="cart-count" style="position: absolute; top: -10px; right: -10px; background: var(--accent-color); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.7rem; display: none; align-items: center; justify-content: center; font-weight: bold;">0</span>
+            </div>
+            <span id="auth-container" style="margin-left: 2rem;"></span>
         </nav>
     </header>
 
     <main>
-        <section class="hero">
-            <div class="hero-content">
-                <h1>Everything.<br>Everywhere.<br>Instantly.</h1>
-                <p>Enything is your hyper-local marketplace connecting you with the best local sellers and fastest delivery partners in Jammu & Kashmir.</p>
-                <div class="cta-group">
-                    <button onclick="alert('Enything is launching soon! Check back in a few days to download the app.')" class="btn btn-primary"><i class="fab fa-android" style="margin-right: 8px; font-size: 1.2rem;"></i> Coming Soon to Android</button>
-                    <button onclick="alert('Enything is launching soon! Check back in a few days to download the app.')" class="btn btn-secondary"><i class="fab fa-apple" style="margin-right: 8px; font-size: 1.2rem;"></i> Coming Soon to iOS</button>
-                </div>
-            </div>
-            <div class="hero-visual">
-                <div class="app-mockup">
-                    <img src="screenshots/customer 1.png" alt="App Preview" style="width: 100%; height: auto; display: block; border-radius: 27px;">
-                </div>
+        <section class="hero-mini">
+            <h1>Everything. Everywhere. Instantly.</h1>
+            <p style="color: var(--text-muted); font-size: 1.2rem; max-width: 600px; margin: 0 auto; margin-bottom: 2rem;">Your hyper-local marketplace. Order from the best local restaurants in Jammu & Kashmir.</p>
+            
+            <div style="max-width: 600px; margin: 0 auto; position: relative;">
+                <input type="text" id="search-input" placeholder="Search for food, groceries, or anything..." 
+                    style="width: 100%; padding: 1rem 1.5rem 1rem 3rem; border-radius: 30px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-main); font-size: 1.1rem; outline: none; transition: border-color 0.3s;"
+                    oninput="handleSearch(this.value)">
+                <i class="fas fa-search" style="position: absolute; left: 1.2rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 1.2rem;"></i>
             </div>
         </section>
 
-        <section id="about" class="about">
-            <h2 class="section-title">About Us</h2>
-            <p class="section-subtitle">We are Enything Technologies, proudly based in Bandipora, J&K. Our mission is to digitize local commerce, empowering small businesses and providing unmatched convenience to our community through our state-of-the-art delivery platform.</p>
-        </section>
-
-        <section class="pricing">
-            <h2 class="section-title">What We Deliver & Pricing</h2>
-            <div class="pricing-grid">
-                <div class="pricing-card">
-                    <div class="pricing-icon">🍔</div>
-                    <h3>Food & Dining</h3>
-                    <p>Order meals from top local restaurants.</p>
-                    <div class="price">Starting at ₹99</div>
-                </div>
-                <div class="pricing-card">
-                    <div class="pricing-icon">🛒</div>
-                    <h3>Groceries & Essentials</h3>
-                    <p>Fresh produce and daily necessities.</p>
-                    <div class="price">Starting at ₹49</div>
-                </div>
-                <div class="pricing-card">
-                    <div class="pricing-icon">📦</div>
-                    <h3>Custom Packages</h3>
-                    <p>Point-to-point secure package delivery.</p>
-                    <div class="price">Starting at ₹30/km</div>
-                </div>
+        <section id="restaurants-filter-section" style="display: none;">
+            <div id="filter-scroll" class="filter-scroll">
+                <!-- Filters injected here -->
             </div>
         </section>
-
-        <section class="features">
-            <h2 class="section-title">Why Choose Enything?</h2>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">🚀</div>
-                    <h3>Hyper-Local Delivery</h3>
-                    <p>We partner with the best local drivers to get your items to you in record time, straight from your neighborhood stores.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🏪</div>
-                    <h3>Trusted Local Sellers</h3>
-                    <p>Support your community. Shop from verified, trusted sellers and businesses right here in Jammu & Kashmir.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🔒</div>
-                    <h3>Secure Payments</h3>
-                    <p>100% secure, encrypted payments via Razorpay. Pay seamlessly with UPI, Cards, or Netbanking.</p>
-                </div>
-            </div>
-        </section>
-
-        <section class="gallery">
-            <h2 class="section-title">App Sneak Peek</h2>
-            <div class="gallery-scroll">
-                <img src="screenshots/customer 1.png" alt="Customer App Screenshot 1" class="gallery-img">
-                <img src="screenshots/customer 2.png" alt="Customer App Screenshot 2" class="gallery-img">
-                <img src="screenshots/seller 1.png" alt="Seller App Screenshot 1" class="gallery-img">
-                <img src="screenshots/seller 2.png" alt="Seller App Screenshot 2" class="gallery-img">
-                <img src="screenshots/Rider 1.png" alt="Rider App Screenshot 1" class="gallery-img">
-                <img src="screenshots/rider 2.png" alt="Rider App Screenshot 2" class="gallery-img">
-                <img src="screenshots/7.png" alt="App Screenshot 7" class="gallery-img">
-                <img src="screenshots/8.png" alt="App Screenshot 8" class="gallery-img">
-            </div>
-        </section>
-
-        <section class="how-it-works">
-            <h2 class="section-title">How It Works</h2>
-            <div class="steps-container">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <h3>Order Enything</h3>
-                        <p>Browse through hundreds of local items, add them to your cart, and check out securely in seconds.</p>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <h3>Sellers Prepare</h3>
-                        <p>The local seller is instantly notified and begins packing your order with care.</p>
-                    </div>
-                </div>
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <h3>Fast Delivery</h3>
-                        <p>A nearby delivery partner picks up your order and drops it at your door. Track them live on the map!</p>
+        
+        <div class="menu-container">
+            <div>
+                <h2 style="margin-bottom: 1.5rem; font-size: 1.8rem;" id="products-heading">All Products</h2>
+                <div id="products-grid" class="products-grid">
+                    <div class="loader-container">
+                        <div class="spinner"></div>
                     </div>
                 </div>
             </div>
-        </section>
+            
+            <div class="cart-sidebar">
+                <div class="cart-header">Your Cart</div>
+                <div id="cart-items" class="cart-items-container">
+                    <!-- Cart items will be injected here -->
+                </div>
+                <div class="cart-footer">
+                    <div class="cart-total-row" style="display: block;">
+                        <div id="cart-total" style="width: 100%;">₹0.00</div>
+                    </div>
+                    <button id="checkout-btn" class="checkout-btn" onclick="window.location.href='checkout.html'" disabled>Proceed to Checkout</button>
+                </div>
+            </div>
+        </div>
 
-        <section id="contact" class="contact-section">
+        <section id="contact" class="contact-section" style="margin-top: 5rem; border-top: 1px solid var(--glass-border); padding-top: 5rem;">
             <h2 class="section-title">Contact Us</h2>
             <div class="contact-card">
                 <h3>Enything Technologies (Muhtaashim Kamran Nazki)</h3>
@@ -147,14 +413,6 @@
                     <p><strong><i class="fas fa-envelope"></i> Email:</strong> <a href="mailto:support@enything.in">support@enything.in</a></p>
                     <p><strong><i class="fas fa-phone"></i> Phone:</strong> +91 7006464241</p>
                 </div>
-            </div>
-        </section>
-
-        <section class="bottom-cta">
-            <h2>Ready to get started?</h2>
-            <p>Join thousands of happy customers in J&K today.</p>
-            <div class="cta-group" style="justify-content: center;">
-                <button onclick="alert('Enything is launching soon! Check back in a few days to download the app.')" class="btn btn-primary"><i class="fab fa-android" style="margin-right: 8px; font-size: 1.2rem;"></i> Coming Soon to Android</button>
             </div>
         </section>
     </main>
@@ -177,5 +435,164 @@
             </div>
         </div>
     </footer>
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/tax_config.js"></script>
+    <script src="js/cart.js"></script>
+    
+    <script>
+        let allProducts = [];
+        let allShops = [];
+        let shopMap = {};
+        
+        function renderProducts(products) {
+            const container = document.getElementById('products-grid');
+            container.innerHTML = '';
+            
+            if (!products || products.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No products available at the moment.</p>';
+                return;
+            }
+
+            products.forEach(product => {
+                const price = product.price;
+                const originalPriceHtml = product.original_price ? `<span class="original-price">₹${product.original_price}</span>` : '';
+                
+                let imageUrl = 'https://via.placeholder.com/300x200?text=No+Image';
+                if (product.images && product.images.length > 0) {
+                    imageUrl = product.images[0];
+                } else if (product.image_url) {
+                    imageUrl = product.image_url;
+                }
+                
+                const vegIcon = product.is_veg === true ? '<div class="veg-icon"></div>' : (product.is_veg === false ? '<div class="veg-icon non-veg-icon"></div>' : '');
+                const shopName = shopMap[product.shop_id] ? shopMap[product.shop_id].name : 'Restaurant';
+                product.shop_category = shopMap[product.shop_id] ? shopMap[product.shop_id].category : 'Other';
+                
+                container.innerHTML += `
+                    <div class="product-card">
+                        <a href="product.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
+                            <img src="${imageUrl}" alt="${product.name}" class="product-image">
+                            <div class="product-info">
+                                <span class="product-shop-name">${shopName}</span>
+                                <div class="product-name">${vegIcon}${product.name}</div>
+                                <div class="product-desc">${product.description || ''}</div>
+                            </div>
+                        </a>
+                        <div class="product-footer">
+                            <div class="price-container">
+                                ${originalPriceHtml}
+                                <span class="price">₹${price}</span>
+                            </div>
+                            <button class="add-to-cart" ${!product.is_available ? 'disabled' : ''} 
+                                onclick='cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>
+                                ${product.is_available ? 'Add +' : 'Out of stock'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderFilters() {
+            const scrollContainer = document.getElementById('filter-scroll');
+            scrollContainer.innerHTML = `<div class="filter-bubble active" id="filter-all" onclick="filterByShop('all')">All Products</div>`;
+            
+            allShops.forEach(shop => {
+                const banner = shop.banner_url || shop.banner_image || 'https://via.placeholder.com/50';
+                scrollContainer.innerHTML += `
+                    <div class="filter-bubble" id="filter-${shop.id}" onclick="filterByShop('${shop.id}')">
+                        <img src="${banner}" alt="">
+                        ${shop.name}
+                    </div>
+                `;
+            });
+            document.getElementById('restaurants-filter-section').style.display = 'block';
+        }
+
+        window.filterByShop = function(shopId) {
+            document.querySelectorAll('.filter-bubble').forEach(b => b.classList.remove('active'));
+            document.getElementById('search-input').value = '';
+            
+            if (shopId === 'all') {
+                document.querySelector('.filter-bubble').classList.add('active');
+                document.getElementById('products-heading').innerText = "All Products";
+                renderProducts(allProducts);
+            } else {
+                document.getElementById(`filter-${shopId}`).classList.add('active');
+                document.getElementById('products-heading').innerText = shopMap[shopId].name + " Menu";
+                const filtered = allProducts.filter(p => p.shop_id === shopId);
+                renderProducts(filtered);
+            }
+        };
+
+        window.handleSearch = function(query) {
+            query = query.toLowerCase().trim();
+            const activeShopId = document.querySelector('.filter-bubble.active').id.replace('filter-', '');
+            
+            let baseProducts = allProducts;
+            if (activeShopId !== 'all') {
+                baseProducts = allProducts.filter(p => p.shop_id === activeShopId);
+            }
+            
+            if (!query) {
+                renderProducts(baseProducts);
+                return;
+            }
+            
+            const searchedProducts = baseProducts.filter(p => 
+                p.name.toLowerCase().includes(query) || 
+                (p.description && p.description.toLowerCase().includes(query))
+            );
+            
+            renderProducts(searchedProducts);
+        };
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const container = document.getElementById('products-grid');
+            
+            try {
+                if (window.supabaseInitError) {
+                    throw window.supabaseInitError;
+                }
+                if (typeof getActiveShops !== 'function' || typeof getAllActiveProducts !== 'function') {
+                    throw new Error("Application scripts failed to load properly. Please refresh the page or disable adblockers.");
+                }
+
+                // 1. Fetch Shops
+                allShops = await getActiveShops();
+                
+                if (allShops.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No restaurants available right now.</p>';
+                    return;
+                }
+
+                // Build shop map
+                const shopIds = [];
+                allShops.forEach(s => {
+                    shopMap[s.id] = s;
+                    shopIds.push(s.id);
+                });
+
+                renderFilters();
+
+                // 2. Fetch Products
+                allProducts = await getAllActiveProducts(shopIds);
+                renderProducts(allProducts);
+
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `<div style="color: #f87171; text-align: center; padding: 2rem; background: rgba(255,0,0,0.1); border-radius: 10px; border: 1px solid rgba(255,0,0,0.2); grid-column: 1/-1;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                    <h3 style="margin-bottom: 0.5rem;">Failed to load data</h3>
+                    <p style="font-size: 0.9rem; font-family: monospace; white-space: pre-wrap; word-break: break-all; opacity: 0.8;">${err.message || String(err)}</p>
+                </div>`;
+            }
+        });
+    </script>
 </body>
 </html>

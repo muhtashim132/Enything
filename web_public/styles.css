@@ -470,3 +470,31 @@ footer {
   .footer-content { flex-direction: column; text-align: center; }
   .footer-legal { text-align: center; margin-top: 2rem; }
 }
+
+.checkout-btn {
+    width: 100%;
+    padding: 1.2rem;
+    font-size: 1.2rem;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    margin-top: 1rem;
+    display: block;
+    text-align: center;
+}
+
+.checkout-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+}
+
+.checkout-btn:disabled {
+    background: #4b5563;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}

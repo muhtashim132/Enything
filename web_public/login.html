@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Enything</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, #04091E 0%, #02061A 50%, #120860 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Animated Aurora Background */
+        .aurora {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.4;
+            animation: float 10s infinite ease-in-out alternate;
+        }
+        .aurora-1 {
+            top: -10%; left: -10%;
+            width: 80vw; height: 80vw;
+            background: #2B4FD4;
+        }
+        .aurora-2 {
+            bottom: -10%; right: -10%;
+            width: 90vw; height: 90vw;
+            background: #6230C8;
+            animation-delay: -5s;
+        }
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(50px, 50px) scale(1.1); }
+        }
+
+        .login-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .logo-box {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #1A2A6C, #0D1B4A);
+            border-radius: 24px;
+            border: 1px solid rgba(91, 139, 255, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: #5B8BFF;
+            margin: 0 auto 1.5rem auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        p.subtitle {
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 2.5rem;
+        }
+
+        /* Step containers */
+        .step {
+            display: none;
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        .step.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Role Cards */
+        .role-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+        }
+        .role-card:hover, .role-card.selected {
+            background: rgba(91, 139, 255, 0.1);
+            border-color: #5B8BFF;
+            transform: translateY(-2px);
+        }
+        .role-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: #5B8BFF;
+        }
+        .role-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.2rem;
+        }
+        .role-desc {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.5);
+        }
+
+        /* Input Fields */
+        .input-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.7);
+        }
+        .input-field {
+            width: 100%;
+            padding: 1.2rem;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 1.1rem;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+        .input-field:focus {
+            border-color: #5B8BFF;
+            background: rgba(0,0,0,0.4);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 1.2rem;
+            background: #5B8BFF;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background: #4775e6;
+            transform: translateY(-2px);
+        }
+        .btn-primary:disabled {
+            background: rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.5);
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .back-btn {
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1rem;
+            padding: 0;
+        }
+        .back-btn:hover {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="aurora aurora-1"></div>
+    <div class="aurora aurora-2"></div>
+
+    <div class="login-container">
+        <div class="logo-box">
+            <i class="fas fa-bolt"></i>
+        </div>
+
+        <!-- Step 1: Role Selection -->
+        <div id="step-role" class="step active">
+            <h1>Choose Your Role</h1>
+            <p class="subtitle">How would you like to use Enything?</p>
+
+            <div class="role-card" onclick="selectRole('customer')">
+                <div class="role-icon"><i class="fas fa-shopping-bag"></i></div>
+                <div>
+                    <div class="role-title">Customer</div>
+                    <div class="role-desc">Order food, groceries, and more</div>
+                </div>
+            </div>
+
+            <div class="role-card" onclick="selectRole('seller')">
+                <div class="role-icon" style="color: #F59E0B;"><i class="fas fa-store"></i></div>
+                <div>
+                    <div class="role-title">Seller</div>
+                    <div class="role-desc">Manage your store and orders</div>
+                </div>
+            </div>
+
+            <div class="role-card" onclick="selectRole('delivery_partner')">
+                <div class="role-icon" style="color: #10B981;"><i class="fas fa-motorcycle"></i></div>
+                <div>
+                    <div class="role-title">Delivery Partner</div>
+                    <div class="role-desc">Deliver orders and earn</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Phone Input -->
+        <div id="step-phone" class="step">
+            <button class="back-btn" onclick="showStep('step-role')"><i class="fas fa-arrow-left"></i> Back</button>
+            <h1 id="phone-title">Welcome Back</h1>
+            <p class="subtitle">Enter your phone number to continue</p>
+
+            <div class="input-group">
+                <label>Phone Number</label>
+                <div style="display: flex; gap: 10px;">
+                    <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.2rem; color: rgba(255,255,255,0.7); display: flex; align-items: center;">
+                        +91
+                    </div>
+                    <input type="tel" id="phone-input" class="input-field" placeholder="10-digit mobile number" maxlength="10">
+                </div>
+            </div>
+            
+            <button id="send-otp-btn" class="btn-primary" onclick="handleSendOtp()">Send OTP</button>
+        </div>
+
+        <!-- Step 3: OTP Input -->
+        <div id="step-otp" class="step">
+            <button class="back-btn" onclick="showStep('step-phone')"><i class="fas fa-arrow-left"></i> Back</button>
+            <h1>Verify OTP</h1>
+            <p class="subtitle">Enter the 6-digit code sent to <br><strong id="display-phone"></strong></p>
+
+            <div class="input-group">
+                <input type="text" id="otp-input" class="input-field" placeholder="Enter 6-digit OTP" maxlength="6" style="text-align: center; letter-spacing: 5px; font-size: 1.5rem;">
+            </div>
+            
+            <button id="verify-otp-btn" class="btn-primary" onclick="handleVerifyOtp()">Verify & Login</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/auth.js"></script>
+    
+    <script>
+        let selectedRole = null;
+        let currentPhone = null;
+
+        function showStep(stepId) {
+            document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+            document.getElementById(stepId).classList.add('active');
+        }
+
+        function selectRole(role) {
+            selectedRole = role;
+            if (role === 'customer') {
+                document.getElementById('phone-title').textContent = 'Welcome to Enything';
+                showStep('step-phone');
+                setTimeout(() => document.getElementById('phone-input').focus(), 100);
+            } else {
+                localStorage.setItem('user_role', role);
+                window.location.href = 'download_app.html';
+            }
+        }
+
+        async function handleSendOtp() {
+            const phone = document.getElementById('phone-input').value;
+            if (phone.length !== 10) {
+                alert("Please enter a valid 10-digit phone number.");
+                return;
+            }
+
+            const btn = document.getElementById('send-otp-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            btn.disabled = true;
+
+            try {
+                // In India format
+                const formattedPhone = '+91' + phone;
+                await auth.sendOtp(formattedPhone);
+                currentPhone = formattedPhone;
+                document.getElementById('display-phone').textContent = formattedPhone;
+                showStep('step-otp');
+                setTimeout(() => document.getElementById('otp-input').focus(), 100);
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function handleVerifyOtp() {
+            const otp = document.getElementById('otp-input').value;
+            if (otp.length < 4) {
+                alert("Please enter a valid OTP.");
+                return;
+            }
+
+            const btn = document.getElementById('verify-otp-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+            btn.disabled = true;
+
+            try {
+                await auth.verifyOtp(currentPhone, otp, selectedRole);
+                
+                // Redirect based on role
+                if (selectedRole === 'customer') {
+                    window.location.href = 'index.html';
+                } else {
+                    window.location.href = 'download_app.html';
+                }
+            } catch (err) {
+                alert(err.message);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

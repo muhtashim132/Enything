@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - Enything</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .checkout-container {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 4rem;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .checkout-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .checkout-section {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .checkout-section h2 {
+            font-size: 1.8rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            color: white;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            color: var(--text-muted);
+        }
+
+        .summary-total {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--glass-border);
+            color: var(--text-main);
+        }
+
+        .pay-btn {
+            width: 100%;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 2rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pay-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        /* Success Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .success-modal {
+            background: var(--secondary-color);
+            border: 1px solid var(--accent-color);
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .success-icon {
+            font-size: 4rem;
+            color: #4ade80;
+            margin-bottom: 1rem;
+        }
+
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="logo.png" alt="Enything Logo" class="logo-img">
+            <span class="logo-text">Enything</span>
+        </a>
+    </header>
+
+    <main>
+        <div class="checkout-container">
+            <!-- Left: Delivery Details -->
+            <div class="checkout-section">
+                <h2>Delivery Details</h2>
+                <form id="checkout-form">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="cust-name" class="form-control" required placeholder="John Doe">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="tel" id="cust-phone" class="form-control" required placeholder="+91 9876543210">
+                    </div>
+                    <div class="form-group">
+                        <label>Delivery Address</label>
+                        <textarea id="cust-address" class="form-control" required rows="3" placeholder="123 Main Street, Bandipora"></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Right: Order Summary -->
+            <div class="checkout-section">
+                <h2>Order Summary</h2>
+                <div id="checkout-items"></div>
+                
+                <div class="summary-item" style="margin-top: 1.5rem;">
+                    <span>Item Total</span>
+                    <span id="summary-subtotal">₹0.00</span>
+                </div>
+                <div class="summary-item">
+                    <span>Delivery Fee</span>
+                    <span>₹30.00</span>
+                </div>
+                <div class="summary-item">
+                    <span>Handling Fee</span>
+                    <span>₹20.00</span>
+                </div>
+                <div class="summary-item">
+                    <span>Taxes (GST)</span>
+                    <span id="summary-taxes">₹0.00</span>
+                </div>
+                
+                <div class="summary-total">
+                    <span>To Pay</span>
+                    <span id="summary-total">₹0.00</span>
+                </div>
+
+                <button id="pay-button" class="pay-btn">
+                    <i class="fas fa-lock"></i> Pay Securely
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="modal-overlay">
+        <div class="success-modal">
+            <i class="fas fa-check-circle success-icon"></i>
+            <h2 style="font-size: 2rem; margin-bottom: 1rem;">Order Placed!</h2>
+            <p style="color: var(--text-muted); margin-bottom: 2rem;">Your payment was successful and your order is on the way.</p>
+            <a href="index.html" class="btn btn-primary" style="width: 100%;">Return to Home</a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/tax_config.js"></script>
+    <script src="js/cart.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    
+    <script>
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (cart.items.length === 0) {
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            // Wait for Supabase to be ready and check auth
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            const itemsContainer = document.getElementById('checkout-items');
+            cart.items.forEach(item => {
+                const price = item.price;
+                itemsContainer.innerHTML += `
+                    <div class="summary-item">
+                        <span>${item.quantity}x ${item.name}</span>
+                        <span>₹${(price * item.quantity).toFixed(2)}</span>
+                    </div>
+                `;
+            });
+
+            const subtotal = cart.getTotal();
+            const gst = cart.getGSTTotal();
+            const deliveryFee = 30.00;
+            const handlingFee = 20.00;
+            const total = subtotal + gst + deliveryFee + handlingFee;
+
+            document.getElementById('summary-subtotal').textContent = `₹${subtotal.toFixed(2)}`;
+            document.getElementById('summary-taxes').textContent = `₹${gst.toFixed(2)}`;
+            document.getElementById('summary-total').textContent = `₹${total.toFixed(2)}`;
+
+            document.getElementById('pay-button').addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                const form = document.getElementById('checkout-form');
+                if (!form.checkValidity()) {
+                    form.reportValidity();
+                    return;
+                }
+
+                // Initialize Razorpay
+                const options = {
+                    "key": CONFIG.RAZORPAY_TEST_KEY,
+                    "amount": Math.round(total * 100), // amount in paise
+                    "currency": "INR",
+                    "name": "Enything Technologies",
+                    "description": "Dummy Order Checkout",
+                    "image": "logo.png",
+                    "handler": function (response) {
+                        // On Success
+                        cart.clear();
+                        document.getElementById('success-modal').style.display = 'flex';
+                    },
+                    "prefill": {
+                        "name": document.getElementById('cust-name').value,
+                        "contact": document.getElementById('cust-phone').value,
+                        "email": "test@enything.in"
+                    },
+                    "theme": {
+                        "color": "#3b82f6"
+                    }
+                };
+                const rzp = new Razorpay(options);
+                rzp.open();
+            });
+        });
+    </script>
+</body>
+</html>
