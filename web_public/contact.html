@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us - Enything</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="logo.png" alt="Enything Logo" class="logo-img">
+            <span class="logo-text">Enything</span>
+        </a>
+        <nav style="display: flex; align-items: center; width: 100%; justify-content: flex-end;">
+            <div id="location-container" style="margin-right: auto; margin-left: 1rem; display: flex; align-items: center;"></div>
+            <span id="auth-container" style="margin-left: 2rem;"></span>
+        </nav>
+    </header>
+
+    <main style="padding-top: 100px; min-height: 70vh;">
+        <div style="max-width: 800px; margin: 0 auto; padding: 2rem; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px;">
+            <h1 style="text-align: center; margin-bottom: 2rem; font-size: 2.5rem;">Contact Us</h1>
+            
+            <p style="text-align: center; color: var(--text-muted); margin-bottom: 3rem; font-size: 1.1rem;">
+                We're here to help! Reach out to us for any queries, support, or feedback.
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem;">
+                <div style="padding: 1.5rem; background: var(--secondary-color); border-radius: 10px; border: 1px solid var(--glass-border); text-align: center;">
+                    <i class="fas fa-envelope" style="font-size: 2.5rem; color: var(--accent-color); margin-bottom: 1rem;"></i>
+                    <h3 style="margin-bottom: 0.5rem;">Email Support</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 0;"><a href="mailto:support@enything.in" style="color: var(--text-main); text-decoration: none; font-weight: 500;">support@enything.in</a></p>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Response time: Within 24-48 hours</p>
+                </div>
+
+                <div style="padding: 1.5rem; background: var(--secondary-color); border-radius: 10px; border: 1px solid var(--glass-border); text-align: center;">
+                    <i class="fas fa-phone-alt" style="font-size: 2.5rem; color: var(--accent-color); margin-bottom: 1rem;"></i>
+                    <h3 style="margin-bottom: 0.5rem;">Phone / WhatsApp</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 0;"><a href="tel:+917006464241" style="color: var(--text-main); text-decoration: none; font-weight: 500;">+91 7006464241</a></p>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Mon-Sat, 9AM - 8PM</p>
+                </div>
+
+                <div style="padding: 1.5rem; background: var(--secondary-color); border-radius: 10px; border: 1px solid var(--glass-border); text-align: center;">
+                    <i class="fas fa-map-marker-alt" style="font-size: 2.5rem; color: var(--accent-color); margin-bottom: 1rem;"></i>
+                    <h3 style="margin-bottom: 0.5rem;">Physical Address</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 0;">Plan Bandipora, Ward No. 2, Bandipora, J&K — 193502, India</p>
+                </div>
+            </div>
+
+            <div style="margin-top: 4rem; text-align: center;">
+                <h3 style="margin-bottom: 1rem;">Grievance Officer</h3>
+                <p style="color: var(--text-muted); margin-bottom: 0.5rem;"><strong>Name:</strong> Muhtaashim Kamran Nazki</p>
+                <p style="color: var(--text-muted); margin-bottom: 0.5rem;"><strong>Email:</strong> support@enything.in</p>
+                <p style="color: var(--text-muted); margin-bottom: 0;"><strong>Timeline:</strong> Complaints are acknowledged within 48 hours and resolved within 1 month from the date of receipt.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="footer-content" style="max-width: 1200px; margin: 0 auto; padding: 2rem 5%; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2rem;">
+            <div class="footer-legal">
+                <p>&copy; 2026 Enything. All rights reserved.</p>
+                <p>Operated by Muhtaashim Kamran Nazki<br>(UDYAM-JK-02-0019684 | GST REG NO. 01CQQPN6775H1ZD)</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js?v=2"></script>
+    <script src="js/supabase-client.js?v=2"></script>
+    <script src="js/auth.js?v=15"></script>
+</body>
+</html>

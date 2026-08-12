@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Enything</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
     <style>
         body {
             margin: 0;
@@ -30,20 +32,32 @@
             opacity: 0.4;
             animation: float 10s infinite ease-in-out alternate;
         }
+
         .aurora-1 {
-            top: -10%; left: -10%;
-            width: 80vw; height: 80vw;
+            top: -10%;
+            left: -10%;
+            width: 80vw;
+            height: 80vw;
             background: #2B4FD4;
         }
+
         .aurora-2 {
-            bottom: -10%; right: -10%;
-            width: 90vw; height: 90vw;
+            bottom: -10%;
+            right: -10%;
+            width: 90vw;
+            height: 90vw;
             background: #6230C8;
             animation-delay: -5s;
         }
+
         @keyframes float {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(50px, 50px) scale(1.1); }
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            100% {
+                transform: translate(50px, 50px) scale(1.1);
+            }
         }
 
         .login-container {
@@ -67,7 +81,7 @@
             font-size: 2.5rem;
             color: #5B8BFF;
             margin: 0 auto 1.5rem auto;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
 
         h1 {
@@ -75,8 +89,9 @@
             font-weight: 700;
             margin-bottom: 0.5rem;
         }
+
         p.subtitle {
-            color: rgba(255,255,255,0.6);
+            color: rgba(255, 255, 255, 0.6);
             margin-bottom: 2.5rem;
         }
 
@@ -85,19 +100,27 @@
             display: none;
             animation: fadeIn 0.5s ease-out forwards;
         }
+
         .step.active {
             display: block;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* Role Cards */
         .role-card {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
             padding: 1.5rem;
             margin-bottom: 1rem;
@@ -108,30 +131,35 @@
             transition: all 0.3s ease;
             text-align: left;
         }
-        .role-card:hover, .role-card.selected {
+
+        .role-card:hover,
+        .role-card.selected {
             background: rgba(91, 139, 255, 0.1);
             border-color: #5B8BFF;
             transform: translateY(-2px);
         }
+
         .role-icon {
             width: 50px;
             height: 50px;
             border-radius: 12px;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.5rem;
             color: #5B8BFF;
         }
+
         .role-title {
             font-weight: 600;
             font-size: 1.1rem;
             margin-bottom: 0.2rem;
         }
+
         .role-desc {
             font-size: 0.85rem;
-            color: rgba(255,255,255,0.5);
+            color: rgba(255, 255, 255, 0.5);
         }
 
         /* Input Fields */
@@ -139,17 +167,19 @@
             margin-bottom: 1.5rem;
             text-align: left;
         }
+
         .input-group label {
             display: block;
             margin-bottom: 0.5rem;
             font-size: 0.9rem;
-            color: rgba(255,255,255,0.7);
+            color: rgba(255, 255, 255, 0.7);
         }
+
         .input-field {
             width: 100%;
             padding: 1.2rem;
-            background: rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             color: white;
             font-size: 1.1rem;
@@ -158,9 +188,10 @@
             transition: all 0.3s ease;
             box-sizing: border-box;
         }
+
         .input-field:focus {
             border-color: #5B8BFF;
-            background: rgba(0,0,0,0.4);
+            background: rgba(0, 0, 0, 0.4);
         }
 
         .btn-primary {
@@ -175,21 +206,23 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
+
         .btn-primary:hover {
             background: #4775e6;
             transform: translateY(-2px);
         }
+
         .btn-primary:disabled {
-            background: rgba(255,255,255,0.2);
-            color: rgba(255,255,255,0.5);
+            background: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.5);
             cursor: not-allowed;
             transform: none;
         }
-        
+
         .back-btn {
             background: none;
             border: none;
-            color: rgba(255,255,255,0.5);
+            color: rgba(255, 255, 255, 0.5);
             margin-bottom: 2rem;
             cursor: pointer;
             display: flex;
@@ -198,11 +231,13 @@
             font-size: 1rem;
             padding: 0;
         }
+
         .back-btn:hover {
             color: white;
         }
     </style>
 </head>
+
 <body>
     <div class="aurora aurora-1"></div>
     <div class="aurora aurora-2"></div>
@@ -251,13 +286,15 @@
             <div class="input-group">
                 <label>Phone Number</label>
                 <div style="display: flex; gap: 10px;">
-                    <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.2rem; color: rgba(255,255,255,0.7); display: flex; align-items: center;">
+                    <div
+                        style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.2rem; color: rgba(255,255,255,0.7); display: flex; align-items: center;">
                         +91
                     </div>
-                    <input type="tel" id="phone-input" class="input-field" placeholder="10-digit mobile number" maxlength="10">
+                    <input type="tel" id="phone-input" class="input-field" placeholder="10-digit mobile number"
+                        maxlength="10">
                 </div>
             </div>
-            
+
             <button id="send-otp-btn" class="btn-primary" onclick="handleSendOtp()">Send OTP</button>
         </div>
 
@@ -268,18 +305,31 @@
             <p class="subtitle">Enter the 6-digit code sent to <br><strong id="display-phone"></strong></p>
 
             <div class="input-group">
-                <input type="text" id="otp-input" class="input-field" placeholder="Enter 6-digit OTP" maxlength="6" style="text-align: center; letter-spacing: 5px; font-size: 1.5rem;">
+                <input type="text" id="otp-input" class="input-field" placeholder="Enter 6-digit OTP" maxlength="6"
+                    style="text-align: center; letter-spacing: 5px; font-size: 1.5rem;">
             </div>
-            
+
             <button id="verify-otp-btn" class="btn-primary" onclick="handleVerifyOtp()">Verify & Login</button>
+        </div>
+
+        <!-- Step 4: Name Input for New Users -->
+        <div id="step-name" class="step">
+            <h1>I am new</h1>
+            <p class="subtitle">What is your name?</p>
+
+            <div class="input-group">
+                <input type="text" id="name-input" class="input-field" placeholder="Full Name">
+            </div>
+
+            <button id="save-name-btn" class="btn-primary" onclick="handleSaveName()">Continue</button>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/config.js"></script>
-    <script src="js/supabase-client.js"></script>
-    <script src="js/auth.js"></script>
-    
+    <script src="js/config.js?v=2"></script>
+    <script src="js/supabase-client.js?v=2"></script>
+    <script src="js/auth.js?v=15"></script>
+
     <script>
         let selectedRole = null;
         let currentPhone = null;
@@ -329,6 +379,8 @@
             }
         }
 
+        let currentUserId = null;
+
         async function handleVerifyOtp() {
             const otp = document.getElementById('otp-input').value;
             if (otp.length < 4) {
@@ -342,20 +394,71 @@
             btn.disabled = true;
 
             try {
-                await auth.verifyOtp(currentPhone, otp, selectedRole);
-                
-                // Redirect based on role
-                if (selectedRole === 'customer') {
-                    window.location.href = 'index.html';
+                if (auth.showDebugError) auth.showDebugError("Calling verifyOtp...");
+                const result = await auth.verifyOtp(currentPhone, otp, selectedRole);
+                if (auth.showDebugError) auth.showDebugError("verifyOtp completed: isNewUser = " + result.isNewUser);
+
+                if (result.isNewUser) {
+                    currentUserId = result.userId;
+                    showStep('step-name');
+                    setTimeout(() => document.getElementById('name-input').focus(), 100);
                 } else {
-                    window.location.href = 'download_app.html';
+                    btn.innerHTML = `<i class="fas fa-check-circle"></i> Welcome back, ${result.profile.full_name.split(' ')[0]}!`;
+                    btn.style.background = '#10B981'; // Green success color
+                    
+                    if (auth.showDebugError) auth.showDebugError(`Redirecting to index.html in 2 seconds...`);
+                    
+                    setTimeout(() => {
+                        if (auth.showDebugError) auth.showDebugError(`Executing redirect NOW.`);
+                        if (selectedRole === 'customer') {
+                            window.location.href = 'index.html?t=' + Date.now();
+                        } else if (selectedRole === 'admin') {
+                            window.location.href = 'admin_dashboard.html?t=' + Date.now();
+                        } else {
+                            window.location.href = 'reviewer_dashboard.html?t=' + Date.now();
+                        }
+                    }, 2000); // Wait 2s to allow user to read the debug output
                 }
             } catch (err) {
+                if (auth.showDebugError) auth.showDebugError("verifyOtp threw error: " + err.message);
                 alert(err.message);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function handleSaveName() {
+            const name = document.getElementById('name-input').value.trim();
+            if (name.length < 2) {
+                alert("Please enter a valid name.");
+                return;
+            }
+
+            const btn = document.getElementById('save-name-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+
+            try {
+                await auth.createProfile(currentUserId, currentPhone, name, selectedRole);
+                
+                btn.innerHTML = `<i class="fas fa-check-circle"></i> Welcome, ${name.split(' ')[0]}!`;
+                btn.style.background = '#10B981'; 
+
+                setTimeout(() => {
+                    if (selectedRole === 'customer') {
+                        window.location.href = 'index.html?t=' + Date.now();
+                    } else {
+                        window.location.href = 'download_app.html';
+                    }
+                }, 1200);
+            } catch (err) {
+                alert("Failed to save profile: " + err.message);
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }
         }
     </script>
 </body>
+
 </html>

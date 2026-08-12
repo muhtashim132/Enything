@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Enything</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="logo.png" alt="Enything Logo" class="logo-img">
+            <span class="logo-text">Enything</span>
+        </a>
+        <nav style="display: flex; align-items: center; width: 100%; justify-content: flex-end;">
+            <div id="location-container" style="margin-right: auto; margin-left: 1rem; display: flex; align-items: center;"></div>
+            <span id="auth-container" style="margin-left: 2rem;"></span>
+        </nav>
+    </header>
+
+    <main style="padding-top: 100px;">
+        <div id="settings-container" style="max-width: 800px; margin: 0 auto; padding: 2rem;">
+            <h1 style="margin-bottom: 2rem;">Account Settings</h1>
+            
+            <div id="settings-content" style="background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); padding: 2rem; border-radius: 16px;">
+                <p style="text-align: center; color: var(--text-muted); font-size: 1.2rem;">Loading settings...</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/config.js?v=2"></script>
+    <script src="js/supabase-client.js?v=2"></script>
+    <script src="js/auth.js?v=10"></script>
+
+    <script>
+        async function loadSettings() {
+            const container = document.getElementById('settings-content');
+            if (!auth.user) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Please login to view settings.</p>';
+                return;
+            }
+            
+            container.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Loading settings...</p>';
+
+            try {
+                // Fetch latest profile to ensure accuracy
+                const { data: profile } = await supabaseClient
+                    .from('profiles')
+                    .select('full_name, phone')
+                    .eq('id', auth.user.id)
+                    .maybeSingle();
+
+                const fullName = profile?.full_name || auth.profileName || '';
+                const phone = profile?.phone || auth.profilePhone || auth.user?.user_metadata?.phone || auth.user?.phone || '';
+
+                container.innerHTML = `
+                    <div style="margin-bottom: 2rem;">
+                        <label style="display: block; color: var(--text-muted); margin-bottom: 0.5rem;">Full Name</label>
+                        <input type="text" id="setting-name" value="${fullName}" style="width: 100%; padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.05); color: white; font-family: 'Outfit', sans-serif;">
+                    </div>
+                    <div style="margin-bottom: 2rem;">
+                        <label style="display: block; color: var(--text-muted); margin-bottom: 0.5rem;">Phone Number</label>
+                        <input type="text" value="${phone}" readonly style="width: 100%; padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: var(--text-muted); font-family: 'Outfit', sans-serif; cursor: not-allowed;">
+                    </div>
+                    <div style="margin-bottom: 2rem;">
+                        <label style="display: block; color: var(--text-muted); margin-bottom: 0.5rem;">Account Type</label>
+                        <input type="text" value="${(auth.role || 'customer').toUpperCase()}" readonly style="width: 100%; padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: var(--text-muted); font-family: 'Outfit', sans-serif; cursor: not-allowed;">
+                    </div>
+                    <button onclick="saveProfile()" id="save-profile-btn" class="btn-primary" style="padding: 1rem 2rem; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; width: 100%;">
+                        Update Profile
+                    </button>
+                `;
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<p style="text-align: center; color: #ef4444;">Failed to load settings.</p>';
+            }
+        }
+        
+        async function saveProfile() {
+            const newName = document.getElementById('setting-name').value;
+            const btn = document.getElementById('save-profile-btn');
+            const originalText = btn.textContent;
+            
+            if (!newName.trim()) {
+                alert("Name cannot be empty");
+                return;
+            }
+            
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+            
+            try {
+                const { error } = await supabaseClient
+                    .from('profiles')
+                    .update({ full_name: newName.trim() })
+                    .eq('id', auth.user.id);
+                    
+                if (error) throw error;
+                
+                // Update auth instance memory so header is updated
+                auth.profileName = newName.trim();
+                auth.updateUI(); // This redraws the header/dropdown immediately
+                
+                btn.textContent = 'Saved Successfully!';
+                btn.style.background = '#10b981'; // Success Green
+                
+                setTimeout(() => {
+                    btn.textContent = 'Update Profile';
+                    btn.style.background = 'var(--accent-color)';
+                    btn.disabled = false;
+                }, 2000);
+                
+            } catch (err) {
+                console.error(err);
+                alert("Failed to update profile.");
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(loadSettings, 500);
+        });
+    </script>
+</body>
+</html>

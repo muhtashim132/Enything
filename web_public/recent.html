@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Menu - Enything</title>
+    <title>Recently Visited - Enything</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
@@ -56,7 +56,6 @@
                 text-align: center;
             }
         }
-
         @media (max-width: 400px) {
             .products-grid {
                 grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -301,7 +300,8 @@
             <img src="logo.png" alt="Enything Logo" class="logo-img">
             <span class="logo-text">Enything</span>
         </a>
-        <nav>
+        <nav style="display: flex; align-items: center; width: 100%; justify-content: flex-end;">
+            <div id="location-container" style="margin-right: auto; margin-left: 1rem; display: flex; align-items: center;"></div>
             <div style="position: relative; margin-left: 2rem;">
                 <a href="cart.html" style="margin-left:0; color:var(--text-main);"><i class="fas fa-shopping-cart"></i></a>
                 <span id="cart-count" style="position: absolute; top: -10px; right: -10px; background: var(--accent-color); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.7rem; display: none; align-items: center; justify-content: center; font-weight: bold;">0</span>
@@ -311,15 +311,19 @@
     </header>
 
     <main>
-        <div id="shop-header-container">
-            <p style="text-align: center; color: var(--text-muted);">Loading restaurant...</p>
+        <div id="search-header-container" style="margin-bottom: 2rem;">
+            <p style="text-align: center; color: var(--text-muted); font-size: 1.2rem;">Searching...</p>
         </div>
 
         <div class="menu-container">
             <div>
-                <h2 style="margin-bottom: 1.5rem; font-size: 1.8rem;">Menu</h2>
                 <div id="products-grid" class="products-grid">
-                    <!-- Products will be injected here -->
+                    <div class="loader-container">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+                <div id="load-more-container" style="text-align: center; margin-top: 2rem; display: none;">
+                    <button class="checkout-btn" style="width: auto; padding: 0.8rem 3rem;" onclick="loadMoreProducts()">See More</button>
                 </div>
             </div>
             
@@ -342,86 +346,93 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/supabase-client.js"></script>
-    <script src="js/auth.js"></script>
+    <script src="js/auth.js?v=11"></script>
     <script src="js/tax_config.js"></script>
     <script src="js/cart.js"></script>
 
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const shopId = urlParams.get('shop_id');
+        let allProducts = [];
+        let recentIds = [];
+        let currentDisplayedCount = 8;
 
         window.addEventListener('DOMContentLoaded', async () => {
-            if (!shopId) {
-                document.getElementById('shop-header-container').innerHTML = '<p style="color:red; text-align:center;">Restaurant not found.</p>';
-                return;
-            }
+            document.getElementById('search-header-container').innerHTML = `<h1>Recently Visited</h1>`;
 
             try {
-                if (window.supabaseInitError) {
-                    throw window.supabaseInitError;
-                }
-                if (typeof getShopDetails !== 'function') {
-                    throw new Error("Application scripts failed to load properly. Please refresh the page or disable adblockers.");
-                }
+                if (window.supabaseInitError) throw window.supabaseInitError;
 
-                // Fetch Shop Details
-                const shop = await getShopDetails(shopId);
-            if (shop) {
-                const banner = shop.banner_url || shop.banner_image || 'https://via.placeholder.com/150';
-                document.getElementById('shop-header-container').innerHTML = `
-                    <div class="shop-header">
-                        <img src="${banner}" alt="${shop.name}" class="shop-image">
-                        <div class="shop-details">
-                            <h1>${shop.name}</h1>
-                            <p>${shop.category || 'Restaurant'} • <i class="fas fa-star" style="color:var(--accent-color)"></i> ${shop.average_rating || '4.5'}</p>
-                            ${!shop.is_accepting_orders ? '<span style="color:#f87171; font-weight:600;"><i class="fas fa-times-circle"></i> Currently not accepting orders</span>' : ''}
-                        </div>
-                    </div>
-                `;
+                const { data: products, error } = await supabaseClient
+                    .from('products')
+                    .select('*')
+                    .eq('is_deleted', false)
+                    .eq('is_available', true);
+                    
+                if (error) throw error;
+                
+                if (products) {
+                    allProducts = products;
+                }
+                
+                recentIds = JSON.parse(localStorage.getItem('recently_visited') || '[]');
+                
+                renderProducts();
+            } catch (err) {
+                console.error(err);
+                document.querySelector('.menu-container').innerHTML = `<div style="color: #f87171; text-align: center; padding: 2rem; background: rgba(255,0,0,0.1); border-radius: 10px; border: 1px solid rgba(255,0,0,0.2); width: 100%;">
+                    <h3 style="margin-bottom: 0.5rem;">Failed to load products</h3>
+                </div>`;
             }
-
-            // Fetch Products
-            const products = await getShopProducts(shopId);
-            const productsGrid = document.getElementById('products-grid');
+        });
+        
+        function renderProducts(isLoadMore = false) {
+            const container = document.getElementById('products-grid');
+            const loadMoreBtn = document.getElementById('load-more-container');
             
-            if (products.length === 0) {
-                productsGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No products available.</p>';
+            window.renderedProductsMap = window.renderedProductsMap || {};
+            
+            if (!isLoadMore) {
+                container.innerHTML = '';
+                currentDisplayedCount = 8;
+                window.renderedProductsMap = {};
+            }
+            
+            const recentProducts = recentIds.map(id => allProducts.find(p => p.id === id)).filter(p => p);
+            
+            if (!recentProducts || recentProducts.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align:center; padding: 3rem;">No recently visited products.</p>';
+                if(loadMoreBtn) loadMoreBtn.style.display = 'none';
                 return;
             }
 
-            productsGrid.innerHTML = '';
-            products.forEach(product => {
+            const startIndex = isLoadMore ? currentDisplayedCount - 8 : 0;
+            const endIndex = Math.min(currentDisplayedCount, recentProducts.length);
+            const productsToShow = recentProducts.slice(startIndex, endIndex);
+
+            productsToShow.forEach(product => {
                 const price = product.price;
                 const originalPriceHtml = product.original_price ? `<span class="original-price">₹${product.original_price}</span>` : '';
                 
                 let imageUrl = 'https://via.placeholder.com/300x200?text=No+Image';
-                if (product.images && product.images.length > 0) {
-                    imageUrl = product.images[0];
-                } else if (product.image_url) {
-                    imageUrl = product.image_url;
-                }
+                if (product.images && product.images.length > 0) imageUrl = product.images[0];
+                else if (product.image_url) imageUrl = product.image_url;
                 
                 const vegIcon = product.is_veg === true ? '<div class="veg-icon"></div>' : (product.is_veg === false ? '<div class="veg-icon non-veg-icon"></div>' : '');
-                product.shop_category = shop ? shop.category : 'Other';
-                
                 const hasVariants = product.variants && Array.isArray(product.variants) && product.variants.length > 0;
                 
                 let buttonHtml;
-                if (!product.is_available) {
-                    buttonHtml = `<button class="add-to-cart" disabled>Out of stock</button>`;
-                } else if (hasVariants) {
+                if (hasVariants) {
                     buttonHtml = `<button class="add-to-cart" onclick="window.location.href='product.html?id=${product.id}'">Options</button>`;
                 } else {
-                    buttonHtml = `<button class="add-to-cart" onclick='cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${shopId}")'>Add +</button>`;
+                    buttonHtml = `<button class="add-to-cart" onclick='cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>Add +</button>`;
                 }
 
-                productsGrid.innerHTML += `
+                container.innerHTML += `
                     <div class="product-card">
                         <a href="product.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
                             <img src="${imageUrl}" alt="${product.name}" class="product-image">
                             <div class="product-info">
                                 <div class="product-name">${vegIcon}${product.name}</div>
-                                <div class="product-desc">${product.description || ''}</div>
+                                <div class="product-desc" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${product.description || ''}</div>
                             </div>
                         </a>
                         <div class="product-footer">
@@ -429,21 +440,62 @@
                                 ${originalPriceHtml}
                                 <span class="price">₹${price}</span>
                             </div>
-                            ${buttonHtml}
+                            <div class="product-action-container" id="action-container-${product.id}">
+                                ${getActionButtonHtml(product)}
+                            </div>
                         </div>
                     </div>
                 `;
             });
-            } catch (err) {
-                console.error(err);
-                document.getElementById('shop-header-container').innerHTML = '';
-                document.querySelector('.menu-container').innerHTML = `<div style="color: #f87171; text-align: center; padding: 2rem; background: rgba(255,0,0,0.1); border-radius: 10px; border: 1px solid rgba(255,0,0,0.2); width: 100%;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                    <h3 style="margin-bottom: 0.5rem;">Failed to load menu</h3>
-                    <p style="font-size: 0.9rem; font-family: monospace; white-space: pre-wrap; word-break: break-all; opacity: 0.8;">${err.message || String(err)}</p>
-                </div>`;
+            
+            if (currentDisplayedCount < recentProducts.length) {
+                if(loadMoreBtn) loadMoreBtn.style.display = 'block';
+            } else {
+                if(loadMoreBtn) loadMoreBtn.style.display = 'none';
+            }
+        }
+        
+        function getActionButtonHtml(product) {
+            window.renderedProductsMap[product.id] = product;
+            
+            const hasVariants = product.variants && Array.isArray(product.variants) && product.variants.length > 0;
+            if (hasVariants) {
+                return `<button class="add-to-cart" onclick="window.location.href='product.html?id=${product.id}'">Options</button>`;
+            }
+            
+            if (!product.is_available) {
+                return `<button class="add-to-cart" disabled>Out of stock</button>`;
+            }
+            
+            const cartItem = cart.items.find(i => i.id === product.id);
+            if (cartItem && cartItem.quantity > 0) {
+                return `
+                    <div class="cart-qty-controls" style="display: flex; align-items: center; justify-content: space-between; background: rgba(91, 139, 255, 0.1); border: 1px solid var(--accent-color); border-radius: 8px; overflow: hidden; height: 35px; width: 80px;">
+                        <button onclick='event.preventDefault(); event.stopPropagation(); cart.updateQuantity("${product.id}", -1)' style="background: none; border: none; color: white; padding: 0 8px; cursor: pointer; height: 100%; display: flex; align-items: center;"><i class="fas fa-minus" style="font-size: 0.7rem;"></i></button>
+                        <span style="color: white; font-weight: 600; font-size: 0.9rem;">${cartItem.quantity}</span>
+                        <button onclick='event.preventDefault(); event.stopPropagation(); cart.updateQuantity("${product.id}", 1)' style="background: none; border: none; color: white; padding: 0 8px; cursor: pointer; height: 100%; display: flex; align-items: center;"><i class="fas fa-plus" style="font-size: 0.7rem;"></i></button>
+                    </div>
+                `;
+            } else {
+                return `<button class="add-to-cart" onclick='event.preventDefault(); event.stopPropagation(); cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>Add +</button>`;
+            }
+        }
+        
+        window.addEventListener('cartUpdated', () => {
+            if (window.renderedProductsMap) {
+                Object.values(window.renderedProductsMap).forEach(product => {
+                    const container = document.getElementById(`action-container-${product.id}`);
+                    if (container) {
+                        container.innerHTML = getActionButtonHtml(product);
+                    }
+                });
             }
         });
+        
+        window.loadMoreProducts = function() {
+            currentDisplayedCount += 8;
+            renderProducts(true);
+        };
     </script>
 </body>
 </html>

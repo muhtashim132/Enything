@@ -181,17 +181,7 @@
             <span class="logo-text">Enything</span>
         </a>
         <nav class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="#contact">Contact</a>
-            <div class="dropdown">
-                <a href="#" class="dropbtn">Policies <i class="fas fa-chevron-down"></i></a>
-                <div class="dropdown-content">
-                    <a href="privacy.html">Privacy Policy</a>
-                    <a href="terms.html">Terms & Conditions</a>
-                    <a href="refunds.html">Refund & Cancellation</a>
-                    <a href="shipping.html">Shipping Policy</a>
-                </div>
-            </div>
+            
             <span id="auth-container" style="margin-left: 2rem;"></span>
         </nav>
     </header>
@@ -236,11 +226,15 @@
 
     <footer>
         <div class="footer-content">
-            <div class="footer-info">
-                <h3>Contact Support</h3>
-                <p>Email: <a href="mailto:support@enything.in" style="color: var(--accent-color); text-decoration: none;">support@enything.in</a></p>
+            <div class="footer-info footer-accordion">
+                <details>
+                    <summary><h3>Contact Support <i class="fas fa-chevron-down accordion-icon"></i></h3></summary>
+                    <div class="accordion-content">
+                        <p>Email: <a href="mailto:support@enything.in" style="color: var(--accent-color); text-decoration: none;">support@enything.in</a></p>
                 <p>Phone: +91 7006464241</p>
                 <p>Address: Plan Bandipora, Ward No. 2, Bandipora, J&K — 193502, India</p>
+                    </div>
+                </details>
             </div>
             <div class="footer-legal">
                 <h3>Grievance Officer</h3>
@@ -287,6 +281,18 @@
                 if (error || !product) {
                     throw new Error("Product not found");
                 }
+
+                // Update recently visited in localStorage
+                try {
+                    let recent = JSON.parse(localStorage.getItem('recently_visited') || '[]');
+                    // Remove if already exists to put at front
+                    recent = recent.filter(pId => pId !== product.id);
+                    recent.unshift(product.id);
+                    // Keep max 50
+                    recent = recent.slice(0, 50);
+                    localStorage.setItem('recently_visited', JSON.stringify(recent));
+                } catch(e) { console.error("Error saving recent:", e); }
+
                 // Fetch Shop to get its category
                 const shopDetail = await getShopDetails(product.shop_id);
                 const shopName = shopDetail ? shopDetail.name : 'Unknown Restaurant';

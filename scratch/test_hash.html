@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+async function test() {
+    const phone = '+919876543210';
+    const digits = phone.replace(/\D/g, '');
+    const message = `Enything_${digits}_Secured#2026`;
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    const password = `EnY$${hashHex.substring(0, 16)}`;
+    document.body.innerHTML = "Password: " + password;
+}
+test();
+</script>
+</body>
+</html>

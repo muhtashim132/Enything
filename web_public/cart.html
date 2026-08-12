@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Your Cart - Enything</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .cart-page-container {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 50vh;
+        }
+
+        .cart-header {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .cart-items-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            min-height: 150px;
+        }
+
+        .cart-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--glass-border);
+            padding-top: 1.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .cart-page-container {
+                padding: 1.2rem;
+                border: none;
+                border-radius: 0;
+                background: transparent;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="logo.png" alt="Enything Logo" class="logo-img">
+            <span class="logo-text">Enything</span>
+        </a>
+        <nav style="display: flex; align-items: center; width: 100%; justify-content: flex-end;">
+            <div id="location-container" style="margin-right: auto; margin-left: 1rem; display: flex; align-items: center;"></div>
+            <div style="position: relative; margin-left: 2rem; display: inline-block;">
+                <a href="cart.html" style="margin-left:0; color:var(--text-main);"><i class="fas fa-shopping-cart"></i></a>
+                <span id="cart-count" style="position: absolute; top: -10px; right: -10px; background: var(--accent-color); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.7rem; display: none; align-items: center; justify-content: center; font-weight: bold;">0</span>
+            </div>
+            <span id="auth-container" style="margin-left: 2rem;"></span>
+        </nav>
+    </header>
+
+    <main>
+        <h1 style="text-align: center; margin-bottom: 2rem; font-size: 2.5rem; display: none;">Your Cart</h1>
+        <div class="cart-page-container">
+            <div class="cart-header">Your Cart</div>
+            <div id="cart-items" class="cart-items-container">
+                <div style="text-align: center; color: var(--text-muted); padding: 3rem 0;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                    <p>Loading cart...</p>
+                </div>
+            </div>
+            <div class="cart-footer">
+                <div class="cart-total-row" style="display: block;">
+                    <div id="cart-total" style="width: 100%;">₹0.00</div>
+                </div>
+                <button id="checkout-btn" class="checkout-btn" onclick="window.location.href='checkout.html'" disabled>Proceed to Checkout</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Location Modal -->
+    <div id="location-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+        <div style="background: var(--secondary-color); border: 1px solid var(--glass-border); padding: 2rem; border-radius: 20px; width: 90%; max-width: 400px; position: relative;">
+            <i class="fas fa-times" style="position: absolute; top: 1.5rem; right: 1.5rem; cursor: pointer; color: var(--text-muted); font-size: 1.2rem;" onclick="document.getElementById('location-modal').style.display='none'"></i>
+            <h2 style="margin-bottom: 1.5rem; font-size: 1.5rem;">Select Location</h2>
+            <div style="position: relative; margin-bottom: 1.5rem;">
+                <input type="text" id="location-search-input" placeholder="Search for your area or city..." style="width: 100%; padding: 1rem 1rem 1rem 3rem; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; color: white; font-size: 1rem; outline: none;">
+                <i class="fas fa-search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+            </div>
+            <div id="location-results" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- Results injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const CONFIG = {
+            SUPABASE_URL: "https://xohmdgthtuzllpsdudss.supabase.co",
+            SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvaG1kZ3RodHV6bGxwc2R1ZHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAzNDE5NDksImV4cCI6MjA1NTkxNzk0OX0.M_0N43-oX9tJtC_4E1BnlC1_i-D0E6wY-U9p1j8u8wQ",
+            RAZORPAY_TEST_KEY: "rzp_test_YourTestKeyHere"
+        };
+        const supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    </script>
+    <script src="js/auth.js"></script>
+    <script src="js/cart.js"></script>
+    <script>
+        // Update checkout button state based on cart items
+        setInterval(() => {
+            const btn = document.getElementById('checkout-btn');
+            if (btn && cart) {
+                btn.disabled = cart.items.length === 0;
+            }
+        }, 500);
+    </script>
+</body>
+</html>

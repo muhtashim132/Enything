@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/supabase-client.js"></script>
+<script>
+    async function check() {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        document.body.innerHTML += "<h1>Session Check</h1>";
+        document.body.innerHTML += "<pre>" + JSON.stringify(session, null, 2) + "</pre>";
+    }
+    check();
+</script>
+</body>
+</html>

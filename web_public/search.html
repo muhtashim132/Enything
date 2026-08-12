@@ -301,7 +301,8 @@
             <img src="logo.png" alt="Enything Logo" class="logo-img">
             <span class="logo-text">Enything</span>
         </a>
-        <nav>
+        <nav style="display: flex; align-items: center; width: 100%; justify-content: flex-end;">
+            <div id="location-container" style="margin-right: auto; margin-left: 1rem; display: flex; align-items: center;"></div>
             <div style="position: relative; margin-left: 2rem;">
                 <a href="cart.html" style="margin-left:0; color:var(--text-main);"><i class="fas fa-shopping-cart"></i></a>
                 <span id="cart-count" style="position: absolute; top: -10px; right: -10px; background: var(--accent-color); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.7rem; display: none; align-items: center; justify-content: center; font-weight: bold;">0</span>
@@ -311,15 +312,14 @@
     </header>
 
     <main>
-        <div id="shop-header-container">
-            <p style="text-align: center; color: var(--text-muted);">Loading restaurant...</p>
+        <div id="search-header-container" style="margin-bottom: 2rem;">
+            <p style="text-align: center; color: var(--text-muted); font-size: 1.2rem;">Searching...</p>
         </div>
 
         <div class="menu-container">
             <div>
-                <h2 style="margin-bottom: 1.5rem; font-size: 1.8rem;">Menu</h2>
                 <div id="products-grid" class="products-grid">
-                    <!-- Products will be injected here -->
+                    <!-- Search results will be injected here -->
                 </div>
             </div>
             
@@ -342,104 +342,93 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/supabase-client.js"></script>
-    <script src="js/auth.js"></script>
+    <script src="js/auth.js?v=11"></script>
     <script src="js/tax_config.js"></script>
     <script src="js/cart.js"></script>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-        const shopId = urlParams.get('shop_id');
+        const query = urlParams.get('q');
 
         window.addEventListener('DOMContentLoaded', async () => {
-            if (!shopId) {
-                document.getElementById('shop-header-container').innerHTML = '<p style="color:red; text-align:center;">Restaurant not found.</p>';
+            if (!query || query.trim() === '') {
+                document.getElementById('search-header-container').innerHTML = '<h1 style="text-align:center;">Please enter a search term.</h1>';
+                document.getElementById('products-grid').innerHTML = '';
                 return;
             }
+
+            document.getElementById('search-header-container').innerHTML = `<h1>Search results for "${query}"</h1>`;
 
             try {
-                if (window.supabaseInitError) {
-                    throw window.supabaseInitError;
-                }
-                if (typeof getShopDetails !== 'function') {
-                    throw new Error("Application scripts failed to load properly. Please refresh the page or disable adblockers.");
-                }
+                if (window.supabaseInitError) throw window.supabaseInitError;
 
-                // Fetch Shop Details
-                const shop = await getShopDetails(shopId);
-            if (shop) {
-                const banner = shop.banner_url || shop.banner_image || 'https://via.placeholder.com/150';
-                document.getElementById('shop-header-container').innerHTML = `
-                    <div class="shop-header">
-                        <img src="${banner}" alt="${shop.name}" class="shop-image">
-                        <div class="shop-details">
-                            <h1>${shop.name}</h1>
-                            <p>${shop.category || 'Restaurant'} • <i class="fas fa-star" style="color:var(--accent-color)"></i> ${shop.average_rating || '4.5'}</p>
-                            ${!shop.is_accepting_orders ? '<span style="color:#f87171; font-weight:600;"><i class="fas fa-times-circle"></i> Currently not accepting orders</span>' : ''}
-                        </div>
-                    </div>
-                `;
-            }
-
-            // Fetch Products
-            const products = await getShopProducts(shopId);
-            const productsGrid = document.getElementById('products-grid');
-            
-            if (products.length === 0) {
-                productsGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No products available.</p>';
-                return;
-            }
-
-            productsGrid.innerHTML = '';
-            products.forEach(product => {
-                const price = product.price;
-                const originalPriceHtml = product.original_price ? `<span class="original-price">₹${product.original_price}</span>` : '';
+                // Search products (respecting is_deleted=false as per rules)
+                const { data: products, error } = await supabaseClient
+                    .from('products')
+                    .select('*')
+                    .eq('is_deleted', false)
+                    .eq('is_available', true)
+                    .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+                    .limit(50);
+                    
+                if (error) throw error;
                 
-                let imageUrl = 'https://via.placeholder.com/300x200?text=No+Image';
-                if (product.images && product.images.length > 0) {
-                    imageUrl = product.images[0];
-                } else if (product.image_url) {
-                    imageUrl = product.image_url;
-                }
+                const productsGrid = document.getElementById('products-grid');
                 
-                const vegIcon = product.is_veg === true ? '<div class="veg-icon"></div>' : (product.is_veg === false ? '<div class="veg-icon non-veg-icon"></div>' : '');
-                product.shop_category = shop ? shop.category : 'Other';
-                
-                const hasVariants = product.variants && Array.isArray(product.variants) && product.variants.length > 0;
-                
-                let buttonHtml;
-                if (!product.is_available) {
-                    buttonHtml = `<button class="add-to-cart" disabled>Out of stock</button>`;
-                } else if (hasVariants) {
-                    buttonHtml = `<button class="add-to-cart" onclick="window.location.href='product.html?id=${product.id}'">Options</button>`;
-                } else {
-                    buttonHtml = `<button class="add-to-cart" onclick='cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${shopId}")'>Add +</button>`;
+                if (!products || products.length === 0) {
+                    productsGrid.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align:center; padding: 3rem;">No products found for this search.</p>';
+                    return;
                 }
 
-                productsGrid.innerHTML += `
-                    <div class="product-card">
-                        <a href="product.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
-                            <img src="${imageUrl}" alt="${product.name}" class="product-image">
-                            <div class="product-info">
-                                <div class="product-name">${vegIcon}${product.name}</div>
-                                <div class="product-desc">${product.description || ''}</div>
+                productsGrid.innerHTML = '';
+                products.forEach(product => {
+                    const price = product.price;
+                    const originalPriceHtml = product.original_price ? `<span class="original-price">₹${product.original_price}</span>` : '';
+                    
+                    let imageUrl = 'https://via.placeholder.com/300x200?text=No+Image';
+                    if (product.images && product.images.length > 0) {
+                        imageUrl = product.images[0];
+                    } else if (product.image_url) {
+                        imageUrl = product.image_url;
+                    }
+                    
+                    const vegIcon = product.is_veg === true ? '<div class="veg-icon"></div>' : (product.is_veg === false ? '<div class="veg-icon non-veg-icon"></div>' : '');
+                    
+                    const hasVariants = product.variants && Array.isArray(product.variants) && product.variants.length > 0;
+                    
+                    let buttonHtml;
+                    if (hasVariants) {
+                        buttonHtml = `<button class="add-to-cart" onclick="window.location.href='product.html?id=${product.id}'">Options</button>`;
+                    } else {
+                        // Pass product.shop_id dynamically for each product!
+                        buttonHtml = `<button class="add-to-cart" onclick='cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>Add +</button>`;
+                    }
+
+                    productsGrid.innerHTML += `
+                        <div class="product-card">
+                            <a href="product.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
+                                <img src="${imageUrl}" alt="${product.name}" class="product-image">
+                                <div class="product-info">
+                                    <div class="product-name">${vegIcon}${product.name}</div>
+                                    <div class="product-desc" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${product.description || ''}</div>
+                                </div>
+                            </a>
+                            <div class="product-footer">
+                                <div class="price-container">
+                                    ${originalPriceHtml}
+                                    <span class="price">₹${price}</span>
+                                </div>
+                                ${buttonHtml}
                             </div>
-                        </a>
-                        <div class="product-footer">
-                            <div class="price-container">
-                                ${originalPriceHtml}
-                                <span class="price">₹${price}</span>
-                            </div>
-                            ${buttonHtml}
                         </div>
-                    </div>
-                `;
-            });
+                    `;
+                });
             } catch (err) {
                 console.error(err);
-                document.getElementById('shop-header-container').innerHTML = '';
+                document.getElementById('search-header-container').innerHTML = '';
                 document.querySelector('.menu-container').innerHTML = `<div style="color: #f87171; text-align: center; padding: 2rem; background: rgba(255,0,0,0.1); border-radius: 10px; border: 1px solid rgba(255,0,0,0.2); width: 100%;">
                     <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                    <h3 style="margin-bottom: 0.5rem;">Failed to load menu</h3>
+                    <h3 style="margin-bottom: 0.5rem;">Search failed</h3>
                     <p style="font-size: 0.9rem; font-family: monospace; white-space: pre-wrap; word-break: break-all; opacity: 0.8;">${err.message || String(err)}</p>
                 </div>`;
             }

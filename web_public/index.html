@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>Enything - Everything. Everywhere. Instantly.</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=3">
     <style>
         .hero-mini {
             text-align: center;
@@ -64,13 +64,52 @@
 
         .menu-container {
             display: grid;
-            grid-template-columns: 2fr 1fr;
+            grid-template-columns: 1fr 380px;
             gap: 3rem;
         }
 
         @media (max-width: 900px) {
             .menu-container {
                 grid-template-columns: 1fr;
+            }
+            .products-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 1rem;
+            }
+        }
+        @media (max-width: 400px) {
+            .products-grid {
+                grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+                gap: 0.8rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .hero-mini {
+                padding: 1rem 0;
+            }
+            .hero-mini h1 {
+                font-size: 2rem;
+                margin-bottom: 0.2rem;
+            }
+            .hero-mini p {
+                font-size: 0.9rem !important;
+                margin-bottom: 1rem !important;
+                padding: 0 1rem;
+            }
+            #search-input {
+                font-size: 0.95rem !important;
+                padding: 0.8rem 1rem 0.8rem 2.5rem !important;
+            }
+            .hero-mini .fa-search {
+                font-size: 1rem !important;
+                left: 1rem !important;
+            }
+            .product-card {
+                padding: 1rem;
+            }
+            .products-grid {
+                gap: 1rem;
             }
         }
 
@@ -97,7 +136,7 @@
 
         .product-image {
             width: 100%;
-            height: 180px;
+            aspect-ratio: 1 / 1;
             border-radius: 10px;
             object-fit: cover;
             margin-bottom: 1rem;
@@ -179,116 +218,7 @@
             transform: none;
         }
 
-        /* Cart Sidebar */
-        .cart-sidebar {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 2rem;
-            position: sticky;
-            top: 100px;
-            height: fit-content;
-            max-height: calc(100vh - 120px);
-            display: flex;
-            flex-direction: column;
-        }
 
-        .cart-header {
-            font-size: 1.5rem;
-            font-weight: 800;
-            margin-bottom: 1.5rem;
-            border-bottom: 1px solid var(--glass-border);
-            padding-bottom: 1rem;
-        }
-
-        .cart-items-container {
-            flex: 1;
-            overflow-y: auto;
-            margin-bottom: 1.5rem;
-        }
-
-        .cart-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-
-        .cart-item-details h4 {
-            font-size: 1rem;
-            margin-bottom: 0.2rem;
-        }
-
-        .cart-item-details span {
-            color: var(--accent-color);
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-
-        .cart-item-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 8px;
-            padding: 4px;
-        }
-
-        .cart-item-actions button {
-            background: none;
-            border: none;
-            color: white;
-            cursor: pointer;
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-        }
-
-        .cart-item-actions button:hover {
-            background: rgba(255,255,255,0.1);
-        }
-
-        .cart-footer {
-            border-top: 1px solid var(--glass-border);
-            padding-top: 1.5rem;
-        }
-
-        .cart-total-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 1.2rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-        }
-
-        .checkout-btn {
-            width: 100%;
-            background: var(--accent-color);
-            color: white;
-            border: none;
-            padding: 1rem;
-            border-radius: 12px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.3s;
-        }
-
-        .checkout-btn:hover:not(:disabled) {
-            opacity: 0.9;
-        }
-        
-        .checkout-btn:disabled {
-            background: #444;
-            cursor: not-allowed;
-            color: #888;
-        }
 
         .veg-icon {
             width: 12px;
@@ -305,6 +235,13 @@
             background: #4ade80;
             border-radius: 50%;
         }
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Dropdown styles are managed in styles.css */
+        
         .non-veg-icon {
             border-color: #f87171;
         }
@@ -336,25 +273,16 @@
     </style>
 </head>
 <body>
+    <div id="app-wrapper" style="overflow-x: hidden; width: 100%; position: relative;">
     <header>
         <a href="index.html" class="logo">
             <img src="logo.png" alt="Enything Logo" class="logo-img">
             <span class="logo-text">Enything</span>
         </a>
-        <nav>
-            <a href="index.html" class="active">Home</a>
-            <a href="#contact">Contact</a>
-            <div class="dropdown">
-                <span class="dropbtn">Policies ▾</span>
-                <div class="dropdown-content">
-                    <a href="privacy.html">Privacy Policy</a>
-                    <a href="terms.html">Terms & Conditions</a>
-                    <a href="refunds.html">Refunds & Cancellations</a>
-                    <a href="shipping.html">Shipping & Delivery</a>
-                </div>
-            </div>
+        <nav style="display: flex; align-items: center; width: 100%; justify-content: flex-end;">
+            <div id="location-container" style="margin-right: auto; margin-left: 1rem; display: flex; align-items: center;"></div>
             <div style="position: relative; margin-left: 2rem; display: inline-block;">
-                <a href="checkout.html" style="margin-left:0; color:var(--text-main);"><i class="fas fa-shopping-cart"></i></a>
+                <a href="cart.html" style="margin-left:0; color:var(--text-main);"><i class="fas fa-shopping-cart"></i></a>
                 <span id="cart-count" style="position: absolute; top: -10px; right: -10px; background: var(--accent-color); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.7rem; display: none; align-items: center; justify-content: center; font-weight: bold;">0</span>
             </div>
             <span id="auth-container" style="margin-left: 2rem;"></span>
@@ -366,11 +294,13 @@
             <h1>Everything. Everywhere. Instantly.</h1>
             <p style="color: var(--text-muted); font-size: 1.2rem; max-width: 600px; margin: 0 auto; margin-bottom: 2rem;">Your hyper-local marketplace. Order from the best local restaurants in Jammu & Kashmir.</p>
             
-            <div style="max-width: 600px; margin: 0 auto; position: relative;">
-                <input type="text" id="search-input" placeholder="Search for food, groceries, or anything..." 
-                    style="width: 100%; padding: 1rem 1.5rem 1rem 3rem; border-radius: 30px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-main); font-size: 1.1rem; outline: none; transition: border-color 0.3s;"
-                    oninput="handleSearch(this.value)">
-                <i class="fas fa-search" style="position: absolute; left: 1.2rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 1.2rem;"></i>
+            <div style="max-width: 600px; margin: 0 auto; padding: 0 1rem;">
+                <div style="position: relative; width: 100%;">
+                    <input type="text" id="search-input" placeholder="Search for food, groceries, or anything..." 
+                        style="width: 100%; padding: 1rem 1.5rem 1rem 3.5rem; border-radius: 30px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-main); font-size: 1.1rem; outline: none; transition: border-color 0.3s;"
+                        onkeydown="if(event.key === 'Enter' && this.value.trim().length > 0) window.location.href='search.html?q=' + encodeURIComponent(this.value.trim())">
+                    <i class="fas fa-search" style="position: absolute; left: 1.5rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 1.2rem; cursor: pointer;" onclick="const val = document.getElementById('search-input').value.trim(); if(val.length > 0) window.location.href='search.html?q=' + encodeURIComponent(val)"></i>
+                </div>
             </div>
         </section>
 
@@ -381,12 +311,34 @@
         </section>
         
         <div class="menu-container">
-            <div>
+            <div style="min-width: 0;">
+                <div id="trending-section" style="display: none; margin-bottom: 2.5rem; overflow: hidden; width: 100%;">
+                    <h2 style="margin-bottom: 1rem; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: var(--text-muted);">
+                        <i class="fas fa-fire" style="color: #ef4444;"></i> Trending Searches
+                    </h2>
+                    <div class="trending-marquee-wrapper">
+                        <div id="trending-marquee" class="trending-marquee">
+                            <!-- Trending products injected here -->
+                        </div>
+                    </div>
+                </div>
+                <div id="recent-section" style="display: none; margin-bottom: 2.5rem;">
+                    <h2 style="margin-bottom: 1.5rem; font-size: 1.8rem; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-history" style="color: var(--accent-color);"></i> Recently Visited
+                    </h2>
+                    <div id="recent-grid" class="products-grid" style="display: flex; gap: 1.5rem; overflow-x: auto; padding-bottom: 1rem; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;">
+                        <!-- Recent products injected here -->
+                    </div>
+                </div>
+
                 <h2 style="margin-bottom: 1.5rem; font-size: 1.8rem;" id="products-heading">All Products</h2>
                 <div id="products-grid" class="products-grid">
                     <div class="loader-container">
                         <div class="spinner"></div>
                     </div>
+                </div>
+                <div id="load-more-container" style="text-align: center; margin-top: 2rem; display: none;">
+                    <button class="checkout-btn" style="width: auto; padding: 0.8rem 3rem;" onclick="loadMoreProducts()">See More</button>
                 </div>
             </div>
             
@@ -419,11 +371,28 @@
 
     <footer>
         <div class="footer-content">
-            <div class="footer-info">
-                <h3>Contact Support</h3>
-                <p>Email: <a href="mailto:support@enything.in" style="color: var(--accent-color); text-decoration: none;">support@enything.in</a></p>
+            <div class="footer-info footer-accordion">
+                <details>
+                    <summary><h3>Contact Support <i class="fas fa-chevron-down accordion-icon"></i></h3></summary>
+                    <div class="accordion-content">
+                        <p>Email: <a href="mailto:support@enything.in" style="color: var(--accent-color); text-decoration: none;">support@enything.in</a></p>
                 <p>Phone: +91 7006464241</p>
                 <p>Address: Plan Bandipora, Ward No. 2, Bandipora, J&K — 193502, India</p>
+                    </div>
+                </details>
+            </div>
+            <div class="footer-legal footer-accordion">
+                <details>
+                    <summary><h3>Legal &amp; Policies <i class="fas fa-chevron-down accordion-icon"></i></h3></summary>
+                    <div class="accordion-content">
+                        <ul style="list-style: none; padding: 0; line-height: 2;">
+                    <li><a href="privacy.html" style="color: var(--text-muted); text-decoration: none;">Privacy Policy</a></li>
+                    <li><a href="terms.html" style="color: var(--text-muted); text-decoration: none;">Terms & Conditions</a></li>
+                    <li><a href="refunds.html" style="color: var(--text-muted); text-decoration: none;">Refunds & Cancellations</a></li>
+                    <li><a href="shipping.html" style="color: var(--text-muted); text-decoration: none;">Shipping & Delivery</a></li>
+                </ul>
+                    </div>
+                </details>
             </div>
             <div class="footer-legal">
                 <h3>Grievance Officer</h3>
@@ -435,30 +404,153 @@
             </div>
         </div>
     </footer>
+    </div>
 
-    <!-- Supabase JS -->
+    <!-- Modals & Auth -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/config.js"></script>
-    <script src="js/supabase-client.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/tax_config.js"></script>
-    <script src="js/cart.js"></script>
+    <script src="js/config.js?v=2"></script>
+    <script src="js/supabase-client.js?v=2"></script>
+    <script src="js/auth.js?v=15"></script>
+    <script src="js/tax_config.js?v=2"></script>
+    <script src="js/cart.js?v=2"></script>
     
     <script>
         let allProducts = [];
         let allShops = [];
         let shopMap = {};
         
-        function renderProducts(products) {
-            const container = document.getElementById('products-grid');
+        // Pagination state
+        let currentDisplayedCount = 9;
+        let currentDisplayedProducts = [];
+
+        function renderTrendingProducts(products) {
+            const container = document.getElementById('trending-marquee');
+            const section = document.getElementById('trending-section');
+            if (!container) return; // safety
             container.innerHTML = '';
             
             if (!products || products.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No products available at the moment.</p>';
+                section.style.display = 'none';
                 return;
             }
 
-            products.forEach(product => {
+            // Get up to 10 random products to simulate trending searches
+            const shuffled = [...products].sort(() => 0.5 - Math.random());
+            const trending = shuffled.slice(0, 10);
+
+            let pillsHtml = '';
+            trending.forEach(product => {
+                pillsHtml += `
+                    <a href="product.html?id=${product.id}" class="trending-pill">
+                        <i class="fas fa-search" style="font-size: 0.8rem; color: var(--text-muted);"></i>
+                        ${product.name}
+                    </a>
+                `;
+            });
+            
+            // Duplicate the pills to create a seamless infinite scrolling marquee
+            container.innerHTML = pillsHtml + pillsHtml;
+            section.style.display = 'block';
+            section.style.display = 'block';
+        }
+
+        function renderRecentProducts(products) {
+            const container = document.getElementById('recent-grid');
+            const section = document.getElementById('recent-section');
+            if (!container || !section) return;
+            
+            try {
+                const recentIds = JSON.parse(localStorage.getItem('recently_visited') || '[]');
+                if (recentIds.length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+                
+                const allRecentProducts = recentIds.map(id => products.find(p => p.id === id)).filter(p => p);
+                const recentProducts = allRecentProducts.slice(0, 8);
+                
+                if (recentProducts.length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+                
+                container.innerHTML = '';
+                recentProducts.forEach(product => {
+                    const price = product.price;
+                    const originalPriceHtml = product.original_price ? `<span class="original-price" style="font-size:0.8rem;">₹${product.original_price}</span>` : '';
+                    
+                    let imageUrl = 'https://via.placeholder.com/300x200?text=No+Image';
+                    if (product.images && product.images.length > 0) imageUrl = product.images[0];
+                    else if (product.image_url) imageUrl = product.image_url;
+                    
+                    const shopName = shopMap[product.shop_id] ? shopMap[product.shop_id].name : 'Restaurant';
+                    
+                    container.innerHTML += `
+                        <div class="product-card" style="width: 220px; flex: 0 0 auto;">
+                            <a href="product.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
+                                <img src="${imageUrl}" alt="${product.name}" class="product-image">
+                                <div class="product-info">
+                                    <span class="product-shop-name">${shopName}</span>
+                                    <div class="product-name" style="font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${product.name}</div>
+                                </div>
+                            </a>
+                            <div class="product-footer" style="margin-top: 10px;">
+                                <div class="price-container">
+                                    ${originalPriceHtml}
+                                    <span class="price" style="font-size:1.1rem;">₹${price}</span>
+                                </div>
+                                <button class="add-to-cart" style="padding: 6px 12px; font-size: 0.9rem;" ${!product.is_available ? 'disabled' : ''} 
+                                    onclick='cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>
+                                    ${product.is_available ? 'Add +' : 'Out'}
+                                </button>
+                            </div>
+                        </div>
+                        </div>
+                    `;
+                });
+                
+                if (allRecentProducts.length > 8) {
+                    container.innerHTML += `
+                        <div class="product-card" style="width: 220px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); cursor: pointer; border: 2px dashed var(--glass-border);" onclick="window.location.href='recent.html'">
+                            <div style="text-align: center; color: var(--accent-color);">
+                                <i class="fas fa-arrow-right" style="font-size: 2.5rem; margin-bottom: 15px; display: block;"></i>
+                                <div style="font-size: 1.1rem; font-weight: 600;">See More</div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                section.style.display = 'block';
+            } catch(e) {
+                console.error("Error rendering recent products", e);
+                section.style.display = 'none';
+            }
+        }
+        
+        function renderProducts(products, isLoadMore = false) {
+            const container = document.getElementById('products-grid');
+            const loadMoreBtn = document.getElementById('load-more-container');
+            
+            window.renderedProductsMap = window.renderedProductsMap || {};
+            
+            if (!isLoadMore) {
+                container.innerHTML = '';
+                currentDisplayedCount = 9;
+                currentDisplayedProducts = products || [];
+                window.renderedProductsMap = {};
+            }
+            
+            if (!currentDisplayedProducts || currentDisplayedProducts.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No products available at the moment.</p>';
+                if(loadMoreBtn) loadMoreBtn.style.display = 'none';
+                return;
+            }
+
+            const startIndex = isLoadMore ? currentDisplayedCount - 9 : 0;
+            const endIndex = Math.min(currentDisplayedCount, currentDisplayedProducts.length);
+            const productsToShow = currentDisplayedProducts.slice(startIndex, endIndex);
+
+            productsToShow.forEach(product => {
                 const price = product.price;
                 const originalPriceHtml = product.original_price ? `<span class="original-price">₹${product.original_price}</span>` : '';
                 
@@ -488,25 +580,68 @@
                                 ${originalPriceHtml}
                                 <span class="price">₹${price}</span>
                             </div>
-                            <button class="add-to-cart" ${!product.is_available ? 'disabled' : ''} 
-                                onclick='cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>
-                                ${product.is_available ? 'Add +' : 'Out of stock'}
-                            </button>
+                            <div class="product-action-container" id="action-container-${product.id}">
+                                ${getActionButtonHtml(product)}
+                            </div>
                         </div>
                     </div>
                 `;
             });
+            
+            if (currentDisplayedCount < currentDisplayedProducts.length) {
+                if(loadMoreBtn) loadMoreBtn.style.display = 'block';
+            } else {
+                if(loadMoreBtn) loadMoreBtn.style.display = 'none';
+            }
         }
+        
+        function getActionButtonHtml(product) {
+            window.renderedProductsMap[product.id] = product;
+            
+            if (!product.is_available) {
+                return `<button class="add-to-cart" disabled>Out of stock</button>`;
+            }
+            
+            const cartItem = cart.items.find(i => i.id === product.id);
+            if (cartItem && cartItem.quantity > 0) {
+                return `
+                    <div class="cart-qty-controls" style="display: flex; align-items: center; justify-content: space-between; background: rgba(91, 139, 255, 0.1); border: 1px solid var(--accent-color); border-radius: 8px; overflow: hidden; height: 35px; width: 80px;">
+                        <button onclick='event.preventDefault(); event.stopPropagation(); cart.updateQuantity("${product.id}", -1)' style="background: none; border: none; color: white; padding: 0 8px; cursor: pointer; height: 100%; display: flex; align-items: center;"><i class="fas fa-minus" style="font-size: 0.7rem;"></i></button>
+                        <span style="color: white; font-weight: 600; font-size: 0.9rem;">${cartItem.quantity}</span>
+                        <button onclick='event.preventDefault(); event.stopPropagation(); cart.updateQuantity("${product.id}", 1)' style="background: none; border: none; color: white; padding: 0 8px; cursor: pointer; height: 100%; display: flex; align-items: center;"><i class="fas fa-plus" style="font-size: 0.7rem;"></i></button>
+                    </div>
+                `;
+            } else {
+                return `<button class="add-to-cart" onclick='event.preventDefault(); event.stopPropagation(); cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>Add +</button>`;
+            }
+        }
+        
+        window.addEventListener('cartUpdated', () => {
+            if (window.renderedProductsMap) {
+                Object.values(window.renderedProductsMap).forEach(product => {
+                    const container = document.getElementById(`action-container-${product.id}`);
+                    if (container) {
+                        container.innerHTML = getActionButtonHtml(product);
+                    }
+                });
+            }
+        });
+
+        window.loadMoreProducts = function() {
+            currentDisplayedCount += 9;
+            renderProducts(currentDisplayedProducts, true);
+        };
 
         function renderFilters() {
             const scrollContainer = document.getElementById('filter-scroll');
             scrollContainer.innerHTML = `<div class="filter-bubble active" id="filter-all" onclick="filterByShop('all')">All Products</div>`;
             
             allShops.forEach(shop => {
-                const banner = shop.banner_url || shop.banner_image || 'https://via.placeholder.com/50';
+                const banner = shop.banner_url || shop.banner_image;
+                const imgHtml = banner ? `<img src="${banner}" alt="" onerror="this.style.display='none'">` : '';
                 scrollContainer.innerHTML += `
                     <div class="filter-bubble" id="filter-${shop.id}" onclick="filterByShop('${shop.id}')">
-                        <img src="${banner}" alt="">
+                        ${imgHtml}
                         ${shop.name}
                     </div>
                 `;
@@ -518,15 +653,23 @@
             document.querySelectorAll('.filter-bubble').forEach(b => b.classList.remove('active'));
             document.getElementById('search-input').value = '';
             
+            const trendingSection = document.getElementById('trending-section');
+            const recentSection = document.getElementById('recent-section');
             if (shopId === 'all') {
                 document.querySelector('.filter-bubble').classList.add('active');
                 document.getElementById('products-heading').innerText = "All Products";
                 renderProducts(allProducts);
+                trendingSection.style.display = 'block';
+                if (JSON.parse(localStorage.getItem('recently_visited') || '[]').length > 0) {
+                    recentSection.style.display = 'block';
+                }
             } else {
                 document.getElementById(`filter-${shopId}`).classList.add('active');
                 document.getElementById('products-heading').innerText = shopMap[shopId].name + " Menu";
                 const filtered = allProducts.filter(p => p.shop_id === shopId);
                 renderProducts(filtered);
+                trendingSection.style.display = 'none';
+                recentSection.style.display = 'none';
             }
         };
 
@@ -539,11 +682,21 @@
                 baseProducts = allProducts.filter(p => p.shop_id === activeShopId);
             }
             
+            const trendingSection = document.getElementById('trending-section');
+            const recentSection = document.getElementById('recent-section');
             if (!query) {
                 renderProducts(baseProducts);
+                if (activeShopId === 'all') {
+                    trendingSection.style.display = 'block';
+                    if (JSON.parse(localStorage.getItem('recently_visited') || '[]').length > 0) {
+                        recentSection.style.display = 'block';
+                    }
+                }
                 return;
             }
             
+            trendingSection.style.display = 'none';
+            recentSection.style.display = 'none';
             const searchedProducts = baseProducts.filter(p => 
                 p.name.toLowerCase().includes(query) || 
                 (p.description && p.description.toLowerCase().includes(query))
@@ -582,6 +735,8 @@
 
                 // 2. Fetch Products
                 allProducts = await getAllActiveProducts(shopIds);
+                renderTrendingProducts(allProducts);
+                renderRecentProducts(allProducts);
                 renderProducts(allProducts);
 
             } catch (err) {
