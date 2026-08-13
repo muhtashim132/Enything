@@ -11,10 +11,34 @@ const razorpayAuth = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
 Deno.serve(async (req) => {
   try {
     const payload = await req.json();
-    const { type, old_record, record } = payload;
+    let { type, old_record, record } = payload;
 
-    // We only care about UPDATE events (status changes)
-    if (type !== "UPDATE") {
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    // Support direct invocation with order_id
+    if (!record && payload.order_id) {
+      const { data: fetchedOrder } = await supabaseAdmin
+        .from("orders")
+        .select("*")
+        .eq("id", payload.order_id)
+        .maybeSingle();
+
+      if (!fetchedOrder) {
+        return new Response(JSON.stringify({ error: "Order not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      record = fetchedOrder;
+      old_record = { ...fetchedOrder, refund_status: "none" };
+      type = "UPDATE";
+    }
+
+    // We only care about UPDATE events (status changes) or direct invocations
+    if (type !== "UPDATE" || !record) {
       return new Response("Ignored: Not an update event", { status: 200 });
     }
 
@@ -34,7 +58,7 @@ Deno.serve(async (req) => {
     const manualRefundTriggered = oldRefundStatus !== "processing" && newRefundStatus === "processing";
 
     // 100x FIX: If an Admin explicitly triggers a manual refund, ALWAYS honor it regardless of current order status (e.g. refunding a 'delivered' order).
-    const shouldRefund = (isRefundableState && statusChanged) || manualRefundTriggered;
+    const shouldRefund = (isRefundableState && statusChanged) || manualRefundTriggered || Boolean(payload.order_id);
 
     if (shouldRefund) {
       console.log(`Order ${record.id} changed to ${newStatus}. Initiating refund check...`);

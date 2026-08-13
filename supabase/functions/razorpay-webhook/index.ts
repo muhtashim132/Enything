@@ -72,20 +72,30 @@ Deno.serve(async (req) => {
       // If order exists with razorpay_order_id but no payment_id yet, confirm it
       const { data: pendingOrder } = await supabaseAdmin
         .from("orders")
-        .select("id, status")
+        .select("id, status, cart_group_id")
         .eq("razorpay_order_id", orderId)
         .limit(1)
         .maybeSingle();
 
       if (pendingOrder && pendingOrder.status === "awaiting_payment") {
-        await supabaseAdmin
-          .from("orders")
-          .update({
-            razorpay_payment_id: paymentId,
-            status: "confirmed",
-            payment_status: "captured",
-          })
-          .eq("razorpay_order_id", orderId); // S1: Using razorpay_order_id handles multi-shop cart group!
+        const { error: rpcError } = await supabaseAdmin.rpc('client_confirm_payment', {
+          p_order_id: pendingOrder.id,
+          p_cart_group_id: pendingOrder.cart_group_id || null,
+          p_razorpay_payment_id: paymentId,
+          p_razorpay_order_id: orderId,
+        });
+
+        if (rpcError) {
+          console.error(`Error confirming order via client_confirm_payment:`, rpcError);
+          await supabaseAdmin
+            .from("orders")
+            .update({
+              razorpay_payment_id: paymentId,
+              status: "confirmed",
+              payment_status: "captured",
+            })
+            .eq("razorpay_order_id", orderId); // S1: Using razorpay_order_id handles multi-shop cart group!
+        }
 
         console.log(`Order ${pendingOrder.id} confirmed via webhook payment ${paymentId}.`);
       }

@@ -152,6 +152,7 @@ Deno.serve(async (req: Request) => {
     };
 
     // Stream state
+    const pageSize = 1000;
     let fetchMore = true;
     let lastId = '00000000-0000-0000-0000-000000000000';
     const roleMap: Record<string, string[]> = {

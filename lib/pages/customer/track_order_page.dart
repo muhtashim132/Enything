@@ -176,7 +176,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _pollingTimer?.cancel();
     if (_channel != null) {
       _isIntentionalDisconnect = true;
-      _supabase.removeChannel(_channel!);
+      final chan = _channel!;
+      _channel = null;
+      _supabase.removeChannel(chan);
     }
     _riderLocationsNotifier.dispose();
     _decisionSecondsLeft.dispose();
@@ -300,8 +302,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (_order == null) return;
     if (_channel != null) {
       _isIntentionalDisconnect = true;
-      _supabase.removeChannel(_channel!);
+      final oldChan = _channel!;
       _channel = null;
+      _supabase.removeChannel(oldChan);
     }
     _isIntentionalDisconnect = false;
 
@@ -317,8 +320,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             value: widget.orderId,
           );
 
-    _channel = _supabase
-        .channel('group-${_order!.cartGroupId ?? widget.orderId}')
+    final newChannel = _supabase
+        .channel('group-${_order!.cartGroupId ?? widget.orderId}');
+    _channel = newChannel;
+
+    newChannel
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -445,13 +451,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           },
         )
         .subscribe((status, [error]) {
-      if ((status == RealtimeSubscribeStatus.closed ||
+      if (identical(_channel, newChannel) &&
+          (status == RealtimeSubscribeStatus.closed ||
               status == RealtimeSubscribeStatus.channelError) &&
           !_isIntentionalDisconnect) {
         debugPrint(
             'TrackOrderPage: Realtime channel disconnected. Reconnecting in 5s...');
         Future.delayed(const Duration(seconds: 5), () {
-          if (mounted && !_isCancelling && !_isLoading) {
+          if (mounted &&
+              identical(_channel, newChannel) &&
+              !_isCancelling &&
+              !_isLoading) {
             _fetchOrder();
           }
         });
