@@ -11,26 +11,45 @@
 //
 // Enable events:
 //   ✅ payment.captured   → Confirm order
-//   ✅ payment.failed     → Mark order as payment_failed
 //   ✅ order.paid         → Redundant backup
+//   ✅ payment.failed     → Mark order as payment_failed
 //   ✅ refund.created     → Log refund
+//   ✅ refund.processed   → Log refund
+//   ✅ refund.failed      → Mark refund as failed
 // =============================================================================
 
+// @ts-nocheck
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createHmac } from "node:crypto";
 
-Deno.serve(async (req) => {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-razorpay-signature",
+};
+
+Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     const webhookSecret = Deno.env.get("RAZORPAY_WEBHOOK_SECRET") ?? "";
     const rawBody = await req.text();
 
     // ── 1. Validate webhook signature ─────────────────────────────────────────
     const receivedSignature = req.headers.get("X-Razorpay-Signature") ?? "";
-    const expectedSignature  = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+    if (webhookSecret) {
+      const expectedSignature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+      if (receivedSignature !== expectedSignature) {
+        console.warn("Webhook signature mismatch — possible spoofing attempt.");
+        return new Response("Forbidden", { status: 403, headers: corsHeaders });
+      }
+    }
 
-    if (webhookSecret && receivedSignature !== expectedSignature) {
-      console.warn("Webhook signature mismatch — possible spoofing attempt.");
-      return new Response("Forbidden", { status: 403 });
+    if (!rawBody || rawBody.trim() === "") {
+      return new Response("Empty body", { status: 200, headers: corsHeaders });
     }
 
     const event = JSON.parse(rawBody);
@@ -45,88 +64,168 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // ── 2. Handle payment.captured ────────────────────────────────────────────
-    if (eventType === "payment.captured") {
+    // ── 2. Handle payment.captured & order.paid ───────────────────────────────
+    if (eventType === "payment.captured" || eventType === "order.paid") {
       const payment   = payload?.payment?.entity;
+      const order     = payload?.order?.entity;
       const paymentId = payment?.id;
-      const orderId   = payment?.order_id;
-      const notes     = payment?.notes ?? {};
+      const orderId   = payment?.order_id ?? order?.id;
+      const notes     = payment?.notes ?? order?.notes ?? {};
+      const noteOrderId     = notes?.order_id;
+      const noteCartGroupId = notes?.cart_group_id;
 
-      if (!paymentId || !orderId) {
-        return new Response("Missing payment data", { status: 200 });
+      if (!orderId && !paymentId && !noteOrderId && !noteCartGroupId) {
+        return new Response("Missing payment data", { status: 200, headers: corsHeaders });
       }
 
       // Idempotency: check if this payment_id is already recorded
-      const { data: existing } = await supabaseAdmin
-        .from("orders")
-        .select("id, status")
-        .eq("razorpay_payment_id", paymentId)
-        .limit(1)
-        .maybeSingle();
+      if (paymentId) {
+        const { data: existing } = await supabaseAdmin
+          .from("orders")
+          .select("id, status")
+          .eq("razorpay_payment_id", paymentId)
+          .limit(1)
+          .maybeSingle();
 
-      if (existing) {
-        console.log(`Payment ${paymentId} already processed. Skipping.`);
-        return new Response("Already processed", { status: 200 });
+        if (existing) {
+          console.log(`Payment ${paymentId} already processed. Skipping.`);
+          return new Response("Already processed", { status: 200, headers: corsHeaders });
+        }
       }
 
-      // If order exists with razorpay_order_id but no payment_id yet, confirm it
-      const { data: pendingOrder } = await supabaseAdmin
-        .from("orders")
-        .select("id, status, cart_group_id")
-        .eq("razorpay_order_id", orderId)
-        .limit(1)
-        .maybeSingle();
+      // Find pending order using multiple correlation paths
+      let pendingOrder: any = null;
 
-      if (pendingOrder && pendingOrder.status === "awaiting_payment") {
+      if (orderId) {
+        const { data } = await supabaseAdmin
+          .from("orders")
+          .select("id, status, cart_group_id")
+          .eq("razorpay_order_id", orderId)
+          .limit(1)
+          .maybeSingle();
+        pendingOrder = data;
+      }
+
+      if (!pendingOrder && noteCartGroupId) {
+        const { data } = await supabaseAdmin
+          .from("orders")
+          .select("id, status, cart_group_id")
+          .eq("cart_group_id", noteCartGroupId)
+          .limit(1)
+          .maybeSingle();
+        pendingOrder = data;
+      }
+
+      if (!pendingOrder && noteOrderId) {
+        const { data } = await supabaseAdmin
+          .from("orders")
+          .select("id, status, cart_group_id")
+          .eq("id", noteOrderId)
+          .limit(1)
+          .maybeSingle();
+        pendingOrder = data;
+      }
+
+      if (pendingOrder && (pendingOrder.status === "awaiting_payment" || pendingOrder.status === "confirmed")) {
         const { error: rpcError } = await supabaseAdmin.rpc('client_confirm_payment', {
           p_order_id: pendingOrder.id,
           p_cart_group_id: pendingOrder.cart_group_id || null,
-          p_razorpay_payment_id: paymentId,
-          p_razorpay_order_id: orderId,
+          p_razorpay_payment_id: paymentId ?? `pay_auto_${orderId}`,
+          p_razorpay_order_id: orderId ?? pendingOrder.id,
         });
 
         if (rpcError) {
           console.error(`Error confirming order via client_confirm_payment:`, rpcError);
-          await supabaseAdmin
-            .from("orders")
-            .update({
-              razorpay_payment_id: paymentId,
-              status: "confirmed",
-              payment_status: "captured",
-            })
-            .eq("razorpay_order_id", orderId); // S1: Using razorpay_order_id handles multi-shop cart group!
+          // Fallback direct update
+          const updatePayload = {
+            status: "confirmed",
+            payment_status: "captured",
+            ...(paymentId ? { razorpay_payment_id: paymentId } : {}),
+            ...(orderId ? { razorpay_order_id: orderId } : {}),
+          };
+
+          if (pendingOrder.cart_group_id) {
+            await supabaseAdmin
+              .from("orders")
+              .update(updatePayload)
+              .eq("cart_group_id", pendingOrder.cart_group_id);
+          } else {
+            await supabaseAdmin
+              .from("orders")
+              .update(updatePayload)
+              .eq("id", pendingOrder.id);
+          }
         }
 
-        console.log(`Order ${pendingOrder.id} confirmed via webhook payment ${paymentId}.`);
+        console.log(`Order ${pendingOrder.id} confirmed via webhook (${eventType}).`);
       }
     }
 
     // ── 3. Handle payment.failed ─────────────────────────────────────────────
     if (eventType === "payment.failed") {
-      const payment = payload?.payment?.entity;
-      const orderId = payment?.order_id;
+      const payment   = payload?.payment?.entity;
+      const orderId   = payment?.order_id;
+      const notes     = payment?.notes ?? {};
+      const noteOrderId     = notes?.order_id;
+      const noteCartGroupId = notes?.cart_group_id;
+
+      let pendingOrder: any = null;
 
       if (orderId) {
-        const { data: pendingOrder } = await supabaseAdmin
+        const { data } = await supabaseAdmin
           .from("orders")
-          .select("id, status")
+          .select("id, status, cart_group_id")
           .eq("razorpay_order_id", orderId)
           .limit(1)
           .maybeSingle();
+        pendingOrder = data;
+      }
 
-        if (pendingOrder && pendingOrder.status === "awaiting_payment") {
+      if (!pendingOrder && noteCartGroupId) {
+        const { data } = await supabaseAdmin
+          .from("orders")
+          .select("id, status, cart_group_id")
+          .eq("cart_group_id", noteCartGroupId)
+          .limit(1)
+          .maybeSingle();
+        pendingOrder = data;
+      }
+
+      if (!pendingOrder && noteOrderId) {
+        const { data } = await supabaseAdmin
+          .from("orders")
+          .select("id, status, cart_group_id")
+          .eq("id", noteOrderId)
+          .limit(1)
+          .maybeSingle();
+        pendingOrder = data;
+      }
+
+      if (pendingOrder && pendingOrder.status === "awaiting_payment") {
+        const cancelPayload = {
+          status: "cancelled",
+          cancelled_reason: "payment_failed",
+          payment_status: "failed",
+        };
+
+        if (pendingOrder.cart_group_id) {
           await supabaseAdmin
             .from("orders")
-            .update({ status: "cancelled", cancelled_reason: "payment_failed", payment_status: "failed" })
-            .eq("razorpay_order_id", orderId);
-
-          console.log(`Order ${pendingOrder.id} marked as cancelled (payment_failed) via webhook.`);
+            .update(cancelPayload)
+            .eq("cart_group_id", pendingOrder.cart_group_id);
+        } else {
+          await supabaseAdmin
+            .from("orders")
+            .update(cancelPayload)
+            .eq("id", pendingOrder.id);
         }
+
+        console.log(`Order ${pendingOrder.id} marked as cancelled (payment_failed) via webhook.`);
       }
     }
 
-    // ── 4. Handle refund.created ─────────────────────────────────────────────
-    if (eventType === "refund.created") {
+    // ── 4. Handle refund.created / refund.processed ───────────────────────────
+    if (eventType === "refund.created" || eventType === "refund.processed") {
       const refund    = payload?.refund?.entity;
       const paymentId = refund?.payment_id;
       const refundId  = refund?.id;
@@ -140,7 +239,6 @@ Deno.serve(async (req) => {
 
         if (orders && orders.length > 0) {
           // Update all orders that haven't been marked as refunded yet
-          // 100x FIX: Only target orders that are explicitly marked for refunding or are completely cancelled
           const terminalStates = ['cancelled', 'seller_rejected', 'payment_failed', 'timeout', 'shop_dispute_cancel', 'verification_failed'];
           const idsToUpdate = orders
             .filter((o: any) => !o.refund_id && (o.refund_status === 'processing' || terminalStates.includes(o.status)))
@@ -160,12 +258,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 5. Acknowledge Razorpay (must be within 5 seconds) ───────────────────
-    return new Response("OK", { status: 200 });
+    // ── 5. Handle refund.failed ──────────────────────────────────────────────
+    if (eventType === "refund.failed") {
+      const refund    = payload?.refund?.entity;
+      const paymentId = refund?.payment_id;
+      const errorDesc = refund?.error_description ?? "Refund processing failed on payment gateway.";
+
+      if (paymentId) {
+        await supabaseAdmin
+          .from("orders")
+          .update({
+            refund_status: "failed",
+            rejection_message: `Refund Failed: ${errorDesc}`,
+          })
+          .eq("razorpay_payment_id", paymentId);
+
+        console.log(`Refund marked as failed for payment ${paymentId}.`);
+      }
+    }
+
+    // ── 6. Acknowledge Razorpay (must be within 5 seconds) ───────────────────
+    return new Response("OK", { status: 200, headers: corsHeaders });
 
   } catch (err: any) {
     console.error("razorpay-webhook exception:", err);
     // Still return 200 to prevent Razorpay from retrying endlessly
-    return new Response("Internal error (logged)", { status: 200 });
+    return new Response("Internal error (logged)", { status: 200, headers: corsHeaders });
   }
 });

@@ -129,7 +129,9 @@ Deno.serve(async (req) => {
         receipt: receipt ?? `zappy_${user.id}_${Date.now()}`,
         notes: {
           user_id: user.id,
-          platform: "zappy_mobile",
+          order_id: order_id || "",
+          cart_group_id: cart_group_id || "",
+          platform: "enything_mobile",
         },
       }),
     });
@@ -142,6 +144,21 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: order?.error?.description ?? "Failed to create payment order." }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Persist razorpay_order_id in the database for webhook correlation
+    if (cart_group_id) {
+      await supabaseAdmin
+        .from('orders')
+        .update({ razorpay_order_id: order.id })
+        .eq('cart_group_id', cart_group_id)
+        .eq('status', 'awaiting_payment');
+    } else if (order_id) {
+      await supabaseAdmin
+        .from('orders')
+        .update({ razorpay_order_id: order.id })
+        .eq('id', order_id)
+        .eq('status', 'awaiting_payment');
     }
 
     // ── 5. Return Razorpay order to Flutter ───────────────────────────────────
