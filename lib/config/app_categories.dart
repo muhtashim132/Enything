@@ -199,7 +199,7 @@ class AppCategories {
       case 'Electronics':
         return '${base}1585298723682-7115561c51b7$params';
       case 'Mobile & Repair':
-        return '${base}1597740985671-2a8a3b805150$params';
+        return '${base}1588508065123-287b28e013da$params';
       case 'Clothing':
         return 'https://plus.unsplash.com/premium_photo-1718913936342-eaafff98834b$params';
       case 'Footwear':
@@ -217,25 +217,27 @@ class AppCategories {
       case 'Pet Supplies':
         return '${base}1583337130417-3346a1be7dee$params';
       case 'Cosmetics & Beauty':
-        return '${base}1522335789203-aabd1fc54c28$params';
+        return '${base}1596462502278-27bfdc403348$params';
       case 'Salon & Beauty':
-        return '${base}1527799820374-d64e9a66d03d$params';
+        return '${base}1560066984-138dadb4c035$params';
       case 'Flowers':
-        return '${base}1561181286-d3fee7d55ef6$params';
+        return '${base}1563241527-3004b7be0ffd$params';
       case 'Home Decor':
         return '${base}1524758631624-e2822e304c36$params';
       case 'Furniture':
-        return '${base}1505691938895-1758d7bef511$params';
+        return '${base}1555041469-a586c61ea9bc$params';
       case 'Auto Parts':
         return '${base}1530046339160-ce3e530c7d2f$params';
       case 'Paan Shop':
-        return '${base}1596649281783-5ec94a0d9baf$params';
+        return '${base}1615485290382-441e4d049cb5$params';
       case 'Tea & Coffee':
         return '${base}1497935586351-b67a49e012bf$params';
       case 'Ice Cream':
-        return '${base}1559703248-dcaaec9fac92$params';
+        return '${base}1497034825429-c343d7c6a68f$params';
       case 'Organic':
-        return '${base}1464226184852-09419184df24$params';
+        return '${base}1542838132-92c53300491e$params';
+      case 'More':
+        return '${base}1441986300917-64674bd600d8$params';
       case 'Other':
         return '${base}1472851294608-062f824d29cc$params';
       default:

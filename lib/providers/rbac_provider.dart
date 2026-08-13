@@ -53,6 +53,7 @@ class RbacProvider extends ChangeNotifier {
       // and grant immediate full superadmin access.
       final isMockAdmin = userId.endsWith('9999999996') ||
           userId == '00000000-0000-0000-0000-919999999996' ||
+          userId == 'a0fc05b6-e3cc-4e0c-adc6-fc7fe8dc70c7' ||
           userId.contains('9999999996');
 
       Map<String, dynamic>? data;

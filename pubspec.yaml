@@ -61,8 +61,6 @@ dev_dependencies:
   supabase: any
   mocktail: ^1.0.5
 flutter:
-  config:
-    enable-swift-package-manager: false
   uses-material-design: true
   assets:
     - .env

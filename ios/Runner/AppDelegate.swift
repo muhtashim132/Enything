@@ -5,9 +5,12 @@ import FirebaseMessaging
 import UserNotifications
 import flutter_background_service_ios
 import flutter_local_notifications
+import UniformTypeIdentifiers
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, UIDocumentPickerDelegate {
+
+  private var audioPickerResult: FlutterResult?
 
   override func application(
     _ application: UIApplication,
@@ -35,9 +38,80 @@ import flutter_local_notifications
     )
     application.registerForRemoteNotifications()
 
-    // ── 4. Register Flutter plugins ──────────────────────────────────────────
+    // ── 4. Register MethodChannel for Audio Picker (iOS parity) ───────────────
+    let controller = window?.rootViewController as? FlutterViewController
+    if let binaryMessenger = controller?.binaryMessenger {
+      let audioChannel = FlutterMethodChannel(name: "com.enything/audio_picker", binaryMessenger: binaryMessenger)
+      audioChannel.setMethodCallHandler { [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) in
+        guard let self = self else { return }
+        if call.method == "pickAudioFile" {
+          self.audioPickerResult = result
+          self.presentAudioDocumentPicker()
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
+
+    // ── 5. Register Flutter plugins ──────────────────────────────────────────
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  private func presentAudioDocumentPicker() {
+    guard let rootVC = window?.rootViewController else {
+      audioPickerResult?(nil)
+      audioPickerResult = nil
+      return
+    }
+
+    let picker: UIDocumentPickerViewController
+    if #available(iOS 14.0, *) {
+      let types: [UTType] = [.audio, .mp3, .wav, .aiff]
+      picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
+    } else {
+      let types = ["public.audio", "public.mp3", "com.microsoft.waveform-audio"]
+      picker = UIDocumentPickerViewController(documentTypes: types, in: .import)
+    }
+
+    picker.delegate = self
+    picker.allowsMultipleSelection = false
+    rootVC.present(picker, animated: true, completion: nil)
+  }
+
+  // ── UIDocumentPickerDelegate ─────────────────────────────────────────────
+  public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    guard let pickedUrl = urls.first else {
+      audioPickerResult?(nil)
+      audioPickerResult = nil
+      return
+    }
+
+    do {
+      let fileManager = FileManager.default
+      let documentsDir = try fileManager.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+      let customBellsDir = documentsDir.appendingPathComponent("CustomBells", isDirectory: true)
+      if !fileManager.fileExists(atPath: customBellsDir.path) {
+        try fileManager.createDirectory(at: customBellsDir, withIntermediateDirectories: true, attributes: nil)
+      }
+
+      let destUrl = customBellsDir.appendingPathComponent(pickedUrl.lastPathComponent)
+      if fileManager.fileExists(atPath: destUrl.path) {
+        try fileManager.removeItem(at: destUrl)
+      }
+      try fileManager.copyItem(at: pickedUrl, to: destUrl)
+
+      audioPickerResult?(destUrl.path)
+    } catch {
+      print("[AudioPicker] Failed to copy audio file: \(error.localizedDescription)")
+      audioPickerResult?(pickedUrl.path)
+    }
+    audioPickerResult = nil
+  }
+
+  public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    audioPickerResult?(nil)
+    audioPickerResult = nil
   }
 
   // ── APNs device token → FCM ──────────────────────────────────────────────

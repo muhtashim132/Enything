@@ -367,6 +367,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     final messageController = TextEditingController();
     String rejectReason =
         order.prescriptionUrls.isNotEmpty ? 'prescription' : 'out_of_stock';
+    String? selectedOutOfStockProductId =
+        order.items.isNotEmpty ? order.items.first.productId : null;
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
@@ -409,11 +411,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     title: Text('Prescription Issue',
                         style: GoogleFonts.outfit(color: Colors.white)),
                     value: 'prescription',
-                    // ignore: deprecated_member_use
                     groupValue: rejectReason,
                     activeColor: AppColors.primary,
                     contentPadding: EdgeInsets.zero,
-                    // ignore: deprecated_member_use
                     onChanged: (val) => setState(() => rejectReason = val!),
                   ),
                 ],
@@ -421,22 +421,57 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   title: Text('Out of Stock',
                       style: GoogleFonts.outfit(color: Colors.white)),
                   value: 'out_of_stock',
-                  // ignore: deprecated_member_use
                   groupValue: rejectReason,
                   activeColor: AppColors.primary,
                   contentPadding: EdgeInsets.zero,
-                  // ignore: deprecated_member_use
                   onChanged: (val) => setState(() => rejectReason = val!),
                 ),
+                if (rejectReason == 'out_of_stock' && order.items.length > 1) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, right: 12, bottom: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Select Out-of-Stock Item:',
+                            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: selectedOutOfStockProductId,
+                              isExpanded: true,
+                              dropdownColor: const Color(0xFF1A1A2E),
+                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 13),
+                              items: order.items.map((item) {
+                                return DropdownMenuItem<String>(
+                                  value: item.productId,
+                                  child: Text(
+                                    item.productName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) =>
+                                  setState(() => selectedOutOfStockProductId = val),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 RadioListTile<String>(
                   title: Text('Other Reason',
                       style: GoogleFonts.outfit(color: Colors.white)),
                   value: 'other',
-                  // ignore: deprecated_member_use
                   groupValue: rejectReason,
                   activeColor: AppColors.primary,
                   contentPadding: EdgeInsets.zero,
-                  // ignore: deprecated_member_use
                   onChanged: (val) => setState(() => rejectReason = val!),
                 ),
                 const SizedBox(height: 12),
@@ -536,6 +571,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         'p_order_id': order.id,
         'p_reject_reason': rejectReason,
         'p_message': msg.isNotEmpty ? msg : null,
+        if (rejectReason == 'out_of_stock' && selectedOutOfStockProductId != null)
+          'p_out_of_stock_product_id': selectedOutOfStockProductId,
       });
 
       if (mounted) {

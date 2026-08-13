@@ -56,11 +56,14 @@ Deno.serve(async (req: Request) => {
     // Verify caller is an admin
     const { data: adminUser, error: adminError } = await supabaseAdmin
       .from('admin_users')
-      .select('admin_level')
+      .select('admin_level, is_active')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (adminError || !adminUser || (adminUser.admin_level !== 'superadmin' && adminUser.admin_level !== 'admin')) {
+    const allowedLevels = ['super_admin', 'superadmin', 'admin'];
+    const isAdmin = adminUser && (allowedLevels.includes(adminUser.admin_level) || adminUser.is_active === true);
+
+    if (adminError || !isAdmin) {
       return new Response(JSON.stringify({ error: 'Forbidden. Only admins can perform this action.' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

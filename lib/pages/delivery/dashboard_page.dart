@@ -3328,19 +3328,43 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _showSnack('$label coordinates not available', isError: true);
       return;
     }
-    final Uri uri = switch (_navApp) {
-      'waze' => Uri.parse('waze://?ll=$lat,$lng&navigate=yes'),
-      'apple_maps' => Uri.parse('maps://maps.apple.com/?daddr=$lat,$lng'),
-      _ => Uri.parse(
-          'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'),
-    };
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      // Fallback
-      await launchUrl(
-          Uri.parse(
-              'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'),
-          mode: LaunchMode.externalApplication);
+
+    Uri primaryUri;
+    switch (_navApp) {
+      case 'waze':
+        primaryUri = Uri.parse('waze://?ll=$lat,$lng&navigate=yes');
+        break;
+      case 'apple_maps':
+        primaryUri = Uri.parse('maps://maps.apple.com/?daddr=$lat,$lng');
+        break;
+      case 'google_maps':
+      default:
+        primaryUri = Platform.isIOS
+            ? Uri.parse(
+                'comgooglemaps://?daddr=$lat,$lng&directionsmode=driving')
+            : Uri.parse(
+                'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
+        break;
     }
+
+    if (await canLaunchUrl(primaryUri)) {
+      await launchUrl(primaryUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+
+    // Secondary fallback for iOS (Apple Maps)
+    if (Platform.isIOS) {
+      final appleMapsUri = Uri.parse('maps://maps.apple.com/?daddr=$lat,$lng');
+      if (await canLaunchUrl(appleMapsUri)) {
+        await launchUrl(appleMapsUri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+
+    // Universal web fallback
+    final webUri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
+    await launchUrl(webUri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _callPhone(String phone) async {

@@ -22,15 +22,18 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
   SupabaseClient get _db => Supabase.instance.client;
 
   List<Map<String, dynamic>> _complaints = [];
+  List<Map<String, dynamic>> _disputes = [];
   List<Map<String, dynamic>> _reviews = [];
   bool _loadingComplaints = true;
+  bool _loadingDisputes = true;
   bool _loadingReviews = true;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _loadComplaints();
+    _loadDisputes();
     _loadReviews();
   }
 
@@ -42,7 +45,6 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
 
   Future<void> _loadComplaints() async {
     try {
-      // Try reading from a support_tickets or complaints table — graceful fallback
       final res = await _db
           .from('support_tickets')
           .select('*, profiles:user_id(full_name, phone)')
@@ -50,17 +52,29 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
           .limit(50);
       _complaints = List<Map<String, dynamic>>.from(res);
     } catch (_) {
-      // Table might not exist yet — show empty state
       _complaints = [];
     }
     if (mounted) setState(() => _loadingComplaints = false);
+  }
+
+  Future<void> _loadDisputes() async {
+    try {
+      final res = await _db
+          .from('order_disputes')
+          .select('*, profiles:customer_id(full_name, phone), shops:shop_id(name), orders:order_id(id, grand_total_collected, status, payment_status, refund_status)')
+          .order('created_at', ascending: false)
+          .limit(50);
+      _disputes = List<Map<String, dynamic>>.from(res);
+    } catch (_) {
+      _disputes = [];
+    }
+    if (mounted) setState(() => _loadingDisputes = false);
   }
 
   Future<void> _loadReviews() async {
     try {
       final res = await _db
           .from('reviews')
-          // FIX: 'shop_name' column does not exist on shops table; actual column is 'name'
           .select(
               '*, profiles:user_id(full_name, avatar_url), shops:shop_id(name)')
           .order('created_at', ascending: false)
@@ -101,7 +115,8 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
             labelStyle: AdminStyles.body(size: 13, color: Colors.white),
             unselectedLabelStyle: AdminStyles.body(size: 13),
             tabs: const [
-              Tab(text: '🎫 Complaints'),
+              Tab(text: '🎫 Tickets'),
+              Tab(text: '⚖️ Disputes'),
               Tab(text: '⭐ Reviews'),
             ],
           ),
@@ -114,6 +129,11 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
                 complaints: _complaints,
                 loading: _loadingComplaints,
                 onRefresh: _loadComplaints,
+              ),
+              _DisputesTab(
+                disputes: _disputes,
+                loading: _loadingDisputes,
+                onRefresh: _loadDisputes,
               ),
               _ReviewsTab(
                 reviews: _reviews,
@@ -430,6 +450,356 @@ class _ComplaintCard extends StatelessWidget {
                   ),
               ]),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DISPUTES TAB
+// ══════════════════════════════════════════════════════════════════
+class _DisputesTab extends StatelessWidget {
+  final List<Map<String, dynamic>> disputes;
+  final bool loading;
+  final Future<void> Function() onRefresh;
+
+  const _DisputesTab({
+    required this.disputes,
+    required this.loading,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return _skelList();
+
+    if (disputes.isEmpty) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const AdminEmptyState(
+            icon: Icons.balance_rounded,
+            message: 'No order disputes filed',
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'Customer post-delivery dispute claims and refund requests will appear here for admin review.',
+              textAlign: TextAlign.center,
+              style: AdminStyles.caption(),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      color: AdminColors.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        itemCount: disputes.length,
+        itemBuilder: (_, i) {
+          final d = disputes[i];
+          return _DisputeCard(dispute: d, onRefresh: onRefresh)
+              .animate()
+              .fadeIn(delay: Duration(milliseconds: i * 40))
+              .slideY(begin: 0.08);
+        },
+      ),
+    );
+  }
+}
+
+class _DisputeCard extends StatelessWidget {
+  final Map<String, dynamic> dispute;
+  final Future<void> Function() onRefresh;
+
+  const _DisputeCard({required this.dispute, required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    final db = Supabase.instance.client;
+    final profile = dispute['profiles'] as Map?;
+    final shop = dispute['shops'] as Map?;
+    final status = (dispute['status'] ?? 'pending') as String;
+    final reason = (dispute['reason'] ?? 'Other') as String;
+    final description = (dispute['description'] ?? '') as String;
+    final photoUrls = (dispute['photo_urls'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final refundAmount = (dispute['refund_amount_requested'] as num?)?.toDouble() ?? 0.0;
+    final orderId = (dispute['order_id'] ?? '').toString();
+    final adminNotes = dispute['admin_notes'] as String?;
+    final time = dispute['created_at'] != null
+        ? DateFormat('dd MMM, hh:mm a')
+            .format(DateTime.parse(dispute['created_at'].toString()).toIST())
+        : '';
+
+    final (statusColor, statusLabel) = switch (status) {
+      'approved' => (AdminColors.success, 'Approved / Refunded'),
+      'partially_approved' => (AdminColors.info, 'Partially Approved'),
+      'rejected' => (AdminColors.danger, 'Rejected'),
+      _ => (AdminColors.warning, 'Pending Review'),
+    };
+
+    Future<void> showResolutionDialog({required bool isApproval}) async {
+      final notesCtrl = TextEditingController();
+      final refundCtrl = TextEditingController(text: refundAmount.toStringAsFixed(2));
+
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            backgroundColor: AdminColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              isApproval ? 'Approve & Issue Refund' : 'Reject Dispute Claim',
+              style: AdminStyles.title(color: isApproval ? AdminColors.success : AdminColors.danger),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (isApproval) ...[
+                    Text('Refund Amount (₹):', style: AdminStyles.label()),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: refundCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: AdminStyles.body(),
+                      decoration: InputDecoration(
+                        hintText: 'Enter refund amount',
+                        hintStyle: AdminStyles.body(color: AdminColors.textMuted),
+                        filled: true,
+                        fillColor: AdminColors.cardBg,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Text('Admin Resolution Notes:', style: AdminStyles.label()),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: notesCtrl,
+                    maxLines: 3,
+                    style: AdminStyles.body(),
+                    decoration: InputDecoration(
+                      hintText: isApproval ? 'Reason for approving refund...' : 'Reason for rejection...',
+                      hintStyle: AdminStyles.body(color: AdminColors.textMuted),
+                      filled: true,
+                      fillColor: AdminColors.cardBg,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancel', style: AdminStyles.body()),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isApproval ? AdminColors.success : AdminColors.danger,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  isApproval ? 'Confirm Refund' : 'Confirm Reject',
+                  style: AdminStyles.body(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (confirm == true) {
+        try {
+          final approvedAmount = double.tryParse(refundCtrl.text.trim()) ?? refundAmount;
+          final newStatus = isApproval
+              ? (approvedAmount < refundAmount ? 'partially_approved' : 'approved')
+              : 'rejected';
+
+          await db.from('order_disputes').update({
+            'status': newStatus,
+            'admin_notes': notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+            'resolved_at': DateTime.now().toIso8601String(),
+          }).eq('id', dispute['id']);
+
+          if (isApproval && orderId.isNotEmpty) {
+            await db.from('orders').update({
+              'refund_status': 'processing',
+            }).eq('id', orderId);
+          }
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(isApproval ? 'Dispute approved and refund marked.' : 'Dispute claim rejected.'),
+              backgroundColor: isApproval ? AdminColors.success : AdminColors.warning,
+            ));
+          }
+          await onRefresh();
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Error resolving dispute: $e'),
+              backgroundColor: AdminColors.danger,
+            ));
+          }
+        }
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: AdminDecorations.glassCard(borderColor: statusColor.withValues(alpha: 0.2)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    AdminBadge(label: statusLabel, color: statusColor),
+                    const SizedBox(width: 8),
+                    AdminBadge(label: reason, color: AdminColors.info),
+                    const Spacer(),
+                    Text(time, style: AdminStyles.label()),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.receipt_long_rounded, size: 14, color: AdminColors.textMuted),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Order: #${orderId.length > 8 ? orderId.substring(0, 8) : orderId}',
+                      style: AdminStyles.body(size: 12, color: Colors.white70),
+                    ),
+                    const SizedBox(width: 12),
+                    if (shop?['name'] != null) ...[
+                      const Icon(Icons.storefront_rounded, size: 14, color: AdminColors.textMuted),
+                      const SizedBox(width: 4),
+                      Text(shop!['name'].toString(), style: AdminStyles.caption()),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(Icons.person_rounded, size: 14, color: AdminColors.textMuted),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${profile?['full_name'] ?? 'Customer'} • ${profile?['phone'] ?? 'No phone'}',
+                      style: AdminStyles.caption(),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Claim: ₹${refundAmount.toStringAsFixed(2)}',
+                      style: AdminStyles.title(size: 13, color: AdminColors.warning),
+                    ),
+                  ],
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AdminColors.cardBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AdminColors.cardBorder),
+                    ),
+                    child: Text(description, style: AdminStyles.body(size: 12, color: AdminColors.textSecondary)),
+                  ),
+                ],
+                if (photoUrls.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 70,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: photoUrls.length,
+                      itemBuilder: (_, pi) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              photoUrls[pi],
+                              width: 70,
+                              height: 70,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 70,
+                                height: 70,
+                                color: AdminColors.cardBg,
+                                child: const Icon(Icons.broken_image_rounded, size: 24, color: AdminColors.textMuted),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+                if (adminNotes != null && adminNotes.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.admin_panel_settings_rounded, size: 14, color: AdminColors.primary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Admin Note: $adminNotes',
+                          style: AdminStyles.caption(color: AdminColors.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (status == 'pending' &&
+                    (context.read<RbacProvider>().isSuperAdmin ||
+                        context.read<RbacProvider>().can('support.reply'))) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => showResolutionDialog(isApproval: false),
+                        icon: const Icon(Icons.close_rounded, size: 14),
+                        label: Text('Reject', style: AdminStyles.caption(color: AdminColors.danger)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AdminColors.danger,
+                          side: BorderSide(color: AdminColors.danger.withValues(alpha: 0.5)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () => showResolutionDialog(isApproval: true),
+                        icon: const Icon(Icons.check_circle_rounded, size: 14, color: Colors.white),
+                        label: Text('Approve & Refund', style: AdminStyles.caption(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AdminColors.success,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );

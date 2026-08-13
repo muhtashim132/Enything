@@ -1,12 +1,18 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/product_model.dart';
 import '../models/shop_model.dart';
 
 /// Utility class for sharing product and shop links via the native share sheet.
 class ShareUtils {
+  static String get _appStoreUrl => Platform.isIOS
+      ? 'https://apps.apple.com/app/enything/id6470000000'
+      : 'https://play.google.com/store/apps/details?id=com.enything.app';
+
   // ── Product share ──────────────────────────────────────────────────────────
   static Future<void> shareProduct(ProductModel product,
-      {ShopModel? shop}) async {
+      {ShopModel? shop, Rect? sharePositionOrigin}) async {
     final shopName = shop?.name ?? 'a shop on Enything';
     // ProductModel uses price (current/discounted) and originalPrice (pre-discount)
     final hasDiscount =
@@ -30,19 +36,21 @@ class ShareUtils {
       ..writeln(
           'Order instantly on Enything — Everything, Everywhere, Instantly!')
       ..writeln()
-      ..write(
-          '📲 Download the app: https://play.google.com/store/apps/details?id=com.enything.app');
+      ..write('📲 Download the app: $_appStoreUrl');
 
     await SharePlus.instance.share(
       ShareParams(
         text: text.toString(),
         subject: '${product.name} on Enything',
+        sharePositionOrigin: sharePositionOrigin ??
+            (Platform.isIOS ? const Rect.fromLTWH(0, 0, 100, 100) : null),
       ),
     );
   }
 
   // ── Shop share ─────────────────────────────────────────────────────────────
-  static Future<void> shareShop(ShopModel shop) async {
+  static Future<void> shareShop(ShopModel shop,
+      {Rect? sharePositionOrigin}) async {
     final ratingStr = shop.totalReviews > 0
         ? '⭐ ${shop.rating.toStringAsFixed(1)} (${shop.totalReviews} reviews)'
         : '🆕 New on Enything';
@@ -57,13 +65,14 @@ class ShareUtils {
       ..writeln(
           'Order from them instantly on Enything — Everything, Everywhere, Instantly!')
       ..writeln()
-      ..write(
-          '📲 Download the app: https://play.google.com/store/apps/details?id=com.enything.app');
+      ..write('📲 Download the app: $_appStoreUrl');
 
     await SharePlus.instance.share(
       ShareParams(
         text: text.toString(),
         subject: '${shop.name} on Enything',
+        sharePositionOrigin: sharePositionOrigin ??
+            (Platform.isIOS ? const Rect.fromLTWH(0, 0, 100, 100) : null),
       ),
     );
   }

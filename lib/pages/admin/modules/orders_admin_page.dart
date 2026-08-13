@@ -88,7 +88,11 @@ class _OrdersAdminPageState extends State<OrdersAdminPage> {
             (_activeFilter == 'Cancelled' &&
                 (status == 'cancelled' ||
                     status == 'seller_rejected' ||
-                    status == 'partner_rejected'));
+                    status == 'partner_rejected' ||
+                    status == 'shop_dispute_cancel' ||
+                    status == 'payment_failed' ||
+                    status == 'timeout' ||
+                    status == 'verification_failed'));
 
         return matchesSearch && matchesFilter;
       }).toList();
@@ -769,20 +773,27 @@ class _OrderCardState extends State<_OrderCard> {
   }
 
   int _timelineStep(String status) => switch (status) {
-        'placed' || 'pending' => 0,
-        'accepted' => 1,
-        'preparing' => 1,
-        'rider_assigned' => 2,
-        'picked_up' => 3,
-        'out_for_delivery' => 3,
+        'placed' || 'pending' || 'awaiting_acceptance' || 'awaiting_payment' => 0,
+        'accepted' || 'confirmed' || 'preparing' => 1,
+        'ready_for_pickup' || 'rider_assigned' => 2,
+        'picked_up' || 'out_for_delivery' => 3,
         'delivered' => 4,
         _ => 0,
       };
 
   (Color, String) _statusStyle(String status) => switch (status) {
         'delivered' => (AdminColors.success, 'Delivered'),
-        'cancelled' => (AdminColors.danger, 'Cancelled'),
-        'preparing' || 'accepted' => (AdminColors.info, 'Preparing'),
+        'cancelled' ||
+        'seller_rejected' ||
+        'partner_rejected' ||
+        'shop_dispute_cancel' ||
+        'payment_failed' ||
+        'timeout' ||
+        'verification_failed' =>
+          (AdminColors.danger, 'Cancelled'),
+        'preparing' || 'accepted' || 'confirmed' => (AdminColors.info, 'Preparing'),
+        'ready_for_pickup' || 'rider_assigned' =>
+          (AdminColors.info, 'Ready / Assigned'),
         'picked_up' || 'out_for_delivery' => (AdminColors.info, 'On the Way'),
         _ => (AdminColors.warning, 'Pending'),
       };

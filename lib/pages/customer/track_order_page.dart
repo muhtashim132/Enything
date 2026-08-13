@@ -418,8 +418,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 }
               }
               // Handle Reassignment (Ghost Rider) logic
-              if (oldOrder?.deliveryPartnerId != null &&
-                  oldOrder!.deliveryPartnerId !=
+              if (oldOrder.deliveryPartnerId != null &&
+                  oldOrder.deliveryPartnerId !=
                       updatedOrder.deliveryPartnerId) {
                 if (_riderLocationsNotifier.value
                     .containsKey(oldOrder.deliveryPartnerId!)) {

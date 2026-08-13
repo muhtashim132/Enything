@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 
 import 'telemetry_service.dart';
@@ -20,14 +21,40 @@ class NotificationService {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const DarwinInitializationSettings initializationSettingsIOS =
+    final darwinNotificationCategories = <DarwinNotificationCategory>[
+      DarwinNotificationCategory(
+        'order_alert_category',
+        actions: <DarwinNotificationAction>[
+          DarwinNotificationAction.plain(
+            'accept',
+            'Accept',
+            options: <DarwinNotificationActionOption>{
+              DarwinNotificationActionOption.foreground,
+            },
+          ),
+          DarwinNotificationAction.plain(
+            'decline',
+            'Decline',
+            options: <DarwinNotificationActionOption>{
+              DarwinNotificationActionOption.destructive,
+            },
+          ),
+        ],
+        options: <DarwinNotificationCategoryOption>{
+          DarwinNotificationCategoryOption.customDismissAction,
+        },
+      ),
+    ];
+
+    final DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
       requestAlertPermission: false, // We request via FCM separately
       requestBadgePermission: false,
       requestSoundPermission: false,
+      notificationCategories: darwinNotificationCategories,
     );
 
-    const InitializationSettings initializationSettings =
+    final InitializationSettings initializationSettings =
         InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
@@ -35,10 +62,27 @@ class NotificationService {
 
     await _flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
+      onDidReceiveNotificationResponse: (NotificationResponse response) async {
         if (response.payload != null && response.payload!.isNotEmpty) {
           try {
             final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+            if (response.actionId == 'decline') {
+              final orderId = data['order_id'] as String?;
+              final currentUserId =
+                  Supabase.instance.client.auth.currentUser?.id;
+              if (orderId != null && currentUserId != null) {
+                await Supabase.instance.client.rpc('rider_reject_order',
+                    params: {
+                      'p_order_id': orderId,
+                      'p_rider_id': currentUserId
+                    });
+                debugPrint('Order $orderId declined via iOS notification.');
+              }
+              if (response.id != null) {
+                await _flutterLocalNotificationsPlugin.cancel(response.id!);
+              }
+              return;
+            }
             // Centralize routing logic in main.dart. If navigator is not ready
             // (e.g. terminated launch), this safely no-ops and SplashPage takes over.
             handleNotificationClick(data);
@@ -91,10 +135,25 @@ class NotificationService {
     required String body,
     required int progress, // 0 to 100
   }) async {
-    // Additive Fix: iOS does not support persistent live progress bars (ongoing: true).
-    // To prevent iOS users from being spammed with a new banner every time progress updates,
-    // we bypass this completely on iOS. Real order status notifications are still sent via showNotification().
-    if (Platform.isIOS) return;
+    if (Platform.isIOS) {
+      // iOS: Display clean grouped notification for progress milestones
+      const DarwinNotificationDetails iosPlatformSpecifics =
+          DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: false,
+        presentSound: false,
+        threadIdentifier: 'order_progress_$_orderNotificationId',
+        interruptionLevel: InterruptionLevel.active,
+      );
+
+      await _flutterLocalNotificationsPlugin.show(
+        _orderNotificationId,
+        title,
+        body,
+        const NotificationDetails(iOS: iosPlatformSpecifics),
+      );
+      return;
+    }
 
     final AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
@@ -147,12 +206,14 @@ class NotificationService {
       icon: '@mipmap/ic_launcher',
     );
 
-    // Additive Fix: Define iOS foreground notification details so the banner actually appears locally on iOS.
+    // iOS foreground notification details with time-sensitive interruption level and custom bell sound
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
       sound: 'enything_bell.wav',
+      categoryIdentifier: 'order_alert_category',
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
     const platformDetails = NotificationDetails(

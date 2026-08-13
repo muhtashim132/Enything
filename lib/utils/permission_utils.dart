@@ -23,7 +23,7 @@ class PermissionUtils {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
-              Icon(Icons.location_on_rounded,
+              const Icon(Icons.location_on_rounded,
                   color: AppColors.primary, size: 28),
               const SizedBox(width: 10),
               Expanded(

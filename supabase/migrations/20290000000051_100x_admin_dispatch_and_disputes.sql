@@ -9,6 +9,21 @@
 -- =============================================================================
 
 -- 1. Partial Unique Index on Idempotency Key
+DO $$
+BEGIN
+  UPDATE public.orders o
+  SET idempotency_key = NULL
+  WHERE idempotency_key IS NOT NULL
+    AND id NOT IN (
+      SELECT DISTINCT ON (idempotency_key) id 
+      FROM public.orders 
+      WHERE idempotency_key IS NOT NULL 
+      ORDER BY idempotency_key, created_at DESC
+    );
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_idempotency_key 
 ON public.orders(idempotency_key) 
 WHERE idempotency_key IS NOT NULL;

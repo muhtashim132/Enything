@@ -154,11 +154,10 @@ Deno.serve(async (req: Request) => {
     // Stream state
     let fetchMore = true;
     let lastId = '00000000-0000-0000-0000-000000000000';
-    const pageSize = 1000;
-    const roleMap: Record<string, string> = {
-      'Customers': 'customer',
-      'Sellers': 'seller',
-      'Riders': 'delivery',
+    const roleMap: Record<string, string[]> = {
+      'Customers': ['customer'],
+      'Sellers': ['seller'],
+      'Riders': ['delivery_partner', 'delivery'],
     };
 
     const notifKeyBase = `broadcast_${Date.now()}`;
@@ -174,7 +173,7 @@ Deno.serve(async (req: Request) => {
           .limit(pageSize);
       
       if (roleMap[audience]) {
-        query = query.eq('role', roleMap[audience]);
+        query = query.inFilter('role', roleMap[audience]);
       }
 
       const res = await query;

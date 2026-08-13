@@ -31,6 +31,8 @@
 		<string>Enything uses your location to show nearby shops and track your deliveries in real time.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 		<string>Enything uses your location in the background to track delivery partner routes and provide accurate ETAs.</string>
+		<key>NSLocationAlwaysUsageDescription</key>
+		<string>Enything uses your location in the background to track delivery partner routes and provide accurate ETAs.</string>
 		<!-- ─── Camera & Photos (image_picker) ───────────────────────────── -->
 		<key>NSCameraUsageDescription</key>
 		<string>Enything needs camera access to let you upload product photos and KYC documents.</string>
@@ -49,6 +51,9 @@
 			<string>phonepe</string>
 			<string>gpay</string>
 			<string>paytm</string>
+			<string>waze</string>
+			<string>comgooglemaps</string>
+			<string>googlechromes</string>
 		</array>
 		<!-- ─── Razorpay callback URL scheme ─────────────────────────────── -->
 		<key>CFBundleURLTypes</key>
@@ -106,12 +111,13 @@
 		<key>UIStatusBarHidden</key>
 		<false/>
 		<!-- ─── Push Notifications & Background Service ─────────────────────── -->
-		<!-- Required: allows FCM to deliver data-only messages when app is backgrounded -->
+		<!-- Required: allows FCM to deliver data-only messages and tracks background GPS -->
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>fetch</string>
 			<string>remote-notification</string>
 			<string>processing</string>
+			<string>location</string>
 		</array>
 		<key>BGTaskSchedulerPermittedIdentifiers</key>
 		<array>

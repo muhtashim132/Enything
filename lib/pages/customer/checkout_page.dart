@@ -56,6 +56,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double _activeWeight = 0.0;
   // ignore: unused_field
   double _activeSurchargePaid = 0.0;
+  // ignore: unused_field
   List<ShopModel> _activeShops = [];
 
   @override
@@ -612,7 +613,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       final isReplacementOrder = widget.existingCartGroupId != null ||
-          context.read<CartProvider>().pendingCartGroupId != null;
+          cart.pendingCartGroupId != null;
 
       double surcharge = 0.0;
       double heavyFee = 0.0;

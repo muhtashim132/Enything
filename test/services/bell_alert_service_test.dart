@@ -3,8 +3,11 @@ import 'package:enythingmobilenew/services/bell_alert_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    BellAlertService.instance.disableAudioForTesting = true;
   });
 
   tearDown(() async {

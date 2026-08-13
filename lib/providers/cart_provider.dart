@@ -163,12 +163,16 @@ class CartProvider extends ChangeNotifier {
   StreamSubscription? _authSubscription;
 
   void _listenToAuthState() {
-    _authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      if (data.event == AuthChangeEvent.signedOut) {
-        clear();
-      }
-    });
+    try {
+      _authSubscription =
+          Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+        if (data.event == AuthChangeEvent.signedOut) {
+          clear();
+        }
+      });
+    } catch (_) {
+      // Supabase instance may not be initialized in headless test environments
+    }
   }
 
   @override

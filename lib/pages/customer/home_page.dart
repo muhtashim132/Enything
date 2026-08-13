@@ -4386,10 +4386,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   margin: const EdgeInsets.only(right: 10, top: 2, bottom: 2),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
-                    image: DecorationImage(
-                      image: CachedNetworkImageProvider(imageUrl),
-                      fit: BoxFit.cover,
-                    ),
                     // Selected state: brighter glow + white border ring
                     boxShadow: [
                       BoxShadow(
@@ -4407,66 +4403,106 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           )
                         : null,
                   ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.8),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
+                  child: ClipRRect(
+                    borderRadius:
+                        BorderRadius.circular(isSelected ? 17.5 : 20),
                     child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        // Selected checkmark badge
-                        if (isSelected)
-                          Positioned(
-                            top: 5,
-                            left: 5,
-                            child: Container(
-                              width: 18,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.90),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.check_rounded,
-                                size: 12,
-                                color: grad.first,
+                        CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          fadeInDuration: const Duration(milliseconds: 300),
+                          placeholder: (context, url) => Container(
+                            color: grad.first.withValues(alpha: 0.3),
+                            child: Center(
+                              child: Text(
+                                cat['emoji'] as String? ?? '🏬',
+                                style: const TextStyle(fontSize: 22),
                               ),
                             ),
                           ),
-                        // Content — CENTERED text at bottom
-                        Positioned.fill(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(6, 12, 6, 10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.bottomCenter,
-                                  child: Text(
-                                    displayLabel,
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 11.5,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w900
-                                          : FontWeight.w800,
-                                      color: Colors.white,
-                                      height: 1.1,
+                          errorWidget: (context, url, error) => Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: grad,
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                cat['emoji'] as String? ?? '🏬',
+                                style: const TextStyle(fontSize: 24),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.8),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                          child: Stack(
+                            children: [
+                              // Selected checkmark badge
+                              if (isSelected)
+                                Positioned(
+                                  top: 5,
+                                  left: 5,
+                                  child: Container(
+                                    width: 18,
+                                    height: 18,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.90),
+                                      shape: BoxShape.circle,
                                     ),
-                                    maxLines: 2,
-                                    textAlign: TextAlign.center,
+                                    child: Icon(
+                                      Icons.check_rounded,
+                                      size: 12,
+                                      color: grad.first,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              // Content — CENTERED text at bottom
+                              Positioned.fill(
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(6, 12, 6, 10),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.bottomCenter,
+                                        child: Text(
+                                          displayLabel,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 11.5,
+                                            fontWeight: isSelected
+                                                ? FontWeight.w900
+                                                : FontWeight.w800,
+                                            color: Colors.white,
+                                            height: 1.1,
+                                          ),
+                                          maxLines: 2,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

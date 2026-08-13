@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -173,10 +174,24 @@ Future<void> _onStart(ServiceInstance service) async {
 
       Position? pos;
       try {
-        pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
+        final LocationSettings locationSettings;
+        if (Platform.isIOS) {
+          locationSettings = AppleSettings(
             accuracy: LocationAccuracy.high,
-          ),
+            activityType: ActivityType.automotiveNavigation,
+            pauseLocationUpdatesAutomatically: false,
+            allowBackgroundLocationUpdates: true,
+            showBackgroundLocationIndicator: true,
+          );
+        } else {
+          locationSettings = AndroidSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 0,
+            intervalDuration: const Duration(seconds: _kIntervalSeconds),
+          );
+        }
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: locationSettings,
         );
       } catch (_) {
         pos = await Geolocator.getLastKnownPosition();

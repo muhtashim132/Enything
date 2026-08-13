@@ -269,9 +269,35 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   }
 
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const iosSettings = DarwinInitializationSettings();
+  final darwinCategories = <DarwinNotificationCategory>[
+    DarwinNotificationCategory(
+      'order_alert_category',
+      actions: <DarwinNotificationAction>[
+        DarwinNotificationAction.plain(
+          'accept',
+          'Accept',
+          options: <DarwinNotificationActionOption>{
+            DarwinNotificationActionOption.foreground,
+          },
+        ),
+        DarwinNotificationAction.plain(
+          'decline',
+          'Decline',
+          options: <DarwinNotificationActionOption>{
+            DarwinNotificationActionOption.destructive,
+          },
+        ),
+      ],
+      options: <DarwinNotificationCategoryOption>{
+        DarwinNotificationCategoryOption.customDismissAction,
+      },
+    ),
+  ];
+  final iosSettings = DarwinInitializationSettings(
+    notificationCategories: darwinCategories,
+  );
   await plugin.initialize(
-    const InitializationSettings(
+    InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     ),
@@ -338,11 +364,15 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     body,
     NotificationDetails(
       android: androidDetails,
-      iOS: const DarwinNotificationDetails(
+      iOS: DarwinNotificationDetails(
         presentSound: true,
         presentBadge: true,
         presentAlert: true,
         sound: 'enything_bell.wav',
+        categoryIdentifier: isUrgent ? 'order_alert_category' : null,
+        interruptionLevel: isUrgent
+            ? InterruptionLevel.timeSensitive
+            : InterruptionLevel.active,
       ),
     ),
     payload: jsonEncode(message.data),

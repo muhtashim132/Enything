@@ -43,6 +43,7 @@ class BellAlertService {
   }
 
   bool _isStarting = false;
+  bool disableAudioForTesting = false;
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -185,6 +186,10 @@ class BellAlertService {
   }
 
   Future<void> _startBell() async {
+    if (disableAudioForTesting) {
+      _isPlaying = true;
+      return;
+    }
     if (_pendingOrderIds.isEmpty) return;
 
     final uid = _userId;
@@ -264,6 +269,7 @@ class BellAlertService {
 
   Future<void> stopBell() async {
     _isPlaying = false;
+    if (disableAudioForTesting) return;
     // STRESS-TEST FIX: Prevent stopBell from accidentally killing a newly started _player during event-loop yields.
     final currentPlayer = _player;
     _player = null;
