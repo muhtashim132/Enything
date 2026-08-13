@@ -94,4 +94,4 @@ All three accounts log in **directly without OTP verification**. Just enter the 
 
 - Do **NOT** use these phone numbers for real accounts
 - The auto-accept only works for the customer account (`9999999996`) — the seller and delivery partner accounts have real dashboards
-- If the Razorpay sheet shows an error, ensure `RAZORPAY_KEY_SECRET` is set in Supabase Dashboard → Project Settings → Secrets matching the key `rzp_test_T5cdZftV7kj5jV`
+- If the Razorpay sheet shows an error, ensure `RAZORPAY_KEY_SECRET` is set in Supabase Dashboard → Project Settings → Secrets matching the key `rzp_test_TPDEHR0Sa0owFN`
