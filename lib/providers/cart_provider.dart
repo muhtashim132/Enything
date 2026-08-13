@@ -210,7 +210,7 @@ class CartProvider extends ChangeNotifier {
   double get platformFee {
     final baseFee = PlatformConfigProvider.instance?.platformFee ??
         PaymentConfig.platformFee;
-    return baseFee * (shops.isEmpty ? 1 : shops.length);
+    return baseFee;
   }
 
   bool get requiresPrescription =>

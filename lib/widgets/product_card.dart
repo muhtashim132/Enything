@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/product_model.dart';
@@ -217,6 +218,7 @@ class _ProductCardState extends State<ProductCard>
                       left: 10,
                       child: GestureDetector(
                         onTap: () {
+                          HapticFeedback.lightImpact();
                           if (auth.currentUserId != null) {
                             favs.toggleProductFavorite(
                                 auth.currentUserId!, product.id);
@@ -263,8 +265,10 @@ class _ProductCardState extends State<ProductCard>
                       top: isBestseller ? null : 42,
                       left: 10,
                       child: GestureDetector(
-                        onTap: () =>
-                            ShareUtils.shareProduct(product, shop: shop),
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          ShareUtils.shareProduct(product, shop: shop);
+                        },
                         child: Container(
                           padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(

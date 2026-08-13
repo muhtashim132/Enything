@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../config/routes.dart';
 
@@ -263,8 +264,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             accentColor: const Color(0xFF4C6EF5),
                             badge: 'Shop Now',
                             selected: _selectedRole == 'customer',
-                            onTap: () =>
-                                setState(() => _selectedRole = 'customer'),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(() => _selectedRole = 'customer');
+                            },
                           ),
                           const SizedBox(height: 16),
                           _AnimatedRoleCard(
@@ -276,8 +279,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             accentColor: const Color(0xFFF4C542),
                             badge: 'Sell Now',
                             selected: _selectedRole == 'seller',
-                            onTap: () =>
-                                setState(() => _selectedRole = 'seller'),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(() => _selectedRole = 'seller');
+                            },
                           ),
                           const SizedBox(height: 16),
                           _AnimatedRoleCard(
@@ -289,8 +294,11 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             accentColor: const Color(0xFF51CF66),
                             badge: 'Earn Now',
                             selected: _selectedRole == 'delivery_partner',
-                            onTap: () => setState(
-                                () => _selectedRole = 'delivery_partner'),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(
+                                  () => _selectedRole = 'delivery_partner');
+                            },
                           ),
 
                           if (isSmallScreen)

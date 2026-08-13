@@ -829,12 +829,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopDelivery = totalDelivery * distanceProportion;
         final shopRiderEarnings = riderEarnings * distanceProportion;
 
-        // 100x FIX: Handling Fee (Platform Fee) is a flat rate PER SHOP.
-        // It must NOT be split proportionally by food value, otherwise when a shop cancels,
-        // the remaining shops retain an inflated/deflated fee instead of exactly ₹20.
+        // 100x FIX: Handling Fee (Platform Fee) is calculated ONCE per order group.
+        // It is split equally across all shops in the order group so total platform fee = 1 basePlatformFee.
         final basePlatformFee = PlatformConfigProvider.instance?.platformFee ??
             PaymentConfig.platformFee;
-        final shopPlatformFee = basePlatformFee;
+        final shopPlatformFee = basePlatformFee / (numShops > 0 ? numShops : 1);
 
         final shopTaxBreakdownItems = shopItems.map((i) {
           return {

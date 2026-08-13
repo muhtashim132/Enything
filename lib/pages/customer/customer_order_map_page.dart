@@ -261,13 +261,39 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   // ── ORS Route Fetching ───────────────────────────────────────────────────
 
   Future<List<LatLng>> _fetchORSRoute(LatLng from, LatLng to) async {
-    int maxRetries = 3;
-    int retryDelaySeconds = 2;
+    // 1. Try free OSRM Public Routing Engine first (No API key needed)
+    try {
+      final osrmUrl = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
+        '?overview=full&geometries=geojson',
+      );
 
+      final resp = await http.get(osrmUrl).timeout(const Duration(seconds: 8));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final routes = data['routes'] as List?;
+        if (routes != null && routes.isNotEmpty) {
+          final geometry = routes.first['geometry'] as Map<String, dynamic>;
+          final coords = geometry['coordinates'] as List;
+          return coords
+              .map((c) => LatLng(
+                    (c[1] as num).toDouble(),
+                    (c[0] as num).toDouble(),
+                  ))
+              .toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('OSRM routing error: $e');
+    }
+
+    // 2. Fallback to OpenRouteService if configured
+    int maxRetries = 2;
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         final key = dotenv.maybeGet('ORS_API_KEY') ?? '';
-        if (key.isEmpty) throw Exception('ORS_API_KEY not set');
+        if (key.isEmpty) break;
 
         final url = Uri.parse(
           'https://api.openrouteservice.org/v2/directions/driving-car'
@@ -278,37 +304,28 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
         final resp = await TelemetryService.instance
             .trackLatency('ors_route_customer', () async {
-          return await http.get(url).timeout(const Duration(seconds: 10));
+          return await http.get(url).timeout(const Duration(seconds: 8));
         });
         if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');
 
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final features = data['features'] as List?;
-        if (features == null || features.isEmpty) {
-          throw Exception('No features');
+        if (features != null && features.isNotEmpty) {
+          final geometry = features.first['geometry'] as Map<String, dynamic>;
+          final coords = geometry['coordinates'] as List;
+          return coords
+              .map((c) => LatLng(
+                    (c[1] as num).toDouble(),
+                    (c[0] as num).toDouble(),
+                  ))
+              .toList();
         }
-
-        final geometry = features.first['geometry'] as Map<String, dynamic>;
-        final coords = geometry['coordinates'] as List;
-
-        return coords
-            .map((c) => LatLng(
-                  (c[1] as num).toDouble(),
-                  (c[0] as num).toDouble(),
-                ))
-            .toList();
-      } catch (e, st) {
+      } catch (e) {
         debugPrint('ORS route error (attempt $attempt): $e');
-        if (attempt == maxRetries) {
-          debugPrint(
-              'Falling back to straight line after $maxRetries attempts');
-          TelemetryService.instance.logError('ors_route_customer_fail', e, st);
-          return [from, to];
-        }
-        await Future.delayed(Duration(seconds: retryDelaySeconds));
-        retryDelaySeconds *= 2; // exponential backoff
       }
     }
+
+    // 3. Fallback to straight line
     return [from, to];
   }
 

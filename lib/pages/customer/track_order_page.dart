@@ -10,6 +10,7 @@ import '../../config/routes.dart';
 import '../../widgets/common/enything_map.dart';
 import '../../widgets/common/rating_bottom_sheet.dart';
 import '../../widgets/common/product_ratings_sheet.dart';
+import '../../widgets/customer/dispute_sheet.dart';
 import '../../pages/customer/customer_order_map_page.dart';
 import '../../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
@@ -550,6 +551,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     // Fix 3: customer already made a decision — hide the panel.
     if (_partialRejectionResolved) return false;
     if (_groupOrders.isEmpty) return false;
+
+    // 100x FIX: Dynamic backend state check — if customer placed a replacement order, resolution is complete.
+    final hasReplacedOrder = _groupOrders.any((o) => o.cancelledReason == 'customer_replaced');
+    if (hasReplacedOrder) return false;
+
     final hasRejected = _groupOrders
         .any((o) => o.status == 'seller_rejected' || o.status == 'cancelled');
     final hasActive = _groupOrders
@@ -557,115 +563,52 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     return hasRejected && hasActive;
   }
 
-  double _computeGroupTotalAmount() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.totalAmount);
+  List<OrderModel> get _activeGroupOrders {
+    if (_groupOrders.isEmpty) return _order != null ? [_order!] : [];
+    return _groupOrders.where((o) =>
+        o.status != 'cancelled' &&
+        o.status != 'seller_rejected' &&
+        o.status != 'verification_failed' &&
+        o.status != 'timeout' &&
+        o.status != 'payment_failed' &&
+        o.status != 'shop_dispute_cancel').toList();
   }
 
-  double _computeGroupDeliveryCharges() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.deliveryCharges);
-  }
+  double _computeGroupTotalAmount() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.totalAmount);
 
-  double _computeGroupPlatformFee() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.platformFee);
-  }
+  double _computeGroupDeliveryCharges() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.deliveryCharges);
 
-  double _computeGroupGstItemTotal() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.gstItemTotal);
-  }
+  double _computeGroupPlatformFee() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.platformFee);
 
-  double _computeGroupGstDelivery() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.gstDelivery);
-  }
+  double _computeGroupGstItemTotal() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstItemTotal);
 
-  double _computeGroupSmallCartFee() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.smallCartFee);
-  }
+  double _computeGroupGstDelivery() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstDelivery);
 
-  double _computeGroupHeavyOrderFee() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.heavyOrderFee);
-  }
+  double _computeGroupSmallCartFee() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.smallCartFee);
 
-  double _computeGroupMultiShopSurcharge() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.multiShopSurcharge);
-  }
+  double _computeGroupHeavyOrderFee() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.heavyOrderFee);
 
-  double _computeGroupCouponDiscount() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.couponDiscount);
-  }
+  double _computeGroupMultiShopSurcharge() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.multiShopSurcharge);
 
-  double _computeGroupGstPlatform() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.gstPlatform);
-  }
+  double _computeGroupCouponDiscount() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.couponDiscount);
 
-  double _computeGroupGrandTotal() {
-    final active = _groupOrders.isEmpty
-        ? [_order!]
-        : _groupOrders
-            .where(
-                (o) => o.status != 'cancelled' && o.status != 'seller_rejected')
-            .toList();
-    return active.fold(0.0, (sum, o) => sum + o.grandTotal);
-  }
+  double _computeGroupGstPlatform() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstPlatform);
+
+  double _computeGroupWaitTimePenalty() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.waitTimePenalty);
+
+  double _computeGroupGrandTotal() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.grandTotal);
 
   bool get _allSellersAccepted {
     if (_groupOrders.isEmpty) return _order?.sellerAccepted ?? false;
@@ -1346,6 +1289,21 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     } finally {
       if (mounted) setState(() => _isCancelling = false);
     }
+  }
+
+  void _showDisputeSheet() {
+    if (_order == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF0F172A)
+          : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => DisputeSheet(order: _order!),
+    );
   }
 
   bool _isRatingFlowOpen = false;
@@ -2594,6 +2552,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     ],
 
                     // ── Tracking Steps ────────────────────────────────────────────
+                    if (_groupOrders.length > 1) ...[
+                      _buildShopStatusList(isDark),
+                    ],
+
                     if (!isCancelled)
                       Container(
                         padding: const EdgeInsets.all(20),
@@ -2657,10 +2619,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         ),
                       ),
                     const SizedBox(height: 20),
-
-                    if (_groupOrders.length > 1) ...[
-                      _buildShopStatusList(isDark),
-                    ],
 
                     // ── Bill Summary ──────────────────────────────────────────────
                     if (!isCancelled)
@@ -2740,6 +2698,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                               _billRow('Handling Fee',
                                   '₹${(_computeGroupPlatformFee() - _computeGroupGstPlatform()).toStringAsFixed(2)}',
                                   isDark: isDark),
+                            ],
+                            if (_computeGroupWaitTimePenalty() > 0) ...[
+                              const SizedBox(height: 8),
+                              _billRow('Wait Time Penalty',
+                                  '+₹${_computeGroupWaitTimePenalty().toStringAsFixed(2)}',
+                                  isDark: isDark,
+                                  valueColor: Colors.orange.shade700),
                             ],
                             if (_computeGroupCouponDiscount() > 0) ...[
                               const SizedBox(height: 8),
@@ -2886,6 +2851,28 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                     color: AppColors.success,
                                     fontWeight: FontWeight.w600)),
                           ],
+                        ),
+                      ),
+                    ],
+                    if (isDelivered) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: _showDisputeSheet,
+                          icon: const Icon(Icons.report_problem_outlined,
+                              color: AppColors.danger, size: 18),
+                          label: Text('Report Issue / Dispute',
+                              style: GoogleFonts.outfit(
+                                  color: AppColors.danger,
+                                  fontWeight: FontWeight.w600)),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                                color: AppColors.danger.withValues(alpha: 0.5)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
                         ),
                       ),
                     ],
@@ -3313,8 +3300,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                               context); // Close the missing items sheet
                           _showAlternativesDialog(
                               item,
-                              rejectedOrders.firstWhere((o) => o.items
-                                  .any((i) => i.productId == item.productId)));
+                              rejectedOrders.firstWhere(
+                                  (o) => o.items
+                                      .any((i) => i.productId == item.productId),
+                                  orElse: () => rejectedOrders.first));
                         },
                         icon: const Icon(Icons.search,
                             size: 16, color: Colors.white),
