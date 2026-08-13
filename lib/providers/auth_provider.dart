@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:uuid/uuid.dart';
 import '../models/user_model.dart';
 import '../main.dart';
 import '../services/rider_background_service.dart';
+import '../services/bell_alert_service.dart';
 import 'package:provider/provider.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
@@ -17,6 +20,7 @@ import 'location_provider.dart';
 import 'coupon_provider.dart';
 import 'referral_provider.dart';
 import 'recently_viewed_provider.dart';
+import 'notification_provider.dart';
 
 class AuthProvider extends ChangeNotifier {
   bool _isDisposed = false;
@@ -33,6 +37,11 @@ class AuthProvider extends ChangeNotifier {
   String? _pendingPhone; // Phone waiting for OTP verification
   String? _mockUserId; // ID used for magic numbers
   bool _isManualSignOut = false;
+  bool _isHandlingForcedLogout = false;
+
+  // ─── Single Device Session State ──────────────────────────────────────────
+  String? _localSessionId;
+  RealtimeChannel? _sessionRealtimeChannel;
 
   // ─── Admin (God Mode) State ───────────────────────────────────────────────
   bool _isAdminVerified = false; // true after 2nd-factor password gate
@@ -46,6 +55,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _user != null;
   String? get currentUserId => _supabase.auth.currentUser?.id ?? _mockUserId;
   String? get pendingPhone => _pendingPhone;
+  String? get localSessionId => _localSessionId;
 
   bool get isAdminVerified => _isAdminVerified;
   bool get isAdmin => _adminData != null;
@@ -140,6 +150,275 @@ class AuthProvider extends ChangeNotifier {
 
   void retryProfileFetch() {
     _fetchProfile();
+  }
+
+  // ─── Single Device Session Engine ─────────────────────────────────────────
+
+  /// Generates and records a new active session for [userId], purging older
+  /// device tokens and invalidating remote sessions on other phones.
+  Future<void> _establishActiveSession(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final newSessionId = const Uuid().v4();
+      _localSessionId = newSessionId;
+      await prefs.setString('local_session_id', newSessionId);
+
+      // Get or generate stable_device_id
+      String? deviceId = prefs.getString('stable_device_id');
+      if (deviceId == null) {
+        deviceId =
+            'dev_${DateTime.now().millisecondsSinceEpoch}_${userId.substring(0, 8)}';
+        await prefs.setString('stable_device_id', deviceId);
+      }
+
+      // Enforce single device in DB via atomic RPC
+      try {
+        await _supabase.rpc('enforce_single_device_login', params: {
+          'p_user_id': userId,
+          'p_session_id': newSessionId,
+          'p_device_id': deviceId,
+        });
+      } catch (rpcErr) {
+        debugPrint('enforce_single_device_login RPC fallback: $rpcErr');
+        await _supabase.from('profiles').update({
+          'current_session_id': newSessionId,
+          'current_device_id': deviceId,
+          'session_created_at': DateTime.now().toIso8601String(),
+        }).eq('id', userId);
+
+        if (deviceId.isNotEmpty) {
+          try {
+            await _supabase
+                .from('device_tokens')
+                .delete()
+                .eq('user_id', userId)
+                .neq('device_id', deviceId);
+          } catch (_) {}
+        }
+      }
+
+      // Invalidate other refresh tokens on Supabase Auth
+      try {
+        await _supabase.auth.signOut(scope: SignOutScope.others);
+      } catch (_) {}
+
+      // Start listening to real-time session updates
+      _listenToSessionStream(userId);
+    } catch (e) {
+      debugPrint('Error establishing active session: $e');
+    }
+  }
+
+  /// Subscribes to real-time session changes on the user's profile row.
+  /// If another device logs in, an UPDATE event triggers immediate logout.
+  void _listenToSessionStream(String userId) {
+    try {
+      _sessionRealtimeChannel?.unsubscribe();
+      _sessionRealtimeChannel = null;
+    } catch (_) {}
+
+    try {
+      _sessionRealtimeChannel = _supabase
+          .channel('profile-session-$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'profiles',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'id',
+              value: userId,
+            ),
+            callback: (payload) {
+              final newRecord = payload.newRecord;
+              final incomingSessionId =
+                  newRecord['current_session_id'] as String?;
+              if (incomingSessionId != null &&
+                  _localSessionId != null &&
+                  incomingSessionId != _localSessionId) {
+                debugPrint(
+                    '[SingleDeviceAuth] Remote login detected on another device! Local: $_localSessionId vs DB: $incomingSessionId');
+                handleRemoteForcedLogout(
+                  message:
+                      'You have been logged out because your account was logged in on another device.',
+                );
+              }
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('Failed to subscribe to session realtime stream: $e');
+    }
+  }
+
+  /// Handles forced logout when this device's session is superseded by another device.
+  Future<void> handleRemoteForcedLogout({String? message}) async {
+    if (_isHandlingForcedLogout) return;
+    _isHandlingForcedLogout = true;
+
+    debugPrint(
+        '[SingleDeviceAuth] Executing remote forced logout for user ${currentUserId ?? "unknown"}');
+
+    // 1. Auto-deactivate shop or delivery partner duty
+    final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+    final role = _user?.activeSessionRole;
+    if (userId != null) {
+      try {
+        if (role == 'seller') {
+          await _supabase
+              .from('shops')
+              .update({'is_active': false}).eq('seller_id', userId);
+        } else if (role == 'delivery_partner') {
+          await _supabase
+              .from('delivery_partners')
+              .update({'is_active': false}).eq('id', userId);
+        }
+      } catch (_) {}
+    }
+
+    // 2. Stop rider background tracking & alert bell immediately
+    try {
+      RiderBackgroundService.instance.stopService();
+    } catch (_) {}
+    try {
+      BellAlertService.instance.clearAll();
+    } catch (_) {}
+
+    // 3. Unsubscribe from session stream
+    try {
+      _sessionRealtimeChannel?.unsubscribe();
+      _sessionRealtimeChannel = null;
+    } catch (_) {}
+
+    // 4. Clear SharedPreferences session keys
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('local_session_id');
+      await prefs.remove('last_active_role');
+      await prefs.remove('admin_session_id');
+      await prefs.remove('enything_cart_v2');
+      await prefs.remove('enything_cart_v1');
+      await prefs.remove('cart_v2');
+      await prefs.remove('cart_items');
+      await prefs.remove('recently_viewed');
+      await prefs.remove('favorite_shops');
+      await prefs.remove('favorite_products');
+    } catch (_) {}
+
+    // 5. Clear in-memory state
+    _user = null;
+    _localSessionId = null;
+    _mockUserId = null;
+    _pendingPhone = null;
+    _isAdminVerified = false;
+    _adminData = null;
+    _isProfileFetched = false;
+
+    // 6. Sign out locally & cancel all active notification banners/sounds
+    try {
+      await _supabase.auth.signOut(scope: SignOutScope.local);
+    } catch (_) {}
+    try {
+      await FlutterLocalNotificationsPlugin().cancelAll();
+    } catch (_) {}
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await _supabase
+            .from('device_tokens')
+            .delete()
+            .eq('token', fcmToken);
+      }
+    } catch (_) {}
+
+    // 7. Clear context providers if mounted
+    try {
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        context.read<CartProvider>().clear();
+        context.read<FavoritesProvider>().clear();
+        context.read<LocationProvider>().clear();
+        context.read<CouponProvider>().clearCoupon();
+        context.read<ReferralProvider>().reset();
+        context.read<RecentlyViewedProvider>().clear();
+        final notifProvider = context.read<NotificationProvider>();
+        notifProvider.stopListening();
+        notifProvider.clearFcmSubs();
+      }
+    } catch (_) {}
+
+    safeNotifyListeners();
+
+    // 8. Navigate to role selection and display clear warning
+    if (navigatorKey.currentState != null) {
+      navigatorKey.currentState!
+          .pushNamedAndRemoveUntil('/auth/role', (route) => false);
+
+      final msg = message ??
+          'You have been logged out because your account was logged in on another device.';
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.devices_other, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    msg,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.redAccent.shade700,
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+
+    _isHandlingForcedLogout = false;
+  }
+
+  /// Validates if the local session matches the active database session.
+  /// Returns false if invalidated (and triggers forced logout).
+  Future<bool> validateActiveSession() async {
+    final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+    if (userId == null) return true;
+
+    // Load local session ID from SharedPreferences if not in memory
+    if (_localSessionId == null) {
+      final prefs = await SharedPreferences.getInstance();
+      _localSessionId = prefs.getString('local_session_id');
+    }
+
+    if (_localSessionId == null) return true;
+
+    try {
+      final row = await _supabase
+          .from('profiles')
+          .select('current_session_id')
+          .eq('id', userId)
+          .maybeSingle();
+
+      final dbSessionId = row?['current_session_id'] as String?;
+      if (dbSessionId != null &&
+          dbSessionId.isNotEmpty &&
+          dbSessionId != _localSessionId) {
+        debugPrint(
+            '[SingleDeviceAuth] Validation check failed: DB session ($dbSessionId) != local ($_localSessionId). Logging out.');
+        await handleRemoteForcedLogout();
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error validating active session: $e');
+    }
+    return true;
   }
 
   // ─── Detect all roles for a given userId ────────────────────────────────
@@ -461,6 +740,20 @@ class AuthProvider extends ChangeNotifier {
         'seller_verification_status': sellerVerificationStatus,
         'rider_verification_status': riderVerificationStatus,
       });
+
+      // ── Single Device Session Tracking ──
+      _localSessionId ??= prefs.getString('local_session_id');
+      if (_localSessionId == null) {
+        final dbSession = data['current_session_id'] as String?;
+        if (dbSession != null && dbSession.isNotEmpty) {
+          _localSessionId = dbSession;
+          await prefs.setString('local_session_id', dbSession);
+        } else {
+          await _establishActiveSession(userId);
+        }
+      }
+      _listenToSessionStream(userId);
+
       _isProfileFetched = true;
       safeNotifyListeners();
     } catch (e) {
@@ -816,19 +1109,15 @@ class AuthProvider extends ChangeNotifier {
         return 'existing';
       }
 
+      // Establish unique active session in DB and start realtime listener
+      await _establishActiveSession(userId);
+
       // 3️⃣ Check if this user already has a profile or is an admin
       final existing = await _supabase
           .from('profiles')
           .select('id, role')
           .eq('id', userId)
           .maybeSingle();
-
-      // Revoke sessions on all other devices (Single Device Enforcement)
-      try {
-        await _supabase.auth.signOut(scope: SignOutScope.others);
-      } catch (e) {
-        debugPrint('Failed to sign out other sessions: $e');
-      }
 
       final isAdmin = await _supabase
           .from('admin_users')
@@ -1183,7 +1472,8 @@ class AuthProvider extends ChangeNotifier {
         'p_admin_password': password, // Store for 2FA verification
       });
 
-      // 3. Fetch profile and mark them verified
+      // 3. Establish active session and fetch profile
+      await _establishActiveSession(userId);
       await _fetchProfile(preferredRole: 'admin');
 
       _isLoading = false;
@@ -1209,6 +1499,10 @@ class AuthProvider extends ChangeNotifier {
     safeNotifyListeners();
     try {
       await _supabase.auth.signInWithPassword(email: email, password: password);
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId != null) {
+        await _establishActiveSession(userId);
+      }
       await _fetchProfile();
       _isLoading = false;
       safeNotifyListeners();
@@ -1246,11 +1540,14 @@ class AuthProvider extends ChangeNotifier {
       } catch (_) {} // Never block logout on deactivation failure
     }
 
+    // Unsubscribe from session stream
+    try {
+      _sessionRealtimeChannel?.unsubscribe();
+      _sessionRealtimeChannel = null;
+    } catch (_) {}
+    _localSessionId = null;
+
     // ── SECURITY FIX: Delete this device's FCM token from DB on every logout ──
-    // Without this, admin tokens registered on a device persist after logout.
-    // The stale token allows the DB send-push webhook to deliver admin-role
-    // notifications (e.g. KYC alerts) to the next user who logs in on the
-    // same physical device — a critical cross-user notification security breach.
     if (userId != null) {
       try {
         final fcmToken = await FirebaseMessaging.instance.getToken();
@@ -1280,6 +1577,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _supabase.auth.signOut();
       final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('local_session_id');
       await prefs.remove('last_active_role');
       await prefs.remove('admin_session_id');
     } catch (_) {}
@@ -1290,6 +1588,10 @@ class AuthProvider extends ChangeNotifier {
     _adminData = null;
 
     try {
+      await FlutterLocalNotificationsPlugin().cancelAll();
+    } catch (_) {}
+
+    try {
       final context = navigatorKey.currentContext;
       if (context != null && context.mounted) {
         context.read<CartProvider>().clear();
@@ -1298,6 +1600,9 @@ class AuthProvider extends ChangeNotifier {
         context.read<CouponProvider>().clearCoupon();
         context.read<ReferralProvider>().reset();
         context.read<RecentlyViewedProvider>().clear();
+        final notifProvider = context.read<NotificationProvider>();
+        notifProvider.stopListening();
+        notifProvider.clearFcmSubs();
       }
     } catch (_) {}
 
@@ -1317,6 +1622,7 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _sessionRealtimeChannel?.unsubscribe();
     _isDisposed = true;
     super.dispose();
   }

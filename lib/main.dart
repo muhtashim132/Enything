@@ -9,6 +9,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/app_theme.dart';
 import 'config/routes.dart';
@@ -246,6 +247,18 @@ void notificationTapBackground(
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   // Fix #1: Connect isolate to OS before doing any platform channel work
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Single Device Session Guard: If device is logged out, drop any in-flight pushes immediately
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final localSessionId = prefs.getString('local_session_id');
+    if (localSessionId == null) {
+      debugPrint(
+          'FCM background: Dropping push message because this device is logged out.');
+      return;
+    }
+  } catch (_) {}
+
   await Firebase.initializeApp();
 
   // For data-only messages, title/body come from message.data
@@ -404,7 +417,7 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-class EnythingApp extends StatelessWidget {
+class EnythingApp extends StatefulWidget {
   final CartProvider cartProvider;
   final PlatformConfigProvider configProvider;
   final RecentlyViewedProvider recentlyViewedProvider;
@@ -416,12 +429,40 @@ class EnythingApp extends StatelessWidget {
   });
 
   @override
+  State<EnythingApp> createState() => _EnythingAppState();
+}
+
+class _EnythingAppState extends State<EnythingApp> with WidgetsBindingObserver {
+  late final AuthProvider _authProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _authProvider = AuthProvider();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Validate single device active session on app resume
+      _authProvider.validateActiveSession();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider(), lazy: false),
+        ChangeNotifierProvider.value(value: _authProvider),
         // Bug #20: use the pre-loaded cartProvider instance
-        ChangeNotifierProvider<CartProvider>.value(value: cartProvider),
+        ChangeNotifierProvider<CartProvider>.value(value: widget.cartProvider),
         ChangeNotifierProvider(create: (_) => LocationProvider()),
         ChangeNotifierProvider(create: (_) => FavoritesProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
@@ -430,10 +471,10 @@ class EnythingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TeamProvider()),
         ChangeNotifierProvider(create: (_) => AuditProvider()),
         ChangeNotifierProvider<PlatformConfigProvider>.value(
-            value: configProvider),
+            value: widget.configProvider),
         ChangeNotifierProvider(create: (_) => CouponProvider()),
         ChangeNotifierProvider<RecentlyViewedProvider>.value(
-            value: recentlyViewedProvider),
+            value: widget.recentlyViewedProvider),
         ChangeNotifierProvider(create: (_) => ReferralProvider()),
       ],
       child: Consumer<ThemeProvider>(

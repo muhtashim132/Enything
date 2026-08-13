@@ -119,6 +119,12 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         return;
       }
 
+      // Single Device Session Guard: Verify if session was superseded while app was closed
+      final isSessionValid = await auth.validateActiveSession();
+      if (!isSessionValid || !mounted || auth.user == null) {
+        return;
+      }
+
       // C1 FIX: Initialize ReferralProvider so referral code is available immediately.
       // Must be called here because init() requires userId which is only
       // available after auth profile is fetched.
