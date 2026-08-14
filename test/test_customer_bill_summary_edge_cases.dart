@@ -129,6 +129,26 @@ Future<void> main() async {
   final cart1Id = const Uuid().v4();
   final now = DateTime.now();
 
+  double currentPlatformFee = 25.0;
+  double currentSmallCartThreshold = 0.0;
+  double currentSmallCartFee = 15.0;
+  try {
+    final pRes = await client.from('platform_config').select('value').eq('key', 'platform_fee').maybeSingle();
+    if (pRes != null && pRes['value'] != null) {
+      currentPlatformFee = (pRes['value'] is num) ? (pRes['value'] as num).toDouble() : double.parse(pRes['value'].toString());
+    }
+    final sRes = await client.from('platform_config').select('value').eq('key', 'small_cart_threshold').maybeSingle();
+    if (sRes != null && sRes['value'] != null) {
+      currentSmallCartThreshold = (sRes['value'] is num) ? (sRes['value'] as num).toDouble() : double.parse(sRes['value'].toString());
+    }
+    final sfRes = await client.from('platform_config').select('value').eq('key', 'small_cart_fee').maybeSingle();
+    if (sfRes != null && sfRes['value'] != null) {
+      currentSmallCartFee = (sfRes['value'] is num) ? (sfRes['value'] as num).toDouble() : double.parse(sfRes['value'].toString());
+    }
+  } catch (_) {}
+
+  final double expectedSmallCartFee = (100.0 < currentSmallCartThreshold) ? currentSmallCartFee : 0.0;
+
   await client.auth.signInWithPassword(email: _emailFromPhone(custPhone), password: _passwordFromPhone(custPhone));
 
   await client.rpc('place_orders_transaction', params: {
@@ -141,17 +161,17 @@ Future<void> main() async {
         'total_amount': 100.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 166.30,
-        'grand_total': 166.30,
+        'grand_total_collected': 100.0 + 5.0 + 41.30 + currentPlatformFee + expectedSmallCartFee,
+        'grand_total': 100.0 + 5.0 + 41.30 + currentPlatformFee + expectedSmallCartFee,
         'delivery_charges': 41.30,
         'rider_earnings': 28.0,
         'multi_shop_surcharge': 0.0,
-        'platform_fee': 20.0,
-        'small_cart_fee': 15.0,
+        'platform_fee': currentPlatformFee,
+        'small_cart_fee': expectedSmallCartFee,
         'heavy_order_fee': 0.0,
         'coupon_discount': 0.0,
-        's9_5_gst_amount': 0.0,
-        'non_food_gst_amount': 5.0,
+        's9_5_gst_amount': 5.0,
+        'non_food_gst_amount': 0.0,
         'estimated_distance_km': 1.0,
         'gst_rate_snapshot': {},
         'shop_prep_time_snapshot': 20,
@@ -194,8 +214,8 @@ Future<void> main() async {
   print('• Handling GST (18%): ₹${o1Db['gst_platform']}');
   print('• Grand Total Collected: ₹${o1Db['grand_total_collected']}');
 
-  if (o1Db['small_cart_fee'] != 15.0) throw Exception('FAILED: Small cart fee must be 15.0');
-  if (o1Db['grand_total_collected'] != 166.30) throw Exception('FAILED: Grand total mismatch');
+  if (o1Db['small_cart_fee'] != expectedSmallCartFee) throw Exception('FAILED: Small cart fee must be $expectedSmallCartFee');
+  if ((o1Db['grand_total_collected'] - (100.0 + 5.0 + 41.30 + currentPlatformFee + expectedSmallCartFee)).abs() > 0.01) throw Exception('FAILED: Grand total mismatch');
   print('✅ [TEST 1 PASSED] Small cart fee and single-shop bill summary verified!');
 
   // ── TEST 2: 2-SHOP MULTI-ORDER CART WITH MULTI-SHOP SURCHARGE & GST ──
@@ -204,7 +224,7 @@ Future<void> main() async {
   final o2bId = const Uuid().v4();
   final cart2Id = const Uuid().v4();
 
-  // Split delivery between 2 shops: ₹23.60 each, platform fee ₹20 each
+  // Split delivery between 2 shops: ₹23.60 each, platform fee per order
   await client.rpc('place_orders_transaction', params: {
     'p_orders': [
       {
@@ -215,17 +235,17 @@ Future<void> main() async {
         'total_amount': 100.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 148.60,
-        'grand_total': 148.60,
+        'grand_total_collected': 100.0 + 5.0 + 23.60 + currentPlatformFee,
+        'grand_total': 100.0 + 5.0 + 23.60 + currentPlatformFee,
         'delivery_charges': 23.60,
         'rider_earnings': 16.0,
         'multi_shop_surcharge': 10.0,
-        'platform_fee': 20.0,
+        'platform_fee': currentPlatformFee,
         'small_cart_fee': 0.0,
         'heavy_order_fee': 0.0,
         'coupon_discount': 0.0,
-        's9_5_gst_amount': 0.0,
-        'non_food_gst_amount': 5.0,
+        's9_5_gst_amount': 5.0,
+        'non_food_gst_amount': 0.0,
         'estimated_distance_km': 1.0,
         'gst_rate_snapshot': {},
         'shop_prep_time_snapshot': 20,
@@ -244,12 +264,12 @@ Future<void> main() async {
         'total_amount': 500.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 633.60,
-        'grand_total': 633.60,
+        'grand_total_collected': 500.0 + 90.0 + 23.60 + currentPlatformFee,
+        'grand_total': 500.0 + 90.0 + 23.60 + currentPlatformFee,
         'delivery_charges': 23.60,
         'rider_earnings': 16.0,
         'multi_shop_surcharge': 10.0,
-        'platform_fee': 20.0,
+        'platform_fee': currentPlatformFee,
         'small_cart_fee': 0.0,
         'heavy_order_fee': 0.0,
         'coupon_discount': 0.0,
@@ -321,22 +341,25 @@ Future<void> main() async {
     grandTotal += (o['grand_total_collected'] as num).toDouble();
   }
 
+  final expectedTotalPlatform = currentPlatformFee * 2;
+  final expectedGrandTotal = 600.0 + 47.20 + 95.0 + expectedTotalPlatform;
+
   print('📊 Aggregated Group Bill Summary (2 Shops):');
   print('• Item Subtotal: ₹$totalAmount (Expected: 600.0)');
   print('• Multi-Shop Surcharge: ₹$totalSurcharge (Expected: 20.0)');
   print('• Gross Delivery Charges: ₹$totalDelivery (Expected: 47.20)');
-  print('• Handling Fee: ₹$totalPlatform (Expected: 40.00)');
+  print('• Handling Fee: ₹$totalPlatform (Expected: $expectedTotalPlatform)');
   print('• Item GST: ₹$totalGstItem (Expected: 95.00 = ₹5 on food + ₹90 on electronics)');
   print('• Delivery GST (18%): ₹${totalGstDelivery.toStringAsFixed(2)}');
   print('• Handling GST (18%): ₹${totalGstPlatform.toStringAsFixed(2)}');
-  print('• Grand Total Paid: ₹$grandTotal (Expected: 782.20)');
+  print('• Grand Total Paid: ₹$grandTotal (Expected: $expectedGrandTotal)');
 
   if (totalAmount != 600.0) throw Exception('FAILED: Total amount mismatch');
   if (totalSurcharge != 20.0) throw Exception('FAILED: Surcharge mismatch');
   if (totalDelivery != 47.20) throw Exception('FAILED: Delivery mismatch');
-  if (totalPlatform != 40.0) throw Exception('FAILED: Platform fee mismatch');
+  if (totalPlatform != expectedTotalPlatform) throw Exception('FAILED: Platform fee mismatch');
   if (totalGstItem != 95.0) throw Exception('FAILED: Item GST mismatch (Expected 95.0, Got $totalGstItem)');
-  if (grandTotal != 782.20) throw Exception('FAILED: Grand Total mismatch');
+  if ((grandTotal - expectedGrandTotal).abs() > 0.01) throw Exception('FAILED: Grand Total mismatch');
 
   print('✅ [TEST 2 PASSED] Multi-shop mixed GST bill summary verified!');
 

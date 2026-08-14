@@ -187,8 +187,8 @@ class _CaReportPageState extends State<CaReportPage> {
         ? '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n'
             'DOC 5 \u2014 GST TCS STATEMENT (\u00a752 CGST \u2014 Non-food only)\n'
             '\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n'
-            'GST TCS Deducted by Enything (1%): \u20b9${_f(_tcsDeducted)}\n'
-            'Legal basis: CGST Act \u00a752 (taxable non-food supplies only)\n'
+            'GST TCS Deducted by Enything (0.5%): \u20b9${_f(_tcsDeducted)}\n'
+            'Legal basis: CGST Act \u00a752 & Notification 15/2024-CT (taxable non-food supplies only)\n'
             '\u00a79(5) food and 0% GST categories are exempt from TCS.\n'
             '\u2192 Enything files GSTR-8 by 10th of next month.\n'
             '\u2192 Claim \u20b9${_f(_tcsDeducted)} as credit in your GSTR-2B after Enything files GSTR-8.\n'
@@ -241,7 +241,7 @@ Gross Collected from Customers  : \u20b9${_f(_grandCollected)}
 Seller Net Payout (incl. GST)   : \u20b9${_f(_sellerPayout)}
 Enything Commission                : \u20b9${_f(_commission)}
 IT TDS Withheld (\u00a7194-O, 0.1%)  : \u20b9${_f(_tdsDeducted)}
-GST TCS Withheld (\u00a752, 1%)      : \u20b9${_f(_tcsDeducted)}
+GST TCS Withheld (\u00a752, 0.5%)      : \u20b9${_f(_tcsDeducted)}
 Delivery GST (Enything remits)     : \u20b9${_f(_deliveryGst)}
 Platform GST (Enything remits)     : \u20b9${_f(_platformGst)}
 Gateway Fees                    : \u20b9${_f(_gatewayFees)}
@@ -456,7 +456,7 @@ Gross Sales Basis   : ₹${_f(_totalBaseSales)}
                           'Only on taxable non-food orders — claim in GSTR-2B',
                       accentColor: const Color(0xFFF4C542),
                       rows: [
-                        _row('GST TCS Withheld by Enything (1%)', _tcsDeducted,
+                        _row('GST TCS Withheld by Enything (0.5%)', _tcsDeducted,
                             color: const Color(0xFFF4C542),
                             tag: 'GSTR-2B CREDIT'),
                         _row(
@@ -465,14 +465,14 @@ Gross Sales Basis   : ₹${_f(_totalBaseSales)}
                                 (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales)),
                         _divider(),
                         _infoRow(
-                          'CGST §52: TCS = 1% on taxable non-food supplies only.\n'
+                          'CGST §52 & Notification 15/2024-CT: TCS = 0.5% (0.25% CGST + 0.25% SGST) on taxable non-food supplies.\n'
                           '§9(5) food & 0% GST categories (Fruits, Butcher, Fish) are exempt from TCS.\n'
                           'Enything files GSTR-8 by 10th of next month. Claim credit in GSTR-2B after that.',
                         ),
                       ],
                       copyText: '''GST TCS Statement (§52) — $_monthLabel
-Legal basis: CGST Act §52 (taxable non-food supplies only)
-GST TCS Deducted (1%)     : ₹${_f(_tcsDeducted)}
+Legal basis: CGST Act §52 & Notification 15/2024-CT (taxable non-food supplies only)
+GST TCS Deducted (0.5%)   : ₹${_f(_tcsDeducted)}
 Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales))}
 → §9(5) food orders and 0% GST categories are excluded from TCS.
 → Enything files GSTR-8 by 10th. Claim ₹${_f(_tcsDeducted)} in your GSTR-2B.''',
@@ -490,7 +490,7 @@ Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.
                       _row('Seller Net Payout (Gross)', _sellerPayout),
                       _row('(-) IT TDS Withheld (§194-O, 0.1%)', _tdsDeducted),
                       if (_tcsDeducted > 0)
-                        _row('(-) GST TCS Withheld (§52, 1%)', _tcsDeducted),
+                        _row('(-) GST TCS Withheld (§52, 0.5%)', _tcsDeducted),
                       _row('Final Bank Deposit',
                           _sellerPayout - _tdsDeducted - _tcsDeducted,
                           color: const Color(0xFF51CF66), isBold: true),

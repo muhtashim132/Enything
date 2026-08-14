@@ -188,13 +188,21 @@ class GstRecommendationEngine {
   bool _isSlabCategory(String category) =>
       category == 'Clothing' || category == 'Footwear';
 
-  /// Standard slab alternatives. All four slabs always shown.
+  /// Complete Indian statutory GST slabs tailored by category.
   List<double> _alternativesFor(String category) {
-    // For Clothing/Footwear show slab info
     if (_isSlabCategory(category)) {
-      return [0.05, 0.18]; // low slab and high slab
+      return const [0.05, 0.12, 0.18]; // low slab, legacy, and high slab
     }
-    return const [0.00, 0.05, 0.18, 0.40];
+    if (category == 'Jewellery') {
+      return const [0.00, 0.0025, 0.015, 0.03, 0.05, 0.18]; // 0.25% rough diamonds, 1.5% cut gems, 3% gold
+    }
+    if (category == 'Pharmacy' || category == 'Medical Store') {
+      return const [0.00, 0.05, 0.12, 0.18]; // exempt, 5% essential, 12% ayurvedic, 18% cosmetics
+    }
+    if (category == 'Electronics' || category == 'Hardware Store' || category == 'Auto Parts') {
+      return const [0.05, 0.18, 0.28]; // solar/merit, 18% standard, 28% luxury/peak
+    }
+    return const [0.00, 0.03, 0.05, 0.12, 0.18, 0.28, 0.40];
   }
 
   // ---------------------------------------------------------------------------

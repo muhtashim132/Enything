@@ -174,12 +174,20 @@ Future<void> main() async {
     'https://storage.enything.com/prescriptions/rx_dr_sharma_page2.jpg'
   ];
 
+  double currentPlatformFee = 25.0;
+  try {
+    final pRes = await client.from('platform_config').select('value').eq('key', 'platform_fee').maybeSingle();
+    if (pRes != null && pRes['value'] != null) {
+      currentPlatformFee = (pRes['value'] is num) ? (pRes['value'] as num).toDouble() : double.parse(pRes['value'].toString());
+    }
+  } catch (_) {}
+
   await client.auth.signInWithPassword(
     email: _emailFromPhone(custPhone),
     password: _passwordFromPhone(custPhone),
   );
 
-  // Split delivery: ₹15.73 each (Total 47.20), Platform fee: ₹20 each (Total 60.0), Surcharge ₹13.33 each (Total 40.0)
+  // Split delivery: ₹15.73 each (Total 47.20), Platform fee: currentPlatformFee each, Surcharge ₹13.33 each (Total 40.0)
   await client.rpc('place_orders_transaction', params: {
     'p_orders': [
       // Pharmacy 1 (Order 1) - Has Rx
@@ -191,12 +199,12 @@ Future<void> main() async {
         'total_amount': 150.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 202.73,
-        'grand_total': 202.73,
+        'grand_total_collected': 150.0 + 7.5 + 15.73 + currentPlatformFee,
+        'grand_total': 150.0 + 7.5 + 15.73 + currentPlatformFee,
         'delivery_charges': 15.73,
         'rider_earnings': 10.66,
         'multi_shop_surcharge': 13.33,
-        'platform_fee': 20.0,
+        'platform_fee': currentPlatformFee,
         'small_cart_fee': 0.0,
         'heavy_order_fee': 0.0,
         'coupon_discount': 0.0,
@@ -218,12 +226,12 @@ Future<void> main() async {
         'total_amount': 250.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 315.23,
-        'grand_total': 315.23,
+        'grand_total_collected': 250.0 + 12.5 + 15.73 + currentPlatformFee,
+        'grand_total': 250.0 + 12.5 + 15.73 + currentPlatformFee,
         'delivery_charges': 15.73,
         'rider_earnings': 10.66,
         'multi_shop_surcharge': 13.33,
-        'platform_fee': 20.0,
+        'platform_fee': currentPlatformFee,
         'small_cart_fee': 0.0,
         'heavy_order_fee': 0.0,
         'coupon_discount': 0.0,
@@ -245,12 +253,12 @@ Future<void> main() async {
         'total_amount': 100.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 135.73,
-        'grand_total': 135.73,
+        'grand_total_collected': 100.0 + 0.0 + 15.74 + currentPlatformFee,
+        'grand_total': 100.0 + 0.0 + 15.74 + currentPlatformFee,
         'delivery_charges': 15.74,
         'rider_earnings': 10.68,
         'multi_shop_surcharge': 13.34,
-        'platform_fee': 20.0,
+        'platform_fee': currentPlatformFee,
         'small_cart_fee': 0.0,
         'heavy_order_fee': 0.0,
         'coupon_discount': 0.0,

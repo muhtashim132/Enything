@@ -216,13 +216,19 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   // ── Edit helpers ────────────────────────────────────────────────────────────
 
   void _startEdit(String category) {
-    _rateCtrl.text = _getRate(category).toStringAsFixed(0);
+    final currentRate = _getRate(category);
+    _rateCtrl.text = currentRate % 1 == 0
+        ? currentRate.toStringAsFixed(0)
+        : currentRate.toString();
     final threshold = _getSlabThreshold(category);
     final highRate = _getSlabHighRate(category);
     _slabThresholdCtrl.text =
         threshold != null ? threshold.toStringAsFixed(0) : '';
-    _slabHighRateCtrl.text =
-        highRate != null ? (highRate * 100).toStringAsFixed(0) : '';
+    _slabHighRateCtrl.text = highRate != null
+        ? ((highRate * 100) % 1 == 0
+            ? (highRate * 100).toStringAsFixed(0)
+            : (highRate * 100).toString())
+        : '';
     setState(() => _editingCategory = category);
   }
 
@@ -503,15 +509,23 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
   // ── Product GST Keyword Overrides ─────────────────────────────────────────
 
   List<Widget> _buildProductOverridesSectionSlivers(bool canEdit) {
-    const slabOptions = [0.00, 0.03, 0.05, 0.18, 0.40];
+    const slabOptions = [0.00, 0.0025, 0.015, 0.03, 0.05, 0.12, 0.18, 0.28, 0.40];
 
-    String rateLabel(double r) => '${(r * 100).toStringAsFixed(0)}%';
+    String rateLabel(double r) {
+      if (r == 0.0025) return '0.25%';
+      if (r == 0.015) return '1.5%';
+      return '${(r * 100).toStringAsFixed(0)}%';
+    }
 
     Color rateColor(double r) {
       if (r == 0.00) return const Color(0xFF00C853);
+      if (r == 0.0025) return const Color(0xFF00BCD4);
+      if (r == 0.015) return const Color(0xFF009688);
       if (r == 0.03) return const Color(0xFF9C27B0);
       if (r == 0.05) return AdminColors.info;
+      if (r == 0.12) return const Color(0xFF3F51B5);
       if (r == 0.18) return AdminColors.warning;
+      if (r == 0.28) return const Color(0xFFFF5722);
       return AdminColors.danger;
     }
 
@@ -1153,9 +1167,11 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${currentValue.toStringAsFixed(0)}%',
-                        style: AdminStyles.title(
-                            size: 14, color: AdminColors.primary)),
+                    Text(
+                      '${currentValue % 1 == 0 ? currentValue.toStringAsFixed(0) : currentValue}%',
+                      style: AdminStyles.title(
+                          size: 14, color: AdminColors.primary),
+                    ),
                     if (canEdit) ...[
                       const SizedBox(width: 8),
                       const Icon(Icons.edit_rounded,
@@ -1448,9 +1464,11 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('${rate.toStringAsFixed(0)}%',
-                                style: AdminStyles.title(
-                                    size: 13, color: AdminColors.primary)),
+                            Text(
+                              '${rate % 1 == 0 ? rate.toStringAsFixed(0) : rate}%',
+                              style: AdminStyles.title(
+                                  size: 13, color: AdminColors.primary),
+                            ),
                             if (canEdit) ...[
                               const SizedBox(width: 6),
                               const Icon(Icons.edit_rounded,

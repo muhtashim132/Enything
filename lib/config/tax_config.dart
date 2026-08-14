@@ -320,13 +320,13 @@ class TaxConfig {
   //      Note: Dairy & Eggs has a blended 5% rate (butter/paneer attract
   //      GST) — conservative approach is to apply TCS; seller can adjust.
   //
-  //   All other categories → TCS = 1% of base seller subtotal.
-  //   Rate: 0.5% CGST + 0.5% SGST = 1% total (Section 52(1)).
+  //   All other categories → TCS = 0.5% of base seller subtotal.
+  //   Rate: 0.25% CGST + 0.25% SGST = 0.5% total (Section 52(1), Notification 15/2024-CT).
   //   Filing: Enything files GSTR-8 by 10th of next month.
   //   Seller claims credit via GSTR-2B after Enything's GSTR-8 is filed.
 
-  /// GST TCS rate (§52) = 1% for taxable non-deemed-supplier supplies.
-  static const double gcTcsRate = 0.01; // 0.5% CGST + 0.5% SGST
+  /// GST TCS rate (§52) = 0.5% for taxable non-deemed-supplier supplies.
+  static const double gcTcsRate = 0.005; // 0.25% CGST + 0.25% SGST
 
   /// Categories where GST TCS (§52) is ZERO:
   ///   — §9(5) deemed-supplier food (Enything already pays GST directly)

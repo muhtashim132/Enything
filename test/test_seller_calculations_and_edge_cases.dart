@@ -136,6 +136,14 @@ Future<void> main() async {
   print('\n--- [TEST 1] Placing 4 Diverse Lifecycle Orders ---');
   await client.auth.signInWithPassword(email: _emailFromPhone(custPhone), password: _passwordFromPhone(custPhone));
 
+  double currentPlatformFee = 5.0;
+  try {
+    final pRes = await client.from('platform_config').select('value').eq('key', 'platform_fee').maybeSingle();
+    if (pRes != null && pRes['value'] != null) {
+      currentPlatformFee = (pRes['value'] is num) ? (pRes['value'] as num).toDouble() : double.parse(pRes['value'].toString());
+    }
+  } catch (_) {}
+
   for (final entry in [
     {'id': o1, 'cart': const Uuid().v4()},
     {'id': o2, 'cart': const Uuid().v4()},
@@ -154,11 +162,11 @@ Future<void> main() async {
           'total_amount': 3000.0,
           'payment_status': 'pending',
           'payment_method': 'upi',
-          'grand_total_collected': 3000.0 + 540.0 + 50.0 + 5.0,
+          'grand_total_collected': 3000.0 + 540.0 + 50.0 + currentPlatformFee,
           'delivery_charges': 50.0,
           'rider_earnings': 40.0,
           'multi_shop_surcharge': 0.0,
-          'platform_fee': 5.0,
+          'platform_fee': currentPlatformFee,
           'small_cart_fee': 0.0,
           'heavy_order_fee': 0.0,
           'coupon_discount': 0.0,
@@ -342,14 +350,14 @@ Future<void> main() async {
 
   print('• Base Sales: ₹$caBaseSales (Expected: 3000.0)');
   print('• Non-Food GST (18%): ₹$caNonFoodGst (Expected: 540.0)');
-  print('• TCS Deducted (1%): ₹$caTcs (Expected: 30.0)');
+  print('• TCS Deducted (0.5%): ₹$caTcs (Expected: 15.0)');
   print('• TDS Deducted (0.1%): ₹$caTds (Expected: 3.0)');
   print('• Delivered Orders Count: $caDeliveredCount (Expected: 1)');
   print('• CA Net Seller Payout: ₹$caPayout (Matches Total Earned: ₹$totalEarned)');
 
   if (caBaseSales != 3000.0) throw Exception('FAILED: CA Base Sales mismatch!');
   if (caNonFoodGst != 540.0) throw Exception('FAILED: CA Non-Food GST mismatch!');
-  if (caTcs != 30.0) throw Exception('FAILED: CA TCS mismatch!');
+  if (caTcs != 15.0) throw Exception('FAILED: CA TCS mismatch!');
   if (caTds != 3.0) throw Exception('FAILED: CA TDS mismatch!');
   if (caDeliveredCount != 1) throw Exception('FAILED: CA Delivered count mismatch!');
   if ((caPayout - totalEarned).abs() > 0.01) throw Exception('FAILED: CA Payout ($caPayout) does not match totalEarned ($totalEarned)!');

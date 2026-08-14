@@ -699,15 +699,23 @@ class _AddProductPageState extends State<AddProductPage> {
     // Color coding by rate
     Color rateColor(double r) {
       if (r == 0.00) return const Color(0xFF00C853); // green — exempt
-      if (r == 0.05) return const Color(0xFF2196F3); // blue — merit
+      if (r == 0.0025) return const Color(0xFF00BCD4); // cyan — rough diamonds
+      if (r == 0.015) return const Color(0xFF009688); // teal — cut gems
+      if (r == 0.03) return const Color(0xFF9C27B0); // purple — gold/jewellery
+      if (r == 0.05) return const Color(0xFF2196F3); // blue — concessional / food
+      if (r == 0.12) return const Color(0xFF3F51B5); // indigo — legacy / processed
       if (r == 0.18) return const Color(0xFFFF9800); // orange — standard
-      if (r >= 0.40) return const Color(0xFFF44336); // red — sin
-      if (r == 0.03) return const Color(0xFF9C27B0); // purple — jewellery
+      if (r == 0.28) return const Color(0xFFFF5722); // deep orange — luxury / peak
+      if (r >= 0.40) return const Color(0xFFF44336); // red — sin / tobacco
       return const Color(0xFF607D8B);
     }
 
-    // Human-readable slab label
-    String rateLabel(double r) => '${(r * 100).toStringAsFixed(0)}%';
+    // Human-readable slab label (supports 0.25%, 1.5%, etc.)
+    String rateLabel(double r) {
+      if (r == 0.0025) return '0.25%';
+      if (r == 0.015) return '1.5%';
+      return '${(r * 100).toStringAsFixed(0)}%';
+    }
 
     final alternatives = rec?.alternatives ?? [0.00, 0.05, 0.18, 0.40];
 
