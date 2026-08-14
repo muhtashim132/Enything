@@ -38,15 +38,15 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
     try {
       final res = await _db.rpc('admin_get_analytics_stats');
       if (res != null) {
-        _totalOrders = res['total_orders'] as int;
-        _deliveredOrders = res['delivered_orders'] as int;
-        _cancelledOrders = res['cancelled_orders'] as int;
-        _avgOrderValue = (res['avg_order_value'] as num).toDouble();
+        _totalOrders = (res['total_orders'] as num?)?.toInt() ?? 0;
+        _deliveredOrders = (res['delivered_orders'] as num?)?.toInt() ?? 0;
+        _cancelledOrders = (res['cancelled_orders'] as num?)?.toInt() ?? 0;
+        _avgOrderValue = (res['avg_order_value'] as num?)?.toDouble() ?? 0.0;
 
-        final obStatus = res['orders_by_status'] as Map<String, dynamic>;
-        _ordersByStatus = obStatus.map((k, v) => MapEntry(k, v as int));
+        final obStatus = (res['orders_by_status'] as Map<String, dynamic>?) ?? {};
+        _ordersByStatus = obStatus.map((k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0));
 
-        final hDist = res['hourly_distribution'] as Map<String, dynamic>;
+        final hDist = (res['hourly_distribution'] as Map<String, dynamic>?) ?? {};
         _hourlySpots = List.generate(24, (h) {
           return FlSpot(
               h.toDouble(), (hDist[h.toString()] as num?)?.toDouble() ?? 0.0);
@@ -55,8 +55,8 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
         // Peak hour
         if (hDist.isNotEmpty) {
           final peak = hDist.entries
-              .reduce((a, b) => (a.value as num) > (b.value as num) ? a : b);
-          final h = int.parse(peak.key);
+              .reduce((a, b) => ((a.value as num?)?.toDouble() ?? 0.0) > ((b.value as num?)?.toDouble() ?? 0.0) ? a : b);
+          final h = int.tryParse(peak.key) ?? 0;
           final suffix = h >= 12 ? 'PM' : 'AM';
           final display = h == 0 ? 12 : (h > 12 ? h - 12 : h);
           _peakHour = '$display:00 $suffix';
@@ -64,16 +64,16 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
           _peakHour = '—';
         }
 
-        final tSellers = res['top_sellers'] as List;
+        final tSellers = (res['top_sellers'] as List?) ?? [];
         _topSellers =
             List<Map<String, dynamic>>.from(tSellers).take(10).toList();
 
-        final tRiders = res['top_riders'] as List;
+        final tRiders = (res['top_riders'] as List?) ?? [];
         _topRiders = List<Map<String, dynamic>>.from(tRiders).take(10).toList();
 
         _churnRisk =
             _totalOrders > 0 ? (_cancelledOrders / _totalOrders) * 100 : 0;
-        _newUsersToday = res['new_users_today'] as int;
+        _newUsersToday = (res['new_users_today'] as num?)?.toInt() ?? 0;
       }
     } catch (e) {
       debugPrint('Analytics error: $e');

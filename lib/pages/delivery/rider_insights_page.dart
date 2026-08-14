@@ -469,7 +469,7 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.white : Colors.black87)),
                   const Spacer(),
-                  Text('₹${(amt as double).toStringAsFixed(0)}',
+                  Text('₹${((amt as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)}',
                       style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

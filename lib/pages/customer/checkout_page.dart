@@ -1001,7 +1001,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               targetUserId: data['shop'].sellerId,
               title: '🔔 New Order! Accept now',
               body:
-                  'Order ₹${(data['grandTotal'] as double).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 3 min window.',
+                  'Order ₹${((data['grandTotal'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 3 min window.',
               data: {'order_id': data['orderId'], 'role': 'seller'},
             );
           }

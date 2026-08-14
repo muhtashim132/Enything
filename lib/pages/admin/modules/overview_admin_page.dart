@@ -45,20 +45,20 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
     try {
       final res = await _db.rpc('admin_get_overview_stats');
       if (res != null) {
-        _totalOrders = res['total_orders'] as int;
-        _totalRevenue = (res['total_revenue'] as num).toDouble();
-        _totalUsers = res['total_users'] as int;
-        _pendingKyc = res['pending_kyc'] as int;
-        _pendingWithdrawals = res['pending_withdrawals'] as int;
+        _totalOrders = (res['total_orders'] as num?)?.toInt() ?? 0;
+        _totalRevenue = (res['total_revenue'] as num?)?.toDouble() ?? 0.0;
+        _totalUsers = (res['total_users'] as num?)?.toInt() ?? 0;
+        _pendingKyc = (res['pending_kyc'] as num?)?.toInt() ?? 0;
+        _pendingWithdrawals = (res['pending_withdrawals'] as num?)?.toInt() ?? 0;
 
         // Platform commission (dynamic based on config)
         _commission = _totalRevenue *
             (PlatformConfigProvider.instance?.commissionRate ?? 0.05);
 
-        final spotsRaw = res['revenue_spots'] as List;
+        final spotsRaw = (res['revenue_spots'] as List?) ?? [];
         _revenueSpots = spotsRaw.asMap().entries.map((e) {
           final i = e.key;
-          final rev = (e.value['revenue'] as num).toDouble();
+          final rev = (e.value['revenue'] as num?)?.toDouble() ?? 0.0;
           return FlSpot(i.toDouble(), rev);
         }).toList();
       }

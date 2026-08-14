@@ -117,7 +117,7 @@ class _CaReportPageState extends State<CaReportPage> {
         _sellerPayout = (response['seller_payout'] ?? 0).toDouble();
         _grandCollected = (response['grand_collected'] ?? 0).toDouble();
         _gatewayFees = (response['gateway_fees'] ?? 0).toDouble();
-        _deliveredOrders = (response['delivered_orders'] ?? 0) as int;
+        _deliveredOrders = (response['delivered_orders'] as num?)?.toInt() ?? 0;
         _monthlyOrders =
             List<Map<String, dynamic>>.from(ordersListResp as List);
         _isLoading = false;

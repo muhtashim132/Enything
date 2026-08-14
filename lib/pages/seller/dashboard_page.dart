@@ -215,11 +215,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
         final statsResult = await _supabase
             .rpc('get_seller_daily_stats', params: {'p_shop_id': shopId});
         if (statsResult != null) {
-          totalOrders += (statsResult['total_orders'] ?? 0) as int;
-          pendingOrders += (statsResult['pending_orders'] ?? 0) as int;
+          totalOrders += (statsResult['total_orders'] as num?)?.toInt() ?? 0;
+          pendingOrders += (statsResult['pending_orders'] as num?)?.toInt() ?? 0;
           todaysEarning +=
               (statsResult['todays_earning'] as num?)?.toDouble() ?? 0.0;
-          products += (statsResult['products'] ?? 0) as int;
+          products += (statsResult['products'] as num?)?.toInt() ?? 0;
         }
 
         // Fetch active orders count purely client-side to be 100% additive
@@ -545,7 +545,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                                                   .alphabetic,
                                                           children: [
                                                             Text(
-                                                                '₹${(_stats['todays_earning'] as double?)?.toStringAsFixed(0) ?? '0'}',
+                                                                '₹${((_stats['todays_earning'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)}',
                                                                 style: GoogleFonts.outfit(
                                                                     color: Colors
                                                                         .white,

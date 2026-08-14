@@ -55,7 +55,7 @@ class _FinanceAdminPageState extends State<FinanceAdminPage>
         _pureProfit = (res['pure_profit'] as num).toDouble();
         _sellerPayouts = (res['seller_payouts'] as num).toDouble();
         _riderEarnings = (res['rider_earnings'] as num).toDouble();
-        _pendingSettlements = res['pending_settlements'] as int;
+        _pendingSettlements = (res['pending_settlements'] as num?)?.toInt() ?? 0;
       }
 
       final orders = await _db
@@ -647,14 +647,14 @@ class _GstStatementTabState extends State<_GstStatementTab> {
         _nonFoodGst = (res['non_food_gst'] as num).toDouble();
         _tcsCollected = (res['tcs'] as num).toDouble();
         _tdsCollected = (res['tds'] as num).toDouble();
-        _deliveredOrders = res['delivered_orders'] as int;
+        _deliveredOrders = (res['delivered_orders'] as num?)?.toInt() ?? 0;
 
         _slabMap.clear();
-        final grouped = res['grouped_items'] as List;
+        final grouped = (res['grouped_items'] as List?) ?? [];
         for (final item in grouped) {
-          final category = item['category'] as String;
-          final price = (item['price'] as num).toDouble();
-          final qty = item['quantity'] as int;
+          final category = (item['category'] as String?) ?? 'Other';
+          final price = (item['price'] as num?)?.toDouble() ?? 0.0;
+          final qty = (item['quantity'] as num?)?.toInt() ?? 1;
           final lineBase = price * qty;
 
           final gstRate =
