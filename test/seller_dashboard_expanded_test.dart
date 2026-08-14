@@ -1,10 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:latlong2/latlong.dart';
-import 'package:enythingmobilenew/config/app_categories.dart';
-import 'package:enythingmobilenew/services/gst_recommendation_engine.dart';
 import 'package:enythingmobilenew/models/product_model.dart';
-import 'package:enythingmobilenew/models/shop_model.dart';
-import 'package:enythingmobilenew/models/order_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
