@@ -38,6 +38,8 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   String _shopEmoji = '🏪';
   bool _shopIsActive = false;
   String _shopRating = '--';
+  List<Map<String, dynamic>> _shopsList = [];
+  String? _activeShopId;
 
   late AnimationController _bgCtrl;
   late AnimationController _entryCtrl;
@@ -152,12 +154,15 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
       final shopsResp = await _supabase
           .from('shops')
           .select(
-              'id, category, categories, is_active, is_accepting_orders, average_rating, verification_status')
+              'id, name, category, categories, is_active, is_accepting_orders, average_rating, verification_status')
           .eq('seller_id', auth.currentUserId ?? '');
 
-      if ((shopsResp as List).isEmpty) {
+      final shopsList = List<Map<String, dynamic>>.from(shopsResp as List);
+
+      if (shopsList.isEmpty) {
         if (mounted) {
           setState(() {
+            _shopsList = [];
             _isLoading = false;
             _noShopFound = true;
           });
@@ -252,13 +257,25 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
 
       if (mounted) {
         setState(() {
-          // Use the first shop's info for the UI badge/emoji
-          final rawCat = firstShopData['category'] ??
-              (firstShopData['categories'] != null &&
-                      (firstShopData['categories'] as List).isNotEmpty
-                  ? firstShopData['categories'][0]
+          _shopsList = shopsList;
+          String currentActiveId = _activeShopId ?? shopsList.first['id'] as String;
+          if (!shopsList.any((s) => s['id'] == currentActiveId)) {
+            currentActiveId = shopsList.first['id'] as String;
+          }
+          _activeShopId = currentActiveId;
+
+          final activeShopData = shopsList.firstWhere(
+            (s) => s['id'] == currentActiveId,
+            orElse: () => shopsList.first,
+          );
+
+          // Use active shop's info for the UI badge/emoji
+          final rawCat = activeShopData['category'] ??
+              (activeShopData['categories'] != null &&
+                      (activeShopData['categories'] as List).isNotEmpty
+                  ? activeShopData['categories'][0]
                   : 'Other');
-          _shopBadgeName = rawCat == 'Other' ? 'Store' : rawCat;
+          _shopBadgeName = rawCat == 'Other' ? (activeShopData['name'] ?? 'Store') : rawCat;
           final catInfo = AppCategories.all.firstWhere(
             (c) => c['name'] == rawCat,
             orElse: () => {'name': rawCat, 'emoji': '🏪'},
@@ -273,21 +290,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
             'products': products,
           };
 
-          // Dashboard badge reflects the seller's own toggle (is_accepting_orders).
-          // 100x FIX: Ensure we do NOT bypass Admin suspensions.
-          if (firstShopData['is_active'] == false) {
+          if (activeShopData['is_active'] == false) {
             _adminSuspended = true;
           } else {
             _adminSuspended = false;
           }
-          // The old auto-fix that forcibly set is_active=true has been removed to respect admin bans.
 
-          // NOTE: is_active (admin KYC flag) is already guarded above via
-          // verification_status redirect (lines 147-165). If we reach this
-          // point, the shop is admin-verified. The badge must only reflect
-          // what the SELLER controls — their open/close toggle.
-          _shopIsActive = firstShopData['is_accepting_orders'] == true;
-          final rawRating = firstShopData['average_rating'];
+          _shopIsActive = activeShopData['is_accepting_orders'] == true;
+          final rawRating = activeShopData['average_rating'];
           _shopRating =
               rawRating != null ? (rawRating as num).toStringAsFixed(1) : '--';
           _isLoading = false;
@@ -820,7 +830,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                             isDark: isDark,
                             onTap: () async {
                               final result = await Navigator.pushNamed(
-                                  context, AppRoutes.addProduct);
+                                context,
+                                AppRoutes.addProduct,
+                                arguments: {'shopId': _activeShopId},
+                              );
                               if (result == true) {
                                 if (!context.mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -845,7 +858,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                             badge: null,
                             isDark: isDark,
                             onTap: () => Navigator.pushNamed(
-                                context, AppRoutes.analytics),
+                              context,
+                              AppRoutes.analytics,
+                              arguments: {'shopId': _activeShopId},
+                            ),
                           ),
                           _actionTile(
                             icon: Icons.account_balance_outlined,
@@ -858,7 +874,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                             badge: null,
                             isDark: isDark,
                             onTap: () => Navigator.pushNamed(
-                                context, AppRoutes.caReport),
+                              context,
+                              AppRoutes.caReport,
+                              arguments: {'shopId': _activeShopId},
+                            ),
                           ),
                           _actionTile(
                             icon: Icons.savings_rounded,
@@ -887,7 +906,10 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                             isDark: isDark,
                             onTap: () async {
                               await Navigator.pushNamed(
-                                  context, AppRoutes.shopManagement);
+                                context,
+                                AppRoutes.shopManagement,
+                                arguments: {'shopId': _activeShopId},
+                              );
                               setState(() => _isLoading = true);
                               _loadStats(); // refresh after returning
                             },
@@ -927,16 +949,81 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                     fontWeight: FontWeight.w900))),
       );
 
-  Widget _roleBadge(String label, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color.withValues(alpha: 0.5))),
-        child: Text(label,
-            style: GoogleFonts.outfit(
-                color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+  Widget _roleBadge(String label, Color color) {
+    if (_shopsList.length > 1) {
+      return PopupMenuButton<String>(
+        tooltip: 'Switch Active Shop',
+        initialValue: _activeShopId,
+        onSelected: (shopId) {
+          setState(() {
+            _activeShopId = shopId;
+            final shop = _shopsList.firstWhere((s) => s['id'] == shopId, orElse: () => _shopsList.first);
+            final rawCat = shop['category'] ??
+                (shop['categories'] != null && (shop['categories'] as List).isNotEmpty
+                    ? shop['categories'][0]
+                    : 'Other');
+            _shopBadgeName = rawCat == 'Other' ? (shop['name'] ?? 'Store') : rawCat;
+            final catInfo = AppCategories.all.firstWhere(
+              (c) => c['name'] == rawCat,
+              orElse: () => {'name': rawCat, 'emoji': '🏪'},
+            );
+            _shopEmoji = catInfo['emoji']!;
+            _shopIsActive = shop['is_accepting_orders'] == true;
+            _adminSuspended = shop['is_active'] == false;
+            final rawRating = shop['average_rating'];
+            _shopRating = rawRating != null ? (rawRating as num).toStringAsFixed(1) : '--';
+          });
+        },
+        itemBuilder: (context) => _shopsList.map((s) {
+          final id = s['id'] as String;
+          final name = s['name'] as String? ?? 'Shop';
+          final isSelected = id == _activeShopId;
+          return PopupMenuItem<String>(
+            value: id,
+            child: Row(
+              children: [
+                Icon(
+                  isSelected ? Icons.check_circle : Icons.store_outlined,
+                  color: isSelected ? const Color(0xFFF4C542) : Colors.grey,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(name, style: GoogleFonts.outfit(fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500))),
+              ],
+            ),
+          );
+        }).toList(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withValues(alpha: 0.5))),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: GoogleFonts.outfit(
+                      color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+              const SizedBox(width: 4),
+              Icon(Icons.arrow_drop_down, color: color, size: 14),
+            ],
+          ),
+        ),
       );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.5))),
+      child: Text(label,
+          style: GoogleFonts.outfit(
+              color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+    );
+  }
 
   Widget _statusBadge(bool isActive) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

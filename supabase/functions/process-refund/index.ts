@@ -51,8 +51,12 @@ Deno.serve(async (req) => {
     const isRefundableState = 
       newStatus === "verification_failed" || 
       newStatus === "seller_rejected" || 
+      newStatus === "partner_rejected" ||
+      newStatus === "rider_rejected" ||
       newStatus === "cancelled" ||
-      newStatus === "shop_dispute_cancel";
+      newStatus === "shop_dispute_cancel" ||
+      newStatus === "timeout" ||
+      newStatus === "payment_failed";
 
     const statusChanged = oldStatus !== newStatus;
     const manualRefundTriggered = oldRefundStatus !== "processing" && newRefundStatus === "processing";
@@ -69,30 +73,32 @@ Deno.serve(async (req) => {
         return new Response("No refund needed: COD order.", { status: 200 });
       }
 
-      // 2. Extract Razorpay Payment ID
-      const paymentId = record.razorpay_payment_id;
+      // 2. Fetch fresh order from DB to get the latest reallocated grand_total_collected
+      const { data: freshOrder } = await supabaseAdmin
+        .from("orders")
+        .select("grand_total_collected, razorpay_payment_id, refund_status, refund_id, payment_method")
+        .eq("id", record.id)
+        .maybeSingle();
+
+      const paymentId = freshOrder?.razorpay_payment_id || record.razorpay_payment_id;
       if (!paymentId) {
         console.warn(`No razorpay_payment_id found for prepaid order ${record.id}`);
         return new Response("Refund skipped: No Razorpay payment ID.", { status: 200 });
       }
 
       // 3. Skip if already refunded
-      if (record.refund_status === "processed" || record.refund_id) {
+      if (freshOrder?.refund_status === "processed" || freshOrder?.refund_id || record.refund_id) {
         return new Response("Refund skipped: Already processed.", { status: 200 });
       }
 
       // 4. Call Razorpay API to issue the refund
-      const collectedAmount = record.grand_total_collected != null ? Number(record.grand_total_collected) : 0;
+      const collectedAmount = freshOrder?.grand_total_collected != null 
+        ? Number(freshOrder.grand_total_collected) 
+        : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0);
       const amountInPaise = Math.round(collectedAmount * 100);
 
-      const supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      );
-      
       if (amountInPaise <= 0) {
         console.log(`Order ${record.id} has 0 collected amount. Marking refund as processed internally.`);
-
         await supabaseAdmin.from("orders").update({
           refund_status: "processed",
           refund_id: "internal_zero_amount"

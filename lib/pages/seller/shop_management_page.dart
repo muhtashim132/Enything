@@ -17,7 +17,8 @@ import '../../widgets/map_pin_picker_page.dart';
 import 'package:latlong2/latlong.dart' as ll;
 
 class ShopManagementPage extends StatefulWidget {
-  const ShopManagementPage({super.key});
+  final String? initialShopId;
+  const ShopManagementPage({super.key, this.initialShopId});
 
   @override
   State<ShopManagementPage> createState() => _ShopManagementPageState();
@@ -33,6 +34,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   String? _currentAddress;
   double? _shopLat;
   double? _shopLng;
+  List<Map<String, dynamic>> _shops = [];
 
   final _bannerCtrl = TextEditingController();
   final _openTimeCtrl = TextEditingController();
@@ -44,6 +46,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   @override
   void initState() {
     super.initState();
+    _shopId = widget.initialShopId;
     _loadShop();
   }
 
@@ -58,20 +61,27 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   Future<void> _loadShop() async {
     final auth = context.read<AuthProvider>();
     try {
-      final resp = await _supabase
+      final shopsResp = await _supabase
           .from('shops')
           .select(
-              'id, is_active, is_accepting_orders, banner_url, open_time, close_time, address')
-          .eq('seller_id', auth.currentUserId ?? '')
-          .limit(1)
-          .maybeSingle();
+              'id, name, is_active, is_accepting_orders, banner_url, open_time, close_time, address')
+          .eq('seller_id', auth.currentUserId ?? '');
 
-      if (resp == null) {
+      final shopsList = List<Map<String, dynamic>>.from(shopsResp as List);
+
+      if (shopsList.isEmpty) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
+      String targetId = _shopId ?? widget.initialShopId ?? shopsList.first['id'];
+      final resp = shopsList.firstWhere(
+        (s) => s['id'] == targetId,
+        orElse: () => shopsList.first,
+      );
+
       setState(() {
+        _shops = shopsList;
         _shopId = resp['id'];
         _isActive = resp['is_accepting_orders'] ?? false;
         _currentAddress = resp['address'];
@@ -239,14 +249,62 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
       backgroundColor:
           isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
       appBar: AppBar(
-        title: Text('Shop Management',
-            style: GoogleFonts.outfit(
-                fontWeight: FontWeight.w700, color: Colors.white)),
-        centerTitle: true,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Shop Management',
+                style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18)),
+            if (_shops.isNotEmpty)
+              Text(
+                _shops.firstWhere((s) => s['id'] == _shopId, orElse: () => _shops.first)['name'] ?? 'Store',
+                style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70),
+              ),
+          ],
+        ),
         backgroundColor: const Color(0xFF0A1260),
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
+        actions: [
+          if (_shops.length > 1)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.store_rounded, color: Colors.white),
+              tooltip: 'Switch Shop',
+              initialValue: _shopId,
+              onSelected: (shopId) {
+                setState(() {
+                  _shopId = shopId;
+                  _isLoading = true;
+                });
+                _loadShop();
+              },
+              itemBuilder: (context) => _shops.map((s) {
+                final id = s['id'] as String;
+                final name = s['name'] as String? ?? 'Shop';
+                return PopupMenuItem<String>(
+                  value: id,
+                  child: Row(
+                    children: [
+                      Icon(
+                        id == _shopId ? Icons.check_circle : Icons.store_outlined,
+                        color: id == _shopId ? AppColors.primary : Colors.grey,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(name,
+                            style: GoogleFonts.outfit(
+                              fontWeight: id == _shopId ? FontWeight.w700 : FontWeight.w500,
+                            )),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

@@ -707,12 +707,20 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         final orderIds = group.orders.map((o) => o.id).toList();
         final groupStatusData = await _supabase
             .from('orders')
-            .select('status')
+            .select('status, payment_status')
             .inFilter('id', orderIds);
 
         bool allShopsAccepted = true;
+        bool isAlreadyPaid = false;
         for (final o in groupStatusData) {
           final st = o['status'] as String?;
+          final paySt = o['payment_status'] as String?;
+          if (paySt == 'captured' ||
+              st == 'confirmed' ||
+              st == 'preparing' ||
+              st == 'ready_for_pickup') {
+            isAlreadyPaid = true;
+          }
           if (st == 'pending' || st == 'awaiting_acceptance') {
             allShopsAccepted = false;
             break;
@@ -723,7 +731,17 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         final notifProv = context.read<NotificationProvider>();
         final firstOrder = group.orders.first;
 
-        if (allShopsAccepted) {
+        if (isAlreadyPaid) {
+          notifProv.sendBackgroundPush(
+            targetUserId: firstOrder.customerId,
+            title: 'New Rider Assigned! 🛵',
+            body: 'A new rider has accepted your order and is on their way!',
+            data: {
+              'route': '/track_order',
+              'order_id': firstOrder.id,
+            },
+          );
+        } else if (allShopsAccepted) {
           notifProv.sendBackgroundPush(
             targetUserId: firstOrder.customerId,
             title: 'Ready for Payment! 💳',
@@ -1478,9 +1496,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           child: Scaffold(
             backgroundColor:
                 isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
-            body: CustomScrollView(
-              controller: _scrollController,
-              slivers: [
+            body: RefreshIndicator(
+              onRefresh: _loadOrders,
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
                 // ── Animated Header ───────────────────────────────────────────
                 SliverAppBar(
                   expandedHeight: 180,
@@ -1972,7 +1993,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               ],
             ),
           ),
-        ));
+        ),
+      ),
+    );
   }
 
   // ── Card Builders ─────────────────────────────────────────────────────────

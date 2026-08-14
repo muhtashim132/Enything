@@ -368,7 +368,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
-        horizontalInterval: maxY > 0 ? maxY / 4 : 100,
+        horizontalInterval:
+            maxY > 0 ? (maxY / 4).clamp(1.0, double.infinity) : 100,
         getDrawingHorizontalLine: (value) => FlLine(
           color: Colors.white.withValues(alpha: 0.05),
           strokeWidth: 1,

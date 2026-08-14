@@ -613,8 +613,9 @@ class CartProvider extends ChangeNotifier {
   /// Idempotent. Tracks processed orders in SharedPreferences. Returns RestoreResult.
   Future<RestoreResult> restoreOrderToCart(String orderId,
       {bool force = false}) async {
-    if (!force && _inFlightRestores.contains(orderId))
+    if (!force && _inFlightRestores.contains(orderId)) {
       return const RestoreResult(0);
+    }
     _inFlightRestores.add(orderId);
 
     try {

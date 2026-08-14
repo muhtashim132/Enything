@@ -315,6 +315,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
         return AppColors.success;
       case 'cancelled':
       case 'seller_rejected':
+      case 'partner_rejected':
+      case 'rider_rejected':
+      case 'verification_failed':
+      case 'timeout':
+      case 'payment_failed':
       case 'shop_dispute_cancel':
         return AppColors.danger;
       case 'out_for_delivery':
@@ -330,6 +335,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
         return Icons.check_circle_outline;
       case 'cancelled':
       case 'seller_rejected':
+      case 'partner_rejected':
+      case 'rider_rejected':
+      case 'verification_failed':
+      case 'timeout':
+      case 'payment_failed':
       case 'shop_dispute_cancel':
         return Icons.cancel_outlined;
       case 'out_for_delivery':

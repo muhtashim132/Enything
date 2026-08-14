@@ -172,8 +172,9 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
               if (rawProducts.length >= 150) break;
             }
           }
-          if (rawProducts.length > 150)
+          if (rawProducts.length > 150) {
             rawProducts = rawProducts.sublist(0, 150);
+          }
         }
 
         // Collect unique shop_ids for a single batch query

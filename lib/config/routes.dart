@@ -161,16 +161,28 @@ class AppRoutes {
       case addProduct:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         return _build(
-            AddProductPage(existingProduct: a?['product'] as ProductModel?),
+            AddProductPage(
+              existingProduct: a?['product'] as ProductModel?,
+              initialShopId: a?['shopId'] as String?,
+            ),
             routeSettings);
       case manageProducts:
-        return _build(const ManageProductsPage(), routeSettings);
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+            ManageProductsPage(initialShopId: a?['shopId'] as String?),
+            routeSettings);
       case sellerOrders:
         return _build(const SellerOrdersPage(), routeSettings);
       case analytics:
-        return _build(const AnalyticsPage(), routeSettings);
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+            AnalyticsPage(initialShopId: a?['shopId'] as String?),
+            routeSettings);
       case caReport:
-        return _build(const CaReportPage(), routeSettings);
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+            CaReportPage(initialShopId: a?['shopId'] as String?),
+            routeSettings);
       case deliveryDashboard:
         return _build(const DeliveryDashboardPage(), routeSettings);
       case riderInsights:
@@ -180,7 +192,10 @@ class AppRoutes {
       case riderOrderHistory:
         return _build(const RiderOrderHistoryPage(), routeSettings);
       case shopManagement:
-        return _build(const ShopManagementPage(), routeSettings);
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+            ShopManagementPage(initialShopId: a?['shopId'] as String?),
+            routeSettings);
       case settings:
         return _build(const ProfileSettingsPage(), routeSettings);
       case terms:

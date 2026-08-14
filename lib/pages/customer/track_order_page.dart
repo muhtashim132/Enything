@@ -39,6 +39,17 @@ class TrackOrderPage extends StatefulWidget {
 
 class _TrackOrderPageState extends State<TrackOrderPage>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  static const Set<String> _terminalRejectionStatuses = {
+    'cancelled',
+    'seller_rejected',
+    'partner_rejected',
+    'rider_rejected',
+    'verification_failed',
+    'timeout',
+    'payment_failed',
+    'shop_dispute_cancel',
+  };
+
   SupabaseClient get _supabase => Supabase.instance.client;
   OrderModel? _order;
   bool _isLoading = true;
@@ -473,7 +484,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (_groupOrders.isEmpty) return _order?.status ?? 'pending';
 
     final activeOrders = _groupOrders
-        .where((o) => o.status != 'cancelled' && o.status != 'seller_rejected')
+        .where((o) => !_terminalRejectionStatuses.contains(o.status))
         .toList();
     if (activeOrders.isEmpty) return 'cancelled';
 
@@ -548,13 +559,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         return 'Cancelled';
       case 'seller_rejected':
         return 'Shop Rejected';
+      case 'verification_failed':
+        return 'Prescription Rejected';
       default:
         return 'Unknown';
     }
   }
 
-  bool get _isCancelled =>
-      _aggregateStatus == 'cancelled' || _aggregateStatus == 'seller_rejected';
+  bool get _isCancelled => _terminalRejectionStatuses.contains(_aggregateStatus);
   bool get _isDelivered => _aggregateStatus == 'delivered';
 
   bool get _hasPartialRejection {
@@ -567,21 +579,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (hasReplacedOrder) return false;
 
     final hasRejected = _groupOrders
-        .any((o) => o.status == 'seller_rejected' || o.status == 'cancelled');
+        .any((o) => _terminalRejectionStatuses.contains(o.status));
     final hasActive = _groupOrders
-        .any((o) => o.status != 'seller_rejected' && o.status != 'cancelled');
+        .any((o) => !_terminalRejectionStatuses.contains(o.status));
     return hasRejected && hasActive;
   }
 
   List<OrderModel> get _activeGroupOrders {
     if (_groupOrders.isEmpty) return _order != null ? [_order!] : [];
-    return _groupOrders.where((o) =>
-        o.status != 'cancelled' &&
-        o.status != 'seller_rejected' &&
-        o.status != 'verification_failed' &&
-        o.status != 'timeout' &&
-        o.status != 'payment_failed' &&
-        o.status != 'shop_dispute_cancel').toList();
+    return _groupOrders.where((o) => !_terminalRejectionStatuses.contains(o.status)).toList();
   }
 
   double _computeGroupTotalAmount() =>
@@ -623,7 +629,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   bool get _allSellersAccepted {
     if (_groupOrders.isEmpty) return _order?.sellerAccepted ?? false;
     final active = _groupOrders
-        .where((o) => o.status != 'cancelled' && o.status != 'seller_rejected')
+        .where((o) => !_terminalRejectionStatuses.contains(o.status))
         .toList();
     if (active.isEmpty) return false;
     return active.every((o) => o.sellerAccepted);
@@ -632,7 +638,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   bool get _partnerAccepted {
     if (_groupOrders.isEmpty) return _order?.partnerAccepted ?? false;
     final active = _groupOrders
-        .where((o) => o.status != 'cancelled' && o.status != 'seller_rejected')
+        .where((o) => !_terminalRejectionStatuses.contains(o.status))
         .toList();
     if (active.isEmpty) return false;
     return active.every((o) => o.partnerAccepted);
@@ -2898,14 +2904,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // ── Partial Rejection Panel ───────────────────────────────────────────
   Widget _buildPartialRejectionPanel(bool isDark) {
     final rejectedOrders = _groupOrders
-        .where((o) => o.status == 'seller_rejected' || o.status == 'cancelled')
+        .where((o) => _terminalRejectionStatuses.contains(o.status))
         .toList();
     final hasReadyToPayShops =
         _groupOrders.any((o) => o.status == 'awaiting_payment');
     final hasSellerAcceptedShops = _groupOrders.any((o) =>
         o.sellerAccepted == true &&
-        o.status != 'cancelled' &&
-        o.status != 'seller_rejected');
+        !_terminalRejectionStatuses.contains(o.status));
     final hasPendingShops = _groupOrders.any(
         (o) => o.status == 'awaiting_acceptance' && o.sellerAccepted != true);
 
@@ -3053,7 +3058,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         for (var pending in pendingOrders) {
                           await _supabase.rpc('cancel_order', params: {
                             'p_order_id': pending.id,
-                            'p_reason': 'customer'
+                            'p_reason': 'customer',
+                            'p_cancel_entire_group': false,
                           });
                         }
                         // Manually update the state of these orders locally
@@ -3083,9 +3089,20 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
                       // FIX: The user has made their decision. Stop the timer and hide the banner!
                       _decisionCountdownTimer?.cancel();
-                      final prefs = await SharedPreferences.getInstance();
                       final cartGroupId =
                           _order?.cartGroupId ?? _order?.id ?? 'unknown';
+
+                      // Disarm backend cron timeout
+                      try {
+                        await _supabase.rpc('acknowledge_partial_rejection', params: {
+                          'p_cart_group_id': cartGroupId,
+                          'p_action': 'proceeded',
+                        });
+                      } catch (e) {
+                        debugPrint('Error acknowledging partial rejection in DB: $e');
+                      }
+
+                      final prefs = await SharedPreferences.getInstance();
                       await prefs.setBool(
                           'partial_rejection_resolved_$cartGroupId', true);
                       if (mounted) {
@@ -4099,9 +4116,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         _order!.deliveryLat != null &&
         _order!.deliveryLng != null;
 
-    final isCancelled = _aggregateStatus == 'cancelled' ||
-        _aggregateStatus == 'seller_rejected' ||
-        _aggregateStatus == 'partner_rejected';
+    final isCancelled = _terminalRejectionStatuses.contains(_aggregateStatus);
 
     // Show full-screen button only for active/trackable statuses
     final canShowMap = hasCoords && !isCancelled;
@@ -4471,8 +4486,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         .eq('is_available', true)
                         .neq('shop_id', rejectedOrder.shopId ?? '')
                         .limit(10);
-                    if ((precise as List).isNotEmpty)
+                    if ((precise as List).isNotEmpty) {
                       return precise as List<dynamic>;
+                    }
                     // Fallback: single first-word search (broader)
                     final broad = await _supabase
                         .from('products')

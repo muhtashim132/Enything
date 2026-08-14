@@ -19,7 +19,8 @@ import '../../services/gst_recommendation_engine.dart';
 
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
-  const AddProductPage({super.key, this.existingProduct});
+  final String? initialShopId;
+  const AddProductPage({super.key, this.existingProduct, this.initialShopId});
 
   @override
   State<AddProductPage> createState() => _AddProductPageState();
@@ -76,6 +77,7 @@ class _AddProductPageState extends State<AddProductPage> {
   @override
   void initState() {
     super.initState();
+    _shopId = widget.existingProduct?.shopId ?? widget.initialShopId;
     // Pre-load DB keyword rules so first recommendation is instant
     GstRecommendationEngine.instance.ensureLoaded();
     _fetchShopId();
@@ -128,11 +130,29 @@ class _AddProductPageState extends State<AddProductPage> {
   Future<void> _fetchShopId() async {
     final auth = context.read<AuthProvider>();
     try {
-      final resp = await _supabase
-          .from('shops')
-          .select('id, category, categories')
-          .eq('seller_id', auth.currentUserId ?? '')
-          .single();
+      final targetShopId = _shopId ?? widget.existingProduct?.shopId ?? widget.initialShopId;
+      Map<String, dynamic>? resp;
+
+      if (targetShopId != null && targetShopId.isNotEmpty) {
+        final queryResp = await _supabase
+            .from('shops')
+            .select('id, category, categories')
+            .eq('id', targetShopId)
+            .maybeSingle();
+        resp = queryResp;
+      }
+
+      if (resp == null) {
+        final queryResp = await _supabase
+            .from('shops')
+            .select('id, category, categories')
+            .eq('seller_id', auth.currentUserId ?? '')
+            .limit(1)
+            .maybeSingle();
+        resp = queryResp;
+      }
+
+      if (resp == null) return;
 
       // Collect all category names associated with this shop
       final shopCatNames = <String>{
@@ -161,7 +181,7 @@ class _AddProductPageState extends State<AddProductPage> {
                   : 'Other');
 
       setState(() {
-        _shopId = resp['id'];
+        _shopId = resp!['id'];
         _allowedCategories = allowed.isNotEmpty ? allowed : AppCategories.names;
 
         // If editing an existing product whose category is already valid, keep it.

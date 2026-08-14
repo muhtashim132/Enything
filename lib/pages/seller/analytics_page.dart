@@ -8,7 +8,8 @@ import '../../utils/responsive_layout.dart';
 import '../../utils/time_utils.dart';
 
 class AnalyticsPage extends StatefulWidget {
-  const AnalyticsPage({super.key});
+  final String? initialShopId;
+  const AnalyticsPage({super.key, this.initialShopId});
 
   @override
   State<AnalyticsPage> createState() => _AnalyticsPageState();
@@ -17,6 +18,9 @@ class AnalyticsPage extends StatefulWidget {
 class _AnalyticsPageState extends State<AnalyticsPage> {
   SupabaseClient get _supabase => Supabase.instance.client;
   bool _isLoading = true;
+  String? _selectedShopId;
+  List<Map<String, dynamic>> _shops = [];
+
   double _totalRevenue = 0;
   double _totalPayout = 0;
   double _totalCommission = 0;
@@ -28,6 +32,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   @override
   void initState() {
     super.initState();
+    _selectedShopId = widget.initialShopId;
     _loadAnalytics();
   }
 
@@ -38,15 +43,20 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
       final shopsResp = await _supabase
           .from('shops')
-          .select('id')
+          .select('id, name')
           .eq('seller_id', auth.currentUserId ?? '');
 
-      if ((shopsResp as List).isEmpty) {
+      final shopsList = List<Map<String, dynamic>>.from(shopsResp as List);
+
+      if (shopsList.isEmpty) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      final shopId = shopsResp.first['id'];
+      String shopId = _selectedShopId ?? widget.initialShopId ?? shopsList.first['id'];
+      if (!shopsList.any((s) => s['id'] == shopId)) {
+        shopId = shopsList.first['id'];
+      }
 
       final now = DateTime.now();
       final todayDate = DateTime(now.year, now.month, now.day);
@@ -74,9 +84,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
       for (final order in (orders as List)) {
         final status = order['status'];
-        final amount = (order['total_amount'] ?? 0.0).toDouble();
-        final sp = (order['seller_payout'] ?? 0.0).toDouble();
-        final zc = (order['enything_commission'] ?? 0.0).toDouble();
+        final amount = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
+        final sp = (order['seller_payout'] as num?)?.toDouble() ?? 0.0;
+        final zc = (order['enything_commission'] as num?)?.toDouble() ?? 0.0;
 
         if (status == 'delivered') {
           total += amount;
@@ -101,19 +111,23 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         spots.add(FlSpot(i.toDouble(), dailyRevenue[dates[i]]!));
       }
 
-      setState(() {
-        _totalRevenue = total;
-        _totalPayout = payout;
-        _totalCommission = commission;
-        _totalOrders = orders.length; // Count of all orders in last 7 days
-        _deliveredOrders = delivered;
-        _revenueSpots.clear();
-        _revenueSpots.addAll(spots);
-        _last7DaysDates = dates;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _shops = shopsList;
+          _selectedShopId = shopId;
+          _totalRevenue = total;
+          _totalPayout = payout;
+          _totalCommission = commission;
+          _totalOrders = orders.length; // Count of all orders in last 7 days
+          _deliveredOrders = delivered;
+          _revenueSpots.clear();
+          _revenueSpots.addAll(spots);
+          _last7DaysDates = dates;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -121,11 +135,59 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Analytics')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Store Analytics'),
+            if (_shops.isNotEmpty)
+              Text(
+                _shops.firstWhere((s) => s['id'] == _selectedShopId, orElse: () => _shops.first)['name'] ?? 'Store',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+          ],
+        ),
+        actions: [
+          if (_shops.length > 1)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.store_rounded),
+              tooltip: 'Switch Shop',
+              initialValue: _selectedShopId,
+              onSelected: (shopId) {
+                setState(() {
+                  _selectedShopId = shopId;
+                  _isLoading = true;
+                });
+                _loadAnalytics();
+              },
+              itemBuilder: (context) => _shops.map((s) {
+                final id = s['id'] as String;
+                final name = s['name'] as String? ?? 'Shop';
+                return PopupMenuItem<String>(
+                  value: id,
+                  child: Row(
+                    children: [
+                      Icon(
+                        id == _selectedShopId ? Icons.check_circle : Icons.store_outlined,
+                        color: id == _selectedShopId ? AppColors.primary : Colors.grey,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(name)),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
       body: MaxWidthContainer(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
+            : RefreshIndicator(
+                onRefresh: _loadAnalytics,
+                child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,6 +382,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   ],
                 ),
               ),
+            ),
       ),
     );
   }

@@ -50,7 +50,13 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage>
           .select(
               'id, created_at, status, rider_earnings, delivery_charges, shops!shop_id(name)')
           .eq('delivery_partner_id', auth.currentUserId ?? '')
-          .inFilter('status', ['delivered', 'cancelled', 'partner_rejected'])
+          .inFilter('status', [
+            'delivered',
+            'cancelled',
+            'partner_rejected',
+            'seller_rejected',
+            'shop_dispute_cancel'
+          ])
           .order('created_at', ascending: false)
           .limit(100);
 
@@ -108,6 +114,8 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage>
                           break;
                         case 'cancelled':
                         case 'partner_rejected':
+                        case 'seller_rejected':
+                        case 'shop_dispute_cancel':
                           statusColor = AppColors.danger;
                           break;
                         default:

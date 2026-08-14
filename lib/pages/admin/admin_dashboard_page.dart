@@ -71,18 +71,26 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   Future<void> _loadBadges() async {
     try {
       final supabase = Supabase.instance.client;
-      int tickets = 0;
+      int count = 0;
       try {
         final t = await supabase
             .from('support_tickets')
             .select('id')
             .eq('status', 'open');
-        tickets = (t as List).length;
+        count += (t as List).length;
+      } catch (_) {}
+
+      try {
+        final d = await supabase
+            .from('order_disputes')
+            .select('id')
+            .eq('status', 'pending');
+        count += (d as List).length;
       } catch (_) {}
 
       if (mounted) {
         setState(() {
-          _openTicketsCount = tickets;
+          _openTicketsCount = count;
         });
       }
     } catch (_) {}
@@ -195,37 +203,49 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           icon: Icons.people_outline_rounded,
           activeIcon: Icons.people_rounded,
           label: 'Users',
-          visible: rbac.can('users.view') || rbac.isSuperAdmin,
+          visible: rbac.isSuperAdmin ||
+              rbac.can('users.view') ||
+              rbac.can('customers.view') ||
+              rbac.can('sellers.view') ||
+              rbac.can('riders.view'),
         ),
         _NavDef(
           icon: Icons.shopping_bag_outlined,
           activeIcon: Icons.shopping_bag_rounded,
           label: 'Orders',
-          visible: rbac.can('orders.view') || rbac.isSuperAdmin,
+          visible: rbac.isSuperAdmin || rbac.can('orders.view'),
         ),
         _NavDef(
           icon: Icons.verified_user_outlined,
           activeIcon: Icons.verified_user_rounded,
           label: 'KYC',
-          visible: rbac.can('kyc.view') || rbac.isSuperAdmin,
+          visible: rbac.isSuperAdmin ||
+              rbac.can('kyc.view') ||
+              rbac.can('sellers.approve') ||
+              rbac.can('riders.approve'),
         ),
         _NavDef(
           icon: Icons.account_balance_wallet_outlined,
           activeIcon: Icons.account_balance_wallet_rounded,
           label: 'Finance',
-          visible: rbac.can('finance.view') || rbac.isSuperAdmin,
+          visible: rbac.isSuperAdmin ||
+              rbac.can('finance.view') ||
+              rbac.can('withdrawals.view'),
         ),
         _NavDef(
           icon: Icons.auto_awesome_outlined,
           activeIcon: Icons.auto_awesome_rounded,
           label: 'Analytics',
-          visible: rbac.can('analytics.view') || rbac.isSuperAdmin,
+          visible: rbac.isSuperAdmin || rbac.can('analytics.view'),
         ),
         _NavDef(
           icon: Icons.support_agent_outlined,
           activeIcon: Icons.support_agent_rounded,
           label: 'Support',
-          visible: rbac.can('support.view') || rbac.isSuperAdmin,
+          visible: rbac.isSuperAdmin ||
+              rbac.can('support.view') ||
+              rbac.can('support.reply') ||
+              rbac.can('support.close'),
           badgeCount: _openTicketsCount,
         ),
         const _NavDef(

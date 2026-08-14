@@ -407,39 +407,37 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     )),
                 const SizedBox(height: 12),
                 if (order.prescriptionUrls.isNotEmpty) ...[
-                  RadioListTile<String>(
-                    title: Text('Prescription Issue',
-                        style: GoogleFonts.outfit(color: Colors.white)),
-                    value: 'prescription',
-                    groupValue: rejectReason,
-                    activeColor: AppColors.primary,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (val) => setState(() => rejectReason = val!),
+                  _rejectionOptionCard(
+                    title: 'Prescription Issue',
+                    subtitle: 'Invalid, expired or unreadable prescription',
+                    icon: Icons.medical_information_outlined,
+                    isSelected: rejectReason == 'prescription',
+                    onTap: () => setState(() => rejectReason = 'prescription'),
                   ),
+                  const SizedBox(height: 8),
                 ],
-                RadioListTile<String>(
-                  title: Text('Out of Stock',
-                      style: GoogleFonts.outfit(color: Colors.white)),
-                  value: 'out_of_stock',
-                  groupValue: rejectReason,
-                  activeColor: AppColors.primary,
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (val) => setState(() => rejectReason = val!),
+                _rejectionOptionCard(
+                  title: 'Out of Stock',
+                  subtitle: 'Item is not currently available in store',
+                  icon: Icons.inventory_2_outlined,
+                  isSelected: rejectReason == 'out_of_stock',
+                  onTap: () => setState(() => rejectReason = 'out_of_stock'),
                 ),
                 if (rejectReason == 'out_of_stock' && order.items.length > 1) ...[
                   Padding(
-                    padding: const EdgeInsets.only(left: 12, right: 12, bottom: 8),
+                    padding: const EdgeInsets.only(top: 8, left: 4, right: 4, bottom: 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Select Out-of-Stock Item:',
-                            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.07),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white12),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
@@ -465,14 +463,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     ),
                   ),
                 ],
-                RadioListTile<String>(
-                  title: Text('Other Reason',
-                      style: GoogleFonts.outfit(color: Colors.white)),
-                  value: 'other',
-                  groupValue: rejectReason,
-                  activeColor: AppColors.primary,
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (val) => setState(() => rejectReason = val!),
+                const SizedBox(height: 8),
+                _rejectionOptionCard(
+                  title: 'Other Reason',
+                  subtitle: 'Shop closed early, technical issue, etc.',
+                  icon: Icons.info_outline,
+                  isSelected: rejectReason == 'other',
+                  onTap: () => setState(() => rejectReason = 'other'),
                 ),
                 const SizedBox(height: 12),
                 Text('Send an optional message to the customer explaining why.',
@@ -601,6 +598,79 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       debugPrint('Reject error: $e');
       _showSnack('Failed to reject: $e', isError: true);
     }
+  }
+
+  Widget _rejectionOptionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.white12,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppColors.primary : Colors.white60,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.outfit(
+                      color: Colors.white60,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? AppColors.primary : Colors.white30,
+                  width: 2,
+                ),
+                color: isSelected ? AppColors.primary : Colors.transparent,
+              ),
+              child: isSelected
+                  ? const Icon(Icons.check, size: 12, color: Colors.white)
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showPrescriptionImages(List<String> urls) {
@@ -1086,7 +1156,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                   color: AppColors.textSecondary, fontSize: 12),
                             ),
                             if (tab == 'active' &&
-                                ['confirmed', 'preparing', 'ready_for_pickup']
+                                ['confirmed', 'preparing']
                                     .contains(order.status))
                               PopupMenuButton<String>(
                                 padding: EdgeInsets.zero,

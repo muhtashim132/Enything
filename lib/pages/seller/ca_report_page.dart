@@ -18,7 +18,8 @@ import '../../utils/responsive_layout.dart';
 // ============================================================================
 
 class CaReportPage extends StatefulWidget {
-  const CaReportPage({super.key});
+  final String? initialShopId;
+  const CaReportPage({super.key, this.initialShopId});
   @override
   State<CaReportPage> createState() => _CaReportPageState();
 }
@@ -26,6 +27,8 @@ class CaReportPage extends StatefulWidget {
 class _CaReportPageState extends State<CaReportPage> {
   SupabaseClient get _supabase => Supabase.instance.client;
   bool _isLoading = true;
+  String? _selectedShopId;
+  List<Map<String, dynamic>> _shops = [];
 
   // Month selector
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
@@ -51,6 +54,7 @@ class _CaReportPageState extends State<CaReportPage> {
   @override
   void initState() {
     super.initState();
+    _selectedShopId = widget.initialShopId;
     _loadReport();
   }
 
@@ -63,13 +67,20 @@ class _CaReportPageState extends State<CaReportPage> {
           .select('id, name')
           .eq('seller_id', auth.currentUserId ?? '');
 
-      if ((shops as List).isEmpty) {
+      final shopsList = List<Map<String, dynamic>>.from(shops as List);
+
+      if (shopsList.isEmpty) {
         setState(() => _isLoading = false);
         return;
       }
 
-      final shopId = shops.first['id'] as String;
-      _shopName = shops.first['name'] ?? 'Your Shop';
+      String shopId = _selectedShopId ?? widget.initialShopId ?? shopsList.first['id'] as String;
+      if (!shopsList.any((s) => s['id'] == shopId)) {
+        shopId = shopsList.first['id'] as String;
+      }
+
+      final currentShop = shopsList.firstWhere((s) => s['id'] == shopId, orElse: () => shopsList.first);
+      _shopName = currentShop['name'] ?? 'Your Shop';
 
       final start = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
       final end = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
@@ -93,6 +104,8 @@ class _CaReportPageState extends State<CaReportPage> {
           .limit(100);
 
       setState(() {
+        _shops = shopsList;
+        _selectedShopId = shopId;
         _totalBaseSales = (response['total_base_sales'] ?? 0).toDouble();
         _nonFoodGst = (response['non_food_gst'] ?? 0).toDouble();
         _s9_5Gst = (response['s9_5_gst'] ?? 0).toDouble();
@@ -246,11 +259,59 @@ Gateway Fees                    : \u20b9${_f(_gatewayFees)}
       appBar: AppBar(
         backgroundColor: const Color(0xFF0A0A14),
         foregroundColor: Colors.white,
-        title: Text('CA Tax Report',
-            style: GoogleFonts.outfit(
-                fontWeight: FontWeight.w700, color: Colors.white)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('CA Tax Report',
+                style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18)),
+            if (_shops.isNotEmpty)
+              Text(
+                _shopName,
+                style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70),
+              ),
+          ],
+        ),
         elevation: 0,
         actions: [
+          if (_shops.length > 1)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.store_rounded, color: Colors.white),
+              tooltip: 'Switch Shop',
+              initialValue: _selectedShopId,
+              onSelected: (shopId) {
+                setState(() {
+                  _selectedShopId = shopId;
+                  _isLoading = true;
+                });
+                _loadReport();
+              },
+              itemBuilder: (context) => _shops.map((s) {
+                final id = s['id'] as String;
+                final name = s['name'] as String? ?? 'Shop';
+                return PopupMenuItem<String>(
+                  value: id,
+                  child: Row(
+                    children: [
+                      Icon(
+                        id == _selectedShopId ? Icons.check_circle : Icons.store_outlined,
+                        color: id == _selectedShopId ? const Color(0xFF4C6EF5) : Colors.grey,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(name,
+                            style: GoogleFonts.outfit(
+                              fontWeight: id == _selectedShopId ? FontWeight.w700 : FontWeight.w500,
+                              color: Colors.white,
+                            )),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
           IconButton(
             icon: const Icon(Icons.copy_all_rounded, color: Colors.white70),
             tooltip: 'Copy Full Report',

@@ -603,7 +603,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             .from('orders')
             .select('id, status, payment_deadline, created_at')
             .eq('customer_id', auth.currentUserId!)
-            .inFilter('status', ['awaiting_payment', 'pending', 'preparing'])
+            .inFilter('status', [
+              'awaiting_acceptance',
+              'awaiting_payment',
+              'pending',
+              'confirmed',
+              'preparing',
+              'ready_for_pickup',
+              'picked_up',
+              'out_for_delivery',
+            ])
             .order('created_at', ascending: false)
             .limit(1)
             .maybeSingle();
@@ -954,8 +963,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 if (rawProductsByName.length >= 50) break;
               }
             }
-            if (rawProductsByName.length > 50)
+            if (rawProductsByName.length > 50) {
               rawProductsByName = rawProductsByName.sublist(0, 50);
+            }
           }
           debugPrint(
               '[Search] Step 2/4 OK: ${rawProductsByName.length} products found');
@@ -1029,8 +1039,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   if (rawProductsByCat.length >= 100) break;
                 }
               }
-              if (rawProductsByCat.length > 100)
+              if (rawProductsByCat.length > 100) {
                 rawProductsByCat = rawProductsByCat.sublist(0, 100);
+              }
             }
             debugPrint(
                 '[Search] Step 4/4 OK: ${rawProductsByCat.length} products found');

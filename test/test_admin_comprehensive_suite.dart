@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  // ══════════════════════════════════════════════════════════════════
+  // GROUP 1: Orders Lifecycle & Timeline
+  // ══════════════════════════════════════════════════════════════════
   group('100x Admin ↔ Customer Functionality Suite', () {
     test('Order Timeline Step Progression maps all active & terminal states', () {
       int timelineStep(String status) => switch (status) {
@@ -192,6 +195,9 @@ void main() {
     });
   });
 
+  // ══════════════════════════════════════════════════════════════════
+  // GROUP 2: Seller & Category Management
+  // ══════════════════════════════════════════════════════════════════
   group('100x Admin ↔ Seller Functionality Suite', () {
     test('Dynamic Category Commission Overrides & Net Payout calculation', () {
       final globalCommission = 5.0; // 5%
@@ -285,6 +291,9 @@ void main() {
     });
   });
 
+  // ══════════════════════════════════════════════════════════════════
+  // GROUP 3: Rider & Telemetry
+  // ══════════════════════════════════════════════════════════════════
   group('100x Admin ↔ Rider (Delivery Partner) Functionality Suite', () {
     test('Rider Commission & Distance Rate calculations', () {
       double calculateRiderEarnings({
@@ -349,6 +358,143 @@ void main() {
     });
   });
 
+  // ══════════════════════════════════════════════════════════════════
+  // GROUP 4: Indian GST, TCS & TDS Statutory Math
+  // ══════════════════════════════════════════════════════════════════
+  group('100x Admin Financial & Tax Engine Suite', () {
+    test('GST & Deemed Supplier Section 9(5) and S.52 TCS Engine', () {
+      bool isDeemedSupplier(String category) {
+        return category == 'Restaurant' || category == 'Food & Dining' || category == 'Cafe' || category == 'Bakery';
+      }
+
+      double getGstRate(String category, {double? itemPrice}) {
+        if (isDeemedSupplier(category)) return 0.05; // 5% deemed supplier
+        if (category == 'Fresh Fruits & Veg' || category == 'Exempt Produce') return 0.0;
+        if (category == 'Clothing' || category == 'Footwear') {
+          return (itemPrice ?? 0) > 1000.0 ? 0.18 : 0.05;
+        }
+        return 0.18; // Default standard goods
+      }
+
+      double calculateTcs({
+        required String category,
+        required double netTaxableGoods,
+      }) {
+        // §52 TCS (1%) applies ONLY to non-food taxable goods collected on behalf of marketplace sellers.
+        // Food §9(5) and Exempt produce are 0% TCS.
+        if (isDeemedSupplier(category)) return 0.0;
+        if (category == 'Fresh Fruits & Veg' || category == 'Exempt Produce') return 0.0;
+        return netTaxableGoods * 0.01;
+      }
+
+      double calculateTds({required double grossOrderTotal}) {
+        // §194-O IT TDS is 0.1% across gross e-commerce transactions
+        return grossOrderTotal * 0.001;
+      }
+
+      // Restaurant order ₹500
+      expect(isDeemedSupplier('Restaurant'), isTrue);
+      expect(getGstRate('Restaurant'), 0.05);
+      expect(calculateTcs(category: 'Restaurant', netTaxableGoods: 500.0), 0.0);
+      expect(calculateTds(grossOrderTotal: 500.0), 0.50);
+
+      // Footwear under ₹1000 (₹800 -> 5% GST, 1% TCS)
+      expect(getGstRate('Footwear', itemPrice: 800.0), 0.05);
+      expect(calculateTcs(category: 'Footwear', netTaxableGoods: 800.0), 8.0);
+      expect(calculateTds(grossOrderTotal: 800.0), 0.80);
+
+      // Footwear over ₹1000 (₹2500 -> 18% GST, 1% TCS)
+      expect(getGstRate('Footwear', itemPrice: 2500.0), 0.18);
+      expect(calculateTcs(category: 'Footwear', netTaxableGoods: 2500.0), 25.0);
+      expect(calculateTds(grossOrderTotal: 2500.0), 2.50);
+    });
+
+    test('Platform Fee & Delivery GST Breakdown (SAC 9965 & 9985)', () {
+      final deliveryFee = 50.0;
+      final platformFee = 20.0;
+      final gstRate = 0.18;
+
+      final deliveryGst = double.parse((deliveryFee * gstRate).toStringAsFixed(2)); // ₹9.00
+      final platformFeeGst = double.parse((platformFee * gstRate).toStringAsFixed(2)); // ₹3.60
+
+      expect(deliveryGst, 9.0);
+      expect(platformFeeGst, 3.6);
+      expect(deliveryFee + deliveryGst + platformFee + platformFeeGst, 82.60);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUP 5: Coupon Promotion Engine
+  // ══════════════════════════════════════════════════════════════════
+  group('100x Admin Coupon Engine Suite', () {
+    test('Flat & Percentage discount coupon validation', () {
+      double calculateDiscount({
+        required String discountType, // 'flat' or 'percent'
+        required double discountValue,
+        required double orderTotal,
+        required double minOrderValue,
+        double? maxDiscount,
+        required DateTime validUntil,
+      }) {
+        if (DateTime.now().isAfter(validUntil)) return 0.0; // Expired
+        if (orderTotal < minOrderValue) return 0.0; // Below threshold
+
+        if (discountType == 'flat') {
+          return discountValue.clamp(0.0, orderTotal);
+        } else {
+          final pct = (orderTotal * (discountValue / 100.0));
+          if (maxDiscount != null && maxDiscount > 0) {
+            return pct.clamp(0.0, maxDiscount);
+          }
+          return pct.clamp(0.0, orderTotal);
+        }
+      }
+
+      final futureDate = DateTime.now().add(const Duration(days: 30));
+      final pastDate = DateTime.now().subtract(const Duration(days: 1));
+
+      // Flat ₹50 off min ₹200
+      expect(calculateDiscount(
+        discountType: 'flat',
+        discountValue: 50.0,
+        orderTotal: 300.0,
+        minOrderValue: 200.0,
+        validUntil: futureDate,
+      ), 50.0);
+
+      // Flat coupon rejected due to low order total (₹150 < ₹200)
+      expect(calculateDiscount(
+        discountType: 'flat',
+        discountValue: 50.0,
+        orderTotal: 150.0,
+        minOrderValue: 200.0,
+        validUntil: futureDate,
+      ), 0.0);
+
+      // Percentage 20% off min ₹300 with ₹100 cap (₹600 order -> 20% is ₹120, capped at ₹100)
+      expect(calculateDiscount(
+        discountType: 'percent',
+        discountValue: 20.0,
+        orderTotal: 600.0,
+        minOrderValue: 300.0,
+        maxDiscount: 100.0,
+        validUntil: futureDate,
+      ), 100.0);
+
+      // Expired coupon rejected
+      expect(calculateDiscount(
+        discountType: 'flat',
+        discountValue: 50.0,
+        orderTotal: 500.0,
+        minOrderValue: 100.0,
+        validUntil: pastDate,
+      ), 0.0);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUP 6: RBAC Navigation & Active Sessions
+  // ══════════════════════════════════════════════════════════════════
   group('100x Admin RBAC & Security Suite', () {
     test('Super Admin God Mode vs Granular Permissions checks', () {
       bool checkPermission({
@@ -376,23 +522,81 @@ void main() {
       expect(checkPermission(isSuperAdmin: false, permissions: financePerms, requiredCode: 'users.delete'), isFalse);
     });
 
-    test('Edge Function Role and Audience Mapping validation', () {
-      final broadcastRoleMap = {
-        'Customers': ['customer'],
-        'Sellers': ['seller'],
-        'Riders': ['delivery_partner', 'delivery'],
-      };
+    test('Nav Tabs Visibility Matrix across Persona Roles', () {
+      List<String> getVisibleTabs({
+        required bool isSuperAdmin,
+        required Set<String> permissions,
+      }) {
+        bool can(String code) => isSuperAdmin || permissions.contains(code);
 
-      expect(broadcastRoleMap['Customers'], contains('customer'));
-      expect(broadcastRoleMap['Sellers'], contains('seller'));
-      expect(broadcastRoleMap['Riders'], contains('delivery_partner'));
-      expect(broadcastRoleMap['Riders'], contains('delivery'));
+        final tabs = <String>[];
+        // Home
+        tabs.add('Home');
+        // Users
+        if (isSuperAdmin || can('users.view') || can('customers.view') || can('sellers.view') || can('riders.view')) {
+          tabs.add('Users');
+        }
+        // Orders
+        if (isSuperAdmin || can('orders.view')) {
+          tabs.add('Orders');
+        }
+        // KYC
+        if (isSuperAdmin || can('kyc.view') || can('sellers.approve') || can('riders.approve')) {
+          tabs.add('KYC');
+        }
+        // Finance
+        if (isSuperAdmin || can('finance.view') || can('withdrawals.view')) {
+          tabs.add('Finance');
+        }
+        // Analytics
+        if (isSuperAdmin || can('analytics.view')) {
+          tabs.add('Analytics');
+        }
+        // Support
+        if (isSuperAdmin || can('support.view') || can('support.reply') || can('support.close')) {
+          tabs.add('Support');
+        }
+        // Settings
+        tabs.add('Settings');
+        return tabs;
+      }
 
-      final allowedAdminLevels = ['super_admin', 'superadmin', 'admin'];
-      expect(allowedAdminLevels.contains('super_admin'), isTrue);
-      expect(allowedAdminLevels.contains('superadmin'), isTrue);
-      expect(allowedAdminLevels.contains('admin'), isTrue);
-      expect(allowedAdminLevels.contains('customer'), isFalse);
+      // Super Admin sees all 8 tabs
+      expect(getVisibleTabs(isSuperAdmin: true, permissions: {}).length, 8);
+
+      // Support Agent (Home, Support, Settings)
+      final supportTabs = getVisibleTabs(isSuperAdmin: false, permissions: {'support.reply'});
+      expect(supportTabs, ['Home', 'Support', 'Settings']);
+
+      // KYC Onboarding Specialist (Home, Users, KYC, Settings)
+      final kycTabs = getVisibleTabs(isSuperAdmin: false, permissions: {'sellers.view', 'sellers.approve'});
+      expect(kycTabs, ['Home', 'Users', 'KYC', 'Settings']);
+
+      // Finance Auditor (Home, Finance, Analytics, Settings)
+      final financeTabs = getVisibleTabs(isSuperAdmin: false, permissions: {'finance.view', 'analytics.view'});
+      expect(financeTabs, ['Home', 'Finance', 'Analytics', 'Settings']);
+    });
+
+    test('Active Session Revocation Logic Guard', () {
+      final currentSessionId = 'sess-active-001';
+      final sessions = [
+        {'id': 'sess-active-001', 'device': 'MacBook Pro', 'is_current': true},
+        {'id': 'sess-remote-002', 'device': 'iPhone 15', 'is_current': false},
+        {'id': 'sess-remote-003', 'device': 'Chrome Windows', 'is_current': false},
+      ];
+
+      bool canRevokeSession(String targetSessionId) {
+        // Cannot revoke current active session
+        return targetSessionId != currentSessionId;
+      }
+
+      expect(canRevokeSession('sess-remote-002'), isTrue);
+      expect(canRevokeSession('sess-remote-003'), isTrue);
+      expect(canRevokeSession('sess-active-001'), isFalse);
+
+      final remainingAfterRevokeOther = sessions.where((s) => s['id'] == currentSessionId).toList();
+      expect(remainingAfterRevokeOther.length, 1);
+      expect(remainingAfterRevokeOther.first['id'], 'sess-active-001');
     });
   });
 }

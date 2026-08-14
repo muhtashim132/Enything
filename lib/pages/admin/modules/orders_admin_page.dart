@@ -493,7 +493,7 @@ class _OrderCardState extends State<_OrderCard> {
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _InfoCell(
                 label: 'Name',
-                value: parseStr(profile?['full_name'], 'Unknown')),
+                value: parseStr(profile?['full_name'] ?? o['customer_name'], 'Unknown')),
             _InfoCell(
                 label: 'Phone',
                 value: parseStr(profile?['phone'] ?? o['customer_phone'])),
@@ -502,15 +502,15 @@ class _OrderCardState extends State<_OrderCard> {
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _InfoCell(
                 label: 'Address',
-                value: parseStr(o['address']),
+                value: parseStr(o['address'] ?? o['delivery_address'] ?? o['shipping_address']),
                 maxLines: null),
           ]),
-          if (parseStr(o['delivery_notes'], '') != '') ...[
+          if (parseStr(o['delivery_notes'] ?? o['instructions'], '') != '') ...[
             const SizedBox(height: 10),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _InfoCell(
                   label: 'Notes',
-                  value: parseStr(o['delivery_notes']),
+                  value: parseStr(o['delivery_notes'] ?? o['instructions']),
                   maxLines: null),
             ]),
           ],
@@ -524,7 +524,7 @@ class _OrderCardState extends State<_OrderCard> {
               style: AdminStyles.title(color: AdminColors.primary, size: 14)),
           const SizedBox(height: 10),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _InfoCell(label: 'Name', value: parseStr(shop?['name'], 'Unknown')),
+            _InfoCell(label: 'Name', value: parseStr(shop?['name'] ?? o['shop_name'], 'Unknown')),
             _InfoCell(label: 'Phone', value: parseStr(o['shop_phone'])),
           ]),
           const SizedBox(height: 10),

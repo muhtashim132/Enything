@@ -1079,9 +1079,10 @@ class NotificationProvider extends ChangeNotifier {
         final deadlineStr = row['acceptance_deadline'] as String?;
         final deadline =
             deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
-        if (orderId != null)
+        if (orderId != null) {
           BellAlertService.instance
               .addPendingOrder(orderId, expiration: deadline);
+        }
       }
     } catch (e) {
       debugPrint('[NotifProvider] _initBellForPendingSeller: $e');
@@ -1103,9 +1104,10 @@ class NotificationProvider extends ChangeNotifier {
         final deadlineStr = row['acceptance_deadline'] as String?;
         final deadline =
             deadlineStr != null ? DateTime.tryParse(deadlineStr) : null;
-        if (orderId != null)
+        if (orderId != null) {
           BellAlertService.instance
               .addPendingOrder(orderId, expiration: deadline);
+        }
       }
     } catch (e) {
       debugPrint('[NotifProvider] _initBellForPendingSellerMulti: $e');
