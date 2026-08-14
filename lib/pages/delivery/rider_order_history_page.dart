@@ -48,7 +48,7 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage>
       final res = await _supabase
           .from('orders')
           .select(
-              'id, created_at, status, rider_earnings, delivery_charges, shops!shop_id(name)')
+              'id, created_at, updated_at, status, rider_earnings, delivery_charges, wait_time_penalty, shops!shop_id(name)')
           .eq('delivery_partner_id', auth.currentUserId ?? '')
           .inFilter('status', [
             'delivered',
@@ -100,10 +100,14 @@ class _RiderOrderHistoryPageState extends State<RiderOrderHistoryPage>
                       final date = (DateTime.tryParse(order['created_at'] ?? '')
                               ?.toIST()) ??
                           DateTime.now();
-                      final amount = (order['rider_earnings'] ??
+                      final baseEarnings = ((order['rider_earnings'] ??
                               order['delivery_charges'] ??
-                              0.0)
+                              0.0) as num)
                           .toDouble();
+                      final waitPenalty =
+                          ((order['wait_time_penalty'] ?? 0.0) as num)
+                              .toDouble();
+                      final amount = baseEarnings + waitPenalty;
                       final shopName = order['shops']?['name'] ?? 'Shop';
                       final status = order['status'] as String? ?? 'unknown';
 

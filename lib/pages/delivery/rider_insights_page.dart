@@ -45,7 +45,7 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
       final orders = await _supabase
           .from('orders')
           .select(
-              'created_at, status, arrived_at_shop_time, order_ready_time, rider_earnings')
+              'created_at, updated_at, status, arrived_at_shop_time, order_ready_time, rider_earnings, wait_time_penalty, delivery_charges')
           .eq('delivery_partner_id', userId);
 
       _totalOrdersAccepted = (orders as List).length;
@@ -68,31 +68,51 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
           _peakHours[dow]![hour] = (_peakHours[dow]![hour] ?? 0) + 1;
         }
 
-        if (o['status'] == 'delivered') {
+        final isDelivered = o['status'] == 'delivered';
+        final isCompensated = o['status'] == 'cancelled' &&
+            ((o['rider_earnings'] as num?)?.toDouble() ?? 0.0) > 0;
+
+        if (isDelivered) {
           deliveredCount++;
 
-          // Basic delivery time approximation (from arrived_at_shop -> delivered)
-          // Since we don't have a specific `delivered_at` timestamp right now except implicitly,
-          // we might just estimate or if they have `created_at` to `updated_at`.
-          // For now, let's use a placeholder for delivery time if we don't track delivered_at explicitly yet.
-          // In an ideal world, orders table has delivered_at. We'll simulate with 25 mins.
-          totalDeliveryTimeMins += 25;
+          // Compute real delivery duration (arrived_at_shop / pickup -> delivered / updated_at)
+          final updatedStr = o['updated_at'];
+          final arrivedStr = o['arrived_at_shop_time'];
+          final readyStr = o['order_ready_time'];
 
-          if (o['arrived_at_shop_time'] != null &&
-              o['order_ready_time'] != null) {
-            final arrived = DateTime.tryParse(o['arrived_at_shop_time']);
-            final ready = DateTime.tryParse(o['order_ready_time']);
-            if (arrived != null && ready != null) {
-              // longestWait computed but used for future analytics display
-              ready.difference(arrived).inMinutes;
-            }
+          final endTime =
+              updatedStr != null ? DateTime.tryParse(updatedStr) : null;
+          final startTime = arrivedStr != null
+              ? DateTime.tryParse(arrivedStr)
+              : (readyStr != null
+                  ? DateTime.tryParse(readyStr)
+                  : (createdAtStr != null
+                      ? DateTime.tryParse(createdAtStr)
+                      : null));
+
+          if (endTime != null && startTime != null) {
+            final diff = endTime.difference(startTime).inMinutes;
+            totalDeliveryTimeMins += diff.clamp(2, 180);
+          } else {
+            totalDeliveryTimeMins += 25;
           }
+        }
 
-          if (createdAt != null) {
+        if (isDelivered || isCompensated) {
+          final effectiveDate = (o['updated_at'] != null
+                  ? DateTime.tryParse(o['updated_at'])?.toIST()
+                  : null) ??
+              createdAt;
+
+          if (effectiveDate != null) {
             final dateKey =
-                "${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}";
-            earningsByDate[dateKey] = (earningsByDate[dateKey] ?? 0.0) +
-                ((o['rider_earnings'] as num?)?.toDouble() ?? 0.0);
+                "${effectiveDate.year}-${effectiveDate.month.toString().padLeft(2, '0')}-${effectiveDate.day.toString().padLeft(2, '0')}";
+            final orderEarnings =
+                ((o['rider_earnings'] ?? o['delivery_charges'] ?? 0.0) as num)
+                        .toDouble() +
+                    ((o['wait_time_penalty'] ?? 0.0) as num).toDouble();
+            earningsByDate[dateKey] =
+                (earningsByDate[dateKey] ?? 0.0) + orderEarnings;
           }
         }
       }

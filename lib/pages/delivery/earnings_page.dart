@@ -60,7 +60,7 @@ class _EarningsPageState extends State<EarningsPage> {
           .from('orders')
           .select()
           .eq('delivery_partner_id', auth.currentUserId ?? '')
-          .eq('status', 'delivered')
+          .or('status.eq.delivered,and(status.eq.cancelled,rider_earnings.gt.0)')
           .order('created_at', ascending: false)
           .limit(20);
 

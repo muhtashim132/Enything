@@ -88,14 +88,14 @@ class AuthProvider extends ChangeNotifier {
             if (role == 'seller') {
               _supabase
                   .from('shops')
-                  .update({'is_active': false})
+                  .update({'is_accepting_orders': false})
                   .eq('seller_id', userId)
                   .then((_) {})
                   .catchError((_) {});
             } else if (role == 'delivery_partner') {
               _supabase
                   .from('delivery_partners')
-                  .update({'is_active': false})
+                  .update({'is_accepting_orders': false})
                   .eq('id', userId)
                   .then((_) {})
                   .catchError((_) {});
@@ -267,11 +267,11 @@ class AuthProvider extends ChangeNotifier {
         if (role == 'seller') {
           await _supabase
               .from('shops')
-              .update({'is_active': false}).eq('seller_id', userId);
+              .update({'is_accepting_orders': false}).eq('seller_id', userId);
         } else if (role == 'delivery_partner') {
           await _supabase
               .from('delivery_partners')
-              .update({'is_active': false}).eq('id', userId);
+              .update({'is_accepting_orders': false}).eq('id', userId);
         }
       } catch (_) {}
     }
@@ -774,10 +774,21 @@ class AuthProvider extends ChangeNotifier {
       try {
         await _supabase
             .from('delivery_partners')
-            .update({'is_active': false}).eq('id', _user!.id);
+            .update({'is_accepting_orders': false}).eq('id', _user!.id);
         RiderBackgroundService.instance.stopService();
       } catch (e) {
         debugPrint('Failed to deactivate delivery partner: $e');
+      }
+    }
+
+    // Auto-deactivate shop accepting orders when switching away from seller role
+    if (_user!.activeSessionRole == 'seller' && role != 'seller') {
+      try {
+        await _supabase
+            .from('shops')
+            .update({'is_accepting_orders': false}).eq('seller_id', _user!.id);
+      } catch (e) {
+        debugPrint('Failed to deactivate seller orders: $e');
       }
     }
 
@@ -1530,11 +1541,11 @@ class AuthProvider extends ChangeNotifier {
         if (role == 'seller') {
           await _supabase
               .from('shops')
-              .update({'is_active': false}).eq('seller_id', userId);
+              .update({'is_accepting_orders': false}).eq('seller_id', userId);
         } else if (role == 'delivery_partner') {
           await _supabase
               .from('delivery_partners')
-              .update({'is_active': false}).eq('id', userId);
+              .update({'is_accepting_orders': false}).eq('id', userId);
           RiderBackgroundService.instance.stopService();
         }
       } catch (_) {} // Never block logout on deactivation failure
