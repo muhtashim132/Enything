@@ -85,9 +85,10 @@ android/app/google-services.json
 /analyze_output.txt
 /diff.txt
 
-ios/build/
-
 # Keystore files
 *.jks
 *.keystore
 android/key.properties
+
+# Scratch debugging directory
+/scratch/

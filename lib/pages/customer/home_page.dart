@@ -539,14 +539,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           'p_lat': lat,
           'p_lng': lng,
           'p_radius_km': DeliveryCalculator.maxRadiusKm,
-          'p_limit': 12,
+          'p_limit': 15,
           'p_disabled_categories': disabledCats.isEmpty ? null : disabledCats,
         });
       } else {
         final disabledCats =
             context.read<PlatformConfigProvider>().disabledCategories.toList();
         response = await _supabase.rpc('get_trending_keywords', params: {
-          'p_limit': 12,
+          'p_limit': 15,
           'p_disabled_categories': disabledCats.isEmpty ? null : disabledCats,
         });
       }
@@ -555,7 +555,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       final rows = response as List?;
       if (rows == null || rows.isEmpty) {
-        // No orders yet (fresh DB) — keep static fallback, do nothing
         return;
       }
 
@@ -571,8 +570,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      if (fetched.length < 3) {
-        // Too few results (< 3) — not enough to make a good strip, keep fallback
+      if (fetched.isEmpty) {
         return;
       }
 
@@ -587,7 +585,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         });
       }
     } catch (e) {
-      // Network error or RPC not yet deployed — silently use fallback, no crash
       debugPrint('[Trending] Failed to load trending keywords: $e');
     }
   }
@@ -739,6 +736,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         if (_isFetching) _pendingLocationUpdate = true;
         return;
       }
+      _loadTrendingKeywords();
       if (_selectedTabIndex < 0) {
         _loadAllData();
       } else {
@@ -1272,6 +1270,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     }
 
     // _selectedTabIndex == -1 means "All" — fetch every active shop
+    _loadTrendingKeywords();
     final cats = _categories;
     if (_selectedTabIndex < 0 || _selectedTabIndex >= cats.length) {
       _loadAllData();
