@@ -11,9 +11,7 @@ import '../config/tax_config.dart';
 import '../providers/platform_config_provider.dart';
 import '../utils/delivery_calculator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../main.dart' show scaffoldMessengerKey, navigatorKey;
-import '../config/routes.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../main.dart' show scaffoldMessengerKey;
 
 class CartNotification {
   final String id;
@@ -360,79 +358,23 @@ class CartProvider extends ChangeNotifier {
           ? '${shops.length} shop${shops.length > 1 ? 's' : ''} selected, $remaining remaining if needed'
           : 'Added successfully. Cart is full (Max 3 shops).';
 
-      final title = '${product.name} added to cart!';
+      final variantText =
+          selectedVariant != null ? ' (${selectedVariant.name})' : '';
+      final title = '${product.name}$variantText added to cart!';
 
-      final currentRoute = ModalRoute.of(context)?.settings.name;
-      final isCartPage = currentRoute == AppRoutes.cart;
+      // 100x SYNC: Set global 3-second notification in CartProvider for both in-sheet & home bottom-nav
+      final notifId = DateTime.now().millisecondsSinceEpoch.toString();
+      _recentNotification =
+          CartNotification(id: notifId, title: title, message: msg);
+      safeNotifyListeners();
 
-      final isMainPage =
-          currentRoute == AppRoutes.customerHome || currentRoute == '/';
-      if (isMainPage) {
-        final notifId = DateTime.now().millisecondsSinceEpoch.toString();
-        _recentNotification =
-            CartNotification(id: notifId, title: title, message: msg);
-        safeNotifyListeners();
-
-        _notificationTimer?.cancel();
-        _notificationTimer = Timer(const Duration(seconds: 3), () {
-          if (_recentNotification?.id == notifId) {
-            _recentNotification = null;
-            safeNotifyListeners();
-          }
-        });
-      } else if (!isCartPage) {
-        final bottomPadding = MediaQuery.paddingOf(context).bottom;
-        final navBarHeight =
-            70.0 + (bottomPadding > 0 ? bottomPadding + 8.0 : 20.0);
-
-        final controller = scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(msg,
-                    style: GoogleFonts.outfit(
-                        fontSize: 12, color: Colors.white70)),
-              ],
-            ),
-            action: SnackBarAction(
-              label: 'View Cart',
-              textColor: Colors.white,
-              onPressed: () {
-                navigatorKey.currentState?.pushNamed(AppRoutes.cart);
-              },
-            ),
-            backgroundColor:
-                const Color(0xFF1E3FD8).withValues(alpha: 0.95), // theme blue
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              bottom: navBarHeight + 16.0,
-              left: 16.0,
-              right: 16.0,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            elevation: 8,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-
-        // Additive fix: Force close after duration to bypass sticky SnackBar bug
-        Future.delayed(const Duration(seconds: 3), () {
-          try {
-            controller?.close();
-          } catch (_) {}
-        });
-      }
+      _notificationTimer?.cancel();
+      _notificationTimer = Timer(const Duration(seconds: 3), () {
+        if (_recentNotification?.id == notifId) {
+          _recentNotification = null;
+          safeNotifyListeners();
+        }
+      });
     }
   }
 

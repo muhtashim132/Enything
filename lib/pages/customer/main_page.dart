@@ -492,16 +492,24 @@ class _CustomerMainPageState extends State<CustomerMainPage>
             height: 70,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF0A1260).withValues(alpha: 0.88),
-                  const Color(0xFF1E3FD8).withValues(alpha: 0.88),
-                ],
+                colors: cart.recentNotification != null
+                    ? [
+                        const Color(0xFF047857).withValues(alpha: 0.95), // Emerald Green
+                        const Color(0xFF10B981).withValues(alpha: 0.95),
+                      ]
+                    : [
+                        const Color(0xFF0A1260).withValues(alpha: 0.88),
+                        const Color(0xFF1E3FD8).withValues(alpha: 0.88),
+                      ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               boxShadow: [
                 BoxShadow(
-                    color: const Color(0xFF1E3FD8).withValues(alpha: 0.5),
+                    color: (cart.recentNotification != null
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFF1E3FD8))
+                        .withValues(alpha: 0.5),
                     blurRadius: 28,
                     offset: const Offset(0, 8)),
               ],
@@ -648,7 +656,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: AppColors.primary,
+              foregroundColor: const Color(0xFF047857),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -660,6 +668,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               style: GoogleFonts.outfit(
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
+                color: const Color(0xFF047857),
               ),
             ),
           ),
