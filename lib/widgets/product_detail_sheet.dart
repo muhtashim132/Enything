@@ -938,12 +938,12 @@ class _SheetContent extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF047857), Color(0xFF10B981)],
+                      colors: [Color(0xFF0A1260), Color(0xFF1E3FD8)],
                     ),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.30),
+                        color: const Color(0xFF1E3FD8).withValues(alpha: 0.35),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -997,7 +997,7 @@ class _SheetContent extends StatelessWidget {
                           child: Text(
                             'View Cart',
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF047857),
+                              color: const Color(0xFF1E3FD8),
                               fontWeight: FontWeight.w800,
                               fontSize: 11,
                             ),
