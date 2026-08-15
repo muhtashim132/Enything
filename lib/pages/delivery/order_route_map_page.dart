@@ -11,6 +11,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../models/order_group.dart';
 import '../../theme/app_colors.dart';
 import '../../services/telemetry_service.dart';
+import '../../widgets/common/animated_moving_marker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 
@@ -51,28 +52,29 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
   double? _totalKm;
 
-  double? _currentRiderLat;
-  double? _currentRiderLng;
+  // ValueNotifier prevents parent widget and map re-renders on GPS stream ticks
+  final ValueNotifier<LatLng?> _riderPositionNotifier = ValueNotifier(null);
   StreamSubscription<Position>? _positionStreamSub;
 
   @override
   void initState() {
     super.initState();
-    _currentRiderLat = widget.riderLat;
-    _currentRiderLng = widget.riderLng;
+    if (widget.riderLat != null && widget.riderLng != null) {
+      _riderPositionNotifier.value = LatLng(widget.riderLat!, widget.riderLng!);
+    }
     _fetchRoutes();
 
     _positionStreamSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+        distanceFilter: 5,
       ),
     ).listen((Position position) {
-      if (mounted) {
-        setState(() {
-          _currentRiderLat = position.latitude;
-          _currentRiderLng = position.longitude;
-        });
+      final newPos = LatLng(position.latitude, position.longitude);
+      if (_riderPositionNotifier.value == null ||
+          _riderPositionNotifier.value!.latitude != newPos.latitude ||
+          _riderPositionNotifier.value!.longitude != newPos.longitude) {
+        _riderPositionNotifier.value = newPos;
       }
     }, onError: (e, st) {
       debugPrint('Geolocator stream error: $e');
@@ -82,6 +84,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   @override
   void dispose() {
     _positionStreamSub?.cancel();
+    _riderPositionNotifier.dispose();
     super.dispose();
   }
 
@@ -161,9 +164,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     List<LatLng> shopPts = [];
     if (widget.shops.isNotEmpty) {
       final unvisited = widget.shops.map((s) => LatLng(s.lat, s.lng)).toList();
-      LatLng currentPos = (_currentRiderLat != null && _currentRiderLng != null)
-          ? LatLng(_currentRiderLat!, _currentRiderLng!)
-          : unvisited.first;
+      final riderPos = _riderPositionNotifier.value;
+      LatLng currentPos = riderPos ?? unvisited.first;
 
       while (unvisited.isNotEmpty) {
         unvisited.sort((a, b) {
@@ -183,11 +185,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
         (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
             ? LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!)
             : null;
-    final riderPt = (_currentRiderLat != null &&
-            _currentRiderLng != null &&
-            _currentRiderLat != 0.0)
-        ? LatLng(_currentRiderLat!, _currentRiderLng!)
-        : null;
+    final riderPos = _riderPositionNotifier.value;
+    final riderPt = (riderPos != null && riderPos.latitude != 0.0) ? riderPos : null;
 
     if (riderPt != null && shopPts.isNotEmpty) {
       final r = await _fetchORSRoute(riderPt, shopPts.first);
@@ -220,11 +219,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   }
 
   void _fitMapBounds() {
+    final riderPos = _riderPositionNotifier.value;
     final allPoints = [
-      if (_currentRiderLat != null &&
-          _currentRiderLng != null &&
-          _currentRiderLat != 0.0)
-        LatLng(_currentRiderLat!, _currentRiderLng!),
+      if (riderPos != null && riderPos.latitude != 0.0) riderPos,
       ...widget.shops
           .where((s) => s.lat != 0.0)
           .map((s) => LatLng(s.lat, s.lng)),
@@ -257,10 +254,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   }
 
   Future<void> _openInExternalMap() async {
-    final origin = (_currentRiderLat != null &&
-            _currentRiderLng != null &&
-            _currentRiderLat != 0.0)
-        ? '$_currentRiderLat,$_currentRiderLng'
+    final riderPos = _riderPositionNotifier.value;
+    final origin = (riderPos != null && riderPos.latitude != 0.0)
+        ? '${riderPos.latitude},${riderPos.longitude}'
         : widget.shops.isNotEmpty
             ? '${widget.shops.first.lat},${widget.shops.first.lng}'
             : '';
@@ -331,6 +327,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMulti = widget.shops.length > 1;
 
     final seenCoords = <String>{};
     LatLng applyJitter(double lat, double lng) {
@@ -355,7 +352,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
           width: 80,
           height: 70,
           child: _mapMarker(
-              _kShopMarker, Icons.storefront_rounded, widget.shops[i].name),
+            _kShopMarker,
+            Icons.storefront_rounded,
+            isMulti ? '${i + 1}. ${widget.shops[i].name}' : widget.shops[i].name,
+          ),
         ),
       if (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
         Marker(
@@ -365,13 +365,6 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
           height: 70,
           child: _mapMarker(
               _kCustomerMarker, Icons.location_on_rounded, 'Customer'),
-        ),
-      if (_currentRiderLat != null && _currentRiderLng != null)
-        Marker(
-          point: applyJitter(_currentRiderLat!, _currentRiderLng!),
-          width: 80,
-          height: 70,
-          child: _mapMarker(_kRiderMarker, Icons.navigation_rounded, 'You'),
         ),
     ];
 
@@ -416,6 +409,30 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                         borderColor: Colors.white.withValues(alpha: 0.6))
                   ]),
                 MarkerLayer(markers: markers),
+
+                // STRESS-TEST FIX: Live moving rider navigation marker without parent setState
+                ValueListenableBuilder<LatLng?>(
+                  valueListenable: _riderPositionNotifier,
+                  builder: (context, riderPos, child) {
+                    if (riderPos == null) return const SizedBox.shrink();
+                    return MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: riderPos,
+                          width: 80,
+                          height: 72,
+                          child: SmoothRiderMarker(
+                            targetLocation: riderPos,
+                            label: 'You',
+                            color: _kRiderMarker,
+                            icon: Icons.navigation_rounded,
+                            rotateWithHeading: true,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
             SafeArea(

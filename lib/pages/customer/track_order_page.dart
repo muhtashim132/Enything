@@ -28,6 +28,7 @@ import '../../utils/responsive_layout.dart';
 import 'package:collection/collection.dart';
 import '../../utils/delivery_calculator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../widgets/common/animated_moving_marker.dart';
 
 class TrackOrderPage extends StatefulWidget {
   final String orderId;
@@ -1555,17 +1556,20 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         _groupOrders.isEmpty && _order != null ? [_order!] : _groupOrders;
     for (final shopOrd in shops) {
       if (shopOrd.shopLat != null && shopOrd.shopLng != null) {
+        final isRejected = shopOrd.status == 'rejected' || shopOrd.status == 'cancelled';
         markers.add(Marker(
           point: LatLng(shopOrd.shopLat!, shopOrd.shopLng!),
           width: 36,
           height: 36,
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.15),
+              color: isRejected
+                  ? Colors.grey.withValues(alpha: 0.2)
+                  : AppColors.accent.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.store_rounded,
-                color: AppColors.accent, size: 20),
+            child: Icon(Icons.store_rounded,
+                color: isRejected ? Colors.grey : AppColors.accent, size: 20),
           ),
         ));
       }
@@ -1586,14 +1590,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           point: riderLoc,
           width: 52,
           height: 52,
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.success, width: 2),
-            ),
-            child: const Icon(Icons.delivery_dining_rounded,
-                color: AppColors.success, size: 28),
+          child: SmoothRiderMarker(
+            targetLocation: riderLoc,
+            width: 52,
+            height: 52,
+            showPulse: false,
           ),
         ));
       }

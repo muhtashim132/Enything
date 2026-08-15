@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/order_model.dart';
 import '../../theme/app_colors.dart';
 import '../../services/telemetry_service.dart';
+import '../../widgets/common/animated_moving_marker.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Colour palette (seller perspective — both legs visible)
@@ -46,8 +47,7 @@ class SellerOrderMapPage extends StatefulWidget {
   State<SellerOrderMapPage> createState() => _SellerOrderMapPageState();
 }
 
-class _SellerOrderMapPageState extends State<SellerOrderMapPage>
-    with TickerProviderStateMixin {
+class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   final MapController _mapCtrl = MapController();
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -58,31 +58,20 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
   double? _pickupKm;
   double? _deliveryKm;
 
-  // Live rider position
-  LatLng? _riderLatLng;
-  DateTime? _riderUpdatedAt;
+  // Live rider position (isolated via ValueNotifier to prevent map re-renders)
+  final ValueNotifier<LatLng?> _riderLatLngNotifier = ValueNotifier(null);
+  final ValueNotifier<DateTime?> _riderUpdatedAtNotifier = ValueNotifier(null);
   RealtimeChannel? _channel;
-
-  // Pulse animation for rider dot
-  late AnimationController _pulseCtrl;
-  late Animation<double> _pulseAnim;
 
   @override
   void initState() {
     super.initState();
 
     if (widget.order.riderLat != null && widget.order.riderLng != null) {
-      _riderLatLng = LatLng(widget.order.riderLat!, widget.order.riderLng!);
-      _riderUpdatedAt = widget.order.riderLocationUpdatedAt;
+      _riderLatLngNotifier.value =
+          LatLng(widget.order.riderLat!, widget.order.riderLng!);
+      _riderUpdatedAtNotifier.value = widget.order.riderLocationUpdatedAt;
     }
-
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
 
     _fetchRoutes();
     _subscribeToRider();
@@ -90,7 +79,8 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
 
   @override
   void dispose() {
-    _pulseCtrl.dispose();
+    _riderLatLngNotifier.dispose();
+    _riderUpdatedAtNotifier.dispose();
     if (_channel != null) {
       Supabase.instance.client.removeChannel(_channel!);
     }
@@ -117,13 +107,16 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
             final lat = (r['rider_lat'] as num?)?.toDouble();
             final lng = (r['rider_lng'] as num?)?.toDouble();
             if (lat != null && lng != null) {
-              setState(() {
-                _riderLatLng = LatLng(lat, lng);
-                _riderUpdatedAt = r['rider_location_updated_at'] != null
-                    ? DateTime.tryParse(r['rider_location_updated_at'])
-                    : null;
-              });
-              // Optionally re-fetch pickup leg when rider moves significantly
+              final newPos = LatLng(lat, lng);
+              if (_riderLatLngNotifier.value == null ||
+                  _riderLatLngNotifier.value!.latitude != newPos.latitude ||
+                  _riderLatLngNotifier.value!.longitude != newPos.longitude) {
+                _riderLatLngNotifier.value = newPos;
+              }
+              _riderUpdatedAtNotifier.value =
+                  r['rider_location_updated_at'] != null
+                      ? DateTime.tryParse(r['rider_location_updated_at'])
+                      : DateTime.now();
             }
           },
         )
@@ -223,8 +216,9 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
 
     // Fetch rider → shop only if rider coords known
     List<LatLng> pickupRoute = [];
-    if (_riderLatLng != null) {
-      pickupRoute = await _fetchORSRoute(_riderLatLng!, shopPt);
+    final riderPos = _riderLatLngNotifier.value;
+    if (riderPos != null) {
+      pickupRoute = await _fetchORSRoute(riderPos, shopPt);
     }
 
     if (mounted) {
@@ -243,12 +237,13 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
 
   void _fitMapBounds() {
     final order = widget.order;
+    final riderPos = _riderLatLngNotifier.value;
     final pts = <LatLng>[
       if (order.shopLat != null && order.shopLng != null)
         LatLng(order.shopLat!, order.shopLng!),
       if (order.deliveryLat != null && order.deliveryLng != null)
         LatLng(order.deliveryLat!, order.deliveryLng!),
-      if (_riderLatLng != null) _riderLatLng!,
+      if (riderPos != null) riderPos,
     ];
     if (pts.isEmpty) return;
 
@@ -304,6 +299,13 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Text(
             label,
@@ -316,52 +318,6 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _riderMarker() {
-    return ScaleTransition(
-      scale: _pulseAnim,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: _kRiderMarkerColor,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: _kRiderMarkerColor.withValues(alpha: 0.5),
-                  blurRadius: 16,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-              border: Border.all(color: Colors.white, width: 2.5),
-            ),
-            child: const Icon(Icons.delivery_dining_rounded,
-                color: Colors.white, size: 26),
-          ),
-          const SizedBox(height: 2),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: _kRiderMarkerColor,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              'Rider',
-              style: GoogleFonts.outfit(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -467,14 +423,6 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
           child: _mapMarker(
               _kCustomerMarkerColor, Icons.location_on_rounded, 'Customer'),
         ),
-      // Live rider marker
-      if (_riderLatLng != null)
-        Marker(
-          point: _riderLatLng!,
-          width: 80,
-          height: 72,
-          child: _riderMarker(),
-        ),
     ];
 
     // Map initial centre — shop location
@@ -534,6 +482,28 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                   ),
 
                 MarkerLayer(markers: markers),
+
+                // STRESS-TEST FIX: Live Rider moving marker completely isolated from parent setState
+                ValueListenableBuilder<LatLng?>(
+                  valueListenable: _riderLatLngNotifier,
+                  builder: (context, riderLoc, child) {
+                    if (riderLoc == null) return const SizedBox.shrink();
+                    return MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: riderLoc,
+                          width: 80,
+                          height: 72,
+                          child: SmoothRiderMarker(
+                            targetLocation: riderLoc,
+                            label: 'Rider',
+                            color: _kRiderMarkerColor,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
 
@@ -743,14 +713,22 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                                     fontSize: 12,
                                     color: _kDeliveryColor,
                                     fontWeight: FontWeight.w600)),
-                            if (_riderUpdatedAt != null) ...[
-                              const Spacer(),
-                              Text(
-                                'Rider updated ${_secondsAgo(_riderUpdatedAt!)}s ago',
-                                style: GoogleFonts.outfit(
-                                    fontSize: 10, color: Colors.grey),
-                              ),
-                            ],
+                            ValueListenableBuilder<DateTime?>(
+                              valueListenable: _riderUpdatedAtNotifier,
+                              builder: (context, riderUpdatedAt, child) {
+                                if (riderUpdatedAt == null) return const SizedBox.shrink();
+                                return Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      'Rider updated ${_secondsAgo(riderUpdatedAt)}s ago',
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 10, color: Colors.grey),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -758,17 +736,25 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                         // Distance chips
                         Row(
                           children: [
-                            if (_riderLatLng != null)
-                              Expanded(
-                                child: _distanceChip(
-                                  color: _kPickupColor,
-                                  icon: Icons.storefront_rounded,
-                                  label: 'To Shop',
-                                  km: _pickupKm,
-                                  loading: _loadingRoutes,
-                                ),
-                              ),
-                            if (_riderLatLng != null) const SizedBox(width: 10),
+                            ValueListenableBuilder<LatLng?>(
+                              valueListenable: _riderLatLngNotifier,
+                              builder: (context, riderPos, child) {
+                                if (riderPos == null) return const SizedBox.shrink();
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _distanceChip(
+                                      color: _kPickupColor,
+                                      icon: Icons.storefront_rounded,
+                                      label: 'To Shop',
+                                      km: _pickupKm,
+                                      loading: _loadingRoutes,
+                                    ),
+                                    const SizedBox(width: 10),
+                                  ],
+                                );
+                              },
+                            ),
                             Expanded(
                               child: _distanceChip(
                                 color: _kDeliveryColor,

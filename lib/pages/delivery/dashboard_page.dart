@@ -1390,7 +1390,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     if (_isMapOpening) return;
     _isMapOpening = true;
     // Resolve shop coords: prefer joined cache, fall back to snapshot on order
-    final shops = group.orders.map((order) {
+    final targetOrders = group.activeOrders.isNotEmpty ? group.activeOrders : group.orders;
+    final shops = targetOrders.map((order) {
       final shopInfo = _shopInfoCache[order.shopId];
       final sLat = shopInfo?.lat ?? order.shopLat;
       final sLng = shopInfo?.lng ?? order.shopLng;
@@ -1405,7 +1406,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _isMapOpening = false;
       return;
     }
-    final primaryOrder = group.orders.first;
+    final primaryOrder = group.primaryOrder;
     if (primaryOrder.deliveryLat == null || primaryOrder.deliveryLng == null) {
       _showSnack('Map not available — customer location missing',
           isError: true);

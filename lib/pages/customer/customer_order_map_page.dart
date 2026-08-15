@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/order_model.dart';
 import '../../theme/app_colors.dart';
 import '../../services/telemetry_service.dart';
+import '../../widgets/common/animated_moving_marker.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Colour palette (customer perspective — no pickup leg)
@@ -43,7 +44,7 @@ class CustomerOrderMapPage extends StatefulWidget {
 }
 
 class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+    with WidgetsBindingObserver {
   final MapController _mapCtrl = MapController();
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -62,10 +63,6 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   Timer? _updateTimer;
   final ValueNotifier<int> _timeTicker = ValueNotifier(0);
   final Map<String, String> _orderToRiderMap = {};
-
-  // Pulse animation for the rider dot
-  late AnimationController _pulseCtrl;
-  late Animation<double> _pulseAnim;
 
   @override
   void initState() {
@@ -95,14 +92,6 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     _riderLocationsNotifier.value = initialLocs;
     _riderUpdatedAtsNotifier.value = initialAts;
 
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
-
     _fetchRoutes();
     _subscribeToRider();
   }
@@ -110,7 +99,6 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _pulseCtrl.dispose();
     _updateTimer?.cancel();
     _timeTicker.dispose();
     if (_channel != null) {
@@ -341,9 +329,13 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     }
     final custPt = LatLng(custLat, custLng);
 
-    final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
+    final allShops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
         ? widget.groupOrders!
         : [widget.order];
+    final activeShops = allShops
+        .where((s) => s.status != 'rejected' && s.status != 'cancelled')
+        .toList();
+    final shops = activeShops.isNotEmpty ? activeShops : allShops;
 
     List<List<LatLng>> allRoutes = [];
     double totalKm = 0;
@@ -364,8 +356,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
               ) /
               1000;
         }
-        // Actually, taking max distance is more accurate for a multi-shop ETA than summing them,
-        // since we just draw separate lines to customer.
+        // Max distance is more accurate for multi-shop ETA than summing them
         if (km > totalKm) totalKm = km;
       }
     }
@@ -390,9 +381,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
         if (loc.latitude != 0.0) loc,
     ];
 
-    final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
+    final allShops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
         ? widget.groupOrders!
         : [widget.order];
+    final activeShops = allShops
+        .where((s) => s.status != 'rejected' && s.status != 'cancelled')
+        .toList();
+    final shops = activeShops.isNotEmpty ? activeShops : allShops;
+
     for (final shop in shops) {
       if (shop.shopLat != null && shop.shopLng != null && shop.shopLat != 0.0) {
         pts.add(LatLng(shop.shopLat!, shop.shopLng!));
@@ -453,6 +449,13 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Text(
             label,
@@ -464,52 +467,6 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _riderMarker() {
-    return ScaleTransition(
-      scale: _pulseAnim,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: _kRiderMarkerColor,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: _kRiderMarkerColor.withValues(alpha: 0.5),
-                  blurRadius: 16,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-              border: Border.all(color: Colors.white, width: 2.5),
-            ),
-            child: const Icon(Icons.delivery_dining_rounded,
-                color: Colors.white, size: 26),
-          ),
-          const SizedBox(height: 2),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: _kRiderMarkerColor,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              'Rider',
-              style: GoogleFonts.outfit(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -607,9 +564,19 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final custLat = order.deliveryLat;
     final custLng = order.deliveryLng;
 
-    final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
+    final allShops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
         ? widget.groupOrders!
         : [order];
+    final activeShops = allShops
+        .where((s) => s.status != 'rejected' && s.status != 'cancelled')
+        .toList();
+    final effectiveShops = activeShops.isNotEmpty ? activeShops : allShops;
+
+    final isMulti = allShops.length > 1;
+    final rejectedCount = allShops
+        .where((s) => s.status == 'rejected' || s.status == 'cancelled')
+        .length;
+    final hasPartialRejection = isMulti && rejectedCount > 0 && activeShops.isNotEmpty;
 
     final seenCoords = <String>{};
     LatLng applyJitter(double lat, double lng) {
@@ -629,14 +596,19 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
     final markers = <Marker>[
       // Shop pins
-      for (final shop in shops)
-        if (shop.shopLat != null && shop.shopLng != null)
+      for (int i = 0; i < allShops.length; i++)
+        if (allShops[i].shopLat != null && allShops[i].shopLng != null)
           Marker(
-            point: applyJitter(shop.shopLat!, shop.shopLng!),
+            point: applyJitter(allShops[i].shopLat!, allShops[i].shopLng!),
             width: 80,
             height: 70,
-            child:
-                _mapMarker(_kShopMarkerColor, Icons.storefront_rounded, 'Shop'),
+            child: _mapMarker(
+              (allShops[i].status == 'rejected' || allShops[i].status == 'cancelled')
+                  ? Colors.grey
+                  : _kShopMarkerColor,
+              Icons.storefront_rounded,
+              isMulti ? 'Shop ${i + 1}' : 'Shop',
+            ),
           ),
       // Customer home pin
       if (custLat != null && custLng != null)
@@ -651,10 +623,10 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     // Map initial centre — prefer customer address
     final mapCenter = (custLat != null && custLng != null)
         ? LatLng(custLat, custLng)
-        : (shops.isNotEmpty &&
-                shops.first.shopLat != null &&
-                shops.first.shopLng != null)
-            ? LatLng(shops.first.shopLat!, shops.first.shopLng!)
+        : (effectiveShops.isNotEmpty &&
+                effectiveShops.first.shopLat != null &&
+                effectiveShops.first.shopLng != null)
+            ? LatLng(effectiveShops.first.shopLat!, effectiveShops.first.shopLng!)
             : const LatLng(28.6139, 77.2090);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -696,22 +668,16 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
                 MarkerLayer(markers: markers),
 
-                // STRESS-TEST FIX: Live Rider layer completely isolated from setState
+                // STRESS-TEST FIX: Live Rider layer with smooth animated movement without setState
                 if (isRiderActiveStatus)
                   ValueListenableBuilder<Map<String, LatLng>>(
                     valueListenable: _riderLocationsNotifier,
                     builder: (context, riderLocs, child) {
                       if (riderLocs.isEmpty) return const SizedBox.shrink();
-                      return MarkerLayer(
-                        markers: [
-                          for (final loc in riderLocs.values)
-                            Marker(
-                              point: applyJitter(loc.latitude, loc.longitude),
-                              width: 80,
-                              height: 72,
-                              child: _riderMarker(),
-                            ),
-                        ],
+                      return SmoothMovingRiderMarkerLayer(
+                        riderLocations: riderLocs,
+                        label: 'Rider',
+                        color: _kRiderMarkerColor,
                       );
                     },
                   ),
@@ -774,7 +740,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Order #${order.id.substring(0, 8).toUpperCase()}',
+                              isMulti
+                                  ? 'Multi-Shop Order (${activeShops.length} active)'
+                                  : 'Order #${order.id.substring(0, 8).toUpperCase()}',
                               style: GoogleFonts.outfit(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 14,
@@ -782,14 +750,21 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                               ),
                             ),
                             Text(
-                              isOutForDelivery
-                                  ? 'Rider is on the way! 🚴'
-                                  : order.statusDisplay,
+                              hasPartialRejection
+                                  ? '${activeShops.length} of ${allShops.length} shops active ($rejectedCount cancelled)'
+                                  : isOutForDelivery
+                                      ? 'Rider is on the way! 🚴'
+                                      : order.statusDisplay,
                               style: GoogleFonts.outfit(
                                 fontSize: 12,
-                                color: isDark
-                                    ? Colors.white54
-                                    : Colors.grey.shade600,
+                                color: hasPartialRejection
+                                    ? AppColors.warning
+                                    : isDark
+                                        ? Colors.white54
+                                        : Colors.grey.shade600,
+                                fontWeight: hasPartialRejection
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
