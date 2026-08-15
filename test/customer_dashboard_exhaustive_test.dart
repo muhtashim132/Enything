@@ -239,11 +239,12 @@ void main() {
 
       expect(DeliveryCalculator.calculateMultiShopSurcharge([shop1]), 0.0);
       expect(DeliveryCalculator.calculateMultiShopSurcharge([shop1, shop2]),
-          greaterThan(0.0));
+          20.0);
       expect(
           DeliveryCalculator.calculateMultiShopSurcharge([shop1, shop2, shop3]),
-          greaterThan(
-              DeliveryCalculator.calculateMultiShopSurcharge([shop1, shop2])));
+          40.0);
+      expect(DeliveryCalculator.calculateDeliveryCharges(2.0, 100.0), 20.0);
+      expect(DeliveryCalculator.calculateDeliveryCharges(5.0, 200.0), 20.0);
     });
   });
 

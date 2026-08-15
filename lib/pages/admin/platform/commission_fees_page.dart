@@ -151,6 +151,14 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                   color: AdminColors.info,
                   children: [
                     _buildItem(
+                        'delivery_base_fee',
+                        'Flat Delivery Fee',
+                        'Flat delivery charge per order / cart (covers 1-3 shops)',
+                        config.deliveryBaseFee,
+                        '₹',
+                        config,
+                        rbac),
+                    _buildItem(
                         'delivery_rate_per_km',
                         'Delivery Rate',
                         'Charge per km (₹/km)',

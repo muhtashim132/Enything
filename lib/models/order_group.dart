@@ -7,9 +7,16 @@ class OrderGroup {
 
   OrderGroup(this.groupId, this.orders);
 
+  static const Set<String> _terminalRejectionStatuses = {
+    'seller_rejected',
+    'partner_rejected',
+    'cancelled',
+    'rejected',
+  };
+
   /// Active orders in this group (excluding cancelled and rejected sub-orders).
   List<OrderModel> get activeOrders =>
-      orders.where((o) => o.status != 'rejected' && o.status != 'cancelled').toList();
+      orders.where((o) => !_terminalRejectionStatuses.contains(o.status)).toList();
 
   /// Primary order to read shared metadata from (customer info, delivery coordinates).
   OrderModel get primaryOrder =>

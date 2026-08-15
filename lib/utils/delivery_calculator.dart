@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:latlong2/latlong.dart';
 import '../models/shop_model.dart';
+import '../config/payment_config.dart';
 import '../providers/platform_config_provider.dart';
 
 class DeliveryCalculator {
@@ -12,16 +13,20 @@ class DeliveryCalculator {
   static double get _ratePerKm =>
       PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10.0;
 
+  /// Flat base delivery fee per cart/order (covers 1-3 shops in cart)
+  static double get flatDeliveryFee =>
+      PlatformConfigProvider.instance?.deliveryBaseFee ??
+      PaymentConfig.deliveryFee;
+
   // ---------------------------------------------------------------------------
   // Base delivery charge (customer ↔ nearest shop)
   // ---------------------------------------------------------------------------
 
-  /// Delivery charge: ceil(distanceKm) × ratePerKm.
+  /// Flat delivery charge per order/cart: flatDeliveryFee (₹20 default).
   /// Returns -1 if beyond maxRadiusKm.
   static double calculateDeliveryCharges(double distanceKm, double orderValue) {
     if (distanceKm > maxRadiusKm) return -1;
-    final km = distanceKm.ceil().clamp(1, maxRadiusKm.ceil().toInt());
-    return km * _ratePerKm;
+    return flatDeliveryFee;
   }
 
   /// Returns the label string for the delivery charge.
@@ -57,46 +62,14 @@ class DeliveryCalculator {
   // Multi-shop surcharge
   // ---------------------------------------------------------------------------
 
-  /// Calculates the extra inter-shop delivery surcharge when a customer orders
-  /// from more than one shop.
-  ///
-  /// **Algorithm**
-  /// • Shop 1 — no surcharge (it's the "anchor").
-  /// • Shop 2 — distance from shop 1.
-  ///   - ≤ 1 km  → `_ratePerKm` × 1 (minimum 1 km charged)
-  ///   - > 1 km  → `_ratePerKm` × ceil(distanceKm)
-  /// • Shop 3, 4, … — distance from the **nearest** already-visited shop
-  ///   (greedy nearest-neighbour), same rate as above.
-  ///
-  /// The actual rate is `_ratePerKm` (₹10/km by default, configurable in Admin → Platform Config).
-
+  /// Multi-shop surcharge:
+  /// • 1 shop: ₹0
+  /// • 2+ shops: multiShopSurcharge (default ₹20.0 from Admin) per additional shop.
   static double calculateMultiShopSurcharge(List<ShopModel> shops) {
-    if (shops.length <= 1) return 0;
-
-    double total = 0;
-    // "visited" starts with just the first shop
-    final visited = <ShopModel>[shops.first];
-
-    for (int i = 1; i < shops.length; i++) {
-      final candidate = shops[i];
-
-      // Find the minimum distance from this shop to any already-visited shop
-      double minDist = double.infinity;
-      for (final v in visited) {
-        final d = haversineKm(candidate.location, v.location);
-        if (d < minDist) minDist = d;
-      }
-
-      // BUG-CMT1 FIX: rate is _ratePerKm (default ₹10/km, admin-configurable)
-      // — NOT a fixed ₹7. Minimum charge = 1 km × _ratePerKm.
-      final chargeForShop = _ratePerKm * math.max(1, minDist.ceil());
-
-      total += chargeForShop;
-
-      visited.add(candidate);
-    }
-
-    return total;
+    if (shops.length <= 1) return 0.0;
+    final ratePerExtraShop =
+        PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
+    return ratePerExtraShop * (shops.length - 1);
   }
 
   // ---------------------------------------------------------------------------

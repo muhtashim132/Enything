@@ -29,6 +29,9 @@ import 'package:collection/collection.dart';
 import '../../utils/delivery_calculator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/common/animated_moving_marker.dart';
+import '../../providers/platform_config_provider.dart';
+import '../../config/payment_config.dart';
+import '../../config/tax_config.dart';
 
 class TrackOrderPage extends StatefulWidget {
   final String orderId;
@@ -59,6 +62,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   late Animation<double> _pulseAnim;
   RealtimeChannel? _channel;
   bool _isIntentionalDisconnect = false;
+  Timer? _realtimeReconnectTimer;
   final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier =
       ValueNotifier({});
   bool _razorpayOpened = false;
@@ -186,6 +190,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _decisionCountdownTimer?.cancel();
     _magicAutoAcceptTimer?.cancel();
     _pollingTimer?.cancel();
+    _realtimeReconnectTimer?.cancel();
     if (_channel != null) {
       _isIntentionalDisconnect = true;
       final chan = _channel!;
@@ -277,9 +282,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
         _subscribeToOrder();
 
-        // Compute aggregate status for countdowns/payments
-        _handleAggregateStatusChange();
-
         // Fix 3: Read the resolved flag from SharedPrefs so the panel stays hidden
         // even when this TrackOrderPage is recreated (e.g. banner tap after replacement).
         if (order.cartGroupId != null && order.cartGroupId!.isNotEmpty) {
@@ -287,11 +289,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           final prefs = await SharedPreferences.getInstance();
           final resolved = prefs.getBool(resolvedKey) ?? false;
           if (resolved && mounted && !_partialRejectionResolved) {
-            setState(() {
-              _partialRejectionResolved = true;
-            });
+            _partialRejectionResolved = true;
           }
         }
+
+        // Compute aggregate status for countdowns/payments after reading preferences
+        _handleAggregateStatusChange();
 
         // If already delivered and not yet rated, show rating prompt
         if (order.status == 'delivered' && !order.hasCustomerRated) {
@@ -332,8 +335,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             value: widget.orderId,
           );
 
-    final newChannel = _supabase
-        .channel('group-${_order!.cartGroupId ?? widget.orderId}');
+    final channelName =
+        'order-track-${_order!.cartGroupId ?? widget.orderId}-${DateTime.now().millisecondsSinceEpoch}';
+    final newChannel = _supabase.channel(channelName);
     _channel = newChannel;
 
     newChannel
@@ -463,20 +467,26 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           },
         )
         .subscribe((status, [error]) {
-      if (identical(_channel, newChannel) &&
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        _realtimeReconnectTimer?.cancel();
+        _realtimeReconnectTimer = null;
+      } else if (identical(_channel, newChannel) &&
           (status == RealtimeSubscribeStatus.closed ||
               status == RealtimeSubscribeStatus.channelError) &&
           !_isIntentionalDisconnect) {
-        debugPrint(
-            'TrackOrderPage: Realtime channel disconnected. Reconnecting in 5s...');
-        Future.delayed(const Duration(seconds: 5), () {
-          if (mounted &&
-              identical(_channel, newChannel) &&
-              !_isCancelling &&
-              !_isLoading) {
-            _fetchOrder();
-          }
-        });
+        if (_realtimeReconnectTimer == null ||
+            !_realtimeReconnectTimer!.isActive) {
+          debugPrint(
+              'TrackOrderPage: Realtime channel disconnected. Reconnecting in 5s...');
+          _realtimeReconnectTimer = Timer(const Duration(seconds: 5), () {
+            if (mounted &&
+                identical(_channel, newChannel) &&
+                !_isCancelling &&
+                !_isLoading) {
+              _fetchOrder();
+            }
+          });
+        }
       }
     });
   }
@@ -488,6 +498,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         .where((o) => !_terminalRejectionStatuses.contains(o.status))
         .toList();
     if (activeOrders.isEmpty) return 'cancelled';
+
+    // 100x FIX: If ALL active sellers have accepted AND the rider has accepted,
+    // and orders are not yet in confirmed/post-payment stage, the aggregate state IS ready for payment ('awaiting_payment').
+    if (_allSellersAccepted &&
+        _partnerAccepted &&
+        activeOrders.every((o) =>
+            o.status == 'awaiting_acceptance' ||
+            o.status == 'awaiting_payment' ||
+            o.status == 'pending')) {
+      return 'awaiting_payment';
+    }
 
     // Priority 1: awaiting_acceptance
     if (activeOrders.any((o) => o.status == 'awaiting_acceptance')) {
@@ -594,38 +615,94 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   double _computeGroupTotalAmount() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.totalAmount);
 
-  double _computeGroupDeliveryCharges() =>
-      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.deliveryCharges);
+  double _computeGroupPlatformFee() {
+    if (_activeGroupOrders.isEmpty) return 0.0;
+    return PlatformConfigProvider.instance?.platformFee ??
+        PaymentConfig.platformFee;
+  }
 
-  double _computeGroupPlatformFee() =>
-      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.platformFee);
+  double _computeGroupGstPlatform() {
+    if (_activeGroupOrders.isEmpty) return 0.0;
+    final fee = _computeGroupPlatformFee();
+    final rate = PlatformConfigProvider.instance?.platformFeeGstRate ??
+        TaxConfig.platformFeeGstRate;
+    return fee - (fee / (1 + rate));
+  }
 
   double _computeGroupGstItemTotal() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstItemTotal);
 
-  double _computeGroupGstDelivery() =>
-      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstDelivery);
+  double _computeGroupMultiShopSurcharge() {
+    if (_activeGroupOrders.length <= 1) return 0.0;
+    final ratePerShop = PlatformConfigProvider.instance?.multiShopSurcharge ??
+        PaymentConfig.multiShopSurcharge;
+    return ratePerShop * (_activeGroupOrders.length - 1);
+  }
 
-  double _computeGroupSmallCartFee() =>
-      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.smallCartFee);
+  double _computeGroupSmallCartFee() {
+    if (_activeGroupOrders.isEmpty) return 0.0;
+    final threshold = PlatformConfigProvider.instance?.smallCartThreshold ??
+        PaymentConfig.smallCartThreshold;
+    final activeSubtotal = _computeGroupTotalAmount();
+    if (activeSubtotal > 0 && activeSubtotal < threshold) {
+      return PlatformConfigProvider.instance?.smallCartFee ??
+          PaymentConfig.smallCartFee;
+    }
+    return 0.0;
+  }
 
-  double _computeGroupHeavyOrderFee() =>
-      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.heavyOrderFee);
+  double _computeGroupHeavyOrderFee() {
+    if (_activeGroupOrders.isEmpty) return 0.0;
+    return _activeGroupOrders.fold(0.0, (sum, o) => sum + o.heavyOrderFee);
+  }
 
-  double _computeGroupMultiShopSurcharge() =>
-      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.multiShopSurcharge);
+  double _computeGroupBaseDeliveryFee() {
+    if (_activeGroupOrders.isEmpty) return 0.0;
+    return PlatformConfigProvider.instance?.deliveryBaseFee ??
+        PaymentConfig.deliveryFee;
+  }
+
+  double _computeGroupDeliveryCharges() {
+    if (_activeGroupOrders.isEmpty) return 0.0;
+    final base = _computeGroupBaseDeliveryFee();
+    final surcharge = _computeGroupMultiShopSurcharge();
+    final smallCart = _computeGroupSmallCartFee();
+    final heavy = _computeGroupHeavyOrderFee();
+    final rate = PlatformConfigProvider.instance?.deliveryGstRate ??
+        TaxConfig.deliveryGstRate;
+    return (base + surcharge + smallCart + heavy) * (1 + rate);
+  }
+
+  double _computeGroupGstDelivery() {
+    if (_activeGroupOrders.isEmpty) return 0.0;
+    final totalDelivery = _computeGroupDeliveryCharges();
+    final rate = PlatformConfigProvider.instance?.deliveryGstRate ??
+        TaxConfig.deliveryGstRate;
+    return totalDelivery - (totalDelivery / (1 + rate));
+  }
 
   double _computeGroupCouponDiscount() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.couponDiscount);
 
-  double _computeGroupGstPlatform() =>
-      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstPlatform);
-
   double _computeGroupWaitTimePenalty() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.waitTimePenalty);
 
-  double _computeGroupGrandTotal() =>
-      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.grandTotal);
+  double _computeGroupGrandTotal() {
+    if (_activeGroupOrders.isEmpty) return 0.0;
+    final activeItemBase = _computeGroupTotalAmount();
+    final activeGstItem = _computeGroupGstItemTotal();
+    final activePlatform = _computeGroupPlatformFee();
+    final activeDelivery = _computeGroupDeliveryCharges();
+    final activeWaitPenalty = _computeGroupWaitTimePenalty();
+    final activeCoupon = _computeGroupCouponDiscount();
+    return (activeItemBase +
+            activeGstItem +
+            activePlatform +
+            activeDelivery +
+            activeWaitPenalty -
+            activeCoupon)
+        .clamp(0.0, double.infinity);
+  }
 
   bool get _allSellersAccepted {
     if (_groupOrders.isEmpty) return _order?.sellerAccepted ?? false;
@@ -2687,7 +2764,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 isDark: isDark),
                             const SizedBox(height: 8),
                             _billRow('Delivery Fee',
-                                '₹${(_computeGroupDeliveryCharges() - _computeGroupGstDelivery()).clamp(0.0, double.infinity).toStringAsFixed(0)}',
+                                '₹${_computeGroupBaseDeliveryFee().toStringAsFixed(0)}',
                                 isDark: isDark),
                             if (_computeGroupSmallCartFee() > 0) ...[
                               const SizedBox(height: 8),
@@ -2756,6 +2833,40 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       ),
                     const SizedBox(height: 24),
 
+                    // ── Primary Action: Complete Payment (when awaiting_payment) ──
+                    if (_aggregateStatus == 'awaiting_payment' && !isCancelled) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: ElevatedButton.icon(
+                          onPressed: _isProcessingPayment ? null : _openRazorpay,
+                          icon: const Icon(Icons.payment_rounded, color: Colors.white),
+                          label: _isProcessingPayment
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2),
+                                )
+                              : Text(
+                                  'Complete Payment · ₹${_computeGroupGrandTotal().toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                      color: Colors.white),
+                                ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                            elevation: 3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
                     // ── Back to Home (only for active orders) ─────────────────────
                     if (!isCancelled)
                       SizedBox(
@@ -2771,8 +2882,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                               style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.w700, fontSize: 15)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
+                            backgroundColor: _aggregateStatus == 'awaiting_payment'
+                                ? (isDark ? Colors.white10 : Colors.grey.shade100)
+                                : AppColors.primary,
+                            foregroundColor: _aggregateStatus == 'awaiting_payment'
+                                ? (isDark ? Colors.white70 : AppColors.textPrimary)
+                                : Colors.white,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16)),
                             elevation: 0,

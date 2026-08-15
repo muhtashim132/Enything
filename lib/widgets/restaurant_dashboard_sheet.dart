@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -708,8 +709,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
   }
 
   Widget _buildMenuItem(ProductModel product, bool isDark) {
-    final cart = context.read<CartProvider>();
-    final quantity = cart.getItemQuantity(product.id);
+    final cart = context.watch<CartProvider>();
+    final totalQuantity = cart.getProductTotalQuantity(product.id);
     final isBestseller = product.rating >= 4.2 && product.totalReviews > 10;
     final hasDiscount =
         product.discountPercent != null && product.discountPercent! > 0;
@@ -719,9 +720,15 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: isDark
-            ? Border.all(color: Colors.white.withValues(alpha: 0.07))
-            : null,
+        border: totalQuantity > 0
+            ? Border.all(
+                color: AppColors.secondary
+                    .withValues(alpha: isDark ? 0.45 : 0.40),
+                width: 1.2,
+              )
+            : isDark
+                ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                : null,
         boxShadow: [
           BoxShadow(
               color: isDark
@@ -750,7 +757,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                         gradient: const LinearGradient(
                           colors: [Color(0xFFFF9F43), Color(0xFFEE5A24)],
                         ),
-                        borderRadius: BorderRadius.circular(7),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -758,7 +765,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                           const Icon(Icons.local_fire_department_rounded,
                               size: 10, color: Colors.white),
                           const SizedBox(width: 3),
-                          Text('Bestseller',
+                          Text('BESTSELLER',
                               style: GoogleFonts.outfit(
                                   color: Colors.white,
                                   fontSize: 9,
@@ -775,18 +782,53 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                      height: 1.2,
                     ),
                   ),
+
+                  const SizedBox(height: 4),
+
+                  // Rating + reviews
+                  Row(
+                    children: [
+                      const Icon(Icons.star_rounded,
+                          color: Color(0xFFF6C90E), size: 14),
+                      const SizedBox(width: 2),
+                      Text(
+                        product.totalReviews > 0
+                            ? product.rating.toStringAsFixed(1)
+                            : 'New',
+                        style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          color: isDark ? Colors.white70 : AppColors.textPrimary,
+                        ),
+                      ),
+                      if (product.totalReviews > 0) ...[
+                        const SizedBox(width: 2),
+                        Text(
+                          '(${product.totalReviews})',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: isDark
+                                ? Colors.white38
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+
                   if (product.description != null &&
                       product.description!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       product.description!,
                       style: GoogleFonts.outfit(
-                          fontSize: 12,
+                          fontSize: 11.5,
                           color:
                               isDark ? Colors.white54 : AppColors.textSecondary,
-                          height: 1.4),
+                          height: 1.35),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -800,7 +842,7 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
                           color:
-                              isDark ? Colors.white : const Color(0xFF1A1A2E),
+                              isDark ? Colors.white : AppColors.primary,
                         ),
                       ),
                       if (hasDiscount) ...[
@@ -814,30 +856,13 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                             decoration: TextDecoration.lineThrough,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color:
-                                const Color(0xFFFF3366).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${product.discountPercent!.toStringAsFixed(0)}% off',
-                            style: GoogleFonts.outfit(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFFFF3366)),
-                          ),
-                        ),
                       ],
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             // ── Image + Add button ────────────────────────────────────
             Column(
               children: [
@@ -857,51 +882,146 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                 const SizedBox(height: 8),
                 // ADD / Stepper
                 product.variants.isNotEmpty
-                    ? GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context); // close sheet
-                          showProductDetailSheet(context, product.id,
-                              highlightVariants: true);
-                        },
-                        child: Container(
-                          width: 100,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.secondary.withValues(alpha: 0.07),
-                                AppColors.secondary.withValues(alpha: 0.12),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(11),
-                            border: Border.all(
-                                color:
-                                    AppColors.secondary.withValues(alpha: 0.5),
-                                width: 1.3),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.add_rounded,
-                                  size: 14, color: AppColors.secondary),
-                              const SizedBox(width: 3),
-                              Text(
-                                'ADD',
-                                style: GoogleFonts.outfit(
-                                    color: AppColors.secondary,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 13),
+                    ? (totalQuantity > 0
+                        ? Builder(builder: (ctx) {
+                            final productItems =
+                                cart.getItemsForProduct(product.id);
+                            final hasSingleVariant = productItems.length == 1;
+                            final singleItem =
+                                hasSingleVariant ? productItems.first : null;
+                            return Container(
+                              width: 100,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                gradient: AppColors.ctaGradient,
+                                borderRadius: BorderRadius.circular(11),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: AppColors.secondary
+                                          .withValues(alpha: 0.35),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4)),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : quantity == 0
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      if (hasSingleVariant &&
+                                          singleItem != null) {
+                                        cart.updateQuantity(
+                                          product.id,
+                                          singleItem.quantity - 1,
+                                          variantName: singleItem
+                                              .selectedVariant?.name,
+                                        );
+                                      } else {
+                                        Navigator.pop(context);
+                                        showProductDetailSheet(
+                                            context, product.id,
+                                            highlightVariants: true);
+                                      }
+                                    },
+                                    child: const Icon(Icons.remove_rounded,
+                                        color: Colors.white, size: 18),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      showProductDetailSheet(
+                                          context, product.id,
+                                          highlightVariants: true);
+                                    },
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text('$totalQuantity',
+                                            style: GoogleFonts.outfit(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 13.5)),
+                                        const SizedBox(width: 2),
+                                        const Icon(
+                                            Icons.keyboard_arrow_down_rounded,
+                                            color: Colors.white,
+                                            size: 13),
+                                      ],
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      if (_shop != null) {
+                                        if (hasSingleVariant &&
+                                            singleItem != null) {
+                                          cart.addItemWithFeedback(
+                                            context,
+                                            product,
+                                            _shop!,
+                                            selectedVariant:
+                                                singleItem.selectedVariant,
+                                          );
+                                        } else {
+                                          Navigator.pop(context);
+                                          showProductDetailSheet(
+                                              context, product.id,
+                                              highlightVariants: true);
+                                        }
+                                      }
+                                    },
+                                    child: const Icon(Icons.add_rounded,
+                                        color: Colors.white, size: 18),
+                                  ),
+                                ],
+                              ),
+                            );
+                          })
+                        : GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              showProductDetailSheet(context, product.id,
+                                  highlightVariants: true);
+                            },
+                            child: Container(
+                              width: 100,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppColors.secondary.withValues(alpha: 0.07),
+                                    AppColors.secondary.withValues(alpha: 0.12),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(11),
+                                border: Border.all(
+                                    color:
+                                        AppColors.secondary.withValues(alpha: 0.5),
+                                    width: 1.3),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'ADD',
+                                    style: GoogleFonts.outfit(
+                                        color: AppColors.secondary,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  const Icon(Icons.keyboard_arrow_down_rounded,
+                                      size: 14, color: AppColors.secondary),
+                                ],
+                              ),
+                            ),
+                          ))
+                    : totalQuantity == 0
                         ? GestureDetector(
                             onTap: () {
                               cart.addItemWithFeedback(
                                   context, product, _shop!);
-                              setState(() {});
                             },
                             child: Container(
                               width: 100,
@@ -956,13 +1076,12 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                 GestureDetector(
                                   onTap: () {
                                     cart.updateQuantity(
-                                        product.id, quantity - 1);
-                                    setState(() {});
+                                        product.id, totalQuantity - 1);
                                   },
                                   child: const Icon(Icons.remove_rounded,
                                       color: Colors.white, size: 18),
                                 ),
-                                Text('$quantity',
+                                Text('$totalQuantity',
                                     style: GoogleFonts.outfit(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w900,
@@ -971,7 +1090,6 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                   onTap: () {
                                     cart.addItemWithFeedback(
                                         context, product, _shop!);
-                                    setState(() {});
                                   },
                                   child: const Icon(Icons.add_rounded,
                                       color: Colors.white, size: 18),

@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     }
 
     // ── 3. Load Key Secret ────────────────────────────────────────────────────
-    const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET") ?? "";
+    const keySecret = (Deno.env.get("RAZORPAY_KEY_SECRET") ?? "").trim();
     if (!keySecret) {
       console.error("RAZORPAY_KEY_SECRET not configured.");
       return new Response(
@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     const expectedPaise = Math.round(dbAmount * 100);
 
     // ── 6. Capture the payment ────────────────────────────────────────────────
-    const keyId     = Deno.env.get("RAZORPAY_KEY_ID") ?? "";
+    const keyId     = (Deno.env.get("RAZORPAY_KEY_ID") ?? "").trim();
     const authHeader = "Basic " + btoa(`${keyId}:${keySecret}`);
 
     const paymentCheckRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'bell_settings_service.dart';
 
 /// Manages the looping alert bell for sellers and riders.
@@ -223,6 +225,32 @@ class BellAlertService {
     _player = AudioPlayer();
 
     try {
+      // 100x FIX: Wake the screen and keep it illuminated while alert is active
+      try {
+        await WakelockPlus.enable();
+        const screenChannel = MethodChannel('com.enything/screen_wake');
+        await screenChannel.invokeMethod('wakeScreen');
+      } catch (_) {}
+
+      try {
+        await AudioPlayer.global.setAudioContext(AudioContext(
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: true,
+            stayAwake: true,
+            contentType: AndroidContentType.sonification,
+            usageType: AndroidUsageType.alarm,
+            audioFocus: AndroidAudioFocus.gainTransientExclusive,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: const {
+              AVAudioSessionOptions.duckOthers,
+              AVAudioSessionOptions.defaultToSpeaker,
+            },
+          ),
+        ));
+      } catch (_) {}
+
       await _player!.setVolume(1.0);
       await _player!.setReleaseMode(
         loop ? ReleaseMode.loop : ReleaseMode.release,
@@ -269,6 +297,12 @@ class BellAlertService {
 
   Future<void> stopBell() async {
     _isPlaying = false;
+    try {
+      await WakelockPlus.disable();
+      const screenChannel = MethodChannel('com.enything/screen_wake');
+      await screenChannel.invokeMethod('releaseWakeScreen');
+    } catch (_) {}
+
     if (disableAudioForTesting) return;
     // STRESS-TEST FIX: Prevent stopBell from accidentally killing a newly started _player during event-loop yields.
     final currentPlayer = _player;

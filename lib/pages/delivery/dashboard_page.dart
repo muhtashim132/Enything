@@ -29,6 +29,7 @@ import '../../models/order_group.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../services/rider_background_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/bell_alert_service.dart';
 import '../../utils/permission_utils.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
@@ -288,6 +289,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     } else {
       _stopLocationBroadcast();
       RiderBackgroundService.instance.stopService();
+      BellAlertService.instance.clearAll();
     }
 
     final auth = context.read<AuthProvider>();
@@ -611,6 +613,27 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           }).toList();
 
           final newGroupIds = _availableGroups.map((g) => g.groupId).toSet();
+          if (_isOnline) {
+            for (final g in _availableGroups) {
+              final latestDeadline = g.orders
+                  .map((o) => o.acceptanceDeadline)
+                  .where((d) => d != null)
+                  .fold<DateTime?>(
+                      null,
+                      (prev, curr) =>
+                          (prev == null || curr!.isAfter(prev)) ? curr : prev);
+              BellAlertService.instance
+                  .addPendingOrder(g.groupId, expiration: latestDeadline);
+            }
+            final removedGroups =
+                _knownAvailableGroupIds.difference(newGroupIds);
+            for (final gid in removedGroups) {
+              BellAlertService.instance.removePendingOrder(gid);
+            }
+          } else {
+            BellAlertService.instance.clearAll();
+          }
+
           if (_knownAvailableGroupIds.isNotEmpty) {
             final newlyAdded = newGroupIds.difference(_knownAvailableGroupIds);
             if (newlyAdded.isNotEmpty) {
@@ -674,6 +697,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           skipReload: true, notifyCustomer: false);
       if (!success) {
         failedCount = group.orders.length;
+      } else {
+        BellAlertService.instance.removePendingOrder(group.groupId);
+        for (final o in group.orders) {
+          BellAlertService.instance.removePendingOrder(o.id);
+        }
       }
     }
 
@@ -2368,6 +2396,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               _availableGroups.removeWhere(
                                   (g) => g.groupId == group.groupId);
                             });
+                            BellAlertService.instance
+                                .removePendingOrder(group.groupId);
+                            for (final o in group.orders) {
+                              BellAlertService.instance
+                                  .removePendingOrder(o.id);
+                            }
                           },
                           icon: const Icon(Icons.close_rounded, size: 22),
                           color: AppColors.danger,

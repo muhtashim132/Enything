@@ -161,6 +161,55 @@ void main() {
       expect(cartProvider.shops.length, 2);
     });
 
+    test('Product variant tracking, getProductTotalQuantity and getItemsForProduct', () {
+      final variantProduct = ProductModel(
+        id: 'p_var',
+        shopId: 's1',
+        name: 'Chicken Malai Makhni',
+        category: 'Food',
+        subCategory: 'Curry',
+        price: 500.0,
+        variants: [
+          ProductVariant(id: 'v1', name: 'Half', price: 500.0),
+          ProductVariant(id: 'v2', name: 'Full', price: 900.0),
+        ],
+      );
+
+      // Initially empty
+      expect(cartProvider.hasProduct('p_var'), false);
+      expect(cartProvider.getProductTotalQuantity('p_var'), 0);
+      expect(cartProvider.getItemsForProduct('p_var'), isEmpty);
+
+      // Add 'Half' variant (qty: 1)
+      cartProvider.addItem(variantProduct, testShop,
+          quantity: 1, selectedVariant: variantProduct.variants[0]);
+      expect(cartProvider.hasProduct('p_var'), true);
+      expect(cartProvider.getProductTotalQuantity('p_var'), 1);
+      expect(cartProvider.getItemQuantity('p_var', variantName: 'Half'), 1);
+      expect(cartProvider.getItemQuantity('p_var', variantName: 'Full'), 0);
+      expect(cartProvider.getItemsForProduct('p_var').length, 1);
+
+      // Add 'Full' variant (qty: 2)
+      cartProvider.addItem(variantProduct, testShop,
+          quantity: 2, selectedVariant: variantProduct.variants[1]);
+      expect(cartProvider.getProductTotalQuantity('p_var'), 3);
+      expect(cartProvider.getItemQuantity('p_var', variantName: 'Half'), 1);
+      expect(cartProvider.getItemQuantity('p_var', variantName: 'Full'), 2);
+      expect(cartProvider.getItemsForProduct('p_var').length, 2);
+
+      // Decrement 'Half' variant to 0
+      cartProvider.updateQuantity('p_var', 0, variantName: 'Half');
+      expect(cartProvider.getProductTotalQuantity('p_var'), 2);
+      expect(cartProvider.getItemQuantity('p_var', variantName: 'Half'), 0);
+      expect(cartProvider.getItemQuantity('p_var', variantName: 'Full'), 2);
+      expect(cartProvider.getItemsForProduct('p_var').length, 1);
+
+      // Remove 'Full' variant
+      cartProvider.removeItem('p_var', variantName: 'Full');
+      expect(cartProvider.hasProduct('p_var'), false);
+      expect(cartProvider.getProductTotalQuantity('p_var'), 0);
+    });
+
     test('Can load cart from shared preferences', () async {
       SharedPreferences.setMockInitialValues({
         'enything_cart_v2':

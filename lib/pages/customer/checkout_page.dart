@@ -91,7 +91,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final response = await supabase
           .from('orders')
           .select(
-              'total_amount, small_cart_fee, heavy_order_fee, shop_id, weight_kg, multi_shop_surcharge')
+              'total_amount, small_cart_fee, heavy_order_fee, shop_id, multi_shop_surcharge')
           .eq('cart_group_id', cartGroupId)
           .inFilter('status', [
         'awaiting_acceptance',
@@ -116,7 +116,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
         subtotal += (row['total_amount'] as num?)?.toDouble() ?? 0.0;
         smallCartFee += (row['small_cart_fee'] as num?)?.toDouble() ?? 0.0;
         heavyFee += (row['heavy_order_fee'] as num?)?.toDouble() ?? 0.0;
-        weight += (row['weight_kg'] as num?)?.toDouble() ?? 0.0;
         surchargePaid +=
             (row['multi_shop_surcharge'] as num?)?.toDouble() ?? 0.0;
         if (row['shop_id'] != null) {
@@ -856,19 +855,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ? (shopBaseSubtotal / cart.subtotal)
             : (1.0 / numShops);
 
-        final distanceProportion = totalCartDistanceKm > 0
-            ? (shopDistanceKm / totalCartDistanceKm)
-            : (1.0 / numShops);
+        // 100x FIX: Distribute flat cart delivery and rider earnings equally across shops
+        final shopDelivery = totalDelivery / (numShops > 0 ? numShops : 1);
+        final shopRiderEarnings = riderEarnings / (numShops > 0 ? numShops : 1);
 
-        // Splitting by distance prevents the "Ghost Rider Scam"
-        final shopDelivery = totalDelivery * distanceProportion;
-        final shopRiderEarnings = riderEarnings * distanceProportion;
-
-        // 100x FIX: Handling Fee (Platform Fee) is calculated ONCE per order group.
-        // It is split equally across all shops in the order group so total platform fee = 1 basePlatformFee.
-        final basePlatformFee = PlatformConfigProvider.instance?.platformFee ??
-            PaymentConfig.platformFee;
-        final shopPlatformFee = basePlatformFee / (numShops > 0 ? numShops : 1);
+        // 100x FIX: Handling Fee (Platform Fee) is a fixed flat fee per cart (NOT per shop)
+        final totalPlatformFee = isReplacementOrder
+            ? 0.0
+            : (PlatformConfigProvider.instance?.platformFee ??
+                PaymentConfig.platformFee);
+        final shopPlatformFee =
+            totalPlatformFee / (numShops > 0 ? numShops : 1);
 
         final shopTaxBreakdownItems = shopItems.map((i) {
           return {
@@ -1221,26 +1218,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     double surcharge = 0.0;
     double heavyFee = 0.0;
     double smallCartFee = 0.0;
-    double effectiveBase = 25.0;
+    double effectiveBase = PlatformConfigProvider.instance?.deliveryBaseFee ??
+        PaymentConfig.deliveryFee;
 
     if (isReplacementOrder) {
       effectiveBase = 0.0;
-
-      // Issue 4 Fix: Use flat admin rate for surcharge — same rule as SQL validation.
-      // totalShopsAtEnd = existing active shops + new unique shops in this checkout.
-      final newUniqueShopIdsDisplay = cart.shops
-          .map((s) => s.id)
-          .where((id) => !_activeShopIds.contains(id))
-          .toSet();
-      final totalShopsAtEndDisplay =
-          _activeShopIds.length + newUniqueShopIdsDisplay.length;
-      final flatSurchargeRateDisplay =
-          PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
-      final totalSurchargeAtEndDisplay = totalShopsAtEndDisplay > 1
-          ? flatSurchargeRateDisplay * (totalShopsAtEndDisplay - 1)
-          : 0.0;
-      surcharge =
-          math.max(0.0, totalSurchargeAtEndDisplay - _activeSurchargePaid);
+      surcharge = 0.0;
 
       final smallCartThreshold =
           PlatformConfigProvider.instance?.smallCartThreshold ??
@@ -1265,8 +1248,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         heavyFee = math.max(0.0, aggregateHeavyFee - _activeHeavyOrderFee);
       }
     } else {
-      effectiveBase = baseCharge >= 0 ? baseCharge : 25.0;
-      surcharge = cart.multiShopSurcharge;
+      effectiveBase = baseCharge >= 0
+          ? baseCharge
+          : (PlatformConfigProvider.instance?.deliveryBaseFee ??
+              PaymentConfig.deliveryFee);
+      surcharge = 0.0;
       heavyFee = cart.heavyOrderFee;
       smallCartFee = cart.smallCartFee;
     }

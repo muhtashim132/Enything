@@ -44,7 +44,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
-    final quantity = cart.getItemQuantity(product.id);
+    final totalQuantity = cart.getProductTotalQuantity(product.id);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasDiscount =
         product.discountPercent != null && product.discountPercent! > 0;
@@ -80,9 +80,15 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : Colors.white,
             borderRadius: PremiumRadius.largeBorder,
-            border: isDark
-                ? Border.all(color: Colors.white.withValues(alpha: 0.07))
-                : null,
+            border: totalQuantity > 0
+                ? Border.all(
+                    color: AppColors.secondary
+                        .withValues(alpha: isDark ? 0.45 : 0.40),
+                    width: 1.2,
+                  )
+                : isDark
+                    ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                    : null,
             boxShadow:
                 PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
@@ -523,9 +529,14 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                               child: isLocked
                                   ? _buildUnavailableButton(context, isDark)
                                   : product.variants.isNotEmpty
-                                      ? _buildVariantAddButton(context, isDark)
-                                      : quantity > 0
-                                          ? _buildStepper(context, quantity)
+                                      ? (totalQuantity > 0
+                                          ? _buildVariantStepper(
+                                              context, totalQuantity, isDark)
+                                          : _buildVariantAddButton(
+                                              context, isDark))
+                                      : totalQuantity > 0
+                                          ? _buildStepper(
+                                              context, totalQuantity)
                                           : _buildAddButton(context, isDark),
                             ),
                           ],
@@ -642,6 +653,140 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildVariantStepper(
+      BuildContext context, int totalQuantity, bool isDark) {
+    final cart = context.read<CartProvider>();
+    final productItems = cart.getItemsForProduct(product.id);
+    final hasSingleVariant = productItems.length == 1;
+    final singleItem = hasSingleVariant ? productItems.first : null;
+
+    return Container(
+      key: const ValueKey('variant_stepper'),
+      height: 32,
+      decoration: BoxDecoration(
+        gradient: AppColors.ctaGradient,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.secondary.withValues(alpha: 0.35),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              if (hasSingleVariant && singleItem != null) {
+                cart.updateQuantity(
+                  product.id,
+                  singleItem.quantity - 1,
+                  variantName: singleItem.selectedVariant?.name,
+                );
+              } else {
+                showProductDetailSheet(context, product.id,
+                    highlightVariants: true);
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Icon(Icons.remove_rounded, size: 15, color: Colors.white),
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              showProductDetailSheet(context, product.id,
+                  highlightVariants: true);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    transitionBuilder: (child, anim) =>
+                        ScaleTransition(scale: anim, child: child),
+                    child: Text(
+                      '$totalQuantity',
+                      key: ValueKey(totalQuantity),
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 2.5, vertical: 0.5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      'OPT',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 6.5,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (product.totalQuantity != null &&
+                  totalQuantity >= product.totalQuantity!) {
+                HapticFeedback.heavyImpact();
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Only ${product.totalQuantity} items in stock',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                    ),
+                    duration: const Duration(seconds: 2),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+              HapticFeedback.lightImpact();
+              if (hasSingleVariant && singleItem != null) {
+                cart.addItemWithFeedback(
+                  context,
+                  product,
+                  shop,
+                  selectedVariant: singleItem.selectedVariant,
+                );
+              } else {
+                showProductDetailSheet(context, product.id,
+                    highlightVariants: true);
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Icon(Icons.add_rounded, size: 15, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }

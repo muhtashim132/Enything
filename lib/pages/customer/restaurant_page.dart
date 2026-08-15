@@ -325,7 +325,7 @@ class _RestaurantPageState extends State<RestaurantPage> {
                         final itemWidth = (availableWidth -
                                 (crossAxisSpacing * (crossAxisCount - 1))) /
                             crossAxisCount;
-                        final itemHeight = itemWidth + 128;
+                        final itemHeight = itemWidth + 138;
                         final childAspectRatio = itemWidth / itemHeight;
 
                         return SliverGrid(

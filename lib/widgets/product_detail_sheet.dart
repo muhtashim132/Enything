@@ -100,9 +100,24 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           .single();
 
       if (mounted) {
+        ProductVariant? initialVariant;
+        if (product.variants.isNotEmpty) {
+          final cart = context.read<CartProvider>();
+          final cartItems = cart.getItemsForProduct(product.id);
+          if (cartItems.isNotEmpty && cartItems.first.selectedVariant != null) {
+            initialVariant = product.variants.firstWhere(
+              (v) => v.name == cartItems.first.selectedVariant!.name,
+              orElse: () => product.variants.first,
+            );
+          } else {
+            initialVariant = product.variants.first;
+          }
+        }
+
         setState(() {
           _product = product;
           _shop = ShopModel.fromMap(shopData);
+          _selectedVariant = initialVariant;
           _isLoading = false;
         });
 
@@ -716,6 +731,9 @@ class _SheetContent extends StatelessWidget {
                                       children: product.variants.map((v) {
                                         final isSelected =
                                             selectedVariant?.name == v.name;
+                                        final variantQty = cart.getItemQuantity(
+                                            product.id,
+                                            variantName: v.name);
                                         return GestureDetector(
                                           onTap: () => onVariantChanged(v),
                                           child: Transform.scale(
@@ -732,37 +750,93 @@ class _SheetContent extends StatelessWidget {
                                                 color: isSelected
                                                     ? AppColors.primary
                                                         .withValues(alpha: 0.1)
-                                                    : (isDark
-                                                        ? Colors.white
+                                                    : (variantQty > 0
+                                                        ? AppColors.secondary
                                                             .withValues(
-                                                                alpha: 0.05)
-                                                        : Colors.grey.shade100),
+                                                                alpha: isDark
+                                                                    ? 0.15
+                                                                    : 0.08)
+                                                        : (isDark
+                                                            ? Colors.white
+                                                                .withValues(
+                                                                    alpha: 0.05)
+                                                            : Colors
+                                                                .grey.shade100)),
                                                 borderRadius:
                                                     BorderRadius.circular(100),
                                                 border: Border.all(
                                                   color: isSelected
                                                       ? AppColors.primary
-                                                      : (highlightVariants
-                                                          ? AppColors.primary
+                                                      : (variantQty > 0
+                                                          ? AppColors.secondary
                                                               .withValues(
-                                                                  alpha: 0.3)
-                                                          : Colors.transparent),
+                                                                  alpha: 0.5)
+                                                          : (highlightVariants
+                                                              ? AppColors
+                                                                  .primary
+                                                                  .withValues(
+                                                                      alpha:
+                                                                          0.3)
+                                                              : Colors
+                                                                  .transparent)),
+                                                  width: isSelected ||
+                                                          variantQty > 0
+                                                      ? 1.4
+                                                      : 1.0,
                                                 ),
                                               ),
-                                              child: Text(
-                                                '${v.name} - ₹${v.price.toStringAsFixed(0)}',
-                                                style: GoogleFonts.outfit(
-                                                  fontSize: 13,
-                                                  fontWeight: isSelected
-                                                      ? FontWeight.w700
-                                                      : FontWeight.w500,
-                                                  color: isSelected
-                                                      ? AppColors.primary
-                                                      : (isDark
-                                                          ? Colors.white70
-                                                          : AppColors
-                                                              .textSecondary),
-                                                ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    '${v.name} - ₹${v.price.toStringAsFixed(0)}',
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 13,
+                                                      fontWeight: isSelected
+                                                          ? FontWeight.w700
+                                                          : FontWeight.w500,
+                                                      color: isSelected
+                                                          ? AppColors.primary
+                                                          : (variantQty > 0
+                                                              ? (isDark
+                                                                  ? AppColors
+                                                                      .secondaryLight
+                                                                  : AppColors
+                                                                      .secondary)
+                                                              : (isDark
+                                                                  ? Colors
+                                                                      .white70
+                                                                  : AppColors
+                                                                      .textSecondary)),
+                                                    ),
+                                                  ),
+                                                  if (variantQty > 0) ...[
+                                                    const SizedBox(width: 6),
+                                                    Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 1.5),
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            AppColors.secondary,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(10),
+                                                      ),
+                                                      child: Text(
+                                                        '$variantQty in cart',
+                                                        style:
+                                                            GoogleFonts.outfit(
+                                                          fontSize: 9.5,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
                                               ),
                                             ),
                                           ),

@@ -5,15 +5,13 @@ void main() {
   group('DeliveryCalculator', () {
     group('Delivery Charges', () {
       test('calculates minimum correctly', () {
-        // Distance 0.5km -> ceil is 1. Should charge for 1km.
-        // Default rate is 10.0
-        expect(DeliveryCalculator.calculateDeliveryCharges(0.5, 500), 10.0);
+        // Flat delivery fee per cart/order (default ₹20.0)
+        expect(DeliveryCalculator.calculateDeliveryCharges(0.5, 500), 20.0);
       });
 
       test('clamps correctly', () {
-        // Assume maxRadiusKm is 15.0 and ratePerKm is 10.0
-        // Distance 15.0 -> ceil is 15.
-        expect(DeliveryCalculator.calculateDeliveryCharges(15.0, 500), 150.0);
+        // Distance 15.0 within maxRadiusKm -> flat delivery fee
+        expect(DeliveryCalculator.calculateDeliveryCharges(15.0, 500), 20.0);
       });
 
       test('returns -1 for out of bounds', () {

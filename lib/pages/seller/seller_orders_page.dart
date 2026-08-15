@@ -15,6 +15,7 @@ import '../../widgets/order_countdown_timer.dart';
 import '../../widgets/common/notification_bell.dart';
 import '../../pages/seller/seller_order_map_page.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../services/bell_alert_service.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/time_utils.dart';
 import '../../utils/delivery_calculator.dart';
@@ -270,6 +271,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       // Update DB and capture boolean return value to prevent TOCTOU races
       final result = await _supabase
           .rpc('accept_order_seller', params: {'p_order_id': order.id});
+      BellAlertService.instance.removePendingOrder(order.id);
       final riderAlreadyAccepted = result == true;
 
       bool allGroupAccepted = true;
@@ -571,6 +573,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         if (rejectReason == 'out_of_stock' && selectedOutOfStockProductId != null)
           'p_out_of_stock_product_id': selectedOutOfStockProductId,
       });
+      BellAlertService.instance.removePendingOrder(order.id);
 
       if (mounted) {
         context.read<NotificationProvider>().sendBackgroundPush(

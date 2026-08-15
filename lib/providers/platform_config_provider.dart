@@ -24,6 +24,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   // ── Defaults (matches hardcoded constants initially) ────────
   double _commissionPercent = 5.0;
   double _platformFee = 20.0;
+  double _deliveryBaseFee = 20.0;
   double _smallCartFee = 15.0;
   double _smallCartThreshold = 99.0;
   double _heavyOrderFee = 25.0;
@@ -120,6 +121,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   }
 
   double get platformFee => _platformFee;
+  double get deliveryBaseFee => _deliveryBaseFee;
   double get smallCartFee => _smallCartFee;
   double get smallCartThreshold => _smallCartThreshold;
   double get heavyOrderFee => _heavyOrderFee;
@@ -168,6 +170,10 @@ class PlatformConfigProvider extends ChangeNotifier {
               break;
             case 'platform_fee':
               _platformFee = val;
+              break;
+            case 'delivery_base_fee':
+            case 'delivery_fee':
+              _deliveryBaseFee = val;
               break;
             case 'small_cart_fee':
               _smallCartFee = val;
@@ -758,6 +764,10 @@ class PlatformConfigProvider extends ChangeNotifier {
       case 'platform_fee':
         _platformFee = val;
         break;
+      case 'delivery_base_fee':
+      case 'delivery_fee':
+        _deliveryBaseFee = val;
+        break;
       case 'small_cart_fee':
         _smallCartFee = val;
         break;
@@ -825,6 +835,10 @@ class PlatformConfigProvider extends ChangeNotifier {
         break;
       case 'platform_fee':
         _platformFee = 15.0;
+        break;
+      case 'delivery_base_fee':
+      case 'delivery_fee':
+        _deliveryBaseFee = 20.0;
         break;
       case 'small_cart_fee':
         _smallCartFee = 15.0;

@@ -22,6 +22,12 @@ class PaymentConfig {
   /// 18% GST is embedded in this amount (extracted for accounting).
   static const double platformFee = 20.0;
 
+  /// Flat delivery fee per cart/order (covers 1, 2, or 3 shops in cart).
+  static const double deliveryFee = 20.0;
+
+  /// Multi-shop surcharge per additional shop beyond the 1st shop.
+  static const double multiShopSurcharge = 20.0;
+
   // ── Order Eligibility ─────────────────────────────────────────────────────
 
   /// Minimum order value to place an order at all.

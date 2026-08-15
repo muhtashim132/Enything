@@ -103,8 +103,8 @@ Deno.serve(async (req) => {
     }
 
     // ── 3. Razorpay credentials ───────────────────────────────────────────────
-    const keyId     = Deno.env.get("RAZORPAY_KEY_ID") ?? "";
-    const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET") ?? "";
+    const keyId     = (Deno.env.get("RAZORPAY_KEY_ID") ?? "").trim();
+    const keySecret = (Deno.env.get("RAZORPAY_KEY_SECRET") ?? "").trim();
 
     if (!keyId || !keySecret) {
       console.error("RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not set in Supabase secrets.");

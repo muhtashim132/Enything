@@ -209,10 +209,10 @@ class CartProvider extends ChangeNotifier {
 
   // PlatformConfigProvider.instance now safely attaches its listener even if it's delayed.
   // This ensures UI rebuilds instantly when admin updates platform fee or rates.
+  /// Handling / Platform fee: Flat fixed per cart/order (default ₹20), NOT per shop.
   double get platformFee {
-    final baseFee = PlatformConfigProvider.instance?.platformFee ??
+    return PlatformConfigProvider.instance?.platformFee ??
         PaymentConfig.platformFee;
-    return baseFee;
   }
 
   bool get requiresPrescription =>
@@ -538,12 +538,35 @@ class CartProvider extends ChangeNotifier {
   /// Option 1: GST is added ON TOP of the delivery charge so the customer pays it.
   double totalDeliveryCharges(double baseDistanceKm) {
     final base = calculateDeliveryCharges(baseDistanceKm);
-    final effectiveBase = base >= 0 ? base : 25.0;
+    final effectiveBase = base >= 0
+        ? base
+        : (PlatformConfigProvider.instance?.deliveryBaseFee ??
+            PaymentConfig.deliveryFee);
     double totalWithoutGst =
         effectiveBase + multiShopSurcharge + heavyOrderFee + smallCartFee;
     if (totalWithoutGst < 0) totalWithoutGst = 0.0;
     return totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
   }
+
+  /// Returns the total quantity of a product in the cart across all its variants (or base product).
+  int getProductTotalQuantity(String productId) {
+    try {
+      return _items
+          .where((item) => item.product.id == productId)
+          .fold(0, (sum, item) => sum + item.quantity);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Returns all cart line items for a specific product ID.
+  List<CartItem> getItemsForProduct(String productId) {
+    return _items.where((item) => item.product.id == productId).toList();
+  }
+
+  /// Returns true if this product (or any of its variants) is currently in the cart.
+  bool hasProduct(String productId) =>
+      _items.any((item) => item.product.id == productId);
 
   int getItemQuantity(String productId, {String? variantName}) {
     try {

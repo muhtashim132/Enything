@@ -66,7 +66,7 @@ class _ProductCardState extends State<ProductCard>
     final cart = context.watch<CartProvider>();
     final favs = context.watch<FavoritesProvider>();
     final auth = context.watch<AuthProvider>();
-    final quantity = cart.getItemQuantity(product.id);
+    final totalQuantity = cart.getProductTotalQuantity(product.id);
     final isFav = favs.isProductFavorite(product.id);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -108,13 +108,19 @@ class _ProductCardState extends State<ProductCard>
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : Colors.white,
             borderRadius: PremiumRadius.largeBorder,
-            border: isDark
-                ? Border.all(color: Colors.white.withValues(alpha: 0.07))
-                : Border.all(
-                    color: _isPressed
-                        ? AppColors.primary.withValues(alpha: 0.12)
-                        : Colors.transparent,
-                  ),
+            border: totalQuantity > 0
+                ? Border.all(
+                    color: AppColors.secondary
+                        .withValues(alpha: isDark ? 0.45 : 0.40),
+                    width: 1.2,
+                  )
+                : isDark
+                    ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                    : Border.all(
+                        color: _isPressed
+                            ? AppColors.primary.withValues(alpha: 0.12)
+                            : Colors.transparent,
+                      ),
             boxShadow:
                 PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
           ),
@@ -413,7 +419,7 @@ class _ProductCardState extends State<ProductCard>
               // ── Info ─────────────────────────────────────────────────────
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(9, 7, 9, 8),
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -426,7 +432,7 @@ class _ProductCardState extends State<ProductCard>
                           // Brand & Unit/Weight row
                           if (hasBrand || weightLabel.isNotEmpty)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
+                              padding: const EdgeInsets.only(bottom: 1),
                               child: Row(
                                 children: [
                                   if (hasBrand)
@@ -494,7 +500,7 @@ class _ProductCardState extends State<ProductCard>
                                   ? Colors.white
                                   : const Color(0xFF1A1A2E),
                               letterSpacing: -0.2,
-                              height: 1.15,
+                              height: 1.1,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -502,7 +508,7 @@ class _ProductCardState extends State<ProductCard>
 
                           // Rating & Shop Distance row
                           Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.only(top: 1),
                             child: Row(
                               children: [
                                 const Icon(Icons.star_rounded,
@@ -626,7 +632,7 @@ class _ProductCardState extends State<ProductCard>
                             ),
                           ),
 
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 3),
 
                           // ── Add to cart / stepper ──────────────────────────
                           AnimatedSwitcher(
@@ -643,10 +649,14 @@ class _ProductCardState extends State<ProductCard>
                             child: isLocked
                                 ? _buildUnavailableButton(isDark)
                                 : product.variants.isNotEmpty
-                                    ? _buildVariantAddButton(isDark)
-                                    : quantity > 0
-                                    ? _buildStepper(cart, quantity, isDark)
-                                    : _buildAddButton(cart, isDark),
+                                    ? (totalQuantity > 0
+                                        ? _buildVariantStepper(
+                                            cart, totalQuantity, isDark)
+                                        : _buildVariantAddButton(isDark))
+                                    : totalQuantity > 0
+                                        ? _buildStepper(
+                                            cart, totalQuantity, isDark)
+                                        : _buildAddButton(cart, isDark),
                           ),
                         ],
                       ),
@@ -821,6 +831,144 @@ class _ProductCardState extends State<ProductCard>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildVariantStepper(
+      CartProvider cart, int totalQuantity, bool isDark) {
+    final productItems = cart.getItemsForProduct(product.id);
+    final hasSingleVariant = productItems.length == 1;
+    final singleItem = hasSingleVariant ? productItems.first : null;
+
+    return Container(
+      key: const ValueKey('variant_stepper'),
+      height: 30,
+      decoration: BoxDecoration(
+        gradient: AppColors.ctaGradient,
+        borderRadius: BorderRadius.circular(100),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.secondary.withValues(alpha: 0.35),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              if (hasSingleVariant && singleItem != null) {
+                cart.updateQuantity(
+                  product.id,
+                  singleItem.quantity - 1,
+                  variantName: singleItem.selectedVariant?.name,
+                );
+              } else {
+                // Multiple variants in cart: open detail sheet to let user choose
+                showProductDetailSheet(context, product.id,
+                    highlightVariants: true);
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Icon(Icons.remove_rounded, size: 14, color: Colors.white),
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              showProductDetailSheet(context, product.id,
+                  highlightVariants: true);
+            },
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                 mainAxisSize: MainAxisSize.min,
+                 children: [
+                   AnimatedSwitcher(
+                     duration: const Duration(milliseconds: 200),
+                     transitionBuilder: (child, animation) => ScaleTransition(
+                       scale: animation,
+                       child: child,
+                     ),
+                     child: Text(
+                       '$totalQuantity',
+                       key: ValueKey(totalQuantity),
+                       style: GoogleFonts.outfit(
+                         fontWeight: FontWeight.w900,
+                         fontSize: 12,
+                         color: Colors.white,
+                       ),
+                     ),
+                   ),
+                   const SizedBox(width: 2),
+                   Container(
+                     padding: const EdgeInsets.symmetric(
+                         horizontal: 2.5, vertical: 0.5),
+                     decoration: BoxDecoration(
+                       color: Colors.black.withValues(alpha: 0.22),
+                       borderRadius: BorderRadius.circular(3),
+                     ),
+                     child: Text(
+                       'OPT',
+                       style: GoogleFonts.outfit(
+                         color: Colors.white,
+                         fontWeight: FontWeight.w800,
+                         fontSize: 6.5,
+                         letterSpacing: 0.3,
+                       ),
+                     ),
+                   ),
+                 ],
+               ),
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (product.totalQuantity != null &&
+                  totalQuantity >= product.totalQuantity!) {
+                HapticFeedback.heavyImpact();
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Only ${product.totalQuantity} items in stock',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                    ),
+                    duration: const Duration(seconds: 2),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+              HapticFeedback.lightImpact();
+              if (shop != null) {
+                if (hasSingleVariant && singleItem != null) {
+                  cart.addItemWithFeedback(
+                    context,
+                    product,
+                    shop!,
+                    selectedVariant: singleItem.selectedVariant,
+                  );
+                } else {
+                  showProductDetailSheet(context, product.id,
+                      highlightVariants: true);
+                }
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Icon(Icons.add_rounded, size: 14, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }

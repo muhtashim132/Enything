@@ -330,10 +330,10 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       role == 'seller' ||
       role == 'delivery_partner' ||
       action == 'new_order');
-  const String channelId = 'enything_bg_silent_v1';
-  const String channelName = 'Order Alerts (Background)';
+  const String channelId = 'enything_urgent_orders_v5';
+  const String channelName = 'Urgent Order Alerts';
   const String channelDesc =
-      'Background order notifications — sound handled by AudioPlayer';
+      'Urgent order notifications with screen wake up and alarm sound';
 
   await androidPlugin?.createNotificationChannel(
     const AndroidNotificationChannel(
@@ -341,8 +341,10 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       channelName,
       description: channelDesc,
       importance: Importance.max, // max = heads-up + FSI support
-      playSound: false, // SILENT — AudioPlayer handles the bell
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('enything_bell'),
       enableVibration: true,
+      enableLights: true,
       showBadge: true,
     ),
   );
@@ -352,15 +354,17 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     channelName,
     channelDescription: channelDesc,
     importance: Importance.max,
-    priority: Priority.high,
-    playSound: false, // SILENT — AudioPlayer handles the bell
+    priority: Priority.max,
+    playSound: true,
+    sound: const RawResourceAndroidNotificationSound('enything_bell'),
+    audioAttributesUsage: AudioAttributesUsage.alarm,
     enableVibration: true,
     fullScreenIntent:
         isUrgent, // THIS WAKES THE SCREEN AND BYPASSES LOCKSCREEN!
     category: AndroidNotificationCategory.alarm,
     visibility: NotificationVisibility.public,
     icon: '@mipmap/ic_launcher',
-    timeoutAfter: isUrgent ? 30000 : null,
+    timeoutAfter: isUrgent ? 180000 : null, // 3 minutes acceptance window
     actions: isUrgent
         ? <AndroidNotificationAction>[
             const AndroidNotificationAction('accept', 'Accept',
@@ -391,15 +395,20 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     payload: jsonEncode(message.data),
   );
 
-  // SAMSUNG FIX: Play the bell sound via AudioPlayer (bypasses broken channel sound).
-  // This is the same approach BellAlertService uses when the app is in the foreground.
-  // DartPluginRegistrant is already initialized via WidgetsFlutterBinding above.
+  // Trigger native screen wake and keyguard dismissal
+  if (isUrgent) {
+    try {
+      const screenChannel = MethodChannel('com.enything/screen_wake');
+      await screenChannel.invokeMethod('wakeScreen');
+    } catch (_) {}
+  }
+
+  // Play continuous/initial bell sound via AudioPlayer
   try {
     final player = AudioPlayer();
-    await player.setReleaseMode(ReleaseMode.release); // play once, then stop
+    await player.setReleaseMode(ReleaseMode.release);
     await player.play(AssetSource('sounds/enything_bell.wav'));
     debugPrint('FCM background: enything_bell.wav playing via AudioPlayer');
-    // Auto-dispose player after bell finishes (max 15s safety net)
     player.onPlayerComplete.listen((_) => player.dispose());
     Future.delayed(const Duration(seconds: 15), () {
       try {
