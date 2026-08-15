@@ -112,27 +112,38 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      minChildSize: 0.4,
-      maxChildSize: 1.0,
-      snap: true,
-      snapSizes: const [0.65, 1.0],
-      builder: (context, scrollController) {
-        return Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF7F8FC),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: _isLoading
-              ? SheetSkeletonLoader(isDark: isDark)
-              : _shop == null
-                  ? const Center(child: Text('Restaurant not found'))
-                  : Stack(
-                      children: [
-                        CustomScrollView(
-                          controller: scrollController,
+    return Stack(
+      children: [
+        // 100x FIX: Tapping on the dimmed / transparent area outside the sheet dismisses it
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(context).pop(),
+          child: const SizedBox.expand(),
+        ),
+        DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          minChildSize: 0.4,
+          maxChildSize: 1.0,
+          snap: true,
+          snapSizes: const [0.65, 1.0],
+          builder: (context, scrollController) {
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {}, // Prevents taps on the sheet itself from dismissing
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF7F8FC),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: _isLoading
+                    ? SheetSkeletonLoader(isDark: isDark)
+                    : _shop == null
+                        ? const Center(child: Text('Restaurant not found'))
+                        : Stack(
+                            children: [
+                              CustomScrollView(
+                                controller: scrollController,
                           slivers: [
                             // Drag handle
                             SliverToBoxAdapter(
@@ -175,8 +186,11 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                         ),
                       ],
                     ),
-        );
-      },
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 

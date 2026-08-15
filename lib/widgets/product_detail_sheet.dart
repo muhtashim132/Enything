@@ -127,46 +127,60 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      minChildSize: 0.4,
-      maxChildSize: 1.0,
-      snap: true,
-      snapSizes: const [0.65, 1.0],
-      builder: (context, scrollController) {
-        return Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF12121A) : const Color(0xFFF8F9FA),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: _isLoading
-              ? const _LoadingSheet()
-              : _product == null
-                  ? const _ErrorSheet()
-                  : _SheetContent(
-                      product: _product!,
-                      shop: _shop,
-                      scrollController: scrollController,
-                      currentImageIndex: _currentImageIndex,
-                      onImageChanged: (i) =>
-                          setState(() => _currentImageIndex = i),
-                      isDark: isDark,
-                      selectedVariant: _selectedVariant,
-                      onVariantChanged: (v) {
-                        setState(() => _selectedVariant = v);
-                        if (_pageController.hasClients) {
-                          _pageController.animateToPage(0,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeInOut);
-                        }
-                      },
-                      highlightVariants: widget.highlightVariants,
-                      variantKey: _variantKey,
-                      pageController: _pageController,
-                    ),
-        );
-      },
+    return Stack(
+      children: [
+        // 100x FIX: Tapping on the dimmed / transparent area outside the sheet dismisses it
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(context).pop(),
+          child: const SizedBox.expand(),
+        ),
+        DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          minChildSize: 0.4,
+          maxChildSize: 1.0,
+          snap: true,
+          snapSizes: const [0.65, 1.0],
+          builder: (context, scrollController) {
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {}, // Prevents taps on the sheet itself from dismissing
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF12121A) : const Color(0xFFF8F9FA),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: _isLoading
+                    ? const _LoadingSheet()
+                    : _product == null
+                        ? const _ErrorSheet()
+                        : _SheetContent(
+                            product: _product!,
+                            shop: _shop,
+                            scrollController: scrollController,
+                            currentImageIndex: _currentImageIndex,
+                            onImageChanged: (i) =>
+                                setState(() => _currentImageIndex = i),
+                            isDark: isDark,
+                            selectedVariant: _selectedVariant,
+                            onVariantChanged: (v) {
+                              setState(() => _selectedVariant = v);
+                              if (_pageController.hasClients) {
+                                _pageController.animateToPage(0,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut);
+                              }
+                            },
+                            highlightVariants: widget.highlightVariants,
+                            variantKey: _variantKey,
+                            pageController: _pageController,
+                          ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
