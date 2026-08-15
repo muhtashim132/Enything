@@ -380,10 +380,7 @@ class CartProvider extends ChangeNotifier {
             safeNotifyListeners();
           }
         });
-      }
-
-      // 100x FIX: Always show the rich floating SnackBar on ALL pages and bottom sheets (except the Cart page itself)
-      if (!isCartPage) {
+      } else if (!isCartPage) {
         final bottomPadding = MediaQuery.paddingOf(context).bottom;
         final navBarHeight =
             70.0 + (bottomPadding > 0 ? bottomPadding + 8.0 : 20.0);
