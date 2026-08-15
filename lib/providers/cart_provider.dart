@@ -363,13 +363,10 @@ class CartProvider extends ChangeNotifier {
       final title = '${product.name} added to cart!';
 
       final currentRoute = ModalRoute.of(context)?.settings.name;
+      final isCartPage = currentRoute == AppRoutes.cart;
+
       final isMainPage =
           currentRoute == AppRoutes.customerHome || currentRoute == '/';
-      final hasBuiltInCart = currentRoute == AppRoutes.allListings ||
-          currentRoute == AppRoutes.restaurant ||
-          currentRoute == AppRoutes.restaurantDashboard ||
-          currentRoute == AppRoutes.cart;
-
       if (isMainPage) {
         final notifId = DateTime.now().millisecondsSinceEpoch.toString();
         _recentNotification =
@@ -383,7 +380,10 @@ class CartProvider extends ChangeNotifier {
             safeNotifyListeners();
           }
         });
-      } else if (!hasBuiltInCart) {
+      }
+
+      // 100x FIX: Always show the rich floating SnackBar on ALL pages and bottom sheets (except the Cart page itself)
+      if (!isCartPage) {
         final bottomPadding = MediaQuery.paddingOf(context).bottom;
         final navBarHeight =
             70.0 + (bottomPadding > 0 ? bottomPadding + 8.0 : 20.0);

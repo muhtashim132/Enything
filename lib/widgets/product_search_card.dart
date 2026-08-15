@@ -413,7 +413,9 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             ),
           ),
           GestureDetector(
-            onTap: () => context.read<CartProvider>().addItem(product, shop),
+            onTap: () => context
+                .read<CartProvider>()
+                .addItemWithFeedback(context, product, shop),
             child: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
           ),
         ],
