@@ -1079,9 +1079,23 @@ class _SheetContent extends StatelessWidget {
                               _showVariantWarning(context);
                               return;
                             }
-                            cart.addItemWithFeedback(context, product, shop!,
-                                selectedVariant: selectedVariant);
-                            Navigator.pushNamed(context, AppRoutes.cart);
+                            final err = cart.addItem(
+                              product,
+                              shop!,
+                              selectedVariant: selectedVariant,
+                            );
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            if (err != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(err),
+                                  backgroundColor: const Color(0xFFEF4444),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            } else {
+                              Navigator.pushNamed(context, AppRoutes.cart);
+                            }
                           }
                         },
                         child: Container(

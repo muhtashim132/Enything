@@ -787,10 +787,23 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         child: GestureDetector(
                           onTap: () {
                             if (_shop != null) {
-                              cart.addItemWithFeedback(
-                                  context, _product!, _shop!,
-                                  selectedVariant: _selectedVariant);
-                              Navigator.pushNamed(context, AppRoutes.cart);
+                              final err = cart.addItem(
+                                _product!,
+                                _shop!,
+                                selectedVariant: _selectedVariant,
+                              );
+                              ScaffoldMessenger.of(context).clearSnackBars();
+                              if (err != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(err),
+                                    backgroundColor: const Color(0xFFEF4444),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              } else {
+                                Navigator.pushNamed(context, AppRoutes.cart);
+                              }
                             }
                           },
                           child: Container(

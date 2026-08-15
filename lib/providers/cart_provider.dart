@@ -367,7 +367,8 @@ class CartProvider extends ChangeNotifier {
           currentRoute == AppRoutes.customerHome || currentRoute == '/';
       final hasBuiltInCart = currentRoute == AppRoutes.allListings ||
           currentRoute == AppRoutes.restaurant ||
-          currentRoute == AppRoutes.restaurantDashboard;
+          currentRoute == AppRoutes.restaurantDashboard ||
+          currentRoute == AppRoutes.cart;
 
       if (isMainPage) {
         final notifId = DateTime.now().millisecondsSinceEpoch.toString();
