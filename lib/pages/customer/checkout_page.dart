@@ -44,7 +44,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool _isCreatingOrder =
       false; // O1 FIX: Idempotency lock — prevents duplicate order creation
   final _notesController = TextEditingController();
-  final List<XFile> _prescriptions = [];
+  
+  // ── 100x Multi-Shop Targeted Prescription State ─────────────────────────────
+  final Map<String, List<XFile>> _shopPrescriptions = {};
+  bool _applyToAllPharmacies = true;
+
+  List<XFile> _getPrescriptionsForShop(String shopId) {
+    if (_applyToAllPharmacies) {
+      return _shopPrescriptions['__ALL__'] ?? [];
+    }
+    return _shopPrescriptions[shopId] ?? [];
+  }
 
   // --- 100x Replacment Order Aggregate State ---
   // ignore: unused_field
@@ -283,7 +293,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // after both seller & rider accept the order.
 
   bool _isPickerOpen = false;
-  Future<void> _pickPrescription() async {
+  Future<void> _pickPrescription({String? shopId}) async {
     if (_isPickerOpen) return;
     _isPickerOpen = true;
     final picker = ImagePicker();
@@ -330,12 +340,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
+    final targetKey = (_applyToAllPharmacies || shopId == null) ? '__ALL__' : shopId;
+
     if (source == ImageSource.camera) {
       final picked = await picker.pickImage(source: source, imageQuality: 70);
       _isPickerOpen = false;
       if (picked != null) {
         setState(() {
-          _prescriptions.add(picked);
+          _shopPrescriptions.putIfAbsent(targetKey, () => []).add(picked);
         });
       }
     } else {
@@ -343,14 +355,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
       _isPickerOpen = false;
       if (picked.isNotEmpty) {
         setState(() {
-          _prescriptions.addAll(picked);
+          _shopPrescriptions.putIfAbsent(targetKey, () => []).addAll(picked);
         });
       }
     }
   }
 
-  void _removePrescription(int index) {
-    setState(() => _prescriptions.removeAt(index));
+  void _removePrescription(String shopId, int index) {
+    final targetKey = _applyToAllPharmacies ? '__ALL__' : shopId;
+    setState(() {
+      _shopPrescriptions[targetKey]?.removeAt(index);
+    });
   }
 
   // ── Step 1: Save order as awaiting_acceptance (NO payment yet) ────────────
@@ -375,33 +390,42 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    // Prescription guard
-    if (cart.requiresPrescription && _prescriptions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.info_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Please upload a prescription to order these medicines.',
-                  style: GoogleFonts.outfit(
-                      color: Colors.white, fontWeight: FontWeight.w500),
-                ),
+    // ── 100x Multi-Shop Prescription Guard ─────────────────────────────────
+    final rxShops = cart.shops.where((s) {
+      return cart.getItemsForShop(s.id).any((i) => i.product.requiresPrescription);
+    }).toList();
+
+    if (rxShops.isNotEmpty) {
+      for (final s in rxShops) {
+        final list = _getPrescriptionsForShop(s.id);
+        if (list.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Please upload a prescription for ${s.name} to proceed.',
+                      style: GoogleFonts.outfit(
+                          color: Colors.white, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      _isProcessing.value = false;
-      return;
+              backgroundColor: AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+          _isProcessing.value = false;
+          return;
+        }
+      }
     }
 
     if (!location.hasLocation ||
@@ -748,36 +772,45 @@ class _CheckoutPageState extends State<CheckoutPage> {
         } catch (_) {}
       }
 
-      List<String> uploadedPrescriptionUrls = [];
-      if (cart.requiresPrescription && _prescriptions.isNotEmpty) {
-        for (int i = 0; i < _prescriptions.length; i++) {
-          final file = _prescriptions[i];
-          final bytes =
-              await ImageCompressionService.compressFile(File(file.path)) ??
-                  await file.readAsBytes();
-          const ext = 'jpg'; // Compressformat is jpeg
-          final path = '${auth.currentUserId}/${cartGroupId}_$i.$ext';
+      // ── 100x Multi-Shop Targeted Storage Upload ───────────────────────────
+      final Map<String, List<String>> uploadedShopPrescriptionUrls = {};
+      final rxShops = cart.shops.where((s) => cart.shopRequiresPrescription(s.id)).toList();
 
-          bool uploadSuccess = false;
-          int retries = 0;
-          while (!uploadSuccess && retries < 3) {
-            try {
-              await supabase.storage
-                  .from('prescription_docs')
-                  .uploadBinary(path, bytes);
-              uploadSuccess = true;
-            } catch (e) {
-              retries++;
-              if (retries >= 3) {
-                throw Exception(
-                    'Failed to upload prescription image after 3 attempts. Please check your connection and try again.');
+      if (rxShops.isNotEmpty) {
+        for (final shop in rxShops) {
+          final files = _getPrescriptionsForShop(shop.id);
+          final urls = <String>[];
+
+          for (int i = 0; i < files.length; i++) {
+            final file = files[i];
+            final bytes =
+                await ImageCompressionService.compressFile(File(file.path)) ??
+                    await file.readAsBytes();
+            const ext = 'jpg'; // Compressed format is jpeg
+            final path = '${auth.currentUserId}/${cartGroupId}_${shop.id}_$i.$ext';
+
+            bool uploadSuccess = false;
+            int retries = 0;
+            while (!uploadSuccess && retries < 3) {
+              try {
+                await supabase.storage
+                    .from('prescription_docs')
+                    .uploadBinary(path, bytes);
+                uploadSuccess = true;
+              } catch (e) {
+                retries++;
+                if (retries >= 3) {
+                  throw Exception(
+                      'Failed to upload prescription for ${shop.name} after 3 attempts. Please check connection and try again.');
+                }
+                await Future.delayed(Duration(seconds: retries * 2));
               }
-              await Future.delayed(Duration(seconds: retries * 2));
             }
+            uploadedPaths.add(path);
+            urls.add(supabase.storage.from('prescription_docs').getPublicUrl(path));
           }
-          uploadedPaths.add(path);
-          uploadedPrescriptionUrls.add(
-              supabase.storage.from('prescription_docs').getPublicUrl(path));
+
+          uploadedShopPrescriptionUrls[shop.id] = urls;
         }
       }
 
@@ -941,7 +974,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'gst_rate_snapshot': rateSnapshot,
           'prescription_urls':
               shopItems.any((item) => item.product.requiresPrescription)
-                  ? uploadedPrescriptionUrls
+                  ? (uploadedShopPrescriptionUrls[shop.id] ?? [])
                   : [],
           'estimated_distance_km': shopDistanceKm,
           'shop_prep_time_snapshot': shop.prepTimeMinutes,
@@ -1503,116 +1536,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ],
                   ),
                 ),
-                if (cart.requiresPrescription) ...[
-                  const SizedBox(height: 16),
-                  _sectionCard(
-                    title: 'Upload Prescription',
-                    icon: Icons.medical_information_outlined,
-                    iconColor: AppColors.danger,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Your order contains medicines that require a valid doctor\'s prescription under Govt of India norms. Please upload it here.',
-                          style: GoogleFonts.outfit(
-                              fontSize: 13, color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: 12),
-                        if (_prescriptions.isEmpty)
-                          GestureDetector(
-                            onTap: _pickPrescription,
-                            child: Container(
-                              width: double.infinity,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                color:
-                                    AppColors.primary.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.3),
-                                    style: BorderStyle.solid),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.add_photo_alternate_outlined,
-                                      color: AppColors.primary, size: 32),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                      'Tap to upload prescription\n(Clear & readable image)',
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.outfit(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ),
-                          )
-                        else
-                          SizedBox(
-                            height: 100,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _prescriptions.length + 1,
-                              itemBuilder: (context, index) {
-                                if (index == _prescriptions.length) {
-                                  return GestureDetector(
-                                    onTap: _pickPrescription,
-                                    child: Container(
-                                      width: 100,
-                                      margin: const EdgeInsets.only(right: 8),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary
-                                            .withValues(alpha: 0.05),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                            color: AppColors.primary
-                                                .withValues(alpha: 0.3)),
-                                      ),
-                                      child: const Center(
-                                          child: Icon(Icons.add,
-                                              color: AppColors.primary)),
-                                    ),
-                                  );
-                                }
-                                return Stack(
-                                  children: [
-                                    Container(
-                                      width: 100,
-                                      margin: const EdgeInsets.only(right: 8),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        image: DecorationImage(
-                                            image: FileImage(File(
-                                                _prescriptions[index].path)),
-                                            fit: BoxFit.cover),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 4,
-                                      right: 12,
-                                      child: GestureDetector(
-                                        onTap: () => _removePrescription(index),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                              color: Colors.black54,
-                                              shape: BoxShape.circle),
-                                          child: const Icon(Icons.close,
-                                              color: Colors.white, size: 14),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+                // ── 100x Multi-Shop Targeted Prescription Section ───────────────
+                _buildPrescriptionSection(cart),
                 const SizedBox(height: 16),
 
                 // ── Coupon / Promo Code ──────────────────────────────────────────
@@ -1889,6 +1814,276 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ── 100x Multi-Shop Targeted Prescription UI ─────────────────────────────
+  Widget _buildPrescriptionSection(CartProvider cart) {
+    final rxShops = cart.shops.where((s) {
+      return cart.getItemsForShop(s.id).any((i) => i.product.requiresPrescription);
+    }).toList();
+
+    if (rxShops.isEmpty) return const SizedBox.shrink();
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMultiShop = rxShops.length > 1;
+
+    return _sectionCard(
+      title: isMultiShop
+          ? 'Upload Prescriptions (${rxShops.length} Pharmacies)'
+          : 'Upload Prescription',
+      icon: Icons.medical_information_outlined,
+      iconColor: AppColors.danger,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Under Govt of India Drugs & Cosmetics rules, a valid doctor\'s prescription is required before pharmacies can legally dispense these medications.',
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          if (isMultiShop) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.sync_alt_rounded, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Use 1 prescription for all pharmacies',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: _applyToAllPharmacies,
+                    activeTrackColor: AppColors.primary,
+                    onChanged: (val) {
+                      HapticUtils.selection();
+                      setState(() => _applyToAllPharmacies = val);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          if (isMultiShop && !_applyToAllPharmacies)
+            Column(
+              children: [
+                for (int i = 0; i < rxShops.length; i++)
+                  _buildSingleShopRxCard(rxShops[i], cart, isDark),
+              ],
+            )
+          else
+            _buildRxUploadGallery(
+              shopId: '__ALL__',
+              files: _shopPrescriptions['__ALL__'] ?? [],
+              isDark: isDark,
+              hintLabel: isMultiShop
+                  ? 'Tap to upload prescription covering all stores'
+                  : 'Tap to upload prescription\n(Clear & readable image)',
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSingleShopRxCard(ShopModel shop, CartProvider cart, bool isDark) {
+    final rxItems = cart.getItemsForShop(shop.id).where((i) => i.product.requiresPrescription).toList();
+    final files = _shopPrescriptions[shop.id] ?? [];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: files.isNotEmpty
+              ? AppColors.success.withValues(alpha: 0.6)
+              : (isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
+          width: files.isNotEmpty ? 1.5 : 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.local_pharmacy_outlined,
+                    size: 16, color: AppColors.primary),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  shop.name,
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (files.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${files.length} Attached',
+                    style: GoogleFonts.outfit(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Requires Rx for: ${rxItems.map((i) => i.product.name).join(", ")}',
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 10),
+          _buildRxUploadGallery(
+            shopId: shop.id,
+            files: files,
+            isDark: isDark,
+            hintLabel: 'Upload prescription for ${shop.name}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRxUploadGallery({
+    required String shopId,
+    required List<XFile> files,
+    required bool isDark,
+    required String hintLabel,
+  }) {
+    if (files.isEmpty) {
+      return GestureDetector(
+        onTap: () => _pickPrescription(shopId: shopId),
+        child: Container(
+          width: double.infinity,
+          height: 100,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.3),
+              style: BorderStyle.solid,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.add_photo_alternate_outlined,
+                  color: AppColors.primary, size: 28),
+              const SizedBox(height: 6),
+              Text(
+                hintLabel,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 90,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: files.length + 1,
+        itemBuilder: (context, index) {
+          if (index == files.length) {
+            return GestureDetector(
+              onTap: () => _pickPrescription(shopId: shopId),
+              child: Container(
+                width: 90,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: const Center(
+                  child: Icon(Icons.add, color: AppColors.primary),
+                ),
+              ),
+            );
+          }
+          return Stack(
+            children: [
+              Container(
+                width: 90,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  image: DecorationImage(
+                    image: FileImage(File(files[index].path)),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 4,
+                right: 12,
+                child: GestureDetector(
+                  onTap: () => _removePrescription(shopId, index),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 14),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

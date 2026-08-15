@@ -218,6 +218,14 @@ class CartProvider extends ChangeNotifier {
   bool get requiresPrescription =>
       _items.any((item) => item.product.requiresPrescription);
 
+  /// Returns all cart line items belonging to a given [shopId].
+  List<CartItem> getItemsForShop(String shopId) =>
+      _items.where((item) => item.shop.id == shopId).toList();
+
+  /// Returns whether any product from [shopId] requires a doctor's prescription.
+  bool shopRequiresPrescription(String shopId) =>
+      _items.any((item) => item.shop.id == shopId && item.product.requiresPrescription);
+
   // ---------------------------------------------------------------------------
   // Add-On GST helpers (tax_config.dart — ADD-ON MODEL)
   // ---------------------------------------------------------------------------
