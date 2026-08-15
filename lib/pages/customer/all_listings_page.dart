@@ -15,7 +15,7 @@ import '../../widgets/shop_detail_sheet.dart';
 import '../../widgets/restaurant_dashboard_sheet.dart';
 import '../../utils/responsive_layout.dart';
 import '../../providers/cart_provider.dart';
-import '../../config/routes.dart';
+import '../../widgets/customer/floating_cart_bar.dart';
 
 // ── Listing type enum ──────────────────────────────────────────────────────────
 enum ListingType { shops, restaurants, products }
@@ -427,12 +427,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
             _isProducts ? _buildProductsBody(isDark) : _buildShopsBody(isDark),
             // Sticky cart bar at bottom
             if (cart.totalItemCount > 0)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _buildCartBar(cart),
-              ),
+              const FloatingCartBar(bottomOffset: 20),
           ],
         ),
       ),
@@ -458,7 +453,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
               final itemWidth = (constraints.crossAxisExtent -
                       crossAxisSpacing * (crossAxisCount - 1)) /
                   crossAxisCount;
-              final childAspectRatio = itemWidth / (itemWidth + 178);
+              final childAspectRatio = itemWidth / (itemWidth + 128);
 
               return SliverGrid.builder(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -657,65 +652,6 @@ class _AllListingsPageState extends State<AllListingsPage> {
               ),
             ],
           ],
-        ),
-      ),
-    );
-  }
-
-  // ── Sticky cart bottom bar ──────────────────────────────────────────────────
-  Widget _buildCartBar(CartProvider cart) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-      child: GestureDetector(
-        onTap: () => Navigator.pushNamed(context, AppRoutes.cart),
-        child: Container(
-          height: 60,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            gradient: AppColors.ctaGradient,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                  color: AppColors.secondary.withValues(alpha: 0.4),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8)),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${cart.totalItemCount} item${cart.totalItemCount > 1 ? 's' : ''}',
-                  style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'View Cart  →',
-                style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '₹${cart.subtotal.toStringAsFixed(0)}',
-                style: GoogleFonts.outfit(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13),
-              ),
-            ],
-          ),
         ),
       ),
     );

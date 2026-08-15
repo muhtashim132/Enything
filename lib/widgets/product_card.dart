@@ -48,6 +48,19 @@ class _ProductCardState extends State<ProductCard>
     super.dispose();
   }
 
+  String _formatWeightUnit() {
+    if (product.weightPerUnit != null && product.weightPerUnit! > 0) {
+      final weight = product.weightPerUnit!;
+      final weightStr =
+          weight % 1 == 0 ? weight.toInt().toString() : weight.toString();
+      final unit = product.unitType.isNotEmpty ? product.unitType : 'g';
+      return '$weightStr $unit';
+    } else if (product.unitType.isNotEmpty && product.unitType != 'pieces') {
+      return product.unitType;
+    }
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
@@ -65,8 +78,18 @@ class _ProductCardState extends State<ProductCard>
         : 0.0;
 
     final isShopClosed = shop != null && !shop!.isOpenRightNow;
-    final isProductUnavailable = !product.isAvailable;
+    final isOutOfStock =
+        product.totalQuantity != null && product.totalQuantity! <= 0;
+    final isProductUnavailable = !product.isAvailable || isOutOfStock;
     final isLocked = isShopClosed || isProductUnavailable;
+
+    final isLowStock = !isLocked &&
+        product.totalQuantity != null &&
+        product.totalQuantity! > 0 &&
+        product.totalQuantity! <= 5;
+
+    final weightLabel = _formatWeightUnit();
+    final hasBrand = product.brand != null && product.brand!.isNotEmpty;
 
     return GestureDetector(
       onTap:
@@ -126,7 +149,7 @@ class _ProductCardState extends State<ProductCard>
                       bottom: 0,
                       left: 0,
                       right: 0,
-                      height: 32,
+                      height: 28,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -150,21 +173,21 @@ class _ProductCardState extends State<ProductCard>
                         right: 0,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 5),
+                              horizontal: 7, vertical: 4),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFFFF6B35), Color(0xFFFF3366)],
                             ),
                             borderRadius: const BorderRadius.only(
                               topRight: Radius.circular(PremiumRadius.large),
-                              bottomLeft: Radius.circular(10),
+                              bottomLeft: Radius.circular(8),
                             ),
                             boxShadow: [
                               BoxShadow(
                                 color: const Color(0xFFFF3366)
-                                    .withValues(alpha: 0.45),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
+                                    .withValues(alpha: 0.40),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
@@ -172,50 +195,108 @@ class _ProductCardState extends State<ProductCard>
                             '${product.discountPercent!.toStringAsFixed(0)}% OFF',
                             style: GoogleFonts.outfit(
                               color: Colors.white,
-                              fontSize: 10,
+                              fontSize: 9.5,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 0.4,
+                              letterSpacing: 0.3,
                             ),
                           ),
                         ),
                       ),
 
-                    // Bestseller badge — top-left (with subtle pulse)
-                    if (isBestseller)
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 4),
-                          decoration: PremiumDecorations.gradientBadge(
-                            colors: const [
-                              Color(0xFFFF9F43),
-                              Color(0xFFEE5A24)
-                            ],
-                            borderRadius: 8,
-                          ),
-                          child: Row(
+                    // Top-Left Badges Stack (Diet / Rx / Bestseller / Low Stock)
+                    Positioned(
+                      top: 7,
+                      left: 7,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.local_fire_department_rounded,
-                                  size: 10, color: Colors.white),
-                              const SizedBox(width: 3),
-                              Text('BEST',
-                                  style: GoogleFonts.outfit(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w900)),
+                              // Veg / Non-Veg Icon
+                              if (product.isVeg != null) ...[
+                                _buildDietEmblem(product.isVeg!),
+                                const SizedBox(width: 3),
+                              ],
+                              // Prescription Tag
+                              if (product.requiresPrescription) ...[
+                                _buildRxBadge(),
+                                const SizedBox(width: 3),
+                              ],
+                              // Bestseller badge
+                              if (isBestseller)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 5, vertical: 2.5),
+                                  decoration: PremiumDecorations.gradientBadge(
+                                    colors: const [
+                                      Color(0xFFFF9F43),
+                                      Color(0xFFEE5A24)
+                                    ],
+                                    borderRadius: 5,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                          Icons.local_fire_department_rounded,
+                                          size: 9,
+                                          color: Colors.white),
+                                      const SizedBox(width: 2),
+                                      Text('BEST',
+                                          style: GoogleFonts.outfit(
+                                              color: Colors.white,
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w900)),
+                                    ],
+                                  ),
+                                ),
                             ],
                           ),
-                        ),
+                          // Low Stock Alert Badge
+                          if (isLowStock) ...[
+                            const SizedBox(height: 3),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD97706),
+                                borderRadius: BorderRadius.circular(5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFD97706)
+                                        .withValues(alpha: 0.35),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.bolt_rounded,
+                                      size: 9, color: Colors.white),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    'Only ${product.totalQuantity} left',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
+                    ),
 
                     // Favorite button
                     Positioned(
-                      top: isBestseller ? null : 10,
-                      bottom: isBestseller ? 10 : null,
-                      left: 10,
+                      bottom: 6,
+                      left: 6,
                       child: GestureDetector(
                         onTap: () {
                           HapticFeedback.lightImpact();
@@ -226,18 +307,18 @@ class _ProductCardState extends State<ProductCard>
                         },
                         child: AnimatedContainer(
                           duration: PremiumAnimations.fast,
-                          padding: const EdgeInsets.all(6),
+                          padding: const EdgeInsets.all(5.5),
                           decoration: BoxDecoration(
                             color: isFav
                                 ? Colors.red.withValues(alpha: 0.15)
                                 : (isDark
-                                    ? Colors.white.withValues(alpha: 0.12)
-                                    : Colors.white),
+                                    ? Colors.black.withValues(alpha: 0.45)
+                                    : Colors.white.withValues(alpha: 0.9)),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.15),
-                                  blurRadius: 8)
+                                  blurRadius: 5)
                             ],
                           ),
                           child: AnimatedSwitcher(
@@ -247,11 +328,11 @@ class _ProductCardState extends State<ProductCard>
                               isFav
                                   ? Icons.favorite_rounded
                                   : Icons.favorite_border_rounded,
-                              size: 15,
+                              size: 13,
                               color: isFav
                                   ? Colors.red
                                   : (isDark
-                                      ? Colors.white60
+                                      ? Colors.white70
                                       : AppColors.textSecondary),
                             ),
                           ),
@@ -261,31 +342,30 @@ class _ProductCardState extends State<ProductCard>
 
                     // Share button
                     Positioned(
-                      bottom: isBestseller ? 10 : null,
-                      top: isBestseller ? null : 42,
-                      left: 10,
+                      bottom: 6,
+                      left: 36,
                       child: GestureDetector(
                         onTap: () {
                           HapticFeedback.lightImpact();
                           ShareUtils.shareProduct(product, shop: shop);
                         },
                         child: Container(
-                          padding: const EdgeInsets.all(5),
+                          padding: const EdgeInsets.all(4.5),
                           decoration: BoxDecoration(
                             color: isDark
-                                ? Colors.white.withValues(alpha: 0.10)
-                                : Colors.white.withValues(alpha: 0.92),
+                                ? Colors.black.withValues(alpha: 0.45)
+                                : Colors.white.withValues(alpha: 0.9),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.10),
-                                  blurRadius: 6)
+                                  blurRadius: 5)
                             ],
                           ),
                           child: Icon(
                             Icons.ios_share_rounded,
-                            size: 13,
-                            color: isDark ? Colors.white60 : AppColors.primary,
+                            size: 12,
+                            color: isDark ? Colors.white70 : AppColors.primary,
                           ),
                         ),
                       ),
@@ -302,19 +382,23 @@ class _ProductCardState extends State<ProductCard>
                             child: Center(
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.8),
+                                  color: Colors.black.withValues(alpha: 0.85),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(color: Colors.white38),
                                 ),
                                 child: Text(
-                                  isShopClosed ? 'SHOP CLOSED' : 'UNAVAILABLE',
+                                  isShopClosed
+                                      ? 'SHOP CLOSED'
+                                      : isOutOfStock
+                                          ? 'OUT OF STOCK'
+                                          : 'UNAVAILABLE',
                                   style: GoogleFonts.outfit(
                                     color: Colors.white,
-                                    fontSize: 12,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.5,
+                                    letterSpacing: 1.0,
                                   ),
                                 ),
                               ),
@@ -329,197 +413,242 @@ class _ProductCardState extends State<ProductCard>
               // ── Info ─────────────────────────────────────────────────────
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                  padding: const EdgeInsets.fromLTRB(9, 7, 9, 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.max,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Product name
-                      SizedBox(
-                        height: 36, // Fixed space for up to 2 lines
-                        child: Text(
-                          product.name,
-                          style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
-                            color:
-                                isDark ? Colors.white : const Color(0xFF1A1A2E),
-                            letterSpacing: -0.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-
-                      // Shop name
-                      SizedBox(
-                        height: 16,
-                        child: shop != null && shop!.name.isNotEmpty
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  shop!.name,
-                                  style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 10,
-                                    color: isDark
-                                        ? Colors.white38
-                                        : AppColors.textSecondary,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-
-                      // Rating row
-                      SizedBox(
-                        height: 18,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.star_rounded,
-                                  color: Color(0xFFF6C90E), size: 13),
-                              const SizedBox(width: 2),
-                              Text(
-                                product.totalReviews > 0
-                                    ? product.rating.toStringAsFixed(1)
-                                    : 'New',
-                                style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : AppColors.textPrimary,
-                                ),
-                              ),
-                              if (product.totalReviews > 0)
-                                Text(
-                                  ' (${product.totalReviews})',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 10,
-                                    color: isDark
-                                        ? Colors.white38
-                                        : AppColors.textSecondary,
-                                  ),
-                                ),
-                              if (shop != null) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                    width: 3,
-                                    height: 3,
-                                    decoration: BoxDecoration(
-                                        color: isDark
-                                            ? Colors.white38
-                                            : AppColors.textSecondary,
-                                        shape: BoxShape.circle)),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.location_on_rounded,
-                                          size: 11, color: AppColors.primary),
-                                      const SizedBox(width: 2),
-                                      Flexible(
-                                        child: Text(
-                                          '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)} km',
-                                          style: GoogleFonts.outfit(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
+                      // Top Info Stack: Brand/Weight, Name, Rating
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Brand & Unit/Weight row
+                          if (hasBrand || weightLabel.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Row(
+                                children: [
+                                  if (hasBrand)
+                                    Expanded(
+                                      child: Text(
+                                        product.brand!.toUpperCase(),
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 9,
+                                          color: isDark
+                                              ? AppColors.primaryLight
+                                              : AppColors.primary,
+                                          letterSpacing: 0.4,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  if (weightLabel.isNotEmpty) ...[
+                                    if (hasBrand) const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? Colors.white
+                                                  .withValues(alpha: 0.08)
+                                              : Colors.grey.shade100,
+                                          borderRadius:
+                                              BorderRadius.circular(3),
+                                          border: Border.all(
                                             color: isDark
-                                                ? Colors.white54
+                                                ? Colors.white12
+                                                : Colors.grey.shade300,
+                                            width: 0.7,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          weightLabel,
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 8.5,
+                                            color: isDark
+                                                ? Colors.white70
                                                 : AppColors.textSecondary,
                                           ),
+                                          maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // Price row
-                      SizedBox(
-                        height: 20,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '₹${product.price.toStringAsFixed(0)}',
-                              style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.primary,
-                                fontSize: 15,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
-                            if (hasDiscount) ...[
-                              const SizedBox(width: 4),
-                              Text(
-                                '₹${product.originalPrice!.toStringAsFixed(0)}',
-                                style: GoogleFonts.outfit(
-                                  color: isDark
-                                      ? Colors.white38
-                                      : AppColors.textLight,
-                                  fontSize: 10,
-                                  decoration: TextDecoration.lineThrough,
-                                  decorationColor: isDark
-                                      ? Colors.white38
-                                      : AppColors.textLight,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
 
-                      // "You save" label
-                      SizedBox(
-                        height: 14,
-                        child: hasDiscount && savedAmount > 0
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  'Save ₹${savedAmount.toStringAsFixed(0)}',
+                          // Product name
+                          Text(
+                            product.name,
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1A1A2E),
+                              letterSpacing: -0.2,
+                              height: 1.15,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+
+                          // Rating & Shop Distance row
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.star_rounded,
+                                    color: Color(0xFFF6C90E), size: 11),
+                                const SizedBox(width: 2),
+                                Text(
+                                  product.totalReviews > 0
+                                      ? product.rating.toStringAsFixed(1)
+                                      : 'New',
                                   style: GoogleFonts.outfit(
-                                    fontSize: 9,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.success,
+                                    fontSize: 10,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : AppColors.textPrimary,
                                   ),
                                 ),
-                              )
-                            : const SizedBox.shrink(),
+                                if (product.totalReviews > 0)
+                                  Text(
+                                    product.totalReviews > 99
+                                        ? ' (99+)'
+                                        : ' (${product.totalReviews})',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 9,
+                                      color: isDark
+                                          ? Colors.white38
+                                          : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                if (shop != null) ...[
+                                  const SizedBox(width: 3),
+                                  Container(
+                                      width: 2.5,
+                                      height: 2.5,
+                                      decoration: BoxDecoration(
+                                          color: isDark
+                                              ? Colors.white38
+                                              : AppColors.textSecondary,
+                                          shape: BoxShape.circle)),
+                                  const SizedBox(width: 3),
+                                  Flexible(
+                                    child: Text(
+                                      '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)}km',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark
+                                            ? Colors.white54
+                                            : AppColors.textSecondary,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
 
-                      const SizedBox(height: 12),
+                      // Bottom Action Stack: Price, ADD / Stepper Button
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Price row with 100x responsive formatting
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Text(
+                                  '₹${product.price.toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w900,
+                                    color: isDark
+                                        ? Colors.white
+                                        : AppColors.primary,
+                                    fontSize: 14.5,
+                                  ),
+                                ),
+                                if (hasDiscount) ...[
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '₹${product.originalPrice!.toStringAsFixed(0)}',
+                                    style: GoogleFonts.outfit(
+                                      color: isDark
+                                          ? Colors.white38
+                                          : AppColors.textLight,
+                                      fontSize: 9.5,
+                                      decoration: TextDecoration.lineThrough,
+                                      decorationColor: isDark
+                                          ? Colors.white38
+                                          : AppColors.textLight,
+                                    ),
+                                  ),
+                                  if (savedAmount > 0) ...[
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 3.5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.success
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      child: Text(
+                                        'Save ₹${savedAmount.toStringAsFixed(0)}',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.success,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ],
+                            ),
+                          ),
 
-                      // ── Add to cart / stepper ──────────────────────────
-                      AnimatedSwitcher(
-                        duration: PremiumAnimations.normal,
-                        switchInCurve: Curves.elasticOut,
-                        switchOutCurve: Curves.easeIn,
-                        transitionBuilder: (child, animation) {
-                          return ScaleTransition(
-                            scale: animation,
-                            child: FadeTransition(
-                                opacity: animation, child: child),
-                          );
-                        },
-                        child: isLocked
-                            ? _buildUnavailableButton(isDark)
-                            : product.variants.isNotEmpty
-                                ? _buildAddButton(cart, isDark)
-                                : quantity > 0
+                          const SizedBox(height: 5),
+
+                          // ── Add to cart / stepper ──────────────────────────
+                          AnimatedSwitcher(
+                            duration: PremiumAnimations.normal,
+                            switchInCurve: Curves.elasticOut,
+                            switchOutCurve: Curves.easeIn,
+                            transitionBuilder: (child, animation) {
+                              return ScaleTransition(
+                                scale: animation,
+                                child: FadeTransition(
+                                    opacity: animation, child: child),
+                              );
+                            },
+                            child: isLocked
+                                ? _buildUnavailableButton(isDark)
+                                : product.variants.isNotEmpty
+                                    ? _buildVariantAddButton(isDark)
+                                    : quantity > 0
                                     ? _buildStepper(cart, quantity, isDark)
                                     : _buildAddButton(cart, isDark),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -528,6 +657,69 @@ class _ProductCardState extends State<ProductCard>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDietEmblem(bool isVeg) {
+    final color = isVeg ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
+    return Container(
+      width: 13,
+      height: 13,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: color, width: 1.1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 2,
+          ),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: 5.5,
+          height: 5.5,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRxBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0284C7), Color(0xFF0369A1)],
+        ),
+        borderRadius: BorderRadius.circular(3),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0284C7).withValues(alpha: 0.30),
+            blurRadius: 3,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.medical_services_rounded,
+              size: 7.5, color: Colors.white),
+          const SizedBox(width: 2),
+          Text(
+            'Rx',
+            style: GoogleFonts.outfit(
+              color: Colors.white,
+              fontSize: 7.5,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -552,8 +744,82 @@ class _ProductCardState extends State<ProductCard>
       child: Center(
         child: Icon(
           Icons.shopping_bag_outlined,
-          size: 36,
+          size: 32,
           color: AppColors.primary.withValues(alpha: isDark ? 0.35 : 0.30),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVariantAddButton(bool isDark) {
+    return GestureDetector(
+      key: const ValueKey('variant_add'),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        showProductDetailSheet(context, product.id, highlightVariants: true);
+      },
+      child: Container(
+        width: double.infinity,
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [
+                    AppColors.secondary.withValues(alpha: 0.22),
+                    AppColors.secondaryLight.withValues(alpha: 0.16),
+                  ]
+                : [
+                    AppColors.secondary.withValues(alpha: 0.08),
+                    AppColors.secondary.withValues(alpha: 0.12),
+                  ],
+          ),
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+              color:
+                  AppColors.secondary.withValues(alpha: isDark ? 0.50 : 0.45),
+              width: 1.1),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'ADD',
+                style: GoogleFonts.outfit(
+                  color:
+                      isDark ? AppColors.secondaryLight : AppColors.secondary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 13,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
+              ),
+              const SizedBox(width: 2),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  'OPTIONS',
+                  style: GoogleFonts.outfit(
+                    color:
+                        isDark ? AppColors.secondaryLight : AppColors.secondary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 7,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -563,15 +829,15 @@ class _ProductCardState extends State<ProductCard>
     return GestureDetector(
       key: const ValueKey('add'),
       onTap: () {
-        if (product.variants.isNotEmpty) {
-          showProductDetailSheet(context, product.id, highlightVariants: true);
-        } else if (shop != null) {
+        HapticFeedback.lightImpact();
+        if (shop != null) {
           cart.addItemWithFeedback(context, product, shop!);
         }
       },
       child: Container(
         width: double.infinity,
-        height: 36,
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isDark
@@ -588,24 +854,30 @@ class _ProductCardState extends State<ProductCard>
           border: Border.all(
               color:
                   AppColors.secondary.withValues(alpha: isDark ? 0.40 : 0.35),
-              width: 1.2),
+              width: 1.1),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Icon(Icons.add_rounded,
-            //     size: 15,
-            //     color: isDark ? AppColors.secondaryLight : AppColors.secondary),
-            // const SizedBox(width: 3),
-            Text(
-              'ADD TO CART',
-              style: GoogleFonts.outfit(
-                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_rounded,
+                  size: 13,
+                  color:
+                      isDark ? AppColors.secondaryLight : AppColors.secondary),
+              const SizedBox(width: 3),
+              Text(
+                'ADD',
+                style: GoogleFonts.outfit(
+                  color:
+                      isDark ? AppColors.secondaryLight : AppColors.secondary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                  letterSpacing: 0.4,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -614,26 +886,29 @@ class _ProductCardState extends State<ProductCard>
   Widget _buildStepper(CartProvider cart, int quantity, bool isDark) {
     return Container(
       key: const ValueKey('stepper'),
-      height: 36,
+      height: 30,
       decoration: BoxDecoration(
         gradient: AppColors.ctaGradient,
         borderRadius: BorderRadius.circular(100),
         boxShadow: [
           BoxShadow(
               color: AppColors.secondary.withValues(alpha: 0.35),
-              blurRadius: 10,
-              offset: const Offset(0, 4)),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           GestureDetector(
-            onTap: () => context
-                .read<CartProvider>()
-                .updateQuantity(product.id, quantity - 1),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context
+                  .read<CartProvider>()
+                  .updateQuantity(product.id, quantity - 1);
+            },
             child:
-                const Icon(Icons.remove_rounded, size: 16, color: Colors.white),
+                const Icon(Icons.remove_rounded, size: 14, color: Colors.white),
           ),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
@@ -646,20 +921,37 @@ class _ProductCardState extends State<ProductCard>
               key: ValueKey(quantity),
               style: GoogleFonts.outfit(
                 fontWeight: FontWeight.w900,
-                fontSize: 13,
+                fontSize: 12,
                 color: Colors.white,
               ),
             ),
           ),
           GestureDetector(
             onTap: () {
+              if (product.totalQuantity != null &&
+                  quantity >= product.totalQuantity!) {
+                HapticFeedback.heavyImpact();
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Only ${product.totalQuantity} items in stock',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                    ),
+                    duration: const Duration(seconds: 2),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+              HapticFeedback.lightImpact();
               if (shop != null) {
                 context
                     .read<CartProvider>()
                     .addItemWithFeedback(context, product, shop!);
               }
             },
-            child: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+            child: const Icon(Icons.add_rounded, size: 14, color: Colors.white),
           ),
         ],
       ),
@@ -669,7 +961,7 @@ class _ProductCardState extends State<ProductCard>
   Widget _buildUnavailableButton(bool isDark) {
     return Container(
       width: double.infinity,
-      height: 36,
+      height: 30,
       decoration: BoxDecoration(
         color: isDark ? Colors.white10 : Colors.grey.shade200,
         borderRadius: BorderRadius.circular(100),
@@ -680,7 +972,8 @@ class _ProductCardState extends State<ProductCard>
           style: GoogleFonts.outfit(
             color: isDark ? Colors.white38 : Colors.grey.shade500,
             fontWeight: FontWeight.w800,
-            fontSize: 12,
+            fontSize: 10,
+            letterSpacing: 0.4,
           ),
         ),
       ),

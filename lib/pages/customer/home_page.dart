@@ -2490,7 +2490,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
-                                      height: 335,
+                                      height: 275,
                                       child: ListView.builder(
                                         scrollDirection: Axis.horizontal,
                                         itemCount: availableRecent.length,
@@ -2498,7 +2498,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           final p = availableRecent[index];
                                           final shop = _productShops[p.id];
                                           return SizedBox(
-                                            width: 155,
+                                            width: 148,
                                             child: Padding(
                                               padding: const EdgeInsets.only(
                                                   right: 12),
@@ -2565,11 +2565,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                             shop: shop,
                                             onTap: () =>
                                                 showRestaurantDashboardSheet(
-                                                    context, shop.id))
+                                                    context, shop.id),
+                                          )
                                         : ShopCard(
                                             shop: shop,
                                             onTap: () => showShopDetailSheet(
-                                                context, shop.id));
+                                                context, shop.id),
+                                          );
                                   },
                                 );
                               },
@@ -2637,7 +2639,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                         (crossAxisSpacing *
                                             (crossAxisCount - 1))) /
                                     crossAxisCount;
-                                final itemHeight = itemWidth + 178;
+                                final itemHeight = itemWidth + 128;
                                 final childAspectRatio = itemWidth / itemHeight;
                                 final displayProducts = _sortedNormalProducts
                                     .take(_productsDisplayLimit)

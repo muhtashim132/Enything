@@ -14,6 +14,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/product_card.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/delivery_calculator.dart';
+import '../../widgets/customer/floating_cart_bar.dart';
 
 class CategoryProductsPage extends StatefulWidget {
   final String categoryName;
@@ -494,7 +495,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                         final itemWidth = (availableWidth -
                                 (crossAxisSpacing * (crossAxisCount + 1))) /
                             crossAxisCount;
-                        final itemHeight = itemWidth + 178;
+                        final itemHeight = itemWidth + 128;
                         final childAspectRatio = itemWidth / itemHeight;
 
                         var filteredProducts = _products;
@@ -516,63 +517,68 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                         final displayProducts =
                             filteredProducts.take(_displayLimit).toList();
 
-                        return CustomScrollView(
-                          slivers: [
-                            SliverPadding(
-                              padding: const EdgeInsets.all(16),
-                              sliver: SliverGrid.builder(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  childAspectRatio: childAspectRatio,
-                                  mainAxisSpacing: 16,
-                                  crossAxisSpacing: crossAxisSpacing,
+                        return Stack(
+                        children: [
+                          CustomScrollView(
+                            slivers: [
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                                sliver: SliverGrid.builder(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossAxisCount,
+                                    childAspectRatio: childAspectRatio,
+                                    mainAxisSpacing: 16,
+                                    crossAxisSpacing: crossAxisSpacing,
+                                  ),
+                                  itemCount: displayProducts.length,
+                                  itemBuilder: (context, index) {
+                                    final product = displayProducts[index];
+                                    final shop = _productShops[product.id];
+                                    return ProductCard(
+                                        product: product, shop: shop);
+                                  },
                                 ),
-                                itemCount: displayProducts.length,
-                                itemBuilder: (context, index) {
-                                  final product = displayProducts[index];
-                                  final shop = _productShops[product.id];
-                                  return ProductCard(
-                                      product: product, shop: shop);
-                                },
                               ),
-                            ),
-                            if (filteredProducts.length > _displayLimit)
-                              SliverToBoxAdapter(
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 8, bottom: 24),
-                                  child: Center(
-                                    child: TextButton(
-                                      onPressed: () =>
-                                          setState(() => _displayLimit += 20),
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 24, vertical: 12),
-                                        backgroundColor: isDark
-                                            ? Colors.white
-                                                .withValues(alpha: 0.05)
-                                            : AppColors.primary
-                                                .withValues(alpha: 0.05),
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(20)),
-                                      ),
-                                      child: Text(
-                                        'Load more products',
-                                        style: GoogleFonts.outfit(
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.primary,
+                              if (filteredProducts.length > _displayLimit)
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsets.only(top: 8, bottom: 90),
+                                    child: Center(
+                                      child: TextButton(
+                                        onPressed: () =>
+                                            setState(() => _displayLimit += 20),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 24, vertical: 12),
+                                          backgroundColor: isDark
+                                              ? Colors.white
+                                                  .withValues(alpha: 0.05)
+                                              : AppColors.primary
+                                                  .withValues(alpha: 0.05),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(20)),
+                                        ),
+                                        child: Text(
+                                          'Load more products',
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.primary,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
+                            ],
+                          ),
+                          const FloatingCartBar(),
+                        ],
+                      );
+                    },
+                  ),
     );
   }
 }

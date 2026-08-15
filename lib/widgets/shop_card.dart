@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -86,6 +87,22 @@ class _ShopCardState extends State<ShopCard> {
 
   String get _emoji => _categoryEmoji[shop.category] ?? '🏪';
 
+  String? _categoryHighlightText() {
+    final cat = shop.category.toLowerCase();
+    if (cat.contains('pharmacy') || cat.contains('medical')) {
+      return 'Rx Accepted 💊';
+    } else if (cat.contains('fruits') ||
+        cat.contains('veg') ||
+        cat.contains('grocery')) {
+      return 'Fresh Daily 🥑';
+    } else if (cat.contains('butcher') || cat.contains('meat')) {
+      return 'Fresh Cut 🥩';
+    } else if (cat.contains('dairy')) {
+      return 'Farm Fresh 🥛';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final favs = context.watch<FavoritesProvider>();
@@ -98,6 +115,11 @@ class _ShopCardState extends State<ShopCard> {
         DeliveryCalculator.calculateDeliveryCharges(shop.distanceKm ?? 0.0, 0);
     final isFreeDelivery = deliveryCharge == 0;
     final isOutOfRange = deliveryCharge < 0;
+    final isInstant = shop.distanceKm != null &&
+        shop.distanceKm! <= 2.0 &&
+        shop.distanceKm! > 0;
+    final isOpen = shop.isOpenRightNow;
+    final highlight = _categoryHighlightText();
 
     return GestureDetector(
       onTap: onTap,
@@ -137,8 +159,7 @@ class _ShopCardState extends State<ShopCard> {
                               imageUrl: shop.bannerImage!,
                               width: double.infinity,
                               fit: BoxFit.cover,
-                              memCacheHeight:
-                                  240, // 2× for crisp rendering, no pixel overload
+                              memCacheHeight: 240,
                               placeholder: (c, i) => _headerPlaceholder(colors),
                               errorWidget: (c, e, s) =>
                                   _headerPlaceholder(colors),
@@ -156,7 +177,7 @@ class _ShopCardState extends State<ShopCard> {
                             colors: [
                               Colors.transparent,
                               Colors.black.withValues(alpha: 0.15),
-                              Colors.black.withValues(alpha: 0.50),
+                              Colors.black.withValues(alpha: 0.60),
                             ],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
@@ -166,60 +187,77 @@ class _ShopCardState extends State<ShopCard> {
                       ),
                     ),
 
-                    // Category badge (top-left) — glassmorphism style
-                    if (!shop.isOpenRightNow)
+                    // CLOSED Overlay with smart opening time
+                    if (!isOpen)
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(PremiumRadius.large)),
                         child: Container(
-                          color: Colors.black.withValues(alpha: 0.65),
+                          color: Colors.black.withValues(alpha: 0.70),
                           child: Center(
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
+                                  horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.8),
+                                color: Colors.black.withValues(alpha: 0.85),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(color: Colors.white38),
                               ),
-                              child: Text(
-                                'CLOSED',
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 3.0,
-                                ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'CLOSED',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 2.0,
+                                    ),
+                                  ),
+                                  if (shop.openTime != null &&
+                                      shop.openTime!.isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'Opens at ${shop.openTime}',
+                                      style: GoogleFonts.outfit(
+                                        color: Colors.white70,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           ),
                         ),
                       ),
 
-                    // Category badge (top-left) — glassmorphism style
+                    // Category badge (top-left)
                     Positioned(
                       top: 10,
                       left: 12,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 9, vertical: 5),
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(colors: colors),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                             boxShadow: [
                               BoxShadow(
                                   color: colors.first.withValues(alpha: 0.45),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3)),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2)),
                             ],
                           ),
                           child: Text(
                             '$_emoji ${shop.category}',
                             style: GoogleFonts.outfit(
                               color: Colors.white,
-                              fontSize: 10,
+                              fontSize: 9.5,
                               fontWeight: FontWeight.w800,
                             ),
                             maxLines: 1,
@@ -229,34 +267,91 @@ class _ShopCardState extends State<ShopCard> {
                       ),
                     ),
 
-                    // Free delivery badge (top-right)
-                    if (isFreeDelivery)
-                      Positioned(
-                        top: 10,
-                        right: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00C853),
-                            borderRadius: BorderRadius.circular(9),
-                            boxShadow: [
-                              BoxShadow(
-                                  color: const Color(0xFF00C853)
-                                      .withValues(alpha: 0.45),
-                                  blurRadius: 8),
-                            ],
-                          ),
-                          child: Text(
-                            'FREE DELIVERY',
-                            style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.3),
-                          ),
-                        ),
-                      ),
+                    // Free delivery / Instant badge (top-right)
+                    Positioned(
+                      top: 10,
+                      right: 12,
+                      child: isInstant && isFreeDelivery
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 4),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFFFF9F43),
+                                    Color(0xFFEE5A24)
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: const Color(0xFFEE5A24)
+                                          .withValues(alpha: 0.4),
+                                      blurRadius: 6),
+                                ],
+                              ),
+                              child: Text(
+                                '⚡ FREE DELIVERY',
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.3),
+                              ),
+                            )
+                          : isInstant
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFFFF9F43),
+                                        Color(0xFFEE5A24)
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                          color: const Color(0xFFEE5A24)
+                                              .withValues(alpha: 0.4),
+                                      blurRadius: 6),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    '⚡ INSTANT',
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.white,
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.3),
+                                  ),
+                                )
+                              : isFreeDelivery
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 7, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00C853),
+                                        borderRadius: BorderRadius.circular(8),
+                                        boxShadow: [
+                                          BoxShadow(
+                                              color: const Color(0xFF00C853)
+                                                  .withValues(alpha: 0.4),
+                                              blurRadius: 6),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        'FREE DELIVERY',
+                                        style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontSize: 8.5,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.3),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                    ),
 
                     // Rating badge (bottom-left)
                     Positioned(
@@ -271,6 +366,7 @@ class _ShopCardState extends State<ShopCard> {
                       right: 12,
                       child: GestureDetector(
                         onTap: () {
+                          HapticFeedback.lightImpact();
                           if (auth.currentUserId != null) {
                             favs.toggleShopFavorite(
                                 auth.currentUserId!, shop.id);
@@ -311,7 +407,7 @@ class _ShopCardState extends State<ShopCard> {
 
               // ── Info section ──────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 13, 14, 15),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -335,30 +431,50 @@ class _ShopCardState extends State<ShopCard> {
                         ),
                         Icon(
                           Icons.arrow_forward_ios_rounded,
-                          size: 13,
+                          size: 12,
                           color: isDark ? Colors.white24 : Colors.grey.shade400,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    // Cuisine / item type
-                    Text(
-                      shop.cuisineType ?? 'Various items',
-                      style: GoogleFonts.outfit(
-                        color:
-                            isDark ? Colors.white54 : AppColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 3),
+                    // Cuisine / item type / category highlight
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            shop.cuisineType ?? 'Various essentials',
+                            style: GoogleFonts.outfit(
+                              color: isDark
+                                  ? Colors.white54
+                                  : AppColors.textSecondary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (highlight != null) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            highlight,
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? AppColors.primaryLight
+                                  : AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 11),
+                    const SizedBox(height: 10),
 
                     // Chips row
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                      spacing: 5,
+                      runSpacing: 5,
                       children: [
                         _buildChip(
                           icon: Icons.access_time_rounded,
@@ -414,7 +530,7 @@ class _ShopCardState extends State<ShopCard> {
   Widget _ratingBadge() {
     final hasRating = shop.totalReviews > 0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: hasRating
@@ -423,26 +539,26 @@ class _ShopCardState extends State<ShopCard> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(8),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 8),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 6),
         ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.star_rounded, color: Colors.white, size: 12),
-          const SizedBox(width: 3),
+          const Icon(Icons.star_rounded, color: Colors.white, size: 11),
+          const SizedBox(width: 2.5),
           Text(
             hasRating ? shop.rating.toStringAsFixed(1) : 'New',
             style: GoogleFonts.outfit(
-                fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white),
+                fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white),
           ),
           if (hasRating)
             Text(
               ' (${shop.totalReviews})',
               style: GoogleFonts.outfit(
-                  fontSize: 10, color: Colors.white.withValues(alpha: 0.75)),
+                  fontSize: 9.5, color: Colors.white.withValues(alpha: 0.75)),
             ),
         ],
       ),
@@ -487,20 +603,20 @@ class _ShopCardState extends State<ShopCard> {
     required bool isDark,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withValues(alpha: 0.08) : color,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: isDark ? Colors.white54 : textColor),
-          const SizedBox(width: 4),
+          Icon(icon, size: 11, color: isDark ? Colors.white54 : textColor),
+          const SizedBox(width: 3.5),
           Text(
             label,
             style: GoogleFonts.outfit(
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white70 : textColor,
             ),

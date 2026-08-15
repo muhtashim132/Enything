@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -28,24 +29,27 @@ class RestaurantShopCard extends StatefulWidget {
 class _RestaurantShopCardState extends State<RestaurantShopCard>
     with SingleTickerProviderStateMixin {
   bool _isPressed = false;
-  late AnimationController _shimmerController;
 
   ShopModel get shop => widget.shop;
   VoidCallback get onTap => widget.onTap;
 
-  @override
-  void initState() {
-    super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
+  int? _closingInMinutes() {
+    if (!shop.isOpenRightNow || shop.closeTime == null) return null;
+    try {
+      final now = DateTime.now();
+      final closeParts = shop.closeTime!.split(':');
+      if (closeParts.length < 2) return null;
+      final closeH = int.parse(closeParts[0]);
+      final closeM = int.parse(closeParts[1]);
+      final nowMinutes = now.hour * 60 + now.minute;
+      var closeMinutes = closeH * 60 + closeM;
+      if (closeMinutes < nowMinutes) {
+        closeMinutes += 24 * 60; // Crosses midnight
+      }
+      final diff = closeMinutes - nowMinutes;
+      if (diff > 0 && diff <= 30) return diff;
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -60,9 +64,11 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
     final isFreeDelivery = deliveryCharge == 0;
     final isOutOfRange = deliveryCharge < 0;
 
-    // Determine badges
+    // Badges & Status
     final isBestseller = shop.rating >= 4.2 && shop.totalReviews > 20;
     final isPromoted = shop.totalOrders > 100;
+    final closingInMins = _closingInMinutes();
+    final isOpen = shop.isOpenRightNow;
 
     // Parse cuisine types into chips
     final cuisineChips = (shop.cuisineType ?? 'Multi-cuisine')
@@ -102,7 +108,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Banner — Expanded prevents pixel overload but allows flexible height
+                    // Banner Image
                     ClipRRect(
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(24)),
@@ -111,13 +117,13 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                               imageUrl: shop.bannerImage!,
                               width: double.infinity,
                               fit: BoxFit.cover,
-                              memCacheHeight:
-                                  310, // 2× for crisp rendering, no pixel overload
+                              memCacheHeight: 320,
                               placeholder: (_, __) => _imgPlaceholder(),
                               errorWidget: (_, __, ___) => _imgPlaceholder(),
                             )
                           : _imgPlaceholder(),
                     ),
+
                     // Gradient overlay — stronger at bottom
                     ClipRRect(
                       borderRadius:
@@ -128,9 +134,9 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                             colors: [
                               Colors.transparent,
                               Colors.transparent,
-                              Colors.black.withValues(alpha: 0.65),
+                              Colors.black.withValues(alpha: 0.70),
                             ],
-                            stops: const [0.0, 0.45, 1.0],
+                            stops: const [0.0, 0.40, 1.0],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                           ),
@@ -138,90 +144,144 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                       ),
                     ),
 
-                    // CLOSED Overlay
-                    if (!shop.isOpenRightNow)
+                    // CLOSED Overlay with smart recovery time
+                    if (!isOpen)
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(24)),
                         child: Container(
-                          color: Colors.black.withValues(alpha: 0.65),
+                          color: Colors.black.withValues(alpha: 0.70),
                           child: Center(
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
+                                  horizontal: 16, vertical: 10),
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.8),
-                                borderRadius: BorderRadius.circular(8),
+                                color: Colors.black.withValues(alpha: 0.85),
+                                borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: Colors.white38),
                               ),
-                              child: Text(
-                                'CLOSED',
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 3.0,
-                                ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'CLOSED',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 2.5,
+                                    ),
+                                  ),
+                                  if (shop.openTime != null &&
+                                      shop.openTime!.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Opens at ${shop.openTime}',
+                                      style: GoogleFonts.outfit(
+                                        color: Colors.white70,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           ),
                         ),
                       ),
 
-                    // ── TOP-LEFT: Bestseller OR Promoted tag ──────────────
-                    if (isBestseller || isPromoted)
-                      Positioned(
-                        top: 12,
-                        left: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: isBestseller
-                                  ? [
-                                      const Color(0xFFFF9F43),
-                                      const Color(0xFFEE5A24)
-                                    ]
-                                  : [
-                                      const Color(0xFF6C5CE7),
-                                      const Color(0xFFA29BFE)
-                                    ],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(
-                                  color: (isBestseller
-                                          ? const Color(0xFFEE5A24)
-                                          : const Color(0xFF6C5CE7))
-                                      .withValues(alpha: 0.4),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3)),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                isBestseller
-                                    ? Icons.local_fire_department_rounded
-                                    : Icons.rocket_launch_rounded,
-                                size: 11,
-                                color: Colors.white,
+                    // ── TOP-LEFT: Bestseller / Promoted / Closing Soon ────
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (closingInMins != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE53E3E),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFE53E3E)
+                                        .withValues(alpha: 0.4),
+                                    blurRadius: 6,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                isBestseller ? 'BESTSELLER' : 'PROMOTED',
-                                style: GoogleFonts.outfit(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.timer_outlined,
+                                      size: 11, color: Colors.white),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'Closes in ${closingInMins}m',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else if (isBestseller || isPromoted)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 4.5),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: isBestseller
+                                      ? [
+                                          const Color(0xFFFF9F43),
+                                          const Color(0xFFEE5A24)
+                                        ]
+                                      : [
+                                          const Color(0xFF6C5CE7),
+                                          const Color(0xFFA29BFE)
+                                        ],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: (isBestseller
+                                              ? const Color(0xFFEE5A24)
+                                              : const Color(0xFF6C5CE7))
+                                          .withValues(alpha: 0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3)),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isBestseller
+                                        ? Icons.local_fire_department_rounded
+                                        : Icons.rocket_launch_rounded,
+                                    size: 11,
                                     color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.6),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isBestseller ? 'BESTSELLER' : 'PROMOTED',
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.6),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
+                        ],
                       ),
+                    ),
 
                     // ── TOP-RIGHT: Pure Veg + Favorite ───────────────────
                     Positioned(
@@ -233,21 +293,21 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                           if (shop.isVegOnly) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 5),
+                                  horizontal: 8, vertical: 4.5),
                               decoration: BoxDecoration(
-                                color: Colors.green.shade700,
-                                borderRadius: BorderRadius.circular(10),
+                                color: const Color(0xFF2E7D32),
+                                borderRadius: BorderRadius.circular(8),
                                 boxShadow: [
                                   BoxShadow(
-                                      color:
-                                          Colors.green.withValues(alpha: 0.35),
-                                      blurRadius: 8),
+                                      color: const Color(0xFF2E7D32)
+                                          .withValues(alpha: 0.35),
+                                      blurRadius: 6),
                                 ],
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.eco,
+                                  const Icon(Icons.eco_rounded,
                                       color: Colors.white, size: 11),
                                   const SizedBox(width: 3),
                                   Text('PURE VEG',
@@ -263,6 +323,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                           // Favorite button
                           GestureDetector(
                             onTap: () {
+                              HapticFeedback.lightImpact();
                               if (auth.currentUserId != null) {
                                 favs.toggleShopFavorite(
                                     auth.currentUserId!, shop.id);
@@ -270,7 +331,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                             },
                             child: AnimatedContainer(
                               duration: PremiumAnimations.fast,
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(7),
                               decoration: BoxDecoration(
                                 color: isFav
                                     ? Colors.red.withValues(alpha: 0.15)
@@ -280,7 +341,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                                   BoxShadow(
                                       color:
                                           Colors.black.withValues(alpha: 0.18),
-                                      blurRadius: 10)
+                                      blurRadius: 8)
                                 ],
                               ),
                               child: AnimatedSwitcher(
@@ -290,7 +351,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                                   isFav
                                       ? Icons.favorite_rounded
                                       : Icons.favorite_border_rounded,
-                                  size: 16,
+                                  size: 15,
                                   color: isFav
                                       ? Colors.red
                                       : AppColors.textSecondary,
@@ -302,35 +363,37 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                       ),
                     ),
 
-                    // ── BOTTOM-LEFT: Rating badge (Zomato-style green) ────
+                    // ── BOTTOM-LEFT: Rating badge ─────────────────────────
                     Positioned(
                       bottom: 12,
                       left: 12,
                       child: _ratingBadge(),
                     ),
 
-                    // ── BOTTOM-RIGHT: Free delivery tag ───────────────────
+                    // ── BOTTOM-RIGHT: Free Delivery / Promo tag ───────────
                     if (isFreeDelivery)
                       Positioned(
                         bottom: 12,
                         right: 12,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 9, vertical: 5),
+                              horizontal: 8, vertical: 4.5),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00C853),
-                            borderRadius: BorderRadius.circular(9),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF00C853), Color(0xFF009624)],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
                             boxShadow: [
                               BoxShadow(
                                   color: const Color(0xFF00C853)
                                       .withValues(alpha: 0.4),
-                                  blurRadius: 8),
+                                  blurRadius: 6),
                             ],
                           ),
                           child: Text('🚴 FREE DELIVERY',
                               style: GoogleFonts.outfit(
                                   color: Colors.white,
-                                  fontSize: 9,
+                                  fontSize: 8.5,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0.4)),
                         ),
@@ -341,61 +404,107 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
 
               // ── Info section ──────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Name row
-                    Text(
-                      shop.name,
-                      style: GoogleFonts.outfit(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : const Color(0xFF1A1A2E),
-                        letterSpacing: -0.3,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-
-                    // Cuisine chips row
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const NeverScrollableScrollPhysics(),
-                      child: Row(
-                        children: cuisineChips.map((c) {
-                          return Container(
-                            margin: const EdgeInsets.only(right: 6),
+                    // Restaurant Name + Orders count
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            shop.name,
+                            style: GoogleFonts.outfit(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1A1A2E),
+                              letterSpacing: -0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (shop.totalOrders > 50) ...[
+                          const SizedBox(width: 6),
+                          Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 5),
+                                horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : const Color(0xFFEEF2FF),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.10)
-                                    : const Color(0xFFD0D9FF),
-                              ),
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              c,
+                              '${shop.totalOrders}+ orders',
                               style: GoogleFonts.outfit(
-                                fontSize: 11,
+                                fontSize: 9.5,
                                 fontWeight: FontWeight.w700,
-                                color: isDark
-                                    ? Colors.white60
-                                    : const Color(0xFF3D52A0),
+                                color: Colors.orange.shade800,
                               ),
                             ),
-                          );
-                        }).toList(),
-                      ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+
+                    // Cuisine chips + Cost for two indicator
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            child: Row(
+                              children: cuisineChips.map((c) {
+                                return Container(
+                                  margin: const EdgeInsets.only(right: 5),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3.5),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.08)
+                                        : const Color(0xFFEEF2FF),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.10)
+                                          : const Color(0xFFD0D9FF),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    c,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : const Color(0xFF3D52A0),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '₹300 for two',
+                          style: GoogleFonts.outfit(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? Colors.white54
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
                     // Divider
                     Divider(
@@ -404,10 +513,12 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                           ? Colors.white.withValues(alpha: 0.08)
                           : const Color(0xFFF0F0F5),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
-                    // Meta chips row
-                    Row(
+                    // Meta chips with Wrap to guarantee zero overflow
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: [
                         _metaChip(
                           Icons.access_time_rounded,
@@ -419,7 +530,6 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                           const Color(0xFFEBF8FF),
                           isDark,
                         ),
-                        const SizedBox(width: 8),
                         _metaChip(
                           isOutOfRange
                               ? Icons.block_rounded
@@ -441,7 +551,6 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                                   : const Color(0xFFFFFAF0),
                           isDark,
                         ),
-                        const SizedBox(width: 8),
                         _metaChip(
                           Icons.location_on_rounded,
                           shop.distanceKm != null
@@ -451,6 +560,39 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                           const Color(0xFFF7FAFC),
                           isDark,
                         ),
+                        if (shop.fssaiNumber != null &&
+                            shop.fssaiNumber!.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 3.5),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.verified_user_rounded,
+                                    size: 10,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.grey.shade700),
+                                const SizedBox(width: 2),
+                                Text(
+                                  'FSSAI',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.grey.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -476,13 +618,13 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('🍽️', style: TextStyle(fontSize: 52)),
-            const SizedBox(height: 8),
+            const Text('🍽️', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 6),
             Text(
               shop.name,
               style: GoogleFonts.outfit(
                   color: Colors.white70,
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -494,7 +636,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
   Widget _ratingBadge() {
     final hasRating = shop.totalReviews > 0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: hasRating
@@ -503,29 +645,31 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.28),
-              blurRadius: 10,
-              offset: const Offset(0, 3)),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.star_rounded, color: Colors.white, size: 13),
-          const SizedBox(width: 4),
+          const Icon(Icons.star_rounded, color: Colors.white, size: 12),
+          const SizedBox(width: 3),
           Text(
             hasRating ? shop.rating.toStringAsFixed(1) : 'New',
             style: GoogleFonts.outfit(
-                fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w900,
+                color: Colors.white),
           ),
           if (hasRating) ...[
             Text(
               ' (${shop.totalReviews})',
               style: GoogleFonts.outfit(
-                  fontSize: 11, color: Colors.white.withValues(alpha: 0.75)),
+                  fontSize: 10, color: Colors.white.withValues(alpha: 0.75)),
             ),
           ],
         ],
@@ -536,20 +680,20 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
   Widget _metaChip(
       IconData icon, String label, Color color, Color bg, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withValues(alpha: 0.08) : bg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: isDark ? Colors.white54 : color),
-          const SizedBox(width: 4),
+          Icon(icon, size: 11, color: isDark ? Colors.white54 : color),
+          const SizedBox(width: 3),
           Text(
             label,
             style: GoogleFonts.outfit(
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white70 : color,
             ),

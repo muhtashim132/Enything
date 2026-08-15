@@ -8,6 +8,7 @@ import '../../models/product_model.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/responsive_layout.dart';
 import '../../config/routes.dart';
+import '../../utils/haptic_utils.dart';
 
 class ManageProductsPage extends StatefulWidget {
   final String? initialShopId;
@@ -140,6 +141,7 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
   }
 
   Future<void> _toggleAvailability(ProductModel product) async {
+    HapticUtils.selection();
     final originalState = product.isAvailable;
     final newState = !originalState;
 

@@ -271,7 +271,7 @@ class _FavoritesPageState extends State<FavoritesPage>
                                       (crossAxisSpacing *
                                           (crossAxisCount - 1))) /
                                   crossAxisCount;
-                              final itemHeight = itemWidth + 178;
+                              final itemHeight = itemWidth + 128;
                               final childAspectRatio = itemWidth / itemHeight;
 
                               return GridView.builder(

@@ -26,6 +26,7 @@ import '../../models/shop_model.dart';
 import 'dart:math' as math;
 
 import '../../widgets/coupon_input_widget.dart';
+import '../../utils/haptic_utils.dart';
 
 class CheckoutPage extends StatefulWidget {
   final String? existingCartGroupId;
@@ -1136,6 +1137,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       if (!mounted) return;
 
+      HapticUtils.success();
+
       Navigator.pushNamedAndRemoveUntil(
         context,
         AppRoutes.trackOrder,
@@ -1616,21 +1619,55 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 CouponInputWidget(cartTotal: cart.subtotal),
                 const SizedBox(height: 16),
 
-                // Delivery Notes
+                // Delivery Instructions
                 _sectionCard(
-                  title: 'Delivery Notes',
-                  icon: Icons.note_alt_outlined,
+                  title: 'Delivery Instructions',
+                  icon: Icons.delivery_dining_outlined,
                   iconColor: AppColors.info,
-                  child: TextField(
-                    controller: _notesController,
-                    maxLines: 2,
-                    decoration: const InputDecoration(
-                      hintText: 'Add any special instructions...',
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildInstructionChip('🔕 Do not ring bell'),
+                            const SizedBox(width: 8),
+                            _buildInstructionChip('🚪 Leave at door'),
+                            const SizedBox(width: 8),
+                            _buildInstructionChip('📞 Call before arriving'),
+                            const SizedBox(width: 8),
+                            _buildInstructionChip('🐕 Beware of pets'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF1E1E2E)
+                              : const Color(0xFFF8F9FE),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white10
+                                : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: TextField(
+                          controller: _notesController,
+                          maxLines: 2,
+                          decoration: const InputDecoration(
+                            hintText: 'Add landmark or gate instructions...',
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -1850,6 +1887,62 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstructionChip(String text) {
+    final isSelected = _notesController.text.contains(text);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () {
+        HapticUtils.selection();
+        setState(() {
+          if (isSelected) {
+            _notesController.text = _notesController.text
+                .replaceAll(text, '')
+                .replaceAll(', ,', ',')
+                .trim();
+            if (_notesController.text.startsWith(',')) {
+              _notesController.text = _notesController.text.substring(1).trim();
+            }
+            if (_notesController.text.endsWith(',')) {
+              _notesController.text =
+                  _notesController.text.substring(0, _notesController.text.length - 1).trim();
+            }
+          } else {
+            if (_notesController.text.trim().isEmpty) {
+              _notesController.text = text;
+            } else {
+              _notesController.text = '${_notesController.text.trim()}, $text';
+            }
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.15)
+              : (isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF1F5F9)),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary
+                : (isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Text(
+          text,
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected
+                ? AppColors.primary
+                : (isDark ? Colors.white : AppColors.textPrimary),
           ),
         ),
       ),
