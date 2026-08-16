@@ -68,8 +68,20 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _fcmSub = FirebaseMessaging.onMessage.listen((_) {
-      if (mounted) _debouncedLoadStats();
+    _fcmSub = FirebaseMessaging.onMessage.listen((message) {
+      if (mounted) {
+        _debouncedLoadStats();
+        final orderId = message.data['order_id'];
+        final action = message.data['action'];
+        final title =
+            message.notification?.title ?? message.data['title'] ?? '';
+        final isNewOrder = action == 'new_order' ||
+            title.toLowerCase().contains('new order') ||
+            (orderId != null && orderId.toString().isNotEmpty);
+        if (isNewOrder && ModalRoute.of(context)?.isCurrent == true) {
+          Navigator.pushNamed(context, AppRoutes.sellerOrders);
+        }
+      }
     });
     _bgCtrl =
         AnimationController(duration: const Duration(seconds: 6), vsync: this)

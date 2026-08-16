@@ -178,7 +178,10 @@ void handleNotificationClick(Map<String, dynamic> data) {
     Future.microtask(() {
       navigatorKey.currentState?.pushNamed(AppRoutes.sellerOrders);
     });
-  } else if (role == 'rider' || role == 'delivery' || action == 'new_order') {
+  } else if (role == 'rider' ||
+      role == 'delivery' ||
+      role == 'delivery_partner' ||
+      action == 'new_order') {
     // Go to Delivery Dashboard — Available Orders section shows new orders.
     navigatorKey.currentState?.pushNamedAndRemoveUntil(
         AppRoutes.deliveryDashboard, (route) => false);
@@ -330,8 +333,8 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       role == 'seller' ||
       role == 'delivery_partner' ||
       action == 'new_order');
-  const String channelId = 'enything_urgent_orders_v5';
-  const String channelName = 'Urgent Order Alerts';
+  const String channelId = 'enything_bell_channel_v4';
+  const String channelName = 'Enything Order Alerts';
   const String channelDesc =
       'Urgent order notifications with screen wake up and alarm sound';
 

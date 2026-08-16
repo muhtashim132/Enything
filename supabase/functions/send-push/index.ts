@@ -201,84 +201,54 @@ Deno.serve(async (req: Request) => {
     for (const batch of tokenChunks) {
       await Promise.all(batch.map(async ({ token, role }) => {
         try {
-          // Additive check: Use unified custom bell channel for all pushes to maintain Enything brand sound.
-          const isUrgentOrderAlert = (role === 'seller' || role === 'delivery' || role === 'delivery_partner') && 
-                                     (String(title).toLowerCase().includes('new order') || 
-                                      String(title).toLowerCase().includes('payment done'));
-                                      
+          const effectiveRole = role || (data && data.role) || 'customer';
+          const isUrgent = (effectiveRole === 'seller' || effectiveRole === 'delivery' || effectiveRole === 'delivery_partner') ||
+                           String(title).toLowerCase().includes('new order') ||
+                           String(title).toLowerCase().includes('payment done');
+                                       
           const channelId = 'enything_bell_channel_v4';
           const soundFile = 'enything_bell';
-          
-
-          // FSI FIX: For seller/rider, send DATA-ONLY message (no notification block).
-          // This lets the Dart _fcmBackgroundHandler fire and create a local
-          // notification WITH fullScreenIntent:true that wakes the screen.
-          // The rider's foreground service (RiderBackgroundService) keeps the
-          // process alive so the handler fires reliably.
-          //
-          // For customers (no foreground service), include the notification block
-          // so Android OS displays the notification natively — guaranteed delivery.
-          //
-          // To revert: remove the conditional and always include notification block.
-          const isSellerOrRider = (role === 'seller' || role === 'delivery' || role === 'delivery_partner');
-
 
           const message = {
             message: {
               token,
-              // Conditionally include notification block:
-              // - Customer: notification+data → OS handles display (guaranteed)
-              // - Seller/Rider: data-only → background handler fires (FSI works)
-              ...(isSellerOrRider ? {} : {
-                notification: {
-                  title: String(title),
-                  body: String(body),
-                },
-              }),
+              notification: {
+                title: String(title),
+                body: String(body),
+              },
               data: {
                 title: String(title),
                 body: String(body),
-                role: String(role),
+                role: String(effectiveRole),
+                action: String((data && data.action) || (isUrgent ? 'new_order' : 'status_update')),
+                click_action: 'FLUTTER_NOTIFICATION_CLICK',
                 ...(data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {}),
               },
               android: {
                 priority: 'high',
-                // For customers: routes OS-displayed notification through our channel.
-                // For sellers/riders: ignored (data-only), but harmless to include.
-                ...(isSellerOrRider ? {} : {
-                  notification: {
-                    channel_id: channelId,
-                    sound: soundFile,
-                    notification_priority: 'PRIORITY_MAX',
-                    visibility: 'PUBLIC',
-                  },
-                }),
+                notification: {
+                  channel_id: channelId,
+                  sound: soundFile,
+                  notification_priority: 'PRIORITY_MAX',
+                  visibility: 'PUBLIC',
+                  default_sound: false,
+                  default_vibrate_timings: true,
+                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                },
               },
               apns: {
                 headers: {
                   'apns-priority': '10',
-                  // 10 = immediate delivery (vs 5 = conservative/low-power)
-                  // Required for sound + banner to appear reliably on iOS
                 },
                 payload: {
                   aps: {
-                    // Explicit alert object guarantees iOS shows the banner,
-                    // even when FCM-to-APNs translation has edge cases.
                     alert: {
                       title: title,
                       body: body,
                     },
                     sound: soundFile ? `${soundFile}.wav` : 'default',
                     badge: 1,
-                    // NOTE: 'content-available': 1 has been REMOVED.
-                    // That flag marks the message as a SILENT background update,
-                    // which causes iOS 15+ to suppress the visible notification
-                    // banner and sound — especially when the app is killed.
-                    // For visible + sound notifications, we must NOT use it.
                     'mutable-content': 1,
-                    // mutable-content=1 allows notification service extensions
-                    // to modify the notification (e.g., for rich media) without
-                    // interfering with display or sound.
                   },
                 },
               },

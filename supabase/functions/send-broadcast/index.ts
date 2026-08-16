@@ -203,33 +203,49 @@ Deno.serve(async (req: Request) => {
       for (const batch of tokenChunks) {
         await Promise.all(batch.map(async ({ token }) => {
           try {
+            const channelId = 'enything_bell_channel_v4';
+            const soundFile = 'enything_bell';
+
             const message = {
               message: {
                 token,
-              // Removed top-level notification to force data-only message on Android
-              data: {
-                title: String(title),
-                body: String(body),
-                ...(safeData ? Object.fromEntries(Object.entries(safeData).map(([k, v]) => [k, String(v)])) : {}),
-              },
-              android: {
-                priority: 'high',
-                // Removed android.notification block to ensure Android OS doesn't intercept
-              },
-              apns: {
-                headers: {
-                  'apns-priority': '10',
+                notification: {
+                  title: String(title),
+                  body: String(body),
                 },
-                payload: {
-                  aps: {
-                    alert: {
-                      title: title,
-                      body: body,
-                    },
-                    sound: 'enything_bell.wav',
-                    badge: 1,
+                data: {
+                  title: String(title),
+                  body: String(body),
+                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                  ...(safeData ? Object.fromEntries(Object.entries(safeData).map(([k, v]) => [k, String(v)])) : {}),
+                },
+                android: {
+                  priority: 'high',
+                  notification: {
+                    channel_id: channelId,
+                    sound: soundFile,
+                    notification_priority: 'PRIORITY_MAX',
+                    visibility: 'PUBLIC',
+                    default_sound: false,
+                    default_vibrate_timings: true,
+                    click_action: 'FLUTTER_NOTIFICATION_CLICK',
                   },
                 },
+                apns: {
+                  headers: {
+                    'apns-priority': '10',
+                  },
+                  payload: {
+                    aps: {
+                      alert: {
+                        title: title,
+                        body: body,
+                      },
+                      sound: soundFile ? `${soundFile}.wav` : 'default',
+                      badge: 1,
+                      'mutable-content': 1,
+                    },
+                  },
                 },
               },
             };

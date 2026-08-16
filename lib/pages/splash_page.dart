@@ -202,7 +202,9 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     // Consume immediately — prevent any chance of double-processing
     pendingNotificationData = null;
 
-    final role = data['role'] as String?;
+    final auth = context.read<AuthProvider>();
+    final sessionRole = auth.user?.activeSessionRole ?? auth.user?.role;
+    final role = (data['role'] as String?) ?? sessionRole;
     final orderId = data['order_id'] as String?;
 
     // For customer: customerHome is already on the stack. Just push trackOrder on top.
@@ -210,15 +212,18 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     // correctly replaces the splash-navigated route with their own dashboard.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if ((role == 'customer' || (role == null && orderId != null)) &&
-          orderId != null) {
+      if (role == 'seller') {
+        handleNotificationClick({...data, 'role': 'seller'});
+      } else if (role == 'delivery_partner' || role == 'delivery' || role == 'rider') {
+        handleNotificationClick({...data, 'role': 'delivery'});
+      } else if (role == 'customer' && orderId != null) {
         // customerHome is already on stack — push trackOrder on top
         Navigator.of(context).pushNamed(
           AppRoutes.trackOrder,
           arguments: {'orderId': orderId},
         );
       } else {
-        // seller / rider / other: let handleNotificationClick do full routing
+        // Fallback to general routing
         handleNotificationClick(data);
       }
     });

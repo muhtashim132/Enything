@@ -134,8 +134,17 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
 
       // Reload available orders when a push arrives while the dashboard is open
-      _fcmForegroundSub = FirebaseMessaging.onMessage.listen((_) {
-        if (mounted) _debouncedLoadOrders();
+      _fcmForegroundSub = FirebaseMessaging.onMessage.listen((message) {
+        if (mounted) {
+          _debouncedLoadOrders();
+          final title =
+              message.notification?.title ?? message.data['title'] ?? '';
+          if (title.toLowerCase().contains('new order') ||
+              message.data['action'] == 'new_order') {
+            _showSnack('🛵 New delivery order available nearby!',
+                isError: false);
+          }
+        }
       });
 
       _startPollingTimer();
