@@ -2490,7 +2490,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
-                                      height: 248,
+                                      height: 260,
                                       child: ListView.builder(
                                         scrollDirection: Axis.horizontal,
                                         itemCount: availableRecent.length,
@@ -2639,7 +2639,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                         (crossAxisSpacing *
                                             (crossAxisCount - 1))) /
                                     crossAxisCount;
-                                final itemHeight = itemWidth + 114;
+                                final itemHeight = itemWidth + 120;
                                 final childAspectRatio = itemWidth / itemHeight;
                                 final displayProducts = _sortedNormalProducts
                                     .take(_productsDisplayLimit)

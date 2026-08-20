@@ -301,7 +301,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 0.62,
+          childAspectRatio: 0.60,
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
         ),
@@ -495,7 +495,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                         final itemWidth = (availableWidth -
                                 (crossAxisSpacing * (crossAxisCount + 1))) /
                             crossAxisCount;
-                        final itemHeight = itemWidth + 114;
+                        final itemHeight = itemWidth + 120;
                         final childAspectRatio = itemWidth / itemHeight;
 
                         var filteredProducts = _products;

@@ -453,7 +453,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
               final itemWidth = (constraints.crossAxisExtent -
                       crossAxisSpacing * (crossAxisCount - 1)) /
                   crossAxisCount;
-              final childAspectRatio = itemWidth / (itemWidth + 114);
+              final childAspectRatio = itemWidth / (itemWidth + 120);
 
               return SliverGrid.builder(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
