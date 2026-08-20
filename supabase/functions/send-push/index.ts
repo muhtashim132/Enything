@@ -238,7 +238,7 @@ Deno.serve(async (req: Request) => {
                            String(title).toLowerCase().includes('new order') ||
                            String(title).toLowerCase().includes('payment done');
                                        
-          const channelId = 'enything_bell_channel_v4';
+          const channelId = 'enything_urgent_alerts_v5';
           const soundFile = 'enything_bell';
 
           // CRITICAL: On Android, DATA-ONLY message forces Android OS to wake up

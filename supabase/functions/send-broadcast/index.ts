@@ -203,7 +203,7 @@ Deno.serve(async (req: Request) => {
       for (const batch of tokenChunks) {
         await Promise.all(batch.map(async ({ token }) => {
           try {
-            const channelId = 'enything_bell_channel_v4';
+            const channelId = 'enything_urgent_alerts_v5';
             const soundFile = 'enything_bell';
 
             // CRITICAL: On Android, DATA-ONLY message forces Android OS to wake up

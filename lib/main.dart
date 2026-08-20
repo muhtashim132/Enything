@@ -340,8 +340,8 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       title.toLowerCase().contains('payment done') ||
       title.toLowerCase().contains('payment received') ||
       title.toLowerCase().contains('order ready'));
-  const String channelId = 'enything_bell_channel_v4';
-  const String channelName = 'Enything Order Alerts';
+  const String channelId = 'enything_urgent_alerts_v5';
+  const String channelName = 'Enything Urgent Alerts';
   const String channelDesc =
       'Urgent order notifications with screen wake up and alarm sound';
 
