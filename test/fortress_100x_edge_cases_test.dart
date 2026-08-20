@@ -88,8 +88,8 @@ void main() {
       final tcs = grocerySubtotal * TaxConfig.tcsRateForCategory('Grocery');
       final tds = grocerySubtotal * TaxConfig.itTdsRate;
 
-      // TCS is 1% (0.5% CGST + 0.5% SGST)
-      expect(tcs, closeTo(10.0, 0.01));
+      // TCS is 0.5% (0.25% CGST + 0.25% SGST)
+      expect(tcs, closeTo(5.0, 0.01));
 
       // TDS is 0.1% (Finance Act 2024 Section 194-O)
       expect(tds, closeTo(1.0, 0.01));

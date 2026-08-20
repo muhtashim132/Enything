@@ -752,6 +752,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             data: {
               'route': '/track_order',
               'order_id': firstOrder.id,
+              'role': 'customer',
             },
           );
         } else if (allShopsAccepted) {
@@ -763,6 +764,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             data: {
               'route': '/track_order',
               'order_id': firstOrder.id,
+              'role': 'customer',
+              'action': 'pay',
             },
           );
         } else {
@@ -771,6 +774,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             title: '🛵 Rider is Ready!',
             body:
                 'A rider accepted your order and is on standby. Waiting for the shop(s) to also confirm.',
+            data: {
+              'route': '/track_order',
+              'order_id': firstOrder.id,
+              'role': 'customer',
+            },
           );
         }
       } catch (e) {
@@ -871,6 +879,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               data: {
                 'route': '/track_order',
                 'order_id': order.id,
+                'role': 'customer',
+                'action': 'pay',
               },
             );
           } else if (notifyCustomer &&
@@ -882,6 +892,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               data: {
                 'route': '/track_order',
                 'order_id': order.id,
+                'role': 'customer',
               },
             );
           }
@@ -899,6 +910,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   title: '⌛ Waiting for Customer Payment',
                   body:
                       'Both you and the rider accepted. Customer is completing payment now.',
+                  data: {
+                    'order_id': order.id,
+                    'role': 'seller',
+                  },
                 );
               }
             });
@@ -921,7 +936,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   title: '🛵 A Rider is Ready!',
                   body:
                       'A rider already accepted this order ₹${order.grandTotal.toStringAsFixed(0)}. Accept now to confirm!',
-                  data: {'order_id': order.id},
+                  data: {'order_id': order.id, 'role': 'seller'},
                 );
               }
             });
@@ -934,6 +949,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               title: '🛵 Rider is Ready!',
               body:
                   'A rider accepted your order and is on standby. Waiting for the shop to also confirm.',
+              data: {
+                'route': '/track_order',
+                'order_id': order.id,
+                'role': 'customer',
+              },
             );
           }
         }

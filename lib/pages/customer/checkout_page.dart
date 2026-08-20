@@ -88,10 +88,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _isLoadingActiveGroup = true);
     try {
       final supabase = Supabase.instance.client;
+      // Bug 3.3: Exclude 'delivered' — delivered orders have separate payments
       final response = await supabase
           .from('orders')
           .select(
-              'total_amount, small_cart_fee, heavy_order_fee, shop_id, multi_shop_surcharge')
+              'id, total_amount, small_cart_fee, heavy_order_fee, shop_id, multi_shop_surcharge')
           .eq('cart_group_id', cartGroupId)
           .inFilter('status', [
         'awaiting_acceptance',
@@ -102,15 +103,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'ready_for_pickup',
         'picked_up',
         'out_for_delivery',
-        'delivered'
       ]);
 
       double subtotal = 0.0;
       double smallCartFee = 0.0;
       double heavyFee = 0.0;
-      double weight = 0.0;
       double surchargePaid = 0.0;
       Set<String> shopIds = {};
+      List<String> activeOrderIds = [];
 
       for (var row in (response as List)) {
         subtotal += (row['total_amount'] as num?)?.toDouble() ?? 0.0;
@@ -120,6 +120,31 @@ class _CheckoutPageState extends State<CheckoutPage> {
             (row['multi_shop_surcharge'] as num?)?.toDouble() ?? 0.0;
         if (row['shop_id'] != null) {
           shopIds.add(row['shop_id'].toString());
+        }
+        if (row['id'] != null) {
+          activeOrderIds.add(row['id'].toString());
+        }
+      }
+
+      // Bug 3.1: Fetch actual weight from order_items joined with products
+      double weight = 0.0;
+      if (activeOrderIds.isNotEmpty) {
+        try {
+          final weightResponse = await supabase
+              .from('order_items')
+              .select('quantity, product:products!inner(weight_per_unit, is_deleted)')
+              .inFilter('order_id', activeOrderIds)
+              .eq('product.is_deleted', false);
+          for (var row in (weightResponse as List)) {
+            final qty = (row['quantity'] as num?)?.toDouble() ?? 0.0;
+            final product = row['product'];
+            final weightPerUnit = product != null
+                ? (product['weight_per_unit'] as num?)?.toDouble() ?? 0.5
+                : 0.5;
+            weight += qty * weightPerUnit;
+          }
+        } catch (e) {
+          debugPrint('Error fetching active order weight: $e');
         }
       }
 
@@ -370,7 +395,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // ── Step 1: Save order as awaiting_acceptance (NO payment yet) ────────────
   // Payment is triggered ONLY after BOTH seller AND rider accept (within 1 min).
   Future<void> _placeOrder() async {
+    if (_isCreatingOrder || _isProcessing.value) return;
     _isProcessing.value = true;
+    _isCreatingOrder = true;
     final cart = context.read<CartProvider>();
     final location = context.read<LocationProvider>();
 
@@ -385,6 +412,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
+      _isCreatingOrder = false;
       _isProcessing.value = false;
       return;
     }
@@ -421,6 +449,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               duration: const Duration(seconds: 4),
             ),
           );
+          _isCreatingOrder = false;
           _isProcessing.value = false;
           return;
         }
@@ -440,6 +469,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
+      _isCreatingOrder = false;
       _isProcessing.value = false;
       return;
     }
@@ -460,6 +490,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             margin: const EdgeInsets.all(16),
           ),
         );
+        _isCreatingOrder = false;
         _isProcessing.value = false;
       }
     }
@@ -493,8 +524,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // Financial snapshot is stored immediately for transparency.
   // Razorpay is only opened from TrackOrderPage when both seller & rider accept.
   Future<void> _createOrderInDb() async {
-    // O1 FIX: Hard idempotency lock — reject concurrent invocations
-    if (_isCreatingOrder) return;
     _isCreatingOrder = true;
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
@@ -782,9 +811,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
           for (int i = 0; i < files.length; i++) {
             final file = files[i];
+            final rawBytes = await file.readAsBytes();
+            if (rawBytes.length > 10 * 1024 * 1024) {
+              throw Exception(
+                  'Prescription file for ${shop.name} exceeds the 10MB limit. Please choose a smaller image.');
+            }
             final bytes =
                 await ImageCompressionService.compressFile(File(file.path)) ??
-                    await file.readAsBytes();
+                    rawBytes;
             const ext = 'jpg'; // Compressed format is jpeg
             final path = '${auth.currentUserId}/${cartGroupId}_${shop.id}_$i.$ext';
 

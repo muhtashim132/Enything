@@ -169,8 +169,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
 
           DateTime? rejectionTime;
           for (var s in siblings) {
-            if (s['status'] == 'seller_rejected' ||
-                s['status'] == 'cancelled') {
+            if ({'seller_rejected', 'partner_rejected', 'rider_rejected', 'verification_failed', 'cancelled'}.contains(s['status'])) {
               isPartialRejection = true;
               final u = s['updated_at'] != null
                   ? DateTime.tryParse(s['updated_at'])

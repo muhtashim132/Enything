@@ -120,6 +120,8 @@ class CartProvider extends ChangeNotifier {
   static const String _cartKey =
       'enything_cart_v2'; // Bumped for variant support
   static const String _legacyCartKey = 'enything_cart_v1';
+  static const String _pendingCartGroupKey = 'enything_pending_cart_group_id';
+  static const String _pendingOrderCancelKey = 'enything_pending_order_to_cancel';
   final List<CartItem> _items = [];
   final Set<String> _inFlightRestores = {};
 
@@ -131,13 +133,42 @@ class CartProvider extends ChangeNotifier {
   String? get pendingCartGroupId => _pendingCartGroupId;
   void setPendingCartGroupId(String? id) {
     _pendingCartGroupId = id;
-    // No notifyListeners() needed — this is read at checkout build time
+    // Persist to SharedPrefs so it survives app kills (Bug E1)
+    _persistPendingFields();
   }
 
   String? _pendingOrderIdToCancel;
   String? get pendingOrderIdToCancel => _pendingOrderIdToCancel;
   void setPendingOrderIdToCancel(String? id) {
     _pendingOrderIdToCancel = id;
+    // Persist to SharedPrefs so it survives app kills (Bug E1)
+    _persistPendingFields();
+  }
+
+  /// Persists pending group/order fields to SharedPrefs for app-kill survival.
+  Future<void> _persistPendingFields() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_pendingCartGroupId != null) {
+        await prefs.setString(_pendingCartGroupKey, _pendingCartGroupId!);
+      } else {
+        await prefs.remove(_pendingCartGroupKey);
+      }
+      if (_pendingOrderIdToCancel != null) {
+        await prefs.setString(_pendingOrderCancelKey, _pendingOrderIdToCancel!);
+      } else {
+        await prefs.remove(_pendingOrderCancelKey);
+      }
+    } catch (_) {}
+  }
+
+  /// Clears persisted pending fields from SharedPrefs.
+  Future<void> _clearPersistedPendingFields() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_pendingCartGroupKey);
+      await prefs.remove(_pendingOrderCancelKey);
+    } catch (_) {}
   }
 
   CartNotification? _recentNotification;
@@ -413,17 +444,23 @@ class CartProvider extends ChangeNotifier {
 
   void clear() {
     _items.clear();
+    _pendingCartGroupId = null;      // Bug 1.1: prevent cross-account injection
+    _pendingOrderIdToCancel = null;  // Bug 1.1: prevent cross-account injection
     scaffoldMessengerKey.currentState?.clearSnackBars();
     _saveCart(); // Bug #20
+    _clearPersistedPendingFields();
     safeNotifyListeners();
   }
 
   /// Explicitly await the disk persistence before proceeding to prevent race conditions.
   Future<void> clearAsync() async {
     _items.clear();
+    _pendingCartGroupId = null;      // Bug 1.1: prevent cross-account injection
+    _pendingOrderIdToCancel = null;  // Bug 1.1: prevent cross-account injection
     scaffoldMessengerKey.currentState?.clearSnackBars();
     safeNotifyListeners();
     await _saveCart();
+    await _clearPersistedPendingFields();
   }
 
   // ---------------------------------------------------------------------------
@@ -505,6 +542,11 @@ class CartProvider extends ChangeNotifier {
       }
       _items.clear();
       _items.addAll(parsedList);
+
+      // Bug E1: Restore pending replacement fields from SharedPrefs
+      _pendingCartGroupId ??= prefs.getString(_pendingCartGroupKey);
+      _pendingOrderIdToCancel ??= prefs.getString(_pendingOrderCancelKey);
+
       safeNotifyListeners();
     } catch (e) {
       debugPrint('CartProvider: failed to load cart: $e');

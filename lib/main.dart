@@ -419,11 +419,20 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     await player.setReleaseMode(ReleaseMode.release);
     await player.play(AssetSource('sounds/enything_bell.wav'));
     debugPrint('FCM background: enything_bell.wav playing via AudioPlayer');
-    player.onPlayerComplete.listen((_) => player.dispose());
-    Future.delayed(const Duration(seconds: 15), () {
-      try {
+    bool isDisposed = false;
+    player.onPlayerComplete.listen((_) {
+      if (!isDisposed) {
+        isDisposed = true;
         player.dispose();
-      } catch (_) {}
+      }
+    });
+    Future.delayed(const Duration(seconds: 15), () {
+      if (!isDisposed) {
+        isDisposed = true;
+        try {
+          player.dispose();
+        } catch (_) {}
+      }
     });
   } catch (e) {
     debugPrint('FCM background: AudioPlayer bell failed: $e');

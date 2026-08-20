@@ -29,9 +29,6 @@ import 'package:collection/collection.dart';
 import '../../utils/delivery_calculator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/common/animated_moving_marker.dart';
-import '../../providers/platform_config_provider.dart';
-import '../../config/payment_config.dart';
-import '../../config/tax_config.dart';
 
 class TrackOrderPage extends StatefulWidget {
   final String orderId;
@@ -85,6 +82,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // Fix 3: tracks that customer already decided (placed replacement or paid for remaining).
   // Persisted in SharedPrefs so it survives banner-tap page recreations.
   bool _partialRejectionResolved = false;
+  // Bug E7: Track rejected order count to detect sequential rejections
+  int _lastKnownRejectedCount = 0;
 
   // Acceptance countdown (3 minutes)
   Timer? _acceptanceCountdownTimer;
@@ -615,71 +614,43 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   double _computeGroupTotalAmount() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.totalAmount);
 
-  double _computeGroupPlatformFee() {
-    if (_activeGroupOrders.isEmpty) return 0.0;
-    return PlatformConfigProvider.instance?.platformFee ??
-        PaymentConfig.platformFee;
-  }
+  // ── Bug 2.2/2.3 FIX: All _computeGroup* methods now read DB-frozen values ──
+  // from OrderModel instead of recalculating from live PlatformConfigProvider.
+  // This prevents client-side divergence from the DB's reallocated values.
 
-  double _computeGroupGstPlatform() {
-    if (_activeGroupOrders.isEmpty) return 0.0;
-    final fee = _computeGroupPlatformFee();
-    final rate = PlatformConfigProvider.instance?.platformFeeGstRate ??
-        TaxConfig.platformFeeGstRate;
-    return fee - (fee / (1 + rate));
-  }
+  double _computeGroupPlatformFee() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.platformFee);
+
+  double _computeGroupGstPlatform() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstPlatform);
 
   double _computeGroupGstItemTotal() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstItemTotal);
 
-  double _computeGroupMultiShopSurcharge() {
-    if (_activeGroupOrders.length <= 1) return 0.0;
-    final ratePerShop = PlatformConfigProvider.instance?.multiShopSurcharge ??
-        PaymentConfig.multiShopSurcharge;
-    return ratePerShop * (_activeGroupOrders.length - 1);
-  }
+  double _computeGroupMultiShopSurcharge() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.multiShopSurcharge);
 
-  double _computeGroupSmallCartFee() {
-    if (_activeGroupOrders.isEmpty) return 0.0;
-    final threshold = PlatformConfigProvider.instance?.smallCartThreshold ??
-        PaymentConfig.smallCartThreshold;
-    final activeSubtotal = _computeGroupTotalAmount();
-    if (activeSubtotal > 0 && activeSubtotal < threshold) {
-      return PlatformConfigProvider.instance?.smallCartFee ??
-          PaymentConfig.smallCartFee;
-    }
-    return 0.0;
-  }
+  double _computeGroupSmallCartFee() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.smallCartFee);
 
-  double _computeGroupHeavyOrderFee() {
-    if (_activeGroupOrders.isEmpty) return 0.0;
-    return _activeGroupOrders.fold(0.0, (sum, o) => sum + o.heavyOrderFee);
-  }
+  double _computeGroupHeavyOrderFee() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.heavyOrderFee);
 
   double _computeGroupBaseDeliveryFee() {
     if (_activeGroupOrders.isEmpty) return 0.0;
-    return PlatformConfigProvider.instance?.deliveryBaseFee ??
-        PaymentConfig.deliveryFee;
-  }
-
-  double _computeGroupDeliveryCharges() {
-    if (_activeGroupOrders.isEmpty) return 0.0;
-    final base = _computeGroupBaseDeliveryFee();
-    final surcharge = _computeGroupMultiShopSurcharge();
-    final smallCart = _computeGroupSmallCartFee();
-    final heavy = _computeGroupHeavyOrderFee();
-    final rate = PlatformConfigProvider.instance?.deliveryGstRate ??
-        TaxConfig.deliveryGstRate;
-    return (base + surcharge + smallCart + heavy) * (1 + rate);
-  }
-
-  double _computeGroupGstDelivery() {
-    if (_activeGroupOrders.isEmpty) return 0.0;
+    // delivery_charges in DB already includes base + surcharge + small_cart + heavy + GST,
+    // so "base" is the total delivery minus the sub-fees. But for display purposes,
+    // we show delivery_charges minus the separately-displayed sub-fees.
     final totalDelivery = _computeGroupDeliveryCharges();
-    final rate = PlatformConfigProvider.instance?.deliveryGstRate ??
-        TaxConfig.deliveryGstRate;
-    return totalDelivery - (totalDelivery / (1 + rate));
+    return totalDelivery - _computeGroupMultiShopSurcharge() -
+        _computeGroupSmallCartFee() - _computeGroupHeavyOrderFee();
   }
+
+  double _computeGroupDeliveryCharges() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.deliveryCharges);
+
+  double _computeGroupGstDelivery() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstDelivery);
 
   double _computeGroupCouponDiscount() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.couponDiscount);
@@ -687,22 +658,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   double _computeGroupWaitTimePenalty() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.waitTimePenalty);
 
-  double _computeGroupGrandTotal() {
-    if (_activeGroupOrders.isEmpty) return 0.0;
-    final activeItemBase = _computeGroupTotalAmount();
-    final activeGstItem = _computeGroupGstItemTotal();
-    final activePlatform = _computeGroupPlatformFee();
-    final activeDelivery = _computeGroupDeliveryCharges();
-    final activeWaitPenalty = _computeGroupWaitTimePenalty();
-    final activeCoupon = _computeGroupCouponDiscount();
-    return (activeItemBase +
-            activeGstItem +
-            activePlatform +
-            activeDelivery +
-            activeWaitPenalty -
-            activeCoupon)
-        .clamp(0.0, double.infinity);
-  }
+  double _computeGroupGrandTotal() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.grandTotal);
 
   bool get _allSellersAccepted {
     if (_groupOrders.isEmpty) return _order?.sellerAccepted ?? false;
@@ -727,6 +684,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   void _handleAggregateStatusChange() {
     if (!mounted || _order == null) return;
     final aggStatus = _aggregateStatus;
+
+    // Bug E7: Detect sequential rejections (Shop A rejects → resolved → Shop B rejects)
+    final currentRejectedCount = _groupOrders
+        .where((o) => _terminalRejectionStatuses.contains(o.status))
+        .length;
+    if (currentRejectedCount > _lastKnownRejectedCount && _partialRejectionResolved) {
+      // A NEW rejection appeared after we resolved the previous one — re-show panel
+      _partialRejectionResolved = false;
+      _wasPartialRejectionTimerStarted = false;
+      _hasScrolledToRejection = false;
+    }
+    _lastKnownRejectedCount = currentRejectedCount;
 
     if (_hasPartialRejection && !_hasScrolledToRejection) {
       _hasScrolledToRejection = true;
@@ -766,7 +735,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         // 100x Edge Case: Cascading Cancellation
         if (aggStatus == 'cancelled' || aggStatus == 'seller_rejected') {
           if (_isMissingItemsSheetOpen || _isSearchingAlternatives) {
-            Navigator.of(context).pop();
+            // Bug 2.7: Pop ALL stacked modals (missing items + find alternative)
+            Navigator.of(context).popUntil((route) => route.isFirst || route.settings.name != null);
             _isMissingItemsSheetOpen = false;
             _isSearchingAlternatives = false;
             showDialog(
@@ -1117,6 +1087,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     setState(() => _isRetrying = true);
     try {
       final cart = context.read<CartProvider>();
+      cart.clear(); // Bug 1.2: clear existing items to prevent merge with unrelated items
       final shopsToRetry =
           retryGroup && _groupOrders.isNotEmpty ? _groupOrders : [_order!];
 

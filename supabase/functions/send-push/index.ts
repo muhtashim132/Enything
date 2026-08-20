@@ -131,6 +131,9 @@ Deno.serve(async (req: Request) => {
       if (rawBody.record.order_id) {
         data.order_id = String(rawBody.record.order_id);
       }
+      if (rawBody.record.role) {
+        data.role = String(rawBody.record.role);
+      }
       if (rawBody.record.notif_key && typeof rawBody.record.notif_key === 'string') {
         const key = rawBody.record.notif_key;
         if (key.includes('_new_available') || key.includes('_reassigned_') || key.includes('_distance_')) {
@@ -212,6 +215,10 @@ Deno.serve(async (req: Request) => {
           const message = {
             message: {
               token,
+              notification: {
+                title: String(title),
+                body: String(body),
+              },
               data: {
                 title: String(title),
                 body: String(body),
@@ -222,6 +229,17 @@ Deno.serve(async (req: Request) => {
               },
               android: {
                 priority: 'high',
+                notification: {
+                  title: String(title),
+                  body: String(body),
+                  channel_id: channelId,
+                  sound: soundFile,
+                  default_vibrate_timings: true,
+                  default_sound: false,
+                  notification_priority: 'PRIORITY_MAX',
+                  visibility: 'PUBLIC',
+                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                },
               },
               apns: {
                 headers: {

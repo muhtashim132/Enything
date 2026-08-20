@@ -263,8 +263,10 @@ class BellAlertService {
       // Universally bind the completion listener to prevent the Silent Bell Deadlock
       // If loop is true, this won't fire until manually stopped or toggled to single-ring mid-flight.
       _player!.onPlayerComplete.listen((_) {
-        _isPlaying = false;
-        debugPrint('[BellAlert] Audio completed. Ready for next order.');
+        if (_player?.releaseMode != ReleaseMode.loop) {
+          _isPlaying = false;
+          debugPrint('[BellAlert] Audio completed. Ready for next order.');
+        }
       });
     } catch (e) {
       debugPrint('[BellAlert] _startBell error: $e');

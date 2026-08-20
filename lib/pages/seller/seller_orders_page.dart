@@ -308,7 +308,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               title: '✅ Shop & Rider Ready! Pay Now 💳',
               body:
                   'Both the shop(s) and rider accepted your order. Complete payment within 10 minutes.',
-              data: {'order_id': order.id, 'action': 'pay'},
+              data: {'order_id': order.id, 'action': 'pay', 'role': 'customer'},
             ).then((err) {
               if (err != null && mounted) _showSnack(err, isError: true);
             });
@@ -325,9 +325,20 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           }
 
           // Notify rider: seller is in, customer is paying
-          if (order.deliveryPartnerId != null) {
+          String? riderIdToNotify = order.deliveryPartnerId;
+          if (riderIdToNotify == null) {
+            try {
+              final fresh = await _supabase
+                  .from('orders')
+                  .select('delivery_partner_id')
+                  .eq('id', order.id)
+                  .maybeSingle();
+              riderIdToNotify = fresh?['delivery_partner_id'] as String?;
+            } catch (_) {}
+          }
+          if (riderIdToNotify != null) {
             notifProv.sendBackgroundPush(
-              targetUserId: order.deliveryPartnerId!,
+              targetUserId: riderIdToNotify,
               title: '⌛ Waiting for Customer Payment',
               body:
                   'The shop accepted. Both of you are confirmed — customer is completing payment now.',

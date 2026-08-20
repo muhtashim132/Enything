@@ -913,8 +913,10 @@ class NotificationProvider extends ChangeNotifier {
     if (notification.orderId != null) {
       final isDuplicate = recentItems.any((n) =>
           n.orderId == notification.orderId &&
-          n.title == notification.title &&
-          DateTime.now().difference(n.createdAt).inSeconds < 5);
+          (n.title == notification.title ||
+              n.body == notification.body ||
+              n.id == notification.id) &&
+          DateTime.now().difference(n.createdAt).inSeconds.abs() < 10);
       if (isDuplicate) {
         debugPrint(
             'Skipping duplicate notification for order ${notification.orderId}');
