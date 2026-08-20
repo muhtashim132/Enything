@@ -189,10 +189,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Server-side deduplication check to prevent duplicate push cards
+    // Server-side deduplication check to prevent duplicate push cards (15s TTL)
     const orderId = (data && data.order_id) || (rawBody && rawBody.record && rawBody.record.order_id);
-    const dedupKey = `${user_id}_${orderId ?? ''}_${title}`;
-    if (orderId && isDuplicatePush(dedupKey)) {
+    const dedupKey = orderId ? `${user_id}_${orderId}` : `${user_id}_${title}`;
+    if (isDuplicatePush(dedupKey)) {
       console.log(`[send-push] Deduplicated push skipped for key: ${dedupKey}`);
       return new Response(
         JSON.stringify({ message: 'Duplicate push skipped by server dedup cache', sent: 0 }),
@@ -241,12 +241,13 @@ Deno.serve(async (req: Request) => {
           const channelId = 'enything_urgent_alerts_v5';
           const soundFile = 'enything_bell';
 
-          // CRITICAL: On Android, DATA-ONLY message forces Android OS to wake up
-          // and invoke _fcmBackgroundHandler in Flutter, which fires Full-Screen Intent (FSI),
-          // turns on the screen over lockscreen, rings the bell, and auto-opens the app.
           const message = {
             message: {
               token,
+              notification: {
+                title: String(title),
+                body: String(body),
+              },
               data: {
                 title: String(title),
                 body: String(body),
@@ -257,6 +258,17 @@ Deno.serve(async (req: Request) => {
               },
               android: {
                 priority: 'high',
+                notification: {
+                  title: String(title),
+                  body: String(body),
+                  channel_id: channelId,
+                  sound: soundFile,
+                  default_vibrate_timings: true,
+                  default_sound: false,
+                  notification_priority: 'PRIORITY_MAX',
+                  visibility: 'PUBLIC',
+                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                },
               },
               apns: {
                 headers: {
