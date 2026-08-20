@@ -208,8 +208,9 @@ Deno.serve(async (req: Request) => {
 
     const { data: rows, error: dbErr } = await supabase
       .from('device_tokens')
-      .select('token, role')
-      .eq('user_id', user_id);
+      .select('token, role, updated_at')
+      .eq('user_id', user_id)
+      .order('updated_at', { ascending: false });
 
     if (dbErr) throw dbErr;
     if (!rows || rows.length === 0) {
@@ -218,6 +219,15 @@ Deno.serve(async (req: Request) => {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
+
+    // Deduplicate tokens by token string so multiple rows for same device don't cause duplicate pushes
+    const uniqueMap = new Map<string, any>();
+    for (const r of rows) {
+      if (!uniqueMap.has(r.token)) {
+        uniqueMap.set(r.token, r);
+      }
+    }
+    const uniqueRows = Array.from(uniqueMap.values());
 
     // Parse service account & get OAuth2 token
     const sa = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
@@ -229,7 +239,7 @@ Deno.serve(async (req: Request) => {
     const errors: string[] = [];
 
     // STRESS-TEST FIX: Chunking & Promise.all to prevent Edge Function timeout cascade
-    const tokenChunks = chunkArray(rows, 50);
+    const tokenChunks = chunkArray(uniqueRows, 50);
     for (const batch of tokenChunks) {
       await Promise.all(batch.map(async ({ token, role }) => {
         try {

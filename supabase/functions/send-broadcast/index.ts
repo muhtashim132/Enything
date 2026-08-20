@@ -164,6 +164,22 @@ Deno.serve(async (req: Request) => {
     const notifKeyBase = `broadcast_${Date.now()}`;
     const seenUserIds = new Set<string>(); // Phase 11 Fix: Global deduplication
 
+    // Look up all active delivery partner user IDs to ensure no rider is missed
+    let riderUserIds: string[] = [];
+    if (audience === 'Riders') {
+      try {
+        const { data: dps } = await supabase
+          .from('delivery_partners')
+          .select('id')
+          .eq('is_active', true);
+        if (dps && dps.length > 0) {
+          riderUserIds = dps.map((d: any) => d.id);
+        }
+      } catch (e) {
+        console.error('Failed to fetch rider user ids:', e);
+      }
+    }
+
     // STRESS-TEST FIX: Stream Processing Loop (OOM Protection)
     while (fetchMore) {
       // Phase 10 Fix: Deterministic Keyset Pagination immune to concurrent deletes
@@ -173,7 +189,9 @@ Deno.serve(async (req: Request) => {
           .gt('id', lastId)
           .limit(pageSize);
       
-      if (roleMap[audience]) {
+      if (audience === 'Riders' && riderUserIds.length > 0) {
+        query = query.or(`role.in.(${roleMap['Riders'].join(',')}),user_id.in.(${riderUserIds.join(',')})`);
+      } else if (roleMap[audience]) {
         query = query.inFilter('role', roleMap[audience]);
       }
 

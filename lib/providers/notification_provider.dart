@@ -927,15 +927,18 @@ class NotificationProvider extends ChangeNotifier {
       _notifications.removeRange(0, _notifications.length - 500);
     }
 
-    // Buzz notification in the foreground!
-    NotificationService().showNotification(
-      title: notification.title,
-      body: notification.body,
-      payload: jsonEncode({
-        if (notification.orderId != null) 'order_id': notification.orderId,
-        if (_listeningRole != null) 'role': _listeningRole,
-      }),
-    );
+    // Buzz notification ONLY if the app is in the foreground!
+    // When in background or killed, FCM displays the system push notification.
+    if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      NotificationService().showNotification(
+        title: notification.title,
+        body: notification.body,
+        payload: jsonEncode({
+          if (notification.orderId != null) 'order_id': notification.orderId,
+          if (_listeningRole != null) 'role': _listeningRole,
+        }),
+      );
+    }
 
     _debouncedNotifyListeners();
     _debouncedPersistToDb(notification); // Batch persist to DB
