@@ -34,6 +34,24 @@ let tokenExpirationTime: number = 0;
 
 let tokenRefreshPromise: Promise<string> | null = null;
 
+// ── Server-Side Deduplication Cache (15s TTL) ─────────────────────────────
+const recentPushes = new Map<string, number>();
+
+function isDuplicatePush(key: string): boolean {
+  const now = Date.now();
+  for (const [k, timestamp] of recentPushes.entries()) {
+    if (now - timestamp > 30000) {
+      recentPushes.delete(k);
+    }
+  }
+  const lastTime = recentPushes.get(key);
+  if (lastTime && now - lastTime < 15000) {
+    return true;
+  }
+  recentPushes.set(key, now);
+  return false;
+}
+
 /**
  * Exchange a Firebase Service Account for a short-lived OAuth2 access token
  * that authorises calls to the FCM HTTP v1 API.
@@ -171,6 +189,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Server-side deduplication check to prevent duplicate push cards
+    const orderId = (data && data.order_id) || (rawBody && rawBody.record && rawBody.record.order_id);
+    const dedupKey = `${user_id}_${orderId ?? ''}_${title}`;
+    if (orderId && isDuplicatePush(dedupKey)) {
+      console.log(`[send-push] Deduplicated push skipped for key: ${dedupKey}`);
+      return new Response(
+        JSON.stringify({ message: 'Duplicate push skipped by server dedup cache', sent: 0 }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // Admin Supabase client to read device tokens
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -212,13 +241,12 @@ Deno.serve(async (req: Request) => {
           const channelId = 'enything_bell_channel_v4';
           const soundFile = 'enything_bell';
 
+          // CRITICAL: On Android, DATA-ONLY message forces Android OS to wake up
+          // and invoke _fcmBackgroundHandler in Flutter, which fires Full-Screen Intent (FSI),
+          // turns on the screen over lockscreen, rings the bell, and auto-opens the app.
           const message = {
             message: {
               token,
-              notification: {
-                title: String(title),
-                body: String(body),
-              },
               data: {
                 title: String(title),
                 body: String(body),
@@ -229,17 +257,6 @@ Deno.serve(async (req: Request) => {
               },
               android: {
                 priority: 'high',
-                notification: {
-                  title: String(title),
-                  body: String(body),
-                  channel_id: channelId,
-                  sound: soundFile,
-                  default_vibrate_timings: true,
-                  default_sound: false,
-                  notification_priority: 'PRIORITY_MAX',
-                  visibility: 'PUBLIC',
-                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                },
               },
               apns: {
                 headers: {

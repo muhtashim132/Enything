@@ -158,7 +158,7 @@ Deno.serve(async (req: Request) => {
     const roleMap: Record<string, string[]> = {
       'Customers': ['customer'],
       'Sellers': ['seller'],
-      'Riders': ['delivery_partner', 'delivery', 'rider'],
+      'Riders': ['delivery_partner', 'delivery', 'rider', 'delivery_partners'],
     };
 
     const notifKeyBase = `broadcast_${Date.now()}`;
@@ -206,13 +206,12 @@ Deno.serve(async (req: Request) => {
             const channelId = 'enything_bell_channel_v4';
             const soundFile = 'enything_bell';
 
+            // CRITICAL: On Android, DATA-ONLY message forces Android OS to wake up
+            // and invoke _fcmBackgroundHandler in Flutter, which fires Full-Screen Intent (FSI),
+            // turns on the screen over lockscreen, rings the bell, and auto-opens the app.
             const message = {
               message: {
                 token,
-                notification: {
-                  title: String(title),
-                  body: String(body),
-                },
                 data: {
                   title: String(title),
                   body: String(body),
@@ -221,17 +220,6 @@ Deno.serve(async (req: Request) => {
                 },
                 android: {
                   priority: 'high',
-                  notification: {
-                    title: String(title),
-                    body: String(body),
-                    channel_id: channelId,
-                    sound: soundFile,
-                    default_vibrate_timings: true,
-                    default_sound: false,
-                    notification_priority: 'PRIORITY_MAX',
-                    visibility: 'PUBLIC',
-                    click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                  },
                 },
                 apns: {
                   headers: {

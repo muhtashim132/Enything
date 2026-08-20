@@ -174,11 +174,7 @@ class NotificationProvider extends ChangeNotifier {
       if (token == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      final cachedToken = prefs.getString('fcm_token_$userId');
-      final cachedRole = prefs.getString('fcm_role_$userId');
-      if (cachedToken == token && cachedRole == role) {
-        debugPrint('FCM token and role unchanged, skipping DB upsert');
-      } else {
+      {
         // ── SECURITY FIX: Delete stale cross-user tokens before registering ──
         // If another user was previously logged in on this device, their token
         // row may still exist in device_tokens with the SAME FCM token but a
