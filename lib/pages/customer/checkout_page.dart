@@ -1141,6 +1141,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
               debugPrint('Rider push notification error (non-fatal): $e');
             }
           }
+
+          // Fallback: If no nearby riders were found/matched via PostGIS, broadcast to all active riders
+          if (notifiedRiderIds.isEmpty && exclusiveRiderId == null) {
+            try {
+              final firstOrderId = notificationData.isNotEmpty
+                  ? (notificationData.first['orderId'] as String?)
+                  : null;
+              notifProv.sendBroadcastToAudience(
+                audience: 'Riders',
+                title: '🛵 New Order Available!',
+                body:
+                    'A new delivery order is waiting for acceptance. Tap to accept now!',
+                data: {
+                  'role': 'delivery',
+                  'action': 'new_order',
+                  if (firstOrderId != null) 'order_id': firstOrderId,
+                },
+              );
+              debugPrint('Broadcasted new order notification to all Riders audience.');
+            } catch (e) {
+              debugPrint('Rider fallback broadcast error: $e');
+            }
+          }
         });
       }
       // ─────────────────────────────────────────────────────────────────────────

@@ -339,6 +339,19 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           _showSnack('✅ Your acceptance saved. Waiting for a delivery partner.',
               isError: false);
 
+          // Broadcast to Riders that shop has accepted and rider is needed
+          notifProv.sendBroadcastToAudience(
+            audience: 'Riders',
+            title: '🛵 Order Ready to Accept!',
+            body:
+                'A shop accepted an order. Tap to accept delivery now!',
+            data: {
+              'role': 'delivery',
+              'action': 'new_order',
+              'order_id': order.id,
+            },
+          );
+
           // Notify customer that shop accepted, waiting for rider
           notifProv.sendBackgroundPush(
             targetUserId: order.customerId,

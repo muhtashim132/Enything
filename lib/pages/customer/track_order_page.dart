@@ -2087,6 +2087,49 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           behavior: SnackBarBehavior.floating,
         ));
 
+        // Notify seller(s) and rider of confirmed payment
+        final notifProv = context.read<NotificationProvider>();
+        final ordersToNotify = _groupOrders.isNotEmpty
+            ? _groupOrders
+            : (_order != null ? [_order!] : <OrderModel>[]);
+        for (final o in ordersToNotify) {
+          if (o.shopId != null) {
+            _supabase
+                .from('shops')
+                .select('seller_id')
+                .eq('id', o.shopId!)
+                .maybeSingle()
+                .then((shopData) {
+              if (shopData != null && shopData['seller_id'] != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: shopData['seller_id'] as String,
+                  title: '💳 Payment Received! Start Preparing 👨‍🍳',
+                  body:
+                      'Customer payment confirmed for Order. Pack the items now!',
+                  data: {
+                    'order_id': o.id,
+                    'role': 'seller',
+                    'action': 'start_preparing',
+                  },
+                );
+              }
+            }).catchError((_) => null);
+          }
+          if (o.deliveryPartnerId != null) {
+            notifProv.sendBackgroundPush(
+              targetUserId: o.deliveryPartnerId!,
+              title: '💳 Payment Done! Go Pick Up 🛵',
+              body:
+                  'Customer payment is complete. Head to the shop to pick up the order!',
+              data: {
+                'order_id': o.id,
+                'role': 'delivery',
+                'action': 'pickup_order',
+              },
+            ).catchError((_) => null);
+          }
+        }
+
         _fetchOrder(); // Fetch fresh data to ensure UI sync
       }
     } catch (e) {

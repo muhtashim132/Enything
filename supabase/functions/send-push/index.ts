@@ -212,10 +212,6 @@ Deno.serve(async (req: Request) => {
           const message = {
             message: {
               token,
-              notification: {
-                title: String(title),
-                body: String(body),
-              },
               data: {
                 title: String(title),
                 body: String(body),
@@ -226,15 +222,6 @@ Deno.serve(async (req: Request) => {
               },
               android: {
                 priority: 'high',
-                notification: {
-                  channel_id: channelId,
-                  sound: soundFile,
-                  notification_priority: 'PRIORITY_MAX',
-                  visibility: 'PUBLIC',
-                  default_sound: false,
-                  default_vibrate_timings: true,
-                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                },
               },
               apns: {
                 headers: {
@@ -243,8 +230,8 @@ Deno.serve(async (req: Request) => {
                 payload: {
                   aps: {
                     alert: {
-                      title: title,
-                      body: body,
+                      title: String(title),
+                      body: String(body),
                     },
                     sound: soundFile ? `${soundFile}.wav` : 'default',
                     badge: 1,

@@ -332,7 +332,14 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       role == 'delivery' ||
       role == 'seller' ||
       role == 'delivery_partner' ||
-      action == 'new_order');
+      action == 'new_order' ||
+      action == 'start_preparing' ||
+      action == 'pickup_order' ||
+      title.toLowerCase().contains('new order') ||
+      title.toLowerCase().contains('accept now') ||
+      title.toLowerCase().contains('payment done') ||
+      title.toLowerCase().contains('payment received') ||
+      title.toLowerCase().contains('order ready'));
   const String channelId = 'enything_bell_channel_v4';
   const String channelName = 'Enything Order Alerts';
   const String channelDesc =

@@ -196,7 +196,7 @@ class NotificationService {
       'Enything Order Alerts',
       channelDescription: 'Push notifications for orders and updates',
       importance: Importance.max,
-      priority: Priority.high,
+      priority: Priority.max,
       playSound: true,
       sound: RawResourceAndroidNotificationSound('enything_bell'),
       enableVibration: true,
