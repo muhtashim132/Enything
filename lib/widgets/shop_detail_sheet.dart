@@ -739,7 +739,7 @@ class _SheetContentState extends State<_SheetContent> {
                       final itemWidth = (availableWidth -
                               (crossAxisSpacing * (crossAxisCount - 1))) /
                           crossAxisCount;
-                      final itemHeight = itemWidth + 128;
+                      final itemHeight = itemWidth + 114;
                       final childAspectRatio = itemWidth / itemHeight;
 
                       return SliverGrid(
