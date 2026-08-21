@@ -941,7 +941,17 @@ class NotificationProvider extends ChangeNotifier {
     }
 
     _debouncedNotifyListeners();
-    _debouncedPersistToDb(notification); // Batch persist to DB
+
+    // Persist to DB — BUT skip order-related notifications.
+    // Order notifications (orderId != null) already get a direct
+    // sendBackgroundPush() call from the calling page (checkout_page,
+    // seller_orders_page, etc.). Persisting them to DB fires the
+    // trigger_send_push webhook → send-push Edge Function → SECOND FCM push.
+    // Non-order notifications (admin broadcasts, KYC alerts) don't get
+    // direct pushes, so they still persist and trigger the webhook path.
+    if (notification.orderId == null) {
+      _debouncedPersistToDb(notification); // Batch persist to DB
+    }
   }
 
   // ── DB Persistence Helpers ────────────────────────────────────────────────

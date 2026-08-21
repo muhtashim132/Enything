@@ -84,11 +84,11 @@
         <!-- Firebase App Check: In debug builds, use the debug provider automatically.
              No secret needed in the manifest — see Firebase Console > App Check > Debug tokens. -->
 
-        <!-- Default FCM notification channel — routes all FCM pushes through
-             enything_bell_channel which plays the custom enything_bell.wav sound. -->
+        <!-- Default FCM notification channel — safety net for any notification+data
+             messages. Must match the channel created in notification_service.dart. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="enything_bell_channel_v4"/>
+            android:value="enything_urgent_alerts_v5"/>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_color"/>

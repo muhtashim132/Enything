@@ -224,13 +224,12 @@ Deno.serve(async (req: Request) => {
             const channelId = 'enything_urgent_alerts_v5';
             const soundFile = 'enything_bell';
 
+            // DATA-ONLY MESSAGE: No top-level `notification` field.
+            // Ensures Android routes through _fcmBackgroundHandler for
+            // proper channel, sound, FSI control.
             const message = {
               message: {
                 token,
-                notification: {
-                  title: String(title),
-                  body: String(body),
-                },
                 data: {
                   title: String(title),
                   body: String(body),
@@ -239,21 +238,11 @@ Deno.serve(async (req: Request) => {
                 },
                 android: {
                   priority: 'high',
-                  notification: {
-                    title: String(title),
-                    body: String(body),
-                    channel_id: channelId,
-                    sound: soundFile,
-                    default_vibrate_timings: true,
-                    default_sound: false,
-                    notification_priority: 'PRIORITY_MAX',
-                    visibility: 'PUBLIC',
-                    click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                  },
                 },
                 apns: {
                   headers: {
                     'apns-priority': '10',
+                    'apns-push-type': 'alert',
                   },
                   payload: {
                     aps: {
@@ -264,6 +253,7 @@ Deno.serve(async (req: Request) => {
                       sound: soundFile ? `${soundFile}.wav` : 'default',
                       badge: 1,
                       'mutable-content': 1,
+                      'content-available': 1,
                     },
                   },
                 },
