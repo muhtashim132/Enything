@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -340,20 +341,30 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       title.toLowerCase().contains('payment done') ||
       title.toLowerCase().contains('payment received') ||
       title.toLowerCase().contains('order ready'));
-  const String channelId = 'enything_urgent_alerts_v5';
-  const String channelName = 'Enything Urgent Alerts';
+
+  const String channelId = 'enything_urgent_order_v1';
+  const String channelName = 'Enything Urgent Orders';
   const String channelDesc =
       'Urgent order notifications with screen wake up and alarm sound';
 
+  // Clean up legacy channels so fresh alarm audio attributes take effect
+  try {
+    await androidPlugin?.deleteNotificationChannel('enything_urgent_alerts_v5');
+    await androidPlugin?.deleteNotificationChannel('enything_bell_channel_v4');
+    await androidPlugin?.deleteNotificationChannel('order_alert_bell_channel');
+  } catch (_) {}
+
   await androidPlugin?.createNotificationChannel(
-    const AndroidNotificationChannel(
+    AndroidNotificationChannel(
       channelId,
       channelName,
       description: channelDesc,
       importance: Importance.max, // max = heads-up + FSI support
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('enything_bell'),
+      sound: const RawResourceAndroidNotificationSound('enything_bell'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
       enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
       enableLights: true,
       showBadge: true,
     ),
@@ -369,11 +380,13 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
     sound: const RawResourceAndroidNotificationSound('enything_bell'),
     audioAttributesUsage: AudioAttributesUsage.alarm,
     enableVibration: true,
+    vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
     fullScreenIntent:
         isUrgent, // THIS WAKES THE SCREEN AND BYPASSES LOCKSCREEN!
     category: AndroidNotificationCategory.alarm,
     visibility: NotificationVisibility.public,
     icon: '@mipmap/ic_launcher',
+    ticker: 'New Order Available!',
     timeoutAfter: isUrgent ? 180000 : null, // 3 minutes acceptance window
     actions: isUrgent
         ? <AndroidNotificationAction>[
@@ -385,8 +398,13 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
         : null,
   );
 
+  // Deterministic Notification ID: prevents duplicate cards in shade
+  final int notifId = orderId != null
+      ? orderId.hashCode
+      : (title.hashCode ^ (role?.hashCode ?? 0));
+
   await plugin.show(
-    orderId?.hashCode ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    notifId,
     title,
     body,
     NotificationDetails(

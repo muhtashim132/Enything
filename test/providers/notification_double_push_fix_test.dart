@@ -187,16 +187,16 @@ void main() {
 
   group('📋 AndroidManifest — Channel Reference Fix', () {
     test(
-        'Default FCM channel matches notification_service.dart channel (v5)',
+        'Default FCM channel matches notification_service.dart channel (v1)',
         () {
       final manifest =
           File('${Directory.current.path}/android/app/src/main/AndroidManifest.xml')
               .readAsStringSync();
 
-      // Must reference v5, NOT the stale v4
-      expect(manifest.contains('enything_urgent_alerts_v5'), true,
+      // Must reference enything_urgent_order_v1
+      expect(manifest.contains('enything_urgent_order_v1'), true,
           reason:
-              'AndroidManifest default channel must be enything_urgent_alerts_v5');
+              'AndroidManifest default channel must be enything_urgent_order_v1');
       expect(manifest.contains('enything_bell_channel_v4'), false,
           reason:
               'AndroidManifest must NOT reference stale enything_bell_channel_v4');
@@ -231,14 +231,14 @@ void main() {
     });
 
     test(
-        'Background handler uses correct channel enything_urgent_alerts_v5',
+        'Background handler uses correct channel enything_urgent_order_v1',
         () {
       final mainFile =
           File('${Directory.current.path}/lib/main.dart').readAsStringSync();
 
-      expect(mainFile.contains("'enything_urgent_alerts_v5'"), true,
+      expect(mainFile.contains("'enything_urgent_order_v1'"), true,
           reason:
-              'Background handler must use enything_urgent_alerts_v5 channel');
+              'Background handler must use enything_urgent_order_v1 channel');
     });
 
     test('Background handler has fullScreenIntent for urgent notifications',
@@ -293,15 +293,15 @@ void main() {
     });
 
     test(
-        'notification_service.dart creates enything_urgent_alerts_v5 channel',
+        'notification_service.dart creates enything_urgent_order_v1 channel',
         () {
       final serviceFile = File(
               '${Directory.current.path}/lib/services/notification_service.dart')
           .readAsStringSync();
 
-      expect(serviceFile.contains("'enything_urgent_alerts_v5'"), true,
+      expect(serviceFile.contains("'enything_urgent_order_v1'"), true,
           reason:
-              'NotificationService must create the v5 channel that background handler uses');
+              'NotificationService must create the enything_urgent_order_v1 channel that background handler uses');
     });
 
     test('Bell alert service is NOT affected by changes', () {

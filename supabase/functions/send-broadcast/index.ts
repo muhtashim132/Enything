@@ -216,12 +216,21 @@ Deno.serve(async (req: Request) => {
         tokenExp = Date.now() + 3500 * 1000;
       }
 
+      // Deduplicate tokens so each physical device receives exactly 1 push notification
+      const uniqueTokensMap = new Map<string, any>();
+      for (const r of rows) {
+        if (r.token && !uniqueTokensMap.has(r.token)) {
+          uniqueTokensMap.set(r.token, r);
+        }
+      }
+      const uniqueRows = Array.from(uniqueTokensMap.values());
+
       // 1. Dispatch Push Notifications for this page concurrently
-      const tokenChunks = chunkArray(rows, 50);
+      const tokenChunks = chunkArray(uniqueRows, 50);
       for (const batch of tokenChunks) {
         await Promise.all(batch.map(async ({ token }) => {
           try {
-            const channelId = 'enything_urgent_alerts_v5';
+            const channelId = 'enything_urgent_order_v1';
             const soundFile = 'enything_bell';
 
             // DATA-ONLY MESSAGE: No top-level `notification` field.
@@ -289,34 +298,6 @@ Deno.serve(async (req: Request) => {
             pushError(String(e));
           }
         }));
-      }
-
-      // 2. Build Insert Payload (Deduplicated globally to prevent OOM and Pixel Overloading)
-      const notifPayload = [];
-      for (const r of rows) {
-        const uid = r.user_id;
-        if (uid && !seenUserIds.has(uid)) {
-          seenUserIds.add(uid);
-          notifPayload.push({
-            user_id: uid,
-            title: title,
-            body: body,
-            // STRESS-TEST FIX: Prevent Postgres cross-chunk unique constraint failures without global memory state
-            notif_key: `${notifKeyBase}_${crypto.randomUUID().substring(0, 8)}`,
-          });
-        }
-      }
-
-      // 3. Insert Database History for this page
-      if (notifPayload.length > 0) {
-        const notifChunks = chunkArray(notifPayload, 1000); // theoretically already <= 1000
-        for (const chunk of notifChunks) {
-          const { error: insertErr } = await supabase.from('notifications').insert(chunk);
-          if (insertErr) {
-            pushError(`DB Insert Error: ${JSON.stringify(insertErr)}`);
-            // Continue; history insert failure shouldn't crash the next page's dispatch
-          }
-        }
       }
 
       // 4. Advance Cursor or Stop

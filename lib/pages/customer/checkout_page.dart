@@ -1065,34 +1065,27 @@ class _CheckoutPageState extends State<CheckoutPage> {
           if (!data['isMagic']) {
             context.read<NotificationProvider>().sendBackgroundPush(
               targetUserId: data['shop'].sellerId,
-              title: '🔔 New Order! Accept now',
+              title: '🔔 New Order!',
               body:
                   'Order ₹${((data['grandTotal'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 3 min window.',
-              data: {'order_id': data['orderId'], 'role': 'seller'},
+              data: {
+                'order_id': data['orderId'],
+                'role': 'seller',
+                'action': 'new_order',
+              },
             );
           }
         }
       }
 
-      // ── Bug #3 FIX: Notify nearby online riders about the new order ─────────
-      // Previously, riders had NO push notification when a new order appeared.
-      // They relied entirely on a 30-second polling timer (which only works when
-      // the app is open). With this fix, riders get a buzz notification even when
-      // their app is completely killed.
-      //
-      // We fire-and-forget this in a separate unawaited Future so it never
-      // blocks or delays the user's navigation to TrackOrderPage.
+      // ── Bug #3 FIX: Notify riders about the new order ────────────────────────
+      // Dispatches push notification to online riders so their device buzzes
+      // with enything_bell even when their app is killed.
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
-        final configRadius =
-            PlatformConfigProvider.instance?.riderNotificationRadiusKm ?? 15.0;
 
-        // Collect unique shop locations to query riders near each shop.
-        // For multi-shop carts, we notify riders near ALL shops so none is missed.
         Future(() async {
-          final notifiedRiderIds = <String>{};
-
-          // FIX 1: Exclusive Rider Affinity check
+          // FIX 1: Exclusive Rider Affinity check for replacement orders
           String? exclusiveRiderId;
           if (isReplacementOrder) {
             try {
@@ -1112,80 +1105,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
             }
           }
 
-          for (final data in notificationData) {
-            if (data['isMagic'] as bool) continue; // Skip test orders
-            final shop = data['shop'] as dynamic;
-            final shopLat = shop.location.latitude as double;
-            final shopLng = shop.location.longitude as double;
-
-            // Skip shops with no location (data integrity guard)
-            if (shopLat == 0.0 && shopLng == 0.0) continue;
-
-            if (exclusiveRiderId != null) {
-              if (!notifiedRiderIds.contains(exclusiveRiderId)) {
-                notifiedRiderIds.add(exclusiveRiderId);
-                notifProv.sendBackgroundPush(
-                  targetUserId: exclusiveRiderId,
-                  title: '🆕 Shop Replacement Added!',
-                  body:
-                      'The customer replaced a shop in your active delivery! Open the app to accept it.',
-                  data: {
-                    'role': 'delivery',
-                    'action': 'new_order',
-                    'order_id': data['orderId'] as String,
-                  },
-                );
-              }
-              continue;
-            }
-
-            try {
-              // Query nearby online riders using the additive RPC
-              final nearbyRiders = await supabase.rpc(
-                'get_nearby_online_riders',
-                params: {
-                  'p_shop_lat': shopLat,
-                  'p_shop_lng': shopLng,
-                  'p_radius_km': configRadius,
-                },
-              ) as List?;
-
-              if (nearbyRiders == null) continue;
-
-              for (final row in nearbyRiders) {
-                final riderId = row['rider_id'] as String?;
-                if (riderId == null) continue;
-                if (notifiedRiderIds.contains(riderId)) continue; // Dedup
-                notifiedRiderIds.add(riderId);
-
-                // Fire-and-forget individual pushes to each nearby rider
-                notifProv.sendBackgroundPush(
-                  targetUserId: riderId,
-                  title: '🛵 New Order Nearby!',
-                  body:
-                      'A new order is available near you. Open the app to accept it.',
-                  data: {
-                    'role': 'delivery',
-                    'action': 'new_order',
-                    'order_id': data['orderId'] as String,
-                  },
-                );
-              }
-            } catch (e) {
-              // Non-critical: log and continue — never block the order flow
-              debugPrint('Rider push notification error (non-fatal): $e');
-            }
-          }
-
-          // ALWAYS broadcast to all active riders as a guaranteed safety net.
-          // The nearby-rider pushes above fire first for faster delivery, but
-          // this broadcast ensures NO rider is ever missed due to:
-          //   - NULL location in delivery_partners
-          //   - verification_status mismatch ('verified' vs 'approved')
-          //   - PostGIS/RPC failures
-          // The send-push Edge Function's server-side dedup cache (15s TTL)
-          // prevents riders who already got a nearby push from seeing duplicates.
-          if (exclusiveRiderId == null) {
+          if (exclusiveRiderId != null) {
+            final firstOrderId = notificationData.isNotEmpty
+                ? (notificationData.first['orderId'] as String?)
+                : null;
+            notifProv.sendBackgroundPush(
+              targetUserId: exclusiveRiderId,
+              title: '🆕 Shop Replacement Added!',
+              body:
+                  'The customer replaced a shop in your active delivery! Open the app to accept it.',
+              data: {
+                'role': 'delivery',
+                'action': 'new_order',
+                if (firstOrderId != null) 'order_id': firstOrderId,
+              },
+            );
+          } else {
+            // Broadcast to all active delivery partners
             try {
               final firstOrderId = notificationData.isNotEmpty
                   ? (notificationData.first['orderId'] as String?)

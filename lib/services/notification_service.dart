@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -97,21 +98,30 @@ class NotificationService {
         _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
+    // Clean up stale channels to ensure fresh AudioAttributes are applied
+    try {
+      await androidPlugin?.deleteNotificationChannel('enything_urgent_alerts_v5');
+      await androidPlugin?.deleteNotificationChannel('enything_bell_channel_v4');
+      await androidPlugin?.deleteNotificationChannel('order_alert_bell_channel');
+    } catch (_) {}
+
     // CRITICAL: Create the order alert bell channel — used for all foreground
-    // buzz notifications for sellers, riders, and customers.
+    // and background buzz notifications for sellers, riders, and customers.
     // Sound: enything_bell.wav from android/app/src/main/res/raw/
-    // NOTE: Channel sound is locked on first creation on a device (Android OS
-    // limitation). A fresh channel name guarantees the WAV is applied correctly.
+    // audioAttributesUsage: alarm ensures full volume & bypasses silent modes
     await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        'enything_urgent_alerts_v5',
-        'Order Alert Bell',
+      AndroidNotificationChannel(
+        'enything_urgent_order_v1',
+        'Enything Urgent Orders',
         description:
-            'Custom bell sound for order notifications (Enything Bell)',
+            'Urgent order notifications with screen wake up and alarm sound',
         importance: Importance.max,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('enything_bell'),
+        sound: const RawResourceAndroidNotificationSound('enything_bell'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
         enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
+        enableLights: true,
         showBadge: true,
       ),
     );
@@ -191,15 +201,17 @@ class NotificationService {
     // Use enything_bell_channel_v2 which has the custom enything_bell.wav sound.
     // This ensures ALL in-app buzz notifications (sellers, riders, customers)
     // play the Enything Bell regardless of role.
-    const androidDetails = AndroidNotificationDetails(
-      'enything_urgent_alerts_v5',
-      'Enything Order Alerts',
+    final androidDetails = AndroidNotificationDetails(
+      'enything_urgent_order_v1',
+      'Enything Urgent Orders',
       channelDescription: 'Push notifications for orders and updates',
       importance: Importance.max,
       priority: Priority.max,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('enything_bell'),
+      sound: const RawResourceAndroidNotificationSound('enything_bell'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
       enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
       fullScreenIntent: true,
       category: AndroidNotificationCategory.alarm,
       visibility: NotificationVisibility.public,
@@ -216,13 +228,24 @@ class NotificationService {
       interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
-    const platformDetails = NotificationDetails(
+    final platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
+    // Parse order_id from payload for deterministic notification ID
+    int notifId = DateTime.now().millisecondsSinceEpoch % 100000;
+    if (payload != null) {
+      try {
+        final data = jsonDecode(payload) as Map<String, dynamic>;
+        if (data['order_id'] != null) {
+          notifId = (data['order_id'] as String).hashCode;
+        }
+      } catch (_) {}
+    }
+
     await _flutterLocalNotificationsPlugin.show(
-      DateTime.now().millisecondsSinceEpoch % 100000,
+      notifId,
       title,
       body,
       platformDetails,

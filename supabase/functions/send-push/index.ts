@@ -248,7 +248,7 @@ Deno.serve(async (req: Request) => {
                            String(title).toLowerCase().includes('new order') ||
                            String(title).toLowerCase().includes('payment done');
                                        
-          const channelId = 'enything_urgent_alerts_v5';
+          const channelId = 'enything_urgent_order_v1';
           const soundFile = 'enything_bell';
 
           // DATA-ONLY MESSAGE: No top-level `notification` field.
