@@ -54,46 +54,16 @@ void main() {
     });
   });
 
-  group('📱 FCM Payload — Data-Only Message Validation', () {
-    test('send-push FCM payload has NO notification field (data-only)', () {
-      // Read the actual Edge Function file and verify no `notification:` at
-      // the top-level of the message object.
+  group('📱 FCM Payload — Notification + Data Payload Validation', () {
+    test('send-push FCM payload has notification and android.notification for closed app delivery', () {
       final sendPushFile = File(
               '${Directory.current.path}/supabase/functions/send-push/index.ts')
           .readAsStringSync();
 
-      // Verify the DATA-ONLY comment exists (our fix marker)
-      expect(sendPushFile.contains('DATA-ONLY MESSAGE'), true,
-          reason: 'send-push should have DATA-ONLY MESSAGE comment');
-
-      // Verify the top-level message object does NOT have a standalone
-      // `notification:` key that would cause Android auto-display.
-      // We search for the exact pattern that was the bug: `notification: {`
-      // appearing as a direct child of the `message:` object (not inside apns.payload.aps).
-      //
-      // The old code had:
-      //   message: { token, notification: { title, body }, data: {...}, android: {...} }
-      //
-      // The new code has:
-      //   message: { token, data: {...}, android: {...}, apns: {...} }
-      //
-      // We verify by checking the message construction block does NOT contain
-      // `notification:` between `token,` and `data:`.
-      final messageBlock = _extractMessageBlock(sendPushFile);
-      expect(messageBlock, isNotNull,
-          reason: 'Should find message construction block');
-
-      // The message block should NOT contain a standalone `notification:` key
-      // (Note: `apns.payload.aps.alert` is fine — that's iOS-specific)
-      final hasTopLevelNotification = RegExp(
-              r'token,\s*\n\s*notification\s*:', // notification immediately after token
-              multiLine: true)
-          .hasMatch(messageBlock!);
-      expect(hasTopLevelNotification, false,
-          reason:
-              'FCM message must NOT have top-level notification field (data-only)');
-
-      // Verify `data:` block exists with title/body (check full file for robustness)
+      expect(sendPushFile.contains('channel_id: channelId'), true,
+          reason: 'send-push should target channelId');
+      expect(sendPushFile.contains('sound: soundFile'), true,
+          reason: 'send-push should configure custom sound');
       expect(sendPushFile.contains("data: {"), true,
           reason: 'FCM message must have data block');
       expect(sendPushFile.contains("title: String(title)"), true,
@@ -132,47 +102,18 @@ void main() {
           reason:
               'APNs must have apns-push-type: alert for proper iOS routing');
     });
-
-    test('send-push does NOT have android.notification block', () {
-      final sendPushFile = File(
-              '${Directory.current.path}/supabase/functions/send-push/index.ts')
-          .readAsStringSync();
-
-      final messageBlock = _extractMessageBlock(sendPushFile);
-
-      // The old code had `android: { priority: 'high', notification: { ... } }`
-      // The new code has `android: { priority: 'high' }` — no notification sub-block
-      final hasAndroidNotification = RegExp(
-              r'android:\s*\{[^}]*notification\s*:', // notification inside android block
-              multiLine: true,
-              dotAll: true)
-          .hasMatch(messageBlock!);
-      expect(hasAndroidNotification, false,
-          reason:
-              'android block must NOT contain notification sub-block (channel/sound is controlled by background handler)');
-    });
   });
 
-  group('📱 send-broadcast — Same Data-Only Fix Applied', () {
-    test('send-broadcast FCM payload has NO notification field', () {
+  group('📱 send-broadcast — Notification Payload Validation', () {
+    test('send-broadcast FCM payload has channel and sound configured', () {
       final file = File(
               '${Directory.current.path}/supabase/functions/send-broadcast/index.ts')
           .readAsStringSync();
 
-      expect(file.contains('DATA-ONLY MESSAGE'), true,
-          reason: 'send-broadcast should have DATA-ONLY MESSAGE comment');
-
-      // Verify no top-level notification in the message construction
-      final messageBlock = _extractBroadcastMessageBlock(file);
-      expect(messageBlock, isNotNull);
-
-      final hasTopLevelNotification = RegExp(
-              r'token,\s*\n\s*notification\s*:',
-              multiLine: true)
-          .hasMatch(messageBlock!);
-      expect(hasTopLevelNotification, false,
-          reason:
-              'send-broadcast must also use data-only messages');
+      expect(file.contains('channel_id: channelId'), true,
+          reason: 'send-broadcast should configure channel_id');
+      expect(file.contains('sound: soundFile'), true,
+          reason: 'send-broadcast should configure sound');
     });
 
     test('send-broadcast has content-available for iOS', () {

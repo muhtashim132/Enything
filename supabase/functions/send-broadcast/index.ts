@@ -233,12 +233,13 @@ Deno.serve(async (req: Request) => {
             const channelId = 'enything_urgent_order_v1';
             const soundFile = 'enything_bell';
 
-            // DATA-ONLY MESSAGE: No top-level `notification` field.
-            // Ensures Android routes through _fcmBackgroundHandler for
-            // proper channel, sound, FSI control.
             const message = {
               message: {
                 token,
+                notification: {
+                  title: String(title),
+                  body: String(body),
+                },
                 data: {
                   title: String(title),
                   body: String(body),
@@ -247,6 +248,16 @@ Deno.serve(async (req: Request) => {
                 },
                 android: {
                   priority: 'high',
+                  notification: {
+                    title: String(title),
+                    body: String(body),
+                    channel_id: channelId,
+                    sound: soundFile,
+                    notification_priority: 'PRIORITY_MAX',
+                    visibility: 'PUBLIC',
+                    default_sound: false,
+                    click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                  },
                 },
                 apns: {
                   headers: {
