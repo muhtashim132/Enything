@@ -8,6 +8,7 @@ import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
+import '../widgets/3d/perspective_card.dart';
 import '../utils/delivery_calculator.dart';
 
 class ShopCard extends StatefulWidget {
@@ -21,8 +22,6 @@ class ShopCard extends StatefulWidget {
 }
 
 class _ShopCardState extends State<ShopCard> {
-  bool _isPressed = false;
-
   ShopModel get shop => widget.shop;
   VoidCallback get onTap => widget.onTap;
 
@@ -121,31 +120,23 @@ class _ShopCardState extends State<ShopCard> {
     final isOpen = shop.isOpenRightNow;
     final highlight = _categoryHighlightText();
 
-    return GestureDetector(
+    return PerspectiveCard(
       onTap: onTap,
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
-      child: AnimatedScale(
-        scale: _isPressed
-            ? PremiumAnimations.pressedScale
-            : PremiumAnimations.normalScale,
-        duration: PremiumAnimations.fast,
-        curve: PremiumAnimations.defaultCurve,
-        child: AnimatedContainer(
-          duration: PremiumAnimations.normal,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurface : Colors.white,
-            borderRadius: PremiumRadius.largeBorder,
-            border: isDark
-                ? Border.all(color: Colors.white.withValues(alpha: 0.07))
-                : null,
-            boxShadow:
-                PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      borderRadius: PremiumRadius.large,
+      maxTiltAngle: 0.05,
+      pressScale: 0.98,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: PremiumRadius.largeBorder,
+          border: isDark
+              ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+              : null,
+          boxShadow: PremiumShadows.card(isDark: isDark),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               // ── Header image strip ─────────────────────────────────────
               Expanded(
                 child: Stack(
@@ -504,9 +495,8 @@ class _ShopCardState extends State<ShopCard> {
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   Widget _headerPlaceholder(List<Color> colors) {
     return Container(

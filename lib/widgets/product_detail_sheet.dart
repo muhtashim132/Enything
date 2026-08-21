@@ -14,6 +14,7 @@ import 'common/sheet_skeleton_loader.dart';
 import '../utils/delivery_calculator.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
+import '../theme/sensory_haptics.dart';
 
 import '../config/app_categories.dart';
 import '../config/routes.dart';
@@ -82,6 +83,23 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     _fetchProduct();
   }
 
+  void _scrollToVariants({int retries = 4}) {
+    if (!mounted || !widget.highlightVariants) return;
+    Future.delayed(const Duration(milliseconds: 320), () {
+      if (!mounted) return;
+      if (_variantKey.currentContext != null) {
+        Scrollable.ensureVisible(
+          _variantKey.currentContext!,
+          duration: const Duration(milliseconds: 550),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.18,
+        );
+      } else if (retries > 0) {
+        _scrollToVariants(retries: retries - 1);
+      }
+    });
+  }
+
   Future<void> _fetchProduct() async {
     try {
       final productData = await _supabase
@@ -122,14 +140,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         });
 
         if (widget.highlightVariants && product.variants.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_variantKey.currentContext != null) {
-              Scrollable.ensureVisible(_variantKey.currentContext!,
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.easeInOut,
-                  alignment: 0.3);
-            }
-          });
+          _scrollToVariants();
         }
         // Track recently viewed (non-blocking, fire-and-forget)
         context.read<RecentlyViewedProvider>().addProduct(product.id);
@@ -151,11 +162,11 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           child: const SizedBox.expand(),
         ),
         DraggableScrollableSheet(
-          initialChildSize: 0.65,
+          initialChildSize: widget.highlightVariants ? 0.88 : 0.65,
           minChildSize: 0.4,
           maxChildSize: 1.0,
           snap: true,
-          snapSizes: const [0.65, 1.0],
+          snapSizes: const [0.65, 0.88, 1.0],
           builder: (context, scrollController) {
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -180,11 +191,20 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                             isDark: isDark,
                             selectedVariant: _selectedVariant,
                             onVariantChanged: (v) {
+                              SensoryHaptics.selection();
                               setState(() => _selectedVariant = v);
                               if (_pageController.hasClients) {
                                 _pageController.animateToPage(0,
                                     duration: const Duration(milliseconds: 300),
                                     curve: Curves.easeInOut);
+                              }
+                              // 100x UX: When selecting a variant, smoothly scroll back up to the top where the image and title are
+                              if (scrollController.hasClients) {
+                                scrollController.animateTo(
+                                  0.0,
+                                  duration: const Duration(milliseconds: 480),
+                                  curve: Curves.easeOutCubic,
+                                );
                               }
                             },
                             highlightVariants: widget.highlightVariants,

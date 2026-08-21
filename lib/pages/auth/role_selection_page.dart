@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../config/routes.dart';
+import '../../widgets/3d/perspective_card.dart';
+import '../../theme/sensory_haptics.dart';
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({super.key});
@@ -448,14 +450,20 @@ class _AnimatedRoleCard extends StatelessWidget {
         scale: anim.value,
         child: Opacity(opacity: anim.value.clamp(0.0, 1.0), child: child),
       ),
-      child: GestureDetector(
-        onTap: onTap,
+      child: PerspectiveCard(
+        onTap: () {
+          SensoryHaptics.medium();
+          onTap();
+        },
+        borderRadius: 22,
+        maxTiltAngle: 0.07,
+        pressScale: 0.97,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: selected
-                ? accentColor.withValues(alpha: 0.14)
+                ? accentColor.withValues(alpha: 0.16)
                 : Colors.white.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
@@ -466,8 +474,8 @@ class _AnimatedRoleCard extends StatelessWidget {
             boxShadow: selected
                 ? [
                     BoxShadow(
-                        color: accentColor.withValues(alpha: 0.22),
-                        blurRadius: 20,
+                        color: accentColor.withValues(alpha: 0.32),
+                        blurRadius: 22,
                         offset: const Offset(0, 6))
                   ]
                 : [],
@@ -481,12 +489,12 @@ class _AnimatedRoleCard extends StatelessWidget {
                 height: 60,
                 decoration: BoxDecoration(
                   color: selected
-                      ? accentColor.withValues(alpha: 0.20)
+                      ? accentColor.withValues(alpha: 0.22)
                       : Colors.white.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: selected
-                        ? accentColor.withValues(alpha: 0.40)
+                        ? accentColor.withValues(alpha: 0.45)
                         : Colors.white.withValues(alpha: 0.08),
                   ),
                 ),

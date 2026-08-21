@@ -26,6 +26,7 @@ import '../../models/shop_model.dart';
 import 'dart:math' as math;
 
 import '../../widgets/coupon_input_widget.dart';
+import '../../widgets/common/slide_to_action.dart';
 import '../../utils/haptic_utils.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -1254,6 +1255,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cart = context.watch<CartProvider>();
     final location = context.watch<LocationProvider>();
     final couponProv = context.watch<CouponProvider>();
@@ -1809,49 +1811,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.ctaGradient,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.secondary.withValues(alpha: 0.4),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: _isProcessing,
-                    builder: (context, isProcessing, _) {
-                      return ElevatedButton(
-                        onPressed: isProcessing ? null : _placeOrder,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: isProcessing
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2.5),
-                              )
-                            : Text(
-                                'CONFIRM ORDER',
-                                style: GoogleFonts.outfit(
-                                    fontSize: 16,
-                                    height: 1.2,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700),
-                              ),
-                      );
-                    },
-                  ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: _isProcessing,
+                  builder: (context, isProcessing, _) {
+                    return SlideToAction(
+                      label: 'Slide to Place Order • ₹${total.toStringAsFixed(0)}',
+                      onConfirmed: _placeOrder,
+                      isLoading: isProcessing,
+                      enabled: !isProcessing,
+                      isDark: isDark,
+                      activeTrackColor: AppColors.secondary,
+                      height: 56,
+                      borderRadius: 16,
+                    );
+                  },
                 ),
               ],
             ),

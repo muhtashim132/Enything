@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../utils/responsive_layout.dart';
 import '../../providers/cart_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/sensory_haptics.dart';
 import '../../config/routes.dart';
 import '../../config/route_observer.dart';
 
@@ -674,6 +675,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
     final isSelected = overrideSelected ?? _navIndex == index;
     return GestureDetector(
       onTap: () {
+        SensoryHaptics.selection();
         if (_navIndex == 0 && index == 0) {
           _homeKey.currentState?.resetToHome();
         }

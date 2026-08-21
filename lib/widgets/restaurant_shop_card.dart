@@ -8,6 +8,7 @@ import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
+import '../widgets/3d/perspective_card.dart';
 import '../utils/delivery_calculator.dart';
 
 /// A full-width, Swiggy/Zomato-style restaurant card used exclusively
@@ -28,8 +29,6 @@ class RestaurantShopCard extends StatefulWidget {
 
 class _RestaurantShopCardState extends State<RestaurantShopCard>
     with SingleTickerProviderStateMixin {
-  bool _isPressed = false;
-
   ShopModel get shop => widget.shop;
   VoidCallback get onTap => widget.onTap;
 
@@ -78,31 +77,23 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
         .take(3)
         .toList();
 
-    return GestureDetector(
+    return PerspectiveCard(
       onTap: onTap,
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
-      child: AnimatedScale(
-        scale: _isPressed
-            ? PremiumAnimations.pressedScale
-            : PremiumAnimations.normalScale,
-        duration: PremiumAnimations.fast,
-        curve: PremiumAnimations.defaultCurve,
-        child: AnimatedContainer(
-          duration: PremiumAnimations.normal,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurface : Colors.white,
-            borderRadius: PremiumRadius.largeBorder,
-            border: isDark
-                ? Border.all(color: Colors.white.withValues(alpha: 0.07))
-                : null,
-            boxShadow:
-                PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      borderRadius: 24,
+      maxTiltAngle: 0.05,
+      pressScale: 0.98,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: PremiumRadius.largeBorder,
+          border: isDark
+              ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+              : null,
+          boxShadow: PremiumShadows.card(isDark: isDark),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               // ── Hero banner image ─────────────────────────────────────
               Expanded(
                 child: Stack(
@@ -601,9 +592,8 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   Widget _imgPlaceholder() => Container(
         height: double.infinity,

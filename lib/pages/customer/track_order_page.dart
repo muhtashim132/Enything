@@ -6,6 +6,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/order_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/sensory_haptics.dart';
 import '../../config/routes.dart';
 import '../../widgets/common/enything_map.dart';
 import '../../widgets/common/rating_bottom_sheet.dart';
@@ -726,6 +727,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (aggStatus != _lastAggStatus) {
       _lastAggStatus = aggStatus;
       NotificationService().updateOrderNotificationFromStatus(aggStatus);
+      if (aggStatus == 'delivered') {
+        SensoryHaptics.success();
+      }
 
       if (aggStatus == 'delivered' ||
           aggStatus == 'cancelled' ||
@@ -3928,7 +3932,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   Widget _buildStep(String title, String subtitle, IconData icon,
       bool isCompleted, bool isCurrent, bool hasLine, bool isDark) {
-    final activeColor = isCompleted ? AppColors.success : AppColors.primary;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3936,45 +3939,61 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 400),
-              width: 40,
-              height: 40,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: isCompleted
                     ? AppColors.success
                     : isCurrent
                         ? AppColors.primary
-                            .withValues(alpha: isDark ? 0.25 : 0.1)
                         : (isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : AppColors.background),
+                            ? const Color(0xFF1E2034)
+                            : const Color(0xFFECEEF8)),
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isCompleted
                       ? AppColors.success
                       : isCurrent
-                          ? AppColors.primary
+                          ? AppColors.primaryLight
                           : (isDark
                               ? Colors.white.withValues(alpha: 0.12)
                               : AppColors.divider),
                   width: 2,
                 ),
+                boxShadow: isCompleted
+                    ? [
+                        BoxShadow(
+                          color: AppColors.success.withValues(alpha: 0.45),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : isCurrent
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.50),
+                              blurRadius: 14,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
               ),
               child: Icon(
                 isCompleted ? Icons.check_rounded : icon,
-                color: isCompleted
+                color: isCompleted || isCurrent
                     ? Colors.white
-                    : isCurrent
-                        ? AppColors.primary
-                        : (isDark ? Colors.white30 : AppColors.textLight),
-                size: 18,
+                    : (isDark ? Colors.white30 : AppColors.textLight),
+                size: 17,
               ),
             ),
             if (hasLine)
               AnimatedContainer(
                 duration: const Duration(milliseconds: 400),
-                width: 2,
+                width: 3,
                 height: 36,
+                margin: const EdgeInsets.symmetric(vertical: 3),
                 decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
                   gradient: isCompleted
                       ? const LinearGradient(
                           colors: [AppColors.success, AppColors.success],
@@ -3982,15 +4001,23 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           end: Alignment.bottomCenter)
                       : LinearGradient(
                           colors: [
-                              isDark
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : AppColors.divider,
-                              isDark
-                                  ? Colors.white.withValues(alpha: 0.1)
-                                  : AppColors.divider,
-                            ],
+                            isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : AppColors.divider,
+                            isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : AppColors.divider,
+                          ],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter),
+                  boxShadow: isCompleted
+                      ? [
+                          BoxShadow(
+                            color: AppColors.success.withValues(alpha: 0.35),
+                            blurRadius: 6,
+                          ),
+                        ]
+                      : null,
                 ),
               ),
           ],
@@ -4030,7 +4057,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: Icon(Icons.check_circle_rounded,
-                color: activeColor.withValues(alpha: 0.5), size: 14),
+                color: AppColors.success.withValues(alpha: 0.8), size: 14),
           ),
       ],
     );

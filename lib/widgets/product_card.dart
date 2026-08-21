@@ -10,7 +10,9 @@ import '../providers/auth_provider.dart';
 import '../providers/location_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
+import '../theme/sensory_haptics.dart';
 import '../widgets/product_detail_sheet.dart';
+import '../widgets/3d/perspective_card.dart';
 import '../utils/share_utils.dart';
 import '../widgets/common/premium_product_image.dart';
 
@@ -26,7 +28,6 @@ class ProductCard extends StatefulWidget {
 
 class _ProductCardState extends State<ProductCard>
     with SingleTickerProviderStateMixin {
-  bool _isPressed = false;
   late AnimationController _addController;
 
   ProductModel get product => widget.product;
@@ -91,42 +92,29 @@ class _ProductCardState extends State<ProductCard>
     final weightLabel = _formatWeightUnit();
     final hasBrand = product.brand != null && product.brand!.isNotEmpty;
 
-    return GestureDetector(
-      onTap:
-          isLocked ? null : () => showProductDetailSheet(context, product.id),
-      onTapDown: isLocked ? null : (_) => setState(() => _isPressed = true),
-      onTapUp: isLocked ? null : (_) => setState(() => _isPressed = false),
-      onTapCancel: isLocked ? null : () => setState(() => _isPressed = false),
-      child: AnimatedScale(
-        scale: _isPressed
-            ? PremiumAnimations.pressedScale
-            : PremiumAnimations.normalScale,
-        duration: PremiumAnimations.fast,
-        curve: PremiumAnimations.defaultCurve,
-        child: AnimatedContainer(
-          duration: PremiumAnimations.normal,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurface : Colors.white,
-            borderRadius: PremiumRadius.largeBorder,
-            border: totalQuantity > 0
-                ? Border.all(
-                    color: AppColors.secondary
-                        .withValues(alpha: isDark ? 0.45 : 0.40),
-                    width: 1.2,
-                  )
-                : isDark
-                    ? Border.all(color: Colors.white.withValues(alpha: 0.07))
-                    : Border.all(
-                        color: _isPressed
-                            ? AppColors.primary.withValues(alpha: 0.12)
-                            : Colors.transparent,
-                      ),
-            boxShadow:
-                PremiumShadows.card(isDark: isDark, isPressed: _isPressed),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+    return PerspectiveCard(
+      onTap: isLocked ? null : () => showProductDetailSheet(context, product.id),
+      borderRadius: PremiumRadius.large,
+      maxTiltAngle: 0.06,
+      pressScale: 0.98,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: PremiumRadius.largeBorder,
+          border: totalQuantity > 0
+              ? Border.all(
+                  color: AppColors.secondary
+                      .withValues(alpha: isDark ? 0.45 : 0.40),
+                  width: 1.2,
+                )
+              : isDark
+                  ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                  : null,
+          boxShadow: PremiumShadows.card(isDark: isDark),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               // ── Product Image ────────────────────────────────────────────
               AspectRatio(
                 aspectRatio: 1.0,
@@ -667,9 +655,8 @@ class _ProductCardState extends State<ProductCard>
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   Widget _buildDietEmblem(bool isVeg) {
     final color = isVeg ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
@@ -977,7 +964,7 @@ class _ProductCardState extends State<ProductCard>
     return GestureDetector(
       key: const ValueKey('add'),
       onTap: () {
-        HapticFeedback.lightImpact();
+        SensoryHaptics.medium();
         if (shop != null) {
           cart.addItemWithFeedback(context, product, shop!);
         }
@@ -990,19 +977,26 @@ class _ProductCardState extends State<ProductCard>
           gradient: LinearGradient(
             colors: isDark
                 ? [
-                    AppColors.secondary.withValues(alpha: 0.18),
-                    AppColors.secondaryLight.withValues(alpha: 0.14),
+                    AppColors.secondary.withValues(alpha: 0.22),
+                    AppColors.secondaryLight.withValues(alpha: 0.16),
                   ]
                 : [
-                    AppColors.secondary.withValues(alpha: 0.06),
-                    AppColors.secondary.withValues(alpha: 0.10),
+                    AppColors.secondary.withValues(alpha: 0.08),
+                    AppColors.secondary.withValues(alpha: 0.14),
                   ],
           ),
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
               color:
-                  AppColors.secondary.withValues(alpha: isDark ? 0.40 : 0.35),
-              width: 1.1),
+                  AppColors.secondary.withValues(alpha: isDark ? 0.45 : 0.40),
+              width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.secondary.withValues(alpha: isDark ? 0.20 : 0.10),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: FittedBox(
           fit: BoxFit.scaleDown,
@@ -1040,9 +1034,9 @@ class _ProductCardState extends State<ProductCard>
         borderRadius: BorderRadius.circular(100),
         boxShadow: [
           BoxShadow(
-              color: AppColors.secondary.withValues(alpha: 0.35),
-              blurRadius: 6,
-              offset: const Offset(0, 2)),
+              color: AppColors.secondary.withValues(alpha: 0.40),
+              blurRadius: 8,
+              offset: const Offset(0, 3)),
         ],
       ),
       child: Row(
@@ -1050,7 +1044,7 @@ class _ProductCardState extends State<ProductCard>
         children: [
           GestureDetector(
             onTap: () {
-              HapticFeedback.lightImpact();
+              SensoryHaptics.light();
               context
                   .read<CartProvider>()
                   .updateQuantity(product.id, quantity - 1);
@@ -1078,7 +1072,7 @@ class _ProductCardState extends State<ProductCard>
             onTap: () {
               if (product.totalQuantity != null &&
                   quantity >= product.totalQuantity!) {
-                HapticFeedback.heavyImpact();
+                SensoryHaptics.error();
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -1092,7 +1086,7 @@ class _ProductCardState extends State<ProductCard>
                 );
                 return;
               }
-              HapticFeedback.lightImpact();
+              SensoryHaptics.medium();
               if (shop != null) {
                 context
                     .read<CartProvider>()

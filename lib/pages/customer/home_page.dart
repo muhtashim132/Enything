@@ -34,6 +34,9 @@ import '../../widgets/product_search_card.dart';
 import '../../widgets/shop_detail_sheet.dart';
 import '../../widgets/restaurant_dashboard_sheet.dart';
 import '../../widgets/common/notification_bell.dart';
+import '../../widgets/common/animated_search_ticker.dart';
+import '../../widgets/3d/perspective_card.dart';
+import '../../theme/sensory_haptics.dart';
 import '../../widgets/address_picker_sheet.dart';
 import 'all_listings_page.dart';
 
@@ -1937,68 +1940,83 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       child: Row(
                         children: [
                           Expanded(
-                            child: TextField(
-                              controller: _searchController,
-                              onChanged: (v) {
-                                _searchDebounce?.cancel();
-                                if (v.trim().isNotEmpty) {
-                                  setState(() {
-                                    _searchQuery = v;
-                                    _isSearching = true;
-                                  });
-                                }
-                                _searchDebounce = Timer(
-                                  const Duration(milliseconds: 350),
-                                  () => _searchShops(v),
-                                );
-                              },
-                              decoration: InputDecoration(
-                                hintText:
-                                    'Search "Milk", "Pizza" or "Medicines"',
-                                hintStyle: GoogleFonts.outfit(
-                                    color: isDark
-                                        ? Colors.grey.shade500
-                                        : Colors.grey.shade400,
-                                    fontSize: 14),
-                                prefixIcon: const Icon(Icons.search,
-                                    color: AppColors.primary),
-                                suffixIcon: _isSearching
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: CupertinoActivityIndicator(
-                                            radius: 9),
-                                      )
-                                    : _searchController.text.isNotEmpty
-                                        ? IconButton(
-                                            icon: const Icon(
-                                                Icons.close_rounded,
-                                                size: 18),
-                                            onPressed: () {
-                                              _searchController.clear();
-                                              _searchShops('');
-                                            },
+                            child: Stack(
+                              alignment: Alignment.centerLeft,
+                              children: [
+                                TextField(
+                                  controller: _searchController,
+                                  onChanged: (v) {
+                                    _searchDebounce?.cancel();
+                                    if (v.trim().isNotEmpty) {
+                                      setState(() {
+                                        _searchQuery = v;
+                                        _isSearching = true;
+                                      });
+                                    }
+                                    _searchDebounce = Timer(
+                                      const Duration(milliseconds: 350),
+                                      () => _searchShops(v),
+                                    );
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: '',
+                                    prefixIcon: const Icon(Icons.search,
+                                        color: AppColors.primary),
+                                    suffixIcon: _isSearching
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(12),
+                                            child: CupertinoActivityIndicator(
+                                                radius: 9),
                                           )
-                                        : null,
-                                filled: true,
-                                fillColor: Theme.of(context)
-                                        .inputDecorationTheme
-                                        .fillColor ??
-                                    Colors.grey.shade100,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide.none,
+                                        : _searchController.text.isNotEmpty
+                                            ? IconButton(
+                                                icon: const Icon(
+                                                    Icons.close_rounded,
+                                                    size: 18),
+                                                onPressed: () {
+                                                  _searchController.clear();
+                                                  _searchShops('');
+                                                },
+                                              )
+                                            : null,
+                                    filled: true,
+                                    fillColor: Theme.of(context)
+                                            .inputDecorationTheme
+                                            .fillColor ??
+                                        Colors.grey.shade100,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                          color: isDark
+                                              ? AppColors.primaryLight
+                                              : AppColors.primary,
+                                          width: 1.5),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                  ),
                                 ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide(
-                                      color: isDark
-                                          ? AppColors.primaryLight
-                                          : AppColors.primary,
-                                      width: 1.5),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
-                              ),
+                                if (_searchController.text.isEmpty)
+                                  Positioned(
+                                    left: 44,
+                                    right: 48,
+                                    child: IgnorePointer(
+                                      child: AnimatedSearchTicker(
+                                        textStyle: GoogleFonts.outfit(
+                                          color: isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade500,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -4362,9 +4380,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               final imageUrl = AppCategories.getImageUrl(catName);
               final isSelected = _selectedTabIndex == index;
 
-              return GestureDetector(
+              return PerspectiveCard(
+                borderRadius: 20,
+                maxTiltAngle: 0.08,
+                pressScale: 0.96,
                 // Tap: filter home page in-place (same exact logic as old upper chips)
                 onTap: () {
+                  SensoryHaptics.light();
                   if (!context.read<LocationProvider>().hasLocation) {
                     _promptEnableLocation();
                     return;
@@ -4381,6 +4403,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 },
                 // Long-press: navigate to dedicated full category page
                 onLongPress: () {
+                  SensoryHaptics.medium();
                   if (!context.read<LocationProvider>().hasLocation) {
                     _promptEnableLocation();
                     return;
