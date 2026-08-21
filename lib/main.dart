@@ -10,7 +10,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme/app_theme.dart';
 import 'config/routes.dart';
@@ -251,17 +250,6 @@ void notificationTapBackground(
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   // Fix #1: Connect isolate to OS before doing any platform channel work
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Single Device Session Guard: If device is logged out, drop any in-flight pushes immediately
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final localSessionId = prefs.getString('local_session_id');
-    if (localSessionId == null) {
-      debugPrint(
-          'FCM background: Dropping push message because this device is logged out.');
-      return;
-    }
-  } catch (_) {}
 
   await Firebase.initializeApp();
 

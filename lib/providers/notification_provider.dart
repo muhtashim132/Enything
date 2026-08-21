@@ -908,31 +908,14 @@ class NotificationProvider extends ChangeNotifier {
     // Additive deduplication for FCM vs Realtime (bounded)
     if (notification.orderId != null) {
       final isDuplicate = recentItems.any((n) =>
-          n.orderId == notification.orderId &&
-          (n.title == notification.title ||
-              n.body == notification.body ||
-              n.id == notification.id) &&
-          DateTime.now().difference(n.createdAt).inSeconds.abs() < 10);
+          n.id == notification.id ||
+          (n.orderId == notification.orderId &&
+              n.title == notification.title &&
+              DateTime.now().difference(n.createdAt).inSeconds.abs() < 5));
       if (isDuplicate) {
         debugPrint(
             'Skipping duplicate notification for order ${notification.orderId}');
         return;
-      }
-
-      // Semantic dedup: catch "New Order" notifications that arrive via both
-      // Realtime (title: "🔔 New Order!") and FCM (title: "🔔 New Order! Accept now").
-      // Different titles/ids but same semantic event for the same order.
-      final incomingLower = notification.title.toLowerCase();
-      if (incomingLower.contains('new order')) {
-        final isSemantic = recentItems.any((n) =>
-            n.orderId == notification.orderId &&
-            n.title.toLowerCase().contains('new order') &&
-            DateTime.now().difference(n.createdAt).inSeconds.abs() < 15);
-        if (isSemantic) {
-          debugPrint(
-              'Skipping semantic duplicate "New Order" for order ${notification.orderId}');
-          return;
-        }
       }
     }
 
