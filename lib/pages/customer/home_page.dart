@@ -4282,6 +4282,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   Widget _buildCategorySection(bool isDark) {
     // First 5 entries from the already-existing _categories list
     final mainCats = _categories.take(5).toList();
+    final remainingCount = _categories.length > 5 ? _categories.length - 5 : 29;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -4289,80 +4290,136 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _buildSectionTitle(
           'Explore Categories',
           subtitle: _selectedTabIndex >= 0
-              ? 'Tap again to clear filter'
-              : 'Tap to filter • Long-press to browse',
+              ? 'Filtering feed • Tap again to show all'
+              : 'Tap to filter feed • Hold to view catalog',
           onSeeAllTap: () =>
               Navigator.pushNamed(context, AppRoutes.allCategories),
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 108,
+          height: 116,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(left: 2, right: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
             // +1 for the "See More" card
             itemCount: mainCats.length + 1,
             itemBuilder: (context, index) {
               // ── "See More" card (last item) ────────────────────────────────
               if (index == mainCats.length) {
-                return GestureDetector(
-                  onTap: () =>
-                      Navigator.pushNamed(context, AppRoutes.allCategories),
+                return PerspectiveCard(
+                  borderRadius: 22,
+                  maxTiltAngle: 0.08,
+                  pressScale: 0.95,
+                  onTap: () {
+                    SensoryHaptics.light();
+                    Navigator.pushNamed(context, AppRoutes.allCategories);
+                  },
                   child: Container(
-                    width: 88,
-                    margin: const EdgeInsets.only(right: 10, top: 2, bottom: 2),
+                    width: 90,
+                    margin: const EdgeInsets.only(right: 10, top: 2, bottom: 4),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? const Color(0xFF1A1D30)
-                          : const Color(0xFFF3F4FF),
-                      borderRadius: BorderRadius.circular(20),
+                          ? const Color(0xFF16192B)
+                          : const Color(0xFFF4F6FB),
+                      borderRadius: BorderRadius.circular(22),
                       border: Border.all(
                         color: isDark
-                            ? Colors.white.withValues(alpha: 0.10)
-                            : AppColors.primary.withValues(alpha: 0.18),
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : AppColors.primary.withValues(alpha: 0.20),
                         width: 1.5,
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: isDark
-                              ? Colors.black.withValues(alpha: 0.28)
-                              : AppColors.primary.withValues(alpha: 0.06),
-                          blurRadius: 10,
+                              ? Colors.black.withValues(alpha: 0.35)
+                              : AppColors.primary.withValues(alpha: 0.08),
+                          blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Stack(
                       children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary
-                                .withValues(alpha: isDark ? 0.18 : 0.10),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.grid_view_rounded,
-                            size: 18,
-                            color: isDark
-                                ? AppColors.primaryLight
-                                : AppColors.primary,
+                        // Subtle gradient accent aura in corner
+                        Positioned(
+                          top: -15,
+                          right: -15,
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'See More',
-                          style: GoogleFonts.outfit(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? AppColors.primaryLight
-                                : AppColors.primary,
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      AppColors.primary,
+                                      AppColors.primaryDark,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.35),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.grid_view_rounded,
+                                  size: 19,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'See All',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary
+                                      .withValues(alpha: isDark ? 0.22 : 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '+$remainingCount More',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? AppColors.primaryLight
+                                        : AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
@@ -4381,9 +4438,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               final isSelected = _selectedTabIndex == index;
 
               return PerspectiveCard(
-                borderRadius: 20,
+                borderRadius: 22,
                 maxTiltAngle: 0.08,
-                pressScale: 0.96,
+                pressScale: 0.95,
                 // Tap: filter home page in-place (same exact logic as old upper chips)
                 onTap: () {
                   SensoryHaptics.light();
@@ -4417,43 +4474,48 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   curve: Curves.easeOutCubic,
-                  width: isSelected ? 96 : 88,
-                  margin: const EdgeInsets.only(right: 10, top: 2, bottom: 2),
+                  width: isSelected ? 96 : 90,
+                  margin: const EdgeInsets.only(right: 10, top: 2, bottom: 4),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    // Selected state: brighter glow + white border ring
+                    borderRadius: BorderRadius.circular(22),
+                    // Selected state: vibrant ambient halo glow
                     boxShadow: [
                       BoxShadow(
                         color: isSelected
-                            ? grad.first.withValues(alpha: 0.60)
-                            : Colors.black.withValues(alpha: 0.15),
-                        blurRadius: isSelected ? 18 : 10,
-                        offset: const Offset(0, 4),
+                            ? grad.first.withValues(alpha: 0.55)
+                            : isDark
+                                ? Colors.black.withValues(alpha: 0.30)
+                                : Colors.black.withValues(alpha: 0.08),
+                        blurRadius: isSelected ? 16 : 10,
+                        offset: Offset(0, isSelected ? 6 : 3),
                       ),
                     ],
-                    border: isSelected
-                        ? Border.all(
-                            color: Colors.white,
-                            width: 2.5,
-                          )
-                        : null,
+                    border: Border.all(
+                      color: isSelected
+                          ? Colors.white
+                          : isDark
+                              ? Colors.white.withValues(alpha: 0.09)
+                              : Colors.black.withValues(alpha: 0.05),
+                      width: isSelected ? 2.5 : 1.0,
+                    ),
                   ),
                   child: ClipRRect(
                     borderRadius:
-                        BorderRadius.circular(isSelected ? 17.5 : 20),
+                        BorderRadius.circular(isSelected ? 19.5 : 21),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
+                        // Background Hero Photo
                         CachedNetworkImage(
                           imageUrl: imageUrl,
                           fit: BoxFit.cover,
-                          fadeInDuration: const Duration(milliseconds: 300),
+                          fadeInDuration: const Duration(milliseconds: 250),
                           placeholder: (context, url) => Container(
-                            color: grad.first.withValues(alpha: 0.3),
+                            color: grad.first.withValues(alpha: 0.25),
                             child: Center(
                               child: Text(
                                 cat['emoji'] as String? ?? '🏬',
-                                style: const TextStyle(fontSize: 22),
+                                style: const TextStyle(fontSize: 24),
                               ),
                             ),
                           ),
@@ -4468,76 +4530,98 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             child: Center(
                               child: Text(
                                 cat['emoji'] as String? ?? '🏬',
-                                style: const TextStyle(fontSize: 24),
+                                style: const TextStyle(fontSize: 26),
                               ),
                             ),
                           ),
                         ),
+
+                        // High-contrast gradient scrim (Clear top, deep elegant glass bottom)
                         Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.8),
+                                Colors.black.withValues(alpha: 0.05),
+                                Colors.black.withValues(alpha: 0.35),
+                                Colors.black.withValues(alpha: 0.88),
                               ],
+                              stops: const [0.0, 0.45, 1.0],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
                           ),
-                          child: Stack(
-                            children: [
-                              // Selected checkmark badge
-                              if (isSelected)
-                                Positioned(
-                                  top: 5,
-                                  left: 5,
-                                  child: Container(
-                                    width: 18,
-                                    height: 18,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.90),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.check_rounded,
-                                      size: 12,
-                                      color: grad.first,
-                                    ),
+                        ),
+
+                        // Selected checkmark badge & active indicator ring
+                        if (isSelected)
+                          Positioned(
+                            top: 6,
+                            left: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(3.5),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.3),
+                                    blurRadius: 6,
                                   ),
-                                ),
-                              // Content — CENTERED text at bottom
-                              Positioned.fill(
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(6, 12, 6, 10),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        alignment: Alignment.bottomCenter,
-                                        child: Text(
-                                          displayLabel,
-                                          style: GoogleFonts.outfit(
-                                            fontSize: 11.5,
-                                            fontWeight: isSelected
-                                                ? FontWeight.w900
-                                                : FontWeight.w800,
-                                            color: Colors.white,
-                                            height: 1.1,
-                                          ),
-                                          maxLines: 2,
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                ],
                               ),
-                            ],
+                              child: Icon(
+                                Icons.check_rounded,
+                                size: 11,
+                                color: grad.first,
+                              ),
+                            ),
+                          ),
+
+                        // Category Label + Emoji Micro-avatar
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.bottomCenter,
+                                  child: Text(
+                                    displayLabel,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11.5,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w900
+                                          : FontWeight.w800,
+                                      color: Colors.white,
+                                      height: 1.12,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black.withValues(alpha: 0.6),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 2,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                if (isSelected) ...[
+                                  const SizedBox(height: 3),
+                                  Container(
+                                    width: 14,
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ),
                       ],

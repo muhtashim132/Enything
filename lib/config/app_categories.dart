@@ -109,6 +109,140 @@ class AppCategories {
     }
   }
 
+  /// Customer-friendly description/subtitle for UI category exploration.
+  static String getCustomerSubtitle(String categoryName) {
+    switch (categoryName) {
+      case 'Supermarket / Hypermarket':
+        return 'Daily staples, pantry & household';
+      case 'Grocery':
+        return 'Fresh provisions & daily cooking needs';
+      case 'Restaurant':
+        return 'Dine-in meals, thalis & specials';
+      case 'Fast Food':
+        return 'Burgers, pizza, wraps & snacks';
+      case 'Bakery':
+        return 'Fresh bread, cakes & pastries';
+      case 'Butcher':
+        return 'Fresh cut chicken, mutton & meats';
+      case 'Fish & Seafood':
+        return 'Fresh catch, prawns & ocean fish';
+      case 'Dairy & Eggs':
+        return 'Fresh milk, butter, cheese & eggs';
+      case 'Fruits & Vegs':
+        return 'Farm-fresh fruits & vegetables';
+      case 'Sweets & Mithai':
+        return 'Traditional sweets, mithai & desserts';
+      case 'Beverages':
+        return 'Cold drinks, juices & shakes';
+      case 'Pharmacy':
+        return 'Medicines, vitamins & healthcare';
+      case 'Medical Store':
+        return 'Prescription drugs & first aid';
+      case 'Electronics':
+        return 'Smartphones, audio & accessories';
+      case 'Mobile & Repair':
+        return 'Phone cases, screen repairs & gadgets';
+      case 'Clothing':
+        return 'Fashion, ethnic wear & apparel';
+      case 'Footwear':
+        return 'Shoes, sandals & sneakers';
+      case 'Jewellery':
+        return 'Gold, silver & fashion jewellery';
+      case 'Hardware Store':
+        return 'Tools, paints, electricals & fittings';
+      case 'Stationery':
+        return 'Books, pens, art & office supplies';
+      case 'Toys & Games':
+        return 'Kids toys, board games & puzzles';
+      case 'Sports':
+        return 'Fitness gear, bats & sports equipment';
+      case 'Pet Supplies':
+        return 'Pet food, treats & accessories';
+      case 'Cosmetics & Beauty':
+        return 'Skincare, makeup & fragrances';
+      case 'Salon & Beauty':
+        return 'Hair care, grooming & salon products';
+      case 'Flowers':
+        return 'Fresh bouquets & floral arrangements';
+      case 'Home Decor':
+        return 'Curtains, lamps, vases & decor';
+      case 'Furniture':
+        return 'Chairs, tables, shelves & home setup';
+      case 'Auto Parts':
+        return 'Car & bike spares, oils & accessories';
+      case 'Paan Shop':
+        return 'Fresh paan, mouth fresheners & snacks';
+      case 'Tea & Coffee':
+        return 'Chai, coffee beans, premixes & cafe drinks';
+      case 'Ice Cream':
+        return 'Tubs, sundaes, cones & popsicles';
+      case 'Organic':
+        return 'Natural organic foods & cold-pressed oils';
+      case 'Other':
+      default:
+        return 'Explore local products & stores';
+    }
+  }
+
+  /// High-level customer collection groups for category filtering
+  static const List<String> customerCollections = [
+    'All',
+    'Food & Dining',
+    'Grocery & Fresh',
+    'Pharmacy & Health',
+    'Fashion & Lifestyle',
+    'Electronics & Utilities',
+    'Home & Living',
+  ];
+
+  /// Maps a category to its consumer collection
+  static String getCustomerCollection(String categoryName) {
+    switch (categoryName) {
+      case 'Restaurant':
+      case 'Fast Food':
+      case 'Bakery':
+      case 'Sweets & Mithai':
+      case 'Tea & Coffee':
+      case 'Ice Cream':
+      case 'Beverages':
+      case 'Paan Shop':
+      case 'Food':
+        return 'Food & Dining';
+      case 'Supermarket / Hypermarket':
+      case 'Grocery':
+      case 'Fruits & Vegs':
+      case 'Dairy & Eggs':
+      case 'Butcher':
+      case 'Fish & Seafood':
+      case 'Organic':
+        return 'Grocery & Fresh';
+      case 'Pharmacy':
+      case 'Medical Store':
+        return 'Pharmacy & Health';
+      case 'Clothing':
+      case 'Footwear':
+      case 'Jewellery':
+      case 'Cosmetics & Beauty':
+      case 'Salon & Beauty':
+        return 'Fashion & Lifestyle';
+      case 'Electronics':
+      case 'Mobile & Repair':
+      case 'Hardware Store':
+      case 'Stationery':
+      case 'Auto Parts':
+        return 'Electronics & Utilities';
+      case 'Home Decor':
+      case 'Furniture':
+      case 'Pet Supplies':
+      case 'Toys & Games':
+      case 'Sports':
+      case 'Flowers':
+      case 'Other':
+      default:
+        return 'Home & Living';
+    }
+  }
+
   /// Flat list of category names (for Supabase queries / dropdowns).
   static List<String> get names => all.map((c) => c['name']!).toList();
 
