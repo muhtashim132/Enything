@@ -1177,8 +1177,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
             }
           }
 
-          // Fallback: If no nearby riders were found/matched via PostGIS, broadcast to all active riders
-          if (notifiedRiderIds.isEmpty && exclusiveRiderId == null) {
+          // ALWAYS broadcast to all active riders as a guaranteed safety net.
+          // The nearby-rider pushes above fire first for faster delivery, but
+          // this broadcast ensures NO rider is ever missed due to:
+          //   - NULL location in delivery_partners
+          //   - verification_status mismatch ('verified' vs 'approved')
+          //   - PostGIS/RPC failures
+          // The send-push Edge Function's server-side dedup cache (15s TTL)
+          // prevents riders who already got a nearby push from seeing duplicates.
+          if (exclusiveRiderId == null) {
             try {
               final firstOrderId = notificationData.isNotEmpty
                   ? (notificationData.first['orderId'] as String?)
