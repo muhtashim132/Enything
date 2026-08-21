@@ -288,6 +288,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   final PageController _bannerController = PageController();
   final ValueNotifier<int> _bannerIndex = ValueNotifier<int>(0);
   Timer? _bannerTimer;
+  bool _isBannerHovered = false;
   Timer? _searchDebounce;
 
   // Location Required block
@@ -480,9 +481,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _checkActiveOrders();
     // Subscribe to live GPS updates so distance filter stays accurate
     _startLiveLocationUpdates();
-    // Auto-scroll banner every 4 seconds
+    // Auto-scroll banner every 4 seconds (pauses on hover/touch)
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (!mounted || !_bannerController.hasClients) return;
+      if (!mounted || !_bannerController.hasClients || _isBannerHovered) return;
       final next = (_bannerIndex.value + 1) % 3;
       _bannerController.animateToPage(
         next,
@@ -3140,6 +3141,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   }
 
   Widget _buildFeaturedBanner() {
+    final isDark = context.watch<ThemeProvider>().isDarkMode;
     final slides = [
       {
         'tag': '🔥 HOT & FRESH',
@@ -3261,119 +3263,125 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
     return Column(
       children: [
-        SizedBox(
-          height: 130, // Reduced from 190
-          child: PageView.builder(
-            controller: _bannerController,
-            onPageChanged: (i) => _bannerIndex.value = i,
-            itemCount: slides.length,
-            itemBuilder: (_, i) {
-              final s = slides[i];
-              final colors = s['colors'] as List<Color>;
-              final accent = s['accent'] as Color;
-              final emoji = s['emoji'] as String;
-              return GestureDetector(
-                onTap: s['action'] as VoidCallback,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: colors,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                          color: colors[1].withValues(alpha: 0.5),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10)),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      // Large background circle
-                      Positioned(
-                          right: -30,
-                          top: -30,
-                          child: Container(
-                              width: 140,
-                              height: 140,
-                              decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color:
-                                      Colors.white.withValues(alpha: 0.05)))),
-                      // Smaller circle
-                      Positioned(
-                          left: -15,
-                          bottom: -15,
-                          child: Container(
-                              width: 70,
-                              height: 70,
-                              decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color:
-                                      Colors.white.withValues(alpha: 0.04)))),
-                      // Background icon
-                      Positioned(
-                          right: -5,
-                          bottom: -15,
-                          child: Icon(s['icon'] as IconData,
-                              size: 90, // Reduced from 130
-                              color: Colors.white.withValues(alpha: 0.07))),
-                      // Big emoji top-right
-                      Positioned(
-                          right: 16,
-                          top: 16,
-                          child: Text(emoji,
-                              style: const TextStyle(
-                                  fontSize: 36))), // Reduced from 52
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 70, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                  color: accent,
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: accent.withValues(alpha: 0.4),
-                                        blurRadius: 6)
-                                  ]),
-                              child: Text(s['tag'] as String,
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w900,
-                                      color: Colors.black87,
-                                      letterSpacing: 0.5)),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(s['title'] as String,
-                                style: GoogleFonts.outfit(
-                                    fontSize: 18, // Reduced from 22
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    height: 1.15,
-                                    letterSpacing: -0.3)),
-                            const SizedBox(height: 4),
-                            Text(s['sub'] as String,
-                                style: GoogleFonts.outfit(
-                                    fontSize: 10, // Reduced from 11
-                                    color: Colors.white.withValues(alpha: 0.72),
-                                    height: 1.3)),
-                          ],
-                        ),
+        MouseRegion(
+          onEnter: (_) => _isBannerHovered = true,
+          onExit: (_) => _isBannerHovered = false,
+          child: SizedBox(
+            height: 130,
+            child: PageView.builder(
+              controller: _bannerController,
+              onPageChanged: (i) => _bannerIndex.value = i,
+              itemCount: slides.length,
+              itemBuilder: (_, i) {
+                final s = slides[i];
+                final colors = s['colors'] as List<Color>;
+                final accent = s['accent'] as Color;
+                final emoji = s['emoji'] as String;
+                return GestureDetector(
+                  onTap: () {
+                    SensoryHaptics.light();
+                    (s['action'] as VoidCallback)();
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: colors,
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                            color: colors[1].withValues(alpha: 0.5),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10)),
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        // Large background circle
+                        Positioned(
+                            right: -30,
+                            top: -30,
+                            child: Container(
+                                width: 140,
+                                height: 140,
+                                decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color:
+                                        Colors.white.withValues(alpha: 0.05)))),
+                        // Smaller circle
+                        Positioned(
+                            left: -15,
+                            bottom: -15,
+                            child: Container(
+                                width: 70,
+                                height: 70,
+                                decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color:
+                                        Colors.white.withValues(alpha: 0.04)))),
+                        // Background icon
+                        Positioned(
+                            right: -5,
+                            bottom: -15,
+                            child: Icon(s['icon'] as IconData,
+                                size: 90,
+                                color: Colors.white.withValues(alpha: 0.07))),
+                        // Big emoji top-right
+                        Positioned(
+                            right: 16,
+                            top: 16,
+                            child: Text(emoji,
+                                style: const TextStyle(fontSize: 36))),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 70, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                    color: accent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                          color: accent.withValues(alpha: 0.4),
+                                          blurRadius: 6)
+                                    ]),
+                                child: Text(s['tag'] as String,
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.black87,
+                                        letterSpacing: 0.5)),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(s['title'] as String,
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
+                                      height: 1.15,
+                                      letterSpacing: -0.3)),
+                              const SizedBox(height: 4),
+                              Text(s['sub'] as String,
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 10,
+                                      color: Colors.white.withValues(alpha: 0.72),
+                                      height: 1.3)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -3396,7 +3404,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         ? const LinearGradient(
                             colors: [Color(0xFF1E3FD8), Color(0xFF3D6BFF)])
                         : null,
-                    color: active ? null : AppColors.textLight,
+                    color: active
+                        ? null
+                        : (isDark ? Colors.white24 : AppColors.textLight),
                     borderRadius: BorderRadius.circular(4),
                     boxShadow: active
                         ? [

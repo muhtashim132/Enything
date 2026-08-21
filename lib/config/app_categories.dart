@@ -309,9 +309,9 @@ class AppCategories {
       case 'Restaurant':
         return '${base}1550966871-3ed3cdb5ed0c$params';
       case 'Fast Food':
-        return '${base}1568901346375-23c9450c58cd$params';
+        return '${base}1607013251379-e6eecfffe234$params';
       case 'Food':
-        return '${base}1568901346375-23c9450c58cd$params'; // Epic, perfectly centered, dripping smashburger
+        return '${base}1607013251379-e6eecfffe234$params'; // Ultra close-up dripping gourmet smashburger with melted cheddar and sauce
       case 'Bakery':
         return '${base}1509440159596-0249088772ff$params';
       case 'Butcher':
