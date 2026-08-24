@@ -287,7 +287,7 @@ class _NotificationSheetState extends State<_NotificationSheet> {
 
       if (!mounted) return;
       Navigator.pop(context); // close sheet
-      final sent = res.data['sent'] ?? 0;
+      final sent = (res.data is Map) ? (res.data['sent'] ?? 0) : 0;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Successfully sent to $sent devices!',
             style: AdminStyles.body(size: 13, color: Colors.white)),

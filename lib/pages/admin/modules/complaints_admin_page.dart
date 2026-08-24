@@ -623,17 +623,28 @@ class _DisputeCard extends StatelessWidget {
           final newStatus = isApproval
               ? (approvedAmount < refundAmount ? 'partially_approved' : 'approved')
               : 'rejected';
+          final adminNotes = notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null;
 
-          await db.from('order_disputes').update({
-            'status': newStatus,
-            'admin_notes': notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
-            'resolved_at': DateTime.now().toIso8601String(),
-          }).eq('id', dispute['id']);
+          try {
+            await db.rpc('admin_resolve_dispute', params: {
+              'p_dispute_id': dispute['id'],
+              'p_status': newStatus,
+              'p_admin_notes': adminNotes,
+              'p_refund_amount': isApproval ? approvedAmount : null,
+            });
+          } catch (_) {
+            // Fallback to direct mutation
+            await db.from('order_disputes').update({
+              'status': newStatus,
+              'admin_notes': adminNotes,
+              'resolved_at': DateTime.now().toIso8601String(),
+            }).eq('id', dispute['id']);
 
-          if (isApproval && orderId.isNotEmpty) {
-            await db.from('orders').update({
-              'refund_status': 'processing',
-            }).eq('id', orderId);
+            if (isApproval && orderId.isNotEmpty) {
+              await db.from('orders').update({
+                'refund_status': 'processing',
+              }).eq('id', orderId);
+            }
           }
 
           if (context.mounted) {

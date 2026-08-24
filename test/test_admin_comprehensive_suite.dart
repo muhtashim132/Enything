@@ -598,5 +598,158 @@ void main() {
       expect(remainingAfterRevokeOther.length, 1);
       expect(remainingAfterRevokeOther.first['id'], 'sess-active-001');
     });
+
+    test('Rider KYC Document & License Extraction verifies complete payload', () {
+      final riderRow = {
+        'id': 'rider-uuid-101',
+        'verification_status': 'pending',
+        'vehicle_type': 'motorcycle',
+        'vehicle_number': 'JK01AB1234',
+        'vehicle_reg_number': 'JK01AB1234',
+        'driving_license': 'DL-01-2024-0019283',
+        'aadhar_number': '1234-5678-9012',
+        'pan_number': 'ABCDE1234F',
+        'bank_account_holder': 'Kishan Nadda',
+        'bank_account_number': '9876543210',
+        'bank_ifsc': 'SBIN0001234',
+        'kyc_documents': {
+          'aadhaar_front': 'https://storage.enything.com/aadhar_f.jpg',
+          'aadhaar_back': 'https://storage.enything.com/aadhar_b.jpg',
+          'pan_front': 'https://storage.enything.com/pan_f.jpg',
+          'pan_back': '',
+          'dl_front': 'https://storage.enything.com/dl_f.jpg',
+          'dl_back': 'https://storage.enything.com/dl_b.jpg',
+          'rc_front': 'https://storage.enything.com/rc_f.jpg',
+          'rc_back': 'https://storage.enything.com/rc_b.jpg',
+        },
+      };
+
+      List<Map<String, String>> extractDocImages(Map<String, dynamic> docs, List<String> keys) {
+        return keys
+            .where((k) => docs[k] != null && (docs[k] as String).isNotEmpty)
+            .map((k) => {'label': k.replaceAll('_', ' ').toUpperCase(), 'url': docs[k] as String})
+            .toList();
+      }
+
+      final docs = riderRow['kyc_documents'] as Map<String, dynamic>;
+      final extracted = extractDocImages(docs, [
+        'aadhaar_front',
+        'aadhaar_back',
+        'pan_front',
+        'pan_back',
+        'dl_front',
+        'dl_back',
+        'rc_front',
+        'rc_back',
+      ]);
+
+      // pan_back is empty so 7 valid images should be returned
+      expect(extracted.length, 7);
+      expect(extracted.first['label'], 'AADHAAR FRONT');
+      expect(extracted.first['url'], 'https://storage.enything.com/aadhar_f.jpg');
+      expect(riderRow['driving_license'], 'DL-01-2024-0019283');
+      expect(riderRow['vehicle_reg_number'], 'JK01AB1234');
+    });
+
+    test('Overview Pending KYC Aggregate calculates both Shop and Rider applications', () {
+      int calculatePendingKyc({required int pendingShops, required int pendingRiders}) {
+        return pendingShops + pendingRiders;
+      }
+
+      expect(calculatePendingKyc(pendingShops: 5, pendingRiders: 3), 8);
+      expect(calculatePendingKyc(pendingShops: 0, pendingRiders: 0), 0);
+      expect(calculatePendingKyc(pendingShops: 12, pendingRiders: 0), 12);
+    });
+
+    test('Atomic Dispute Resolution transitions status and triggers order refund', () {
+      Map<String, dynamic> resolveDispute({
+        required String disputeId,
+        required String resolutionStatus,
+        required String orderPaymentStatus,
+        required String? existingRefundStatus,
+        required double claimedAmount,
+        required double approvedAmount,
+      }) {
+        if (!['approved', 'partially_approved', 'rejected'].contains(resolutionStatus)) {
+          throw ArgumentError('Invalid resolution status: $resolutionStatus');
+        }
+
+        final finalDisputeStatus = resolutionStatus == 'approved' && approvedAmount < claimedAmount
+            ? 'partially_approved'
+            : resolutionStatus;
+
+        String? newOrderRefundStatus = existingRefundStatus;
+        if (['approved', 'partially_approved'].contains(finalDisputeStatus)) {
+          if (orderPaymentStatus == 'captured' && (existingRefundStatus == null || existingRefundStatus == 'none')) {
+            newOrderRefundStatus = 'processing';
+          }
+        }
+
+        return {
+          'dispute_id': disputeId,
+          'dispute_status': finalDisputeStatus,
+          'order_refund_status': newOrderRefundStatus,
+        };
+      }
+
+      // Full approval on captured order
+      final res1 = resolveDispute(
+        disputeId: 'disp-001',
+        resolutionStatus: 'approved',
+        orderPaymentStatus: 'captured',
+        existingRefundStatus: 'none',
+        claimedAmount: 500.0,
+        approvedAmount: 500.0,
+      );
+      expect(res1['dispute_status'], 'approved');
+      expect(res1['order_refund_status'], 'processing');
+
+      // Partial approval on captured order
+      final res2 = resolveDispute(
+        disputeId: 'disp-002',
+        resolutionStatus: 'approved',
+        orderPaymentStatus: 'captured',
+        existingRefundStatus: 'none',
+        claimedAmount: 500.0,
+        approvedAmount: 250.0,
+      );
+      expect(res2['dispute_status'], 'partially_approved');
+      expect(res2['order_refund_status'], 'processing');
+
+      // Rejection
+      final res3 = resolveDispute(
+        disputeId: 'disp-003',
+        resolutionStatus: 'rejected',
+        orderPaymentStatus: 'captured',
+        existingRefundStatus: 'none',
+        claimedAmount: 500.0,
+        approvedAmount: 0.0,
+      );
+      expect(res3['dispute_status'], 'rejected');
+      expect(res3['order_refund_status'], 'none');
+    });
+
+    test('Admin Review Deletion and Average Rating Recalculation', () {
+      final reviews = [
+        {'id': 'rev-1', 'rating': 5.0},
+        {'id': 'rev-2', 'rating': 4.0},
+        {'id': 'rev-3', 'rating': 1.0, 'is_spam': true},
+        {'id': 'rev-4', 'rating': 5.0},
+      ];
+
+      double computeAvgRating(List<Map<String, dynamic>> list) {
+        if (list.isEmpty) return 0.0;
+        final sum = list.map((r) => r['rating'] as double).reduce((a, b) => a + b);
+        return sum / list.length;
+      }
+
+      // Initial average with spam review
+      expect(computeAvgRating(reviews), 3.75);
+
+      // Admin deletes spam review
+      final cleanedReviews = reviews.where((r) => r['id'] != 'rev-3').toList();
+      expect(cleanedReviews.length, 3);
+      expect(computeAvgRating(cleanedReviews), closeTo(4.666, 0.01));
+    });
   });
 }

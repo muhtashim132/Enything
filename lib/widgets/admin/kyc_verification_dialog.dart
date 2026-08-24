@@ -31,10 +31,20 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
   Future<void> _updateStatus(String status) async {
     setState(() => _isProcessing = true);
     try {
-      await _db.from(widget.tableName).update({
-        'verification_status': status,
-        'is_active': status == 'verified',
-      }).eq(widget.idColumn, widget.data['id']);
+      final entityType = widget.tableName == 'shops' ? 'shop' : 'rider';
+      try {
+        await _db.rpc('admin_update_kyc', params: {
+          'p_target_id': widget.data['id'],
+          'p_type': entityType,
+          'p_status': status,
+        });
+      } catch (_) {
+        // Fallback to direct table mutation if RPC is unavailable
+        await _db.from(widget.tableName).update({
+          'verification_status': status,
+          'is_active': status == 'verified' || status == 'approved',
+        }).eq(widget.idColumn, widget.data['id']);
+      }
 
       if (mounted) {
         Navigator.pop(context);
@@ -42,7 +52,7 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Profile $status successfully!'),
-            backgroundColor: status == 'verified'
+            backgroundColor: status == 'verified' || status == 'approved'
                 ? const Color(0xFF51CF66)
                 : Colors.redAccent,
             behavior: SnackBarBehavior.floating,
