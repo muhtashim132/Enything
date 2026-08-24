@@ -527,6 +527,10 @@ class NotificationProvider extends ChangeNotifier {
                   'confirmed',
                   'cancelled',
                   'seller_rejected',
+                  'partner_rejected',
+                  'rider_rejected',
+                  'timeout',
+                  'shop_dispute_cancel',
                   'delivered'
                 ].contains(newStatus)) {
               BellAlertService.instance.removePendingOrder(orderId);
@@ -657,6 +661,10 @@ class NotificationProvider extends ChangeNotifier {
                     'confirmed',
                     'cancelled',
                     'seller_rejected',
+                    'partner_rejected',
+                    'rider_rejected',
+                    'timeout',
+                    'shop_dispute_cancel',
                     'delivered'
                   ].contains(newStatus)) {
                 BellAlertService.instance.removePendingOrder(orderId);
@@ -1198,6 +1206,22 @@ class NotificationProvider extends ChangeNotifier {
         );
       case 'cancelled':
         return ('❌ Order Cancelled', 'This order has been cancelled.');
+      case 'payment_failed':
+        return (
+          '❌ Payment Failed',
+          'Customer payment was unsuccessful. The order was cancelled.'
+        );
+      case 'verification_failed':
+        return (
+          '🚫 Prescription Rejected',
+          'The prescription was rejected by admin. The order was cancelled.'
+        );
+      case 'partner_rejected':
+      case 'rider_rejected':
+        return (
+          '🛵 Rider Declined',
+          'Rider declined. Looking for another delivery partner.'
+        );
       case 'picked_up':
         return (
           '✅ Order Picked Up',
@@ -1226,6 +1250,21 @@ class NotificationProvider extends ChangeNotifier {
         return (
           '❌ Order Cancelled',
           'The order you accepted has been cancelled.'
+        );
+      case 'payment_failed':
+        return (
+          '❌ Payment Failed',
+          'Customer payment was unsuccessful. The delivery was cancelled.'
+        );
+      case 'seller_rejected':
+        return (
+          '😔 Shop Rejected',
+          'The shop could not accept the order. This delivery was cancelled.'
+        );
+      case 'verification_failed':
+        return (
+          '🚫 Prescription Rejected',
+          'The prescription was rejected by admin. This delivery was cancelled.'
         );
       case 'preparing':
         return (

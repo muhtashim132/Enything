@@ -86,7 +86,7 @@ void main() {
     test('TCS (Section 52) and TDS (Section 194-O) Statutory Rates', () {
       const grocerySubtotal = 1000.0;
       final tcs = grocerySubtotal * TaxConfig.tcsRateForCategory('Grocery');
-      final tds = grocerySubtotal * TaxConfig.itTdsRate;
+      const tds = grocerySubtotal * TaxConfig.itTdsRate;
 
       // TCS is 0.5% (0.25% CGST + 0.25% SGST)
       expect(tcs, closeTo(5.0, 0.01));

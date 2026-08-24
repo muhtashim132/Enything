@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
       if (orderId) {
         const { data } = await supabaseAdmin
           .from("orders")
-          .select("id, status, cart_group_id")
+          .select("id, status, cart_group_id, payment_status")
           .eq("razorpay_order_id", orderId)
           .limit(1)
           .maybeSingle();
@@ -109,7 +109,7 @@ Deno.serve(async (req: Request) => {
       if (!pendingOrder && noteCartGroupId) {
         const { data } = await supabaseAdmin
           .from("orders")
-          .select("id, status, cart_group_id")
+          .select("id, status, cart_group_id, payment_status")
           .eq("cart_group_id", noteCartGroupId)
           .limit(1)
           .maybeSingle();
@@ -119,14 +119,14 @@ Deno.serve(async (req: Request) => {
       if (!pendingOrder && noteOrderId) {
         const { data } = await supabaseAdmin
           .from("orders")
-          .select("id, status, cart_group_id")
+          .select("id, status, cart_group_id, payment_status")
           .eq("id", noteOrderId)
           .limit(1)
           .maybeSingle();
         pendingOrder = data;
       }
 
-      if (pendingOrder && (pendingOrder.status === "awaiting_payment" || pendingOrder.status === "confirmed")) {
+      if (pendingOrder && (pendingOrder.status === "awaiting_payment" || pendingOrder.status === "confirmed") && pendingOrder.payment_status !== "captured") {
         const { error: rpcError } = await supabaseAdmin.rpc('client_confirm_payment', {
           p_order_id: pendingOrder.id,
           p_cart_group_id: pendingOrder.cart_group_id || null,

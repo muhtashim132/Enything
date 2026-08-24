@@ -12,16 +12,16 @@ void main() async {
 
   final supabase = SupabaseClient(url, key);
   final rnd = Random().nextInt(999999);
-  final email = '9876${rnd}@auth.enything.app'; 
-  final password = 'TestPassword123!';
+  final email = '9876$rnd@auth.enything.app'; 
+  const password = 'TestPassword123!';
   
   try {
     final res = await supabase.auth.signUp(
       email: email,
       password: password,
     );
-    print('SignUp User ID: ' + res.user!.id);
-    print('SignUp Session: ' + (res.session != null).toString());
+    print('SignUp User ID: ${res.user!.id}');
+    print('SignUp Session: ${res.session != null}');
   } catch (e) {
     print('Error from Supabase:');
     print(e.toString());

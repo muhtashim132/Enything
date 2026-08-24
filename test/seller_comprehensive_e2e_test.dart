@@ -235,7 +235,7 @@ void main() {
 
       // Pharmacist declines prescription
       const rejectReason = 'prescription';
-      final resultingStatus = rejectReason == 'prescription' ? 'verification_failed' : 'seller_rejected';
+      const resultingStatus = rejectReason == 'prescription' ? 'verification_failed' : 'seller_rejected';
       expect(resultingStatus, 'verification_failed');
     });
   });
@@ -347,7 +347,7 @@ void main() {
       final tds194O = totalBaseSales * 0.001;
 
       // GST TCS §52 (1% on taxable non-food sales)
-      final tcsGst = 1000.0 * 0.01;
+      const tcsGst = 1000.0 * 0.01;
 
       expect(totalBaseSales, 1500.0);
       expect(s9_5Gst, 25.0); // Doc 3: Section 9(5) Statement

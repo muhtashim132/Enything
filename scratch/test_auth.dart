@@ -10,8 +10,8 @@ void main() async {
   }
 
   final supabase = SupabaseClient(url, key);
-  final email = 'mock919999999996@enything.com'; 
-  final password = 'Dummy123';
+  const email = 'mock919999999996@enything.com'; 
+  const password = 'Dummy123';
   
   try {
     final res = await supabase.auth.signInWithPassword(

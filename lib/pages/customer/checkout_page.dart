@@ -998,11 +998,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'tds_amount': shopTds,
           'grand_total_collected': math.max(
               0.0,
-              shopGrandTotal +
-                  (surcharge * proportion) +
-                  (smallCartFee * proportion) +
-                  (heavyFee * proportion) -
-                  (appliedCouponDiscount * proportion)),
+              shopGrandTotal - (appliedCouponDiscount * proportion)),
           'gst_rate_snapshot': rateSnapshot,
           'prescription_urls':
               shopItems.any((item) => item.product.requiresPrescription)

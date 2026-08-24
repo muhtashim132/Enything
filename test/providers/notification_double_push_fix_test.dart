@@ -5,6 +5,7 @@
 ///   2. FCM payload structure is data-only (no `notification` field)
 ///   3. Foreground FCM handler works with data-only messages
 ///   4. Edge cases: deduplication, non-order notifications still persist
+library;
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 

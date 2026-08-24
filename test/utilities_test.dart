@@ -98,20 +98,20 @@ void main() {
     group('GeoUtils', () {
       test('calculates accurate compass bearing', () {
         // Point North
-        final p1 = LatLng(12.9716, 77.5946);
-        final pNorth = LatLng(13.9716, 77.5946);
+        const p1 = LatLng(12.9716, 77.5946);
+        const pNorth = LatLng(13.9716, 77.5946);
         final bearingNorth = GeoUtils.calculateBearing(p1, pNorth);
         expect(bearingNorth, closeTo(0.0, 1.0));
 
         // Point East
-        final pEast = LatLng(12.9716, 78.5946);
+        const pEast = LatLng(12.9716, 78.5946);
         final bearingEast = GeoUtils.calculateBearing(p1, pEast);
         expect(bearingEast, closeTo(90.0, 1.0));
       });
 
       test('computes bounding box for camera view', () {
-        final p1 = LatLng(12.9716, 77.5946);
-        final p2 = LatLng(12.9800, 77.6000);
+        const p1 = LatLng(12.9716, 77.5946);
+        const p2 = LatLng(12.9800, 77.6000);
         final bounds = GeoUtils.computeBounds([p1, p2]);
         expect(bounds, isNotNull);
         expect(bounds!.contains(p1), isTrue);

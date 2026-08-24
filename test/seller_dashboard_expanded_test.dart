@@ -31,7 +31,7 @@ void main() {
       ];
 
       // Simulate client-side search query
-      final q = 'mango';
+      const q = 'mango';
       final filtered = products.where((p) => p.name.toLowerCase().contains(q.toLowerCase())).toList();
       expect(filtered.length, 1);
       expect(filtered.first.id, 'prod-1');

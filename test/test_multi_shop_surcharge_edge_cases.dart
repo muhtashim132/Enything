@@ -123,9 +123,9 @@ Future<void> main() async {
 
   // ── TEST 1: MULTI-SHOP SURCHARGE & GST CALCULATION (3 SHOPS) ──
   print('\n--- [TEST 1] Multi-Shop Surcharge & 18% GST Verification ---');
-  final totalDeliveryGross = 70.80;
-  final multiShopSurchargeTotal = 40.0;
-  final expectedTotalRiderEarnings = 48.0;
+  const totalDeliveryGross = 70.80;
+  const multiShopSurchargeTotal = 40.0;
+  const expectedTotalRiderEarnings = 48.0;
 
   print('Total Multi-Shop Surcharge: ₹$multiShopSurchargeTotal');
   print('Total Gross Delivery Charges (inc 18% GST): ₹$totalDeliveryGross');
@@ -137,9 +137,9 @@ Future<void> main() async {
   final cartGroupId = const Uuid().v4();
   final now = DateTime.now();
 
-  final shopDeliveryFee = totalDeliveryGross / 3.0; // 23.60
-  final shopSurcharge = multiShopSurchargeTotal / 3.0; // 13.33
-  final shopPlatformFee = 5.0 / 3.0; // 1.67
+  const shopDeliveryFee = totalDeliveryGross / 3.0; // 23.60
+  const shopSurcharge = multiShopSurchargeTotal / 3.0; // 13.33
+  const shopPlatformFee = 5.0 / 3.0; // 1.67
 
   final ordersPayload = [
     {

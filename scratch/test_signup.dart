@@ -14,8 +14,8 @@ void main() async {
   
   // Random real number email
   final rnd = Random().nextInt(999999);
-  final email = '9876\$rnd@auth.enything.app'; 
-  final password = 'TestPassword123!';
+  const email = '9876\$rnd@auth.enything.app'; 
+  const password = 'TestPassword123!';
   
   try {
     final res = await supabase.auth.signUp(

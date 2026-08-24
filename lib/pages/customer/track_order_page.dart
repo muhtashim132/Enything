@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -640,11 +641,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   double _computeGroupBaseDeliveryFee() {
     if (_activeGroupOrders.isEmpty) return 0.0;
     // delivery_charges in DB already includes base + surcharge + small_cart + heavy + GST,
-    // so "base" is the total delivery minus the sub-fees. But for display purposes,
-    // we show delivery_charges minus the separately-displayed sub-fees.
+    // so "base" is the total delivery minus the sub-fees and delivery GST.
     final totalDelivery = _computeGroupDeliveryCharges();
-    return totalDelivery - _computeGroupMultiShopSurcharge() -
-        _computeGroupSmallCartFee() - _computeGroupHeavyOrderFee();
+    final base = totalDelivery -
+        _computeGroupMultiShopSurcharge() -
+        _computeGroupSmallCartFee() -
+        _computeGroupHeavyOrderFee() -
+        _computeGroupGstDelivery();
+    return math.max(0.0, base);
   }
 
   double _computeGroupDeliveryCharges() =>
@@ -695,6 +699,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       _partialRejectionResolved = false;
       _wasPartialRejectionTimerStarted = false;
       _hasScrolledToRejection = false;
+      // Reset timer key in SharedPreferences to provide fresh 5 mins for new rejection
+      final cartGroupId = _order?.cartGroupId ?? _order?.id;
+      if (cartGroupId != null && cartGroupId.isNotEmpty) {
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.remove('partial_rejection_timer_start_$cartGroupId');
+        }).catchError((_) => null);
+      }
     }
     _lastKnownRejectedCount = currentRejectedCount;
 

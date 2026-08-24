@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:enythingmobilenew/models/order_group.dart';
@@ -8,8 +7,8 @@ import 'package:enythingmobilenew/widgets/common/animated_moving_marker.dart';
 void main() {
   group('100x Map Mathematics & Smooth Marker Algorithms', () {
     test('lerpLatLng accurately interpolates coordinates between two points', () {
-      final p1 = const LatLng(28.6139, 77.2090); // New Delhi
-      final p2 = const LatLng(28.7041, 77.1025);
+      const p1 = LatLng(28.6139, 77.2090); // New Delhi
+      const p2 = LatLng(28.7041, 77.1025);
 
       final mid = lerpLatLng(p1, p2, 0.5);
       expect(mid.latitude, closeTo((28.6139 + 28.7041) / 2, 0.00001));

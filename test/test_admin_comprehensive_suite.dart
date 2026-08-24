@@ -200,7 +200,7 @@ void main() {
   // ══════════════════════════════════════════════════════════════════
   group('100x Admin ↔ Seller Functionality Suite', () {
     test('Dynamic Category Commission Overrides & Net Payout calculation', () {
-      final globalCommission = 5.0; // 5%
+      const globalCommission = 5.0; // 5%
       final categoryOverrides = {
         'Electronics': 8.0,
         'Restaurant': 10.0,
@@ -410,9 +410,9 @@ void main() {
     });
 
     test('Platform Fee & Delivery GST Breakdown (SAC 9965 & 9985)', () {
-      final deliveryFee = 50.0;
-      final platformFee = 20.0;
-      final gstRate = 0.18;
+      const deliveryFee = 50.0;
+      const platformFee = 20.0;
+      const gstRate = 0.18;
 
       final deliveryGst = double.parse((deliveryFee * gstRate).toStringAsFixed(2)); // ₹9.00
       final platformFeeGst = double.parse((platformFee * gstRate).toStringAsFixed(2)); // ₹3.60
@@ -578,7 +578,7 @@ void main() {
     });
 
     test('Active Session Revocation Logic Guard', () {
-      final currentSessionId = 'sess-active-001';
+      const currentSessionId = 'sess-active-001';
       final sessions = [
         {'id': 'sess-active-001', 'device': 'MacBook Pro', 'is_current': true},
         {'id': 'sess-remote-002', 'device': 'iPhone 15', 'is_current': false},
