@@ -74,11 +74,12 @@ class _ComplaintsAdminPageState extends State<ComplaintsAdminPage>
   Future<void> _loadReviews() async {
     try {
       final res = await _db
-          .from('reviews')
+          .from('ratings')
           .select(
-              '*, profiles:user_id(full_name, avatar_url), shops:shop_id(name)')
+              'id, rating, review, created_at, shop_id, product_id, rater_id, rater_role, ratee_role, profiles:rater_id(full_name, avatar_url), shops:shop_id(name), products:product_id(name)')
+          .not('review', 'is', null)
           .order('created_at', ascending: false)
-          .limit(80);
+          .limit(100);
       _reviews = List<Map<String, dynamic>>.from(res);
     } catch (_) {
       _reviews = [];
@@ -865,7 +866,7 @@ class _ReviewsTab extends StatelessWidget {
 
       if (confirm == true) {
         try {
-          await Supabase.instance.client.from('reviews').delete().eq('id', id);
+          await Supabase.instance.client.from('ratings').delete().eq('id', id);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Review deleted successfully'),
@@ -894,7 +895,7 @@ class _ReviewsTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
-              'Requires a `reviews` table with columns: rating, comment, user_id, shop_id.',
+              'Ratings and reviews submitted by customers, sellers, and riders will appear here.',
               textAlign: TextAlign.center,
               style: AdminStyles.caption(),
             ),
@@ -941,11 +942,17 @@ class _ReviewsTab extends StatelessWidget {
             final r = e.value;
             final profile = r['profiles'] as Map?;
             final shop = r['shops'] as Map?;
+            final product = r['products'] as Map?;
             final rating = (r['rating'] as num?)?.toDouble() ?? 0.0;
             final comment = (r['comment'] ??
                 r['review'] ??
                 r['review_text'] ??
                 '') as String;
+            final targetLabel = shop?['name'] ??
+                product?['name'] ??
+                (r['ratee_role'] == 'delivery' || r['ratee_role'] == 'delivery_partner'
+                    ? 'Delivery Partner Review'
+                    : '');
             final time = r['created_at'] != null
                 ? DateFormat('dd MMM yy')
                     .format(DateTime.parse(r['created_at'].toString()).toIST())
@@ -980,9 +987,8 @@ class _ReviewsTab extends StatelessWidget {
                         children: [
                           Text(profile?['full_name'] ?? 'Anonymous',
                               style: AdminStyles.body(size: 13)),
-                          // FIX: use 'name' not 'shop_name' — shops table column is 'name'
-                          Text(shop?['name'] ?? '',
-                              style: AdminStyles.caption()),
+                          if (targetLabel.isNotEmpty)
+                            Text(targetLabel, style: AdminStyles.caption()),
                         ],
                       ),
                     ),
