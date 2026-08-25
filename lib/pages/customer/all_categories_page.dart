@@ -35,9 +35,7 @@ class _AllCategoriesPageState extends State<AllCategoriesPage> {
     final config = context.watch<PlatformConfigProvider>();
 
     // Show only active categories (filtering admin-disabled ones)
-    final allCategories = config.activeCategoryMaps.isNotEmpty
-        ? config.activeCategoryMaps
-        : AppCategories.all;
+    final allCategories = config.activeCategoryMaps;
 
     // Filter categories based on search query and selected collection
     final filteredCategories = allCategories.where((cat) {

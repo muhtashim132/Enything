@@ -25,11 +25,26 @@ void main() {
 
     test('Role Persona & Aliases Validation Engine', () {
       bool isValidRaterRole(String role) {
-        return ['customer', 'seller', 'shop', 'rider', 'delivery', 'delivery_partner'].contains(role);
+        return [
+          'customer',
+          'seller',
+          'shop',
+          'rider',
+          'delivery',
+          'delivery_partner'
+        ].contains(role);
       }
 
       bool isValidRateeRole(String role) {
-        return ['seller', 'shop', 'rider', 'delivery', 'delivery_partner', 'customer', 'product'].contains(role);
+        return [
+          'seller',
+          'shop',
+          'rider',
+          'delivery',
+          'delivery_partner',
+          'customer',
+          'product'
+        ].contains(role);
       }
 
       // Supported rater roles
@@ -62,8 +77,11 @@ void main() {
         if (orderStatus != 'delivered') return false;
 
         if (raterRole == 'customer') return userId == customerId;
-        if (raterRole == 'seller' || raterRole == 'shop') return userId == sellerId;
-        if (raterRole == 'rider' || raterRole == 'delivery' || raterRole == 'delivery_partner') {
+        if (raterRole == 'seller' || raterRole == 'shop')
+          return userId == sellerId;
+        if (raterRole == 'rider' ||
+            raterRole == 'delivery' ||
+            raterRole == 'delivery_partner') {
           return userId == riderId;
         }
         return false;
@@ -168,7 +186,10 @@ void main() {
     });
 
     test('IDOR Permission Checks on Order Rating Flags', () {
-      bool canSetCustomerRated({required String callerId, required String orderCustomerId, bool isAdmin = false}) {
+      bool canSetCustomerRated(
+          {required String callerId,
+          required String orderCustomerId,
+          bool isAdmin = false}) {
         return callerId == orderCustomerId || isAdmin;
       }
 
@@ -178,7 +199,9 @@ void main() {
         required String orderCustomerId,
         bool isAdmin = false,
       }) {
-        return callerId == orderDeliveryPartnerId || callerId == orderCustomerId || isAdmin;
+        return callerId == orderDeliveryPartnerId ||
+            callerId == orderCustomerId ||
+            isAdmin;
       }
 
       bool canSetSellerRated({
@@ -187,7 +210,9 @@ void main() {
         required String orderCustomerId,
         bool isAdmin = false,
       }) {
-        return callerId == orderSellerId || callerId == orderCustomerId || isAdmin;
+        return callerId == orderSellerId ||
+            callerId == orderCustomerId ||
+            isAdmin;
       }
 
       const custId = 'cust-101';
@@ -196,30 +221,76 @@ void main() {
       const strangerId = 'stranger-999';
 
       // Customer rated
-      expect(canSetCustomerRated(callerId: custId, orderCustomerId: custId), isTrue);
-      expect(canSetCustomerRated(callerId: strangerId, orderCustomerId: custId), isFalse);
+      expect(canSetCustomerRated(callerId: custId, orderCustomerId: custId),
+          isTrue);
+      expect(canSetCustomerRated(callerId: strangerId, orderCustomerId: custId),
+          isFalse);
 
       // Delivery rated (called by rider or customer)
-      expect(canSetDeliveryRated(callerId: riderId, orderDeliveryPartnerId: riderId, orderCustomerId: custId), isTrue);
-      expect(canSetDeliveryRated(callerId: custId, orderDeliveryPartnerId: riderId, orderCustomerId: custId), isTrue);
-      expect(canSetDeliveryRated(callerId: strangerId, orderDeliveryPartnerId: riderId, orderCustomerId: custId), isFalse);
+      expect(
+          canSetDeliveryRated(
+              callerId: riderId,
+              orderDeliveryPartnerId: riderId,
+              orderCustomerId: custId),
+          isTrue);
+      expect(
+          canSetDeliveryRated(
+              callerId: custId,
+              orderDeliveryPartnerId: riderId,
+              orderCustomerId: custId),
+          isTrue);
+      expect(
+          canSetDeliveryRated(
+              callerId: strangerId,
+              orderDeliveryPartnerId: riderId,
+              orderCustomerId: custId),
+          isFalse);
 
       // Seller rated (called by seller or customer)
-      expect(canSetSellerRated(callerId: sellerId, orderSellerId: sellerId, orderCustomerId: custId), isTrue);
-      expect(canSetSellerRated(callerId: custId, orderSellerId: sellerId, orderCustomerId: custId), isTrue);
-      expect(canSetSellerRated(callerId: strangerId, orderSellerId: sellerId, orderCustomerId: custId), isFalse);
+      expect(
+          canSetSellerRated(
+              callerId: sellerId,
+              orderSellerId: sellerId,
+              orderCustomerId: custId),
+          isTrue);
+      expect(
+          canSetSellerRated(
+              callerId: custId,
+              orderSellerId: sellerId,
+              orderCustomerId: custId),
+          isTrue);
+      expect(
+          canSetSellerRated(
+              callerId: strangerId,
+              orderSellerId: sellerId,
+              orderCustomerId: custId),
+          isFalse);
     });
 
     test('Admin Review Deletion and Recalculation Engine', () {
       final ratingsList = [
         {'id': 'r-1', 'shop_id': 'shop-1', 'rating': 5, 'review': 'Great!'},
         {'id': 'r-2', 'shop_id': 'shop-1', 'rating': 4, 'review': 'Good food'},
-        {'id': 'r-3', 'shop_id': 'shop-1', 'rating': 1, 'review': 'Spam test review'},
-        {'id': 'r-4', 'shop_id': 'shop-2', 'rating': 5, 'review': 'Awesome bakery'},
+        {
+          'id': 'r-3',
+          'shop_id': 'shop-1',
+          'rating': 1,
+          'review': 'Spam test review'
+        },
+        {
+          'id': 'r-4',
+          'shop_id': 'shop-2',
+          'rating': 5,
+          'review': 'Awesome bakery'
+        },
       ];
 
-      Map<String, dynamic> computeShopStats(String shopId, List<Map<String, dynamic>> items) {
-        final shopRatings = items.where((r) => r['shop_id'] == shopId).map((r) => r['rating'] as int).toList();
+      Map<String, dynamic> computeShopStats(
+          String shopId, List<Map<String, dynamic>> items) {
+        final shopRatings = items
+            .where((r) => r['shop_id'] == shopId)
+            .map((r) => r['rating'] as int)
+            .toList();
         if (shopRatings.isEmpty) return {'avg': 0.0, 'count': 0};
         final sum = shopRatings.reduce((a, b) => a + b);
         return {

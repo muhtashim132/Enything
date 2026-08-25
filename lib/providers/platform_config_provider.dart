@@ -71,7 +71,22 @@ class PlatformConfigProvider extends ChangeNotifier {
   // ── Category Management Getters (Additive) ──────────────────────────────
 
   /// Returns true if this category is currently active (not disabled by admin).
-  bool isActiveCategory(String name) => !_disabledCategories.contains(name);
+  bool isActiveCategory(String? name) {
+    if (name == null || name.trim().isEmpty) return false;
+    final trimmed = name.trim();
+    if (_disabledCategories.contains(trimmed)) return false;
+    // Case-insensitive check fallback
+    final lower = trimmed.toLowerCase();
+    for (final d in _disabledCategories) {
+      if (d.trim().toLowerCase() == lower) return false;
+    }
+    return true;
+  }
+
+  /// Filters a list of category/subcategory names, returning only active ones.
+  List<String> getActiveSubcategories(List<String> categories) {
+    return categories.where(isActiveCategory).toList();
+  }
 
   /// All disabled category names.
   Set<String> get disabledCategories => Set.unmodifiable(_disabledCategories);
@@ -79,10 +94,10 @@ class PlatformConfigProvider extends ChangeNotifier {
   /// Returns all active built-in category maps (filtered by disabled set).
   List<Map<String, String>> get activeCategoryMaps {
     final builtIn = AppCategories.all
-        .where((c) => !_disabledCategories.contains(c['name']))
+        .where((c) => isActiveCategory(c['name']))
         .toList();
     final custom = _customCategories
-        .where((c) => !_disabledCategories.contains(c['name']))
+        .where((c) => isActiveCategory(c['name']))
         .toList();
     return [...builtIn, ...custom];
   }
@@ -703,6 +718,8 @@ class PlatformConfigProvider extends ChangeNotifier {
         return _commissionPercent;
       case 'commission_percent':
         return _commissionPercent; // Legacy
+      case 'delivery_base_fee':
+        return _deliveryBaseFee;
       case 'wait_penalty_per_min':
         return _waitPenaltyPerMin;
       case 'platform_fee':
@@ -825,16 +842,16 @@ class PlatformConfigProvider extends ChangeNotifier {
     // Reset base configurations to default if deleted
     switch (key) {
       case 'default_commission_percent':
-        _commissionPercent = 10.0;
+        _commissionPercent = 5.0;
         break;
       case 'commission_percent':
-        _commissionPercent = 10.0;
+        _commissionPercent = 5.0;
         break; // Legacy
       case 'wait_penalty_per_min':
         _waitPenaltyPerMin = 2.0;
         break;
       case 'platform_fee':
-        _platformFee = 15.0;
+        _platformFee = 20.0;
         break;
       case 'delivery_base_fee':
       case 'delivery_fee':

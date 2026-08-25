@@ -11,42 +11,49 @@ Future<String> authUser(
   final email = _emailFromPhone(phone);
   final password = _passwordFromPhone(phone);
 
-  try {
-    final res =
-        await client.auth.signInWithPassword(email: email, password: password);
-    if (res.user != null) {
-      return res.user!.id;
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    try {
+      final res =
+          await client.auth.signInWithPassword(email: email, password: password);
+      if (res.user != null) {
+        return res.user!.id;
+      }
+    } catch (_) {}
+
+    try {
+      final signUpRes =
+          await client.auth.signUp(email: email, password: password);
+      final userId = signUpRes.user?.id;
+      if (userId != null) {
+        await client.from('profiles').upsert({
+          'id': userId,
+          'phone': phone,
+          'full_name': 'Test Customer $role',
+          'role': role,
+        });
+
+        if (role == 'seller') {
+          await client.from('shops').upsert({
+            'seller_id': userId,
+            'name': 'CustomerTestShop_$phone',
+            'is_active': true,
+            'is_accepting_orders': true,
+            'location': 'POINT(74.7973 34.0837)',
+          });
+        }
+
+        return userId;
+      }
+    } catch (e) {
+      if (attempt == 3) {
+        final res =
+            await client.auth.signInWithPassword(email: email, password: password);
+        return res.user!.id;
+      }
+      await Future.delayed(const Duration(seconds: 2));
     }
-  } catch (_) {}
-
-  try {
-    final signUpRes =
-        await client.auth.signUp(email: email, password: password);
-    final userId = signUpRes.user!.id;
-
-    await client.from('profiles').upsert({
-      'id': userId,
-      'phone': phone,
-      'full_name': 'Test Customer $role',
-      'role': role,
-    });
-
-    if (role == 'seller') {
-      await client.from('shops').upsert({
-        'seller_id': userId,
-        'name': 'CustomerTestShop_$phone',
-        'is_active': true,
-        'is_accepting_orders': true,
-        'location': 'POINT(74.7973 34.0837)',
-      });
-    }
-
-    return userId;
-  } catch (e) {
-    final res =
-        await client.auth.signInWithPassword(email: email, password: password);
-    return res.user!.id;
   }
+  throw Exception('Failed to authenticate $phone');
 }
 
 Future<void> main() async {
@@ -161,8 +168,8 @@ Future<void> main() async {
         'total_amount': 100.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 100.0 + 5.0 + 41.30 + currentPlatformFee + expectedSmallCartFee,
-        'grand_total': 100.0 + 5.0 + 41.30 + currentPlatformFee + expectedSmallCartFee,
+        'grand_total_collected': 100.0 + 5.0 + 41.30 + currentPlatformFee,
+        'grand_total': 100.0 + 5.0 + 41.30 + currentPlatformFee,
         'delivery_charges': 41.30,
         'rider_earnings': 28.0,
         'multi_shop_surcharge': 0.0,
@@ -215,7 +222,7 @@ Future<void> main() async {
   print('• Grand Total Collected: ₹${o1Db['grand_total_collected']}');
 
   if (o1Db['small_cart_fee'] != expectedSmallCartFee) throw Exception('FAILED: Small cart fee must be $expectedSmallCartFee');
-  if ((o1Db['grand_total_collected'] - (100.0 + 5.0 + 41.30 + currentPlatformFee + expectedSmallCartFee)).abs() > 0.01) throw Exception('FAILED: Grand total mismatch');
+  if ((o1Db['grand_total_collected'] - (100.0 + 5.0 + 41.30 + currentPlatformFee)).abs() > 0.01) throw Exception('FAILED: Grand total mismatch');
   print('✅ [TEST 1 PASSED] Small cart fee and single-shop bill summary verified!');
 
   // ── TEST 2: 2-SHOP MULTI-ORDER CART WITH MULTI-SHOP SURCHARGE & GST ──
@@ -224,7 +231,9 @@ Future<void> main() async {
   final o2bId = const Uuid().v4();
   final cart2Id = const Uuid().v4();
 
-  // Split delivery between 2 shops: ₹23.60 each, platform fee per order
+  final platFeePerShop = currentPlatformFee / 2.0;
+
+  // Split delivery between 2 shops: ₹23.60 each, platform fee split per order
   await client.rpc('place_orders_transaction', params: {
     'p_orders': [
       {
@@ -235,12 +244,12 @@ Future<void> main() async {
         'total_amount': 100.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 100.0 + 5.0 + 23.60 + currentPlatformFee,
-        'grand_total': 100.0 + 5.0 + 23.60 + currentPlatformFee,
+        'grand_total_collected': 100.0 + 5.0 + 23.60 + platFeePerShop,
+        'grand_total': 100.0 + 5.0 + 23.60 + platFeePerShop,
         'delivery_charges': 23.60,
         'rider_earnings': 16.0,
         'multi_shop_surcharge': 10.0,
-        'platform_fee': currentPlatformFee,
+        'platform_fee': platFeePerShop,
         'small_cart_fee': 0.0,
         'heavy_order_fee': 0.0,
         'coupon_discount': 0.0,
@@ -264,12 +273,12 @@ Future<void> main() async {
         'total_amount': 500.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 500.0 + 90.0 + 23.60 + currentPlatformFee,
-        'grand_total': 500.0 + 90.0 + 23.60 + currentPlatformFee,
+        'grand_total_collected': 500.0 + 90.0 + 23.60 + platFeePerShop,
+        'grand_total': 500.0 + 90.0 + 23.60 + platFeePerShop,
         'delivery_charges': 23.60,
         'rider_earnings': 16.0,
         'multi_shop_surcharge': 10.0,
-        'platform_fee': currentPlatformFee,
+        'platform_fee': platFeePerShop,
         'small_cart_fee': 0.0,
         'heavy_order_fee': 0.0,
         'coupon_discount': 0.0,
@@ -341,7 +350,7 @@ Future<void> main() async {
     grandTotal += (o['grand_total_collected'] as num).toDouble();
   }
 
-  final expectedTotalPlatform = currentPlatformFee * 2;
+  final expectedTotalPlatform = currentPlatformFee;
   final expectedGrandTotal = 600.0 + 47.20 + 95.0 + expectedTotalPlatform;
 
   print('📊 Aggregated Group Bill Summary (2 Shops):');

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -35,7 +34,6 @@ class AuthProvider extends ChangeNotifier {
   bool _isProfileFetched = false;
   String? _error;
   String? _pendingPhone; // Phone waiting for OTP verification
-  String? _mockUserId; // ID used for magic numbers
   bool _isManualSignOut = false;
   bool _isHandlingForcedLogout = false;
 
@@ -53,7 +51,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isProfileFetched => _isProfileFetched;
   String? get error => _error;
   bool get isAuthenticated => _user != null;
-  String? get currentUserId => _supabase.auth.currentUser?.id ?? _mockUserId;
+  String? get currentUserId => _supabase.auth.currentUser?.id;
   String? get pendingPhone => _pendingPhone;
   String? get localSessionId => _localSessionId;
 
@@ -82,7 +80,7 @@ class AuthProvider extends ChangeNotifier {
         // Auto-deactivate shop/rider for FORCED logouts (session revoked from another device).
         // Manual signOut() already deactivated before this event fires, so skip to avoid double-write.
         if (!_isManualSignOut) {
-          final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+          final userId = _supabase.auth.currentUser?.id;
           final role = _user?.activeSessionRole;
           if (userId != null) {
             if (role == 'seller') {
@@ -107,7 +105,6 @@ class AuthProvider extends ChangeNotifier {
         _isManualSignOut = false; // Reset
 
         _user = null;
-        _mockUserId = null;
         _pendingPhone = null;
         _isProfileFetched = false;
 
@@ -260,7 +257,7 @@ class AuthProvider extends ChangeNotifier {
         '[SingleDeviceAuth] Executing remote forced logout for user ${currentUserId ?? "unknown"}');
 
     // 1. Auto-deactivate shop or delivery partner duty
-    final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+    final userId = _supabase.auth.currentUser?.id;
     final role = _user?.activeSessionRole;
     if (userId != null) {
       try {
@@ -308,7 +305,6 @@ class AuthProvider extends ChangeNotifier {
     // 5. Clear in-memory state
     _user = null;
     _localSessionId = null;
-    _mockUserId = null;
     _pendingPhone = null;
     _isAdminVerified = false;
     _adminData = null;
@@ -388,7 +384,7 @@ class AuthProvider extends ChangeNotifier {
   /// Validates if the local session matches the active database session.
   /// Returns false if invalidated (and triggers forced logout).
   Future<bool> validateActiveSession() async {
-    final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+    final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return true;
 
     // Load local session ID from SharedPreferences if not in memory
@@ -594,7 +590,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _fetchProfile({String? preferredRole}) async {
     try {
-      final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+      final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
         _isProfileFetched = true;
         safeNotifyListeners();
@@ -722,18 +718,9 @@ class AuthProvider extends ChangeNotifier {
       _user = UserModel.fromMap({
         ...data,
         'email': _supabase.auth.currentUser?.email ?? '',
-        'phone': (_supabase.auth.currentUser?.email?.contains('9999999996') ==
-                true)
-            ? '+919999999996'
-            : (_supabase.auth.currentUser?.email?.contains('9999999997') ==
-                    true)
-                ? '+919999999997'
-                : (_supabase.auth.currentUser?.email?.contains('9999999998') ==
-                        true)
-                    ? '+919999999998'
-                    : (_supabase.auth.currentUser?.phone?.isNotEmpty == true)
-                        ? _supabase.auth.currentUser!.phone!
-                        : (data['phone'] ?? ''),
+        'phone': (_supabase.auth.currentUser?.phone?.isNotEmpty == true)
+            ? _supabase.auth.currentUser!.phone!
+            : (data['phone'] ?? ''),
         'activeRoles': allRoles,
         'activeSessionRole': sessionRole,
         'verification_status': verificationStatus,
@@ -830,48 +817,20 @@ class AuthProvider extends ChangeNotifier {
   /// Derives a stable email+password pair from a phone number so we can
   /// create a real Supabase Auth session after OTP verification.
   String _emailFromPhone(String phone) {
-    if (phone.endsWith('9999999996')) return 'mock919999999996@enything.com';
-    if (phone.endsWith('9999999997')) return 'mock919999999997@enything.com';
-    if (phone.endsWith('9999999998')) return 'mock919999999998@enything.com';
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return '$digits@auth.enything.app';
   }
 
   String _legacyPasswordFromPhone(String phone) {
-    if (phone.endsWith('9999999996') ||
-        phone.endsWith('9999999997') ||
-        phone.endsWith('9999999998')) {
-      return 'Dummy123';
-    }
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     return 'Enything$digits#Auth2025';
   }
 
   String _passwordFromPhone(String phone) {
-    if (phone.endsWith('9999999996') ||
-        phone.endsWith('9999999997') ||
-        phone.endsWith('9999999998')) {
-      return 'Dummy123';
-    }
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     final bytes = utf8.encode('Enything_${digits}_Secured#2026');
     final digest = sha256.convert(bytes);
     return 'EnY\$${digest.toString().substring(0, 16)}';
-  }
-
-  // S4 FIX: Magic test numbers are ONLY active in debug builds EXCEPT for reviewer numbers.
-  bool _isMagicNumber(String phone) {
-    if (phone.endsWith('9999999996') ||
-        phone.endsWith('9999999997') ||
-        phone.endsWith('9999999998')) {
-      return true;
-    }
-    if (!kDebugMode) return false;
-    return phone.endsWith('9999999991') ||
-        phone.endsWith('9999999992') ||
-        phone.endsWith('9999999993') ||
-        phone.endsWith('9999999994') ||
-        phone.endsWith('9999999995');
   }
 
   /// Step 1: Send OTP via the `send-otp` Supabase Edge Function (Fast2SMS).
@@ -880,14 +839,6 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     safeNotifyListeners();
-
-    // ── Magic number bypass for internal testing ──────────────────────────
-    if (_isMagicNumber(phone)) {
-      _pendingPhone = phone;
-      _isLoading = false;
-      safeNotifyListeners();
-      return null;
-    }
 
     try {
       final response = await _supabase.functions.invoke(
@@ -944,24 +895,20 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     safeNotifyListeners();
 
-    // ──────────────────────────────────────────────────────────────────────
-
     try {
       // 1️⃣ Verify OTP via Edge Function
-      if (!_isMagicNumber(phone)) {
-        final verifyResp = await _supabase.functions.invoke(
-          'verify-otp',
-          body: {'phone': phone, 'otp': otp.trim()},
-        );
+      final verifyResp = await _supabase.functions.invoke(
+        'verify-otp',
+        body: {'phone': phone, 'otp': otp.trim()},
+      );
 
-        if (verifyResp.status != 200) {
-          final data = verifyResp.data;
-          _error = (data is Map ? data['error'] as String? : null) ??
-              'Invalid OTP. Please try again.';
-          _isLoading = false;
-          safeNotifyListeners();
-          return null;
-        }
+      if (verifyResp.status != 200) {
+        final data = verifyResp.data;
+        _error = (data is Map ? data['error'] as String? : null) ??
+            'Invalid OTP. Please try again.';
+        _isLoading = false;
+        safeNotifyListeners();
+        return null;
       }
 
       // 2️⃣ Create / sign-in to Supabase Auth using phone-derived credentials
@@ -1021,105 +968,6 @@ class AuthProvider extends ChangeNotifier {
         return null;
       }
 
-      // For Razorpay reviewer, auto-insert profile + role specific row + address
-      if (phone.endsWith('9999999996') ||
-          phone.endsWith('9999999997') ||
-          phone.endsWith('9999999998')) {
-        String mockRole = 'customer';
-        if (phone.endsWith('9999999997')) mockRole = 'seller';
-        if (phone.endsWith('9999999998')) mockRole = 'delivery_partner';
-
-        final assignedRole = preferredRole ?? mockRole;
-        const hardcodedLocation = 'POINT(74.6366 34.4225)';
-
-        // 1. Upsert profile — handle phone uniqueness gracefully
-        // Reviewer names: 9999999996 → Rajesh Kumar (Customer)
-        //                 9999999997 → Amit Bandana (Seller)
-        //                 9999999998 → Kishan Nadda  (Delivery Partner)
-        final reviewerName = phone.endsWith('9999999996')
-            ? 'Rajesh Kumar'
-            : phone.endsWith('9999999997')
-                ? 'Amit Bandana'
-                : 'Kishan Nadda';
-        try {
-          final uniquePhone = phone.contains('999999999')
-              ? '+9199999${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}'
-              : phone;
-          await _supabase.from('profiles').upsert({
-            'id': userId,
-            'role': assignedRole,
-            'full_name': reviewerName,
-            'phone': uniquePhone
-          }, onConflict: 'id');
-        } catch (e) {
-          debugPrint('Mock profile upsert failed: $e');
-        }
-
-        // 2. Upsert specific role row (with hardcoded location)
-        try {
-          if (assignedRole == 'customer') {
-            await _supabase.from('customers').upsert({
-              'id': userId,
-              'location': hardcodedLocation,
-            }, onConflict: 'id');
-          } else if (assignedRole == 'seller') {
-            await _supabase.from('shops').upsert({
-              'seller_id': userId,
-              'name': 'Amit Medical Store',
-              'category': 'Medical Store',
-              'categories': ['Medical Store'],
-              'address': 'Main Market, Bandipora, J&K 193502',
-              'is_active': true,
-              'is_accepting_orders': true,
-              'verification_status': 'verified',
-              'location': hardcodedLocation,
-              'opening_hours': '00:00 - 23:59',
-              'open_time': '00:00:00',
-              'close_time': '23:59:59',
-            }, onConflict: 'seller_id');
-          } else if (assignedRole == 'delivery_partner') {
-            await _supabase.from('delivery_partners').upsert({
-              'id': userId,
-              'is_active': true,
-              'verification_status': 'verified',
-              'location': hardcodedLocation,
-            }, onConflict: 'id');
-          }
-        } catch (e) {
-          debugPrint('Mock role upsert failed: $e');
-        }
-
-        // 3. Insert a saved address so the reviewer can place orders
-        try {
-          final existingAddr = await _supabase
-              .from('saved_addresses')
-              .select()
-              .eq('user_id', userId)
-              .maybeSingle();
-
-          if (existingAddr == null) {
-            await _supabase.from('saved_addresses').insert({
-              'user_id': userId,
-              'label': 'Home',
-              'address': 'Main Market, Bandipora',
-              'landmark': 'Near Jamia Masjid',
-              'pincode': '193502',
-              'latitude': 34.4225,
-              'longitude': 74.6366,
-              'is_default': true
-            });
-          }
-        } catch (e) {
-          debugPrint('Mock address insert failed: $e');
-        }
-
-        // Always treat Razorpay reviewer as an existing user — skip setup page
-        await _fetchProfile(preferredRole: assignedRole);
-        _isLoading = false;
-        safeNotifyListeners();
-        return 'existing';
-      }
-
       // Establish unique active session in DB and start realtime listener
       await _establishActiveSession(userId);
 
@@ -1172,6 +1020,7 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
+
   // ─── Create / Update Profile ─────────────────────────────────────────────
   /// One phone user can have ONE profile row AND also independent rows in
   /// sellers/customers/delivery_partners. This method upserts both.
@@ -1186,8 +1035,13 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final user = _supabase.auth.currentUser;
-      final userId = user?.id ??
-          '00000000-0000-0000-0000-${_pendingPhone?.replaceAll("+", "").padLeft(12, "0") ?? "000000000001"}';
+      final userId = user?.id;
+      if (userId == null) {
+        _error = 'User session not found. Please log in again.';
+        _isLoading = false;
+        safeNotifyListeners();
+        return _error;
+      }
 
       String phone = user?.phone ?? '';
       if (phone.isEmpty) {
@@ -1534,14 +1388,14 @@ class AuthProvider extends ChangeNotifier {
 
     // Auto-deactivate shop/rider status before signing out so they don't
     // appear Open/Online after the user logs out or deletes the app.
-    final userId = _supabase.auth.currentUser?.id ?? _mockUserId;
+    final userId = _supabase.auth.currentUser?.id;
     final role = _user?.activeSessionRole;
     if (userId != null) {
       try {
         if (role == 'seller') {
           await _supabase
               .from('shops')
-              .update({'is_accepting_orders': false}).eq('seller_id', userId);
+                  .update({'is_accepting_orders': false}).eq('seller_id', userId);
         } else if (role == 'delivery_partner') {
           await _supabase
               .from('delivery_partners')
@@ -1594,7 +1448,6 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
     _user = null;
     _pendingPhone = null;
-    _mockUserId = null;
     _isAdminVerified = false;
     _adminData = null;
 

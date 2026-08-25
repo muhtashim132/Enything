@@ -97,20 +97,6 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       final auth = context.read<AuthProvider>();
       final allRoles = auth.user?.activeRoles ?? [];
 
-      // ── Razorpay test account: always go straight to dashboard ──
-      if (_phone.endsWith('9999999996')) {
-        _goToWelcomeThenDashboard(_requestedRole ?? 'customer');
-        return;
-      }
-      if (_phone.endsWith('9999999997')) {
-        _goToWelcomeThenDashboard(_requestedRole ?? 'seller');
-        return;
-      }
-      if (_phone.endsWith('9999999998')) {
-        _goToWelcomeThenDashboard(_requestedRole ?? 'delivery_partner');
-        return;
-      }
-
       // ── Admin Override: Admins always get the role picker or dashboard directly ──
       if (allRoles.contains('admin')) {
         final Set<String> adminRolesToShow = {'admin'};

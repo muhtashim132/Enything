@@ -62,12 +62,26 @@ class _CaReportPageState extends State<CaReportPage> {
     setState(() => _isLoading = true);
     try {
       final auth = context.read<AuthProvider>();
-      final shops = await _supabase
-          .from('shops')
-          .select('id, name')
-          .eq('seller_id', auth.currentUserId ?? '');
-
-      final shopsList = List<Map<String, dynamic>>.from(shops as List);
+      List<Map<String, dynamic>> shopsList;
+      if (widget.initialShopId != null && auth.isAdmin) {
+        final shops = await _supabase
+            .from('shops')
+            .select('id, name')
+            .eq('id', widget.initialShopId!);
+        shopsList = List<Map<String, dynamic>>.from(shops as List);
+      } else if (auth.isAdmin) {
+        final shops = await _supabase
+            .from('shops')
+            .select('id, name')
+            .order('name');
+        shopsList = List<Map<String, dynamic>>.from(shops as List);
+      } else {
+        final shops = await _supabase
+            .from('shops')
+            .select('id, name')
+            .eq('seller_id', auth.currentUserId ?? '');
+        shopsList = List<Map<String, dynamic>>.from(shops as List);
+      }
 
       if (shopsList.isEmpty) {
         setState(() => _isLoading = false);

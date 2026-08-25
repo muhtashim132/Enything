@@ -29,6 +29,9 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   final SupabaseClient _supabase = Supabase.instance.client;
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isComingSoon = false;
+  String? _comingSoonTitle;
+  String? _comingSoonSubtitle;
   List<ProductModel> _products = [];
   Map<String, ShopModel> _productShops = {};
   int _displayLimit = 20;
@@ -79,12 +82,6 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Guard: if this category is disabled by admin, don't fetch & pop back
-      final config = context.read<PlatformConfigProvider>();
-      if (!config.isActiveCategory(widget.categoryName)) {
-        Navigator.of(context).pop();
-        return;
-      }
       _fetchProducts();
     });
   }
@@ -93,21 +90,39 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
     setState(() {
       _isLoading = true;
       _hasError = false;
+      _isComingSoon = false;
+      _comingSoonTitle = null;
+      _comingSoonSubtitle = null;
     });
 
     try {
+      final config = context.read<PlatformConfigProvider>();
       final locationProvider = context.read<LocationProvider>();
       final lat = locationProvider.currentLocation?.latitude;
       final lng = locationProvider.currentLocation?.longitude;
 
-      final subcategories =
+      final isCategoryActive = config.isActiveCategory(widget.categoryName);
+      final rawSubcategories =
           _tabCategories[widget.categoryName] ?? [widget.categoryName];
+      final subcategories =
+          rawSubcategories.where((c) => config.isActiveCategory(c)).toList();
+
+      if (!isCategoryActive || subcategories.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _products = [];
+            _productShops = {};
+            _isLoading = false;
+            _isComingSoon = true;
+            _comingSoonTitle = '${widget.categoryName} Coming Soon!';
+            _comingSoonSubtitle =
+                'This category is currently paused in your area. We\'ll be back soon!';
+          });
+        }
+        return;
+      }
 
       if (lat != null && lng != null) {
-        // Phase 26 Fix (Ported): Fetch products WITHOUT .select('*, shops(*)')
-        // which causes PostgREST to reject embedded-resource requests on
-        // SECURITY DEFINER SETOF RPCs. Batch-fetch shops separately instead.
-        // Phase 31 Fix: Bypass PostgREST overload bug entirely
         final nearbyShops =
             await _supabase.rpc('search_shops_geospatial', params: {
           'p_lat': lat,
@@ -210,11 +225,11 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
 
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
-          if (!product.isAvailable) continue;
+          if (!product.isAvailable || !config.isActiveCategory(product.category)) continue;
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive) continue;
+          if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
 
           if (shop.location.latitude != 0 && shop.location.longitude != 0) {
             shop.distanceKm = locationProvider.distanceTo(shop.location);
@@ -460,27 +475,75 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                     ],
                   ),
                 )
-              : _products.isEmpty
+              : (_products.isEmpty || _isComingSoon)
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.inventory_2_outlined,
-                              size: 64,
-                              color: isDark ? Colors.white30 : Colors.black26),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No products found',
-                            style: GoogleFonts.outfit(
-                                fontSize: 20, fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'We couldn\'t find any products for this category.',
-                            style: GoogleFonts.outfit(
-                                color: AppColors.textSecondary),
-                          ),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 40),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 84,
+                              height: 84,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? AppColors.primary.withValues(alpha: 0.15)
+                                    : AppColors.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  Icons.rocket_launch_rounded,
+                                  size: 38,
+                                  color: isDark
+                                      ? AppColors.primaryLight
+                                      : AppColors.primary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              _comingSoonTitle ??
+                                  '${widget.categoryName} Delivery Coming Soon!',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              _comingSoonSubtitle ??
+                                  'We\'re partnering with top local stores to bring ${widget.categoryName} to your location soon!',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : AppColors.textSecondary,
+                                  height: 1.4),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: () => Navigator.of(context).pop(),
+                              icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                              label: Text('Explore Other Categories',
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 14, fontWeight: FontWeight.w700)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   : LayoutBuilder(

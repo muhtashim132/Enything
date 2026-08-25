@@ -1,16 +1,15 @@
 // @ts-nocheck
-// This file runs on the Deno runtime (Supabase Edge Functions).
-// Triggered by a Database Webhook on the `orders` table (UPDATE events).
+// =============================================================================
+// process-refund — Supabase Edge Function (100x Hardened)
+// =============================================================================
+// Runs on the Deno runtime.
+// Triggered by Database Webhook on `orders` table (UPDATE events) or direct RPC.
+// =============================================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-// Razorpay API Credentials (ensure these are set in Supabase Edge Secrets)
-const razorpayKeyId = Deno.env.get("RAZORPAY_KEY_ID") || "";
-const razorpayKeySecret = Deno.env.get("RAZORPAY_KEY_SECRET") || "";
-const razorpayAuth = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
 
 Deno.serve(async (req) => {
   try {
-    const payload = await req.json();
+    const payload = await req.json().catch(() => ({}));
     let { type, old_record, record } = payload;
 
     const supabaseAdmin = createClient(
@@ -61,7 +60,7 @@ Deno.serve(async (req) => {
     const statusChanged = oldStatus !== newStatus;
     const manualRefundTriggered = oldRefundStatus !== "processing" && newRefundStatus === "processing";
 
-    // 100x FIX: If an Admin explicitly triggers a manual refund, ALWAYS honor it regardless of current order status (e.g. refunding a 'delivered' order).
+    // 100x FIX: If an Admin explicitly triggers a manual refund, ALWAYS honor it regardless of current order status
     const shouldRefund = (isRefundableState && statusChanged) || manualRefundTriggered || Boolean(payload.order_id);
 
     if (shouldRefund) {
@@ -92,6 +91,14 @@ Deno.serve(async (req) => {
       }
 
       // 4. Call Razorpay API to issue the refund
+      const keyId = (Deno.env.get("RAZORPAY_KEY_ID") || "").trim();
+      const keySecret = (Deno.env.get("RAZORPAY_KEY_SECRET") || "").trim();
+      if (!keyId || !keySecret) {
+        console.error("Razorpay credentials missing in Supabase Edge Secrets for process-refund.");
+        return new Response("Payment credentials missing.", { status: 500 });
+      }
+      const razorpayAuth = btoa(`${keyId}:${keySecret}`);
+
       const collectedAmount = freshOrder?.grand_total_collected != null 
         ? Number(freshOrder.grand_total_collected) 
         : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0);
@@ -116,7 +123,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           amount: amountInPaise,
           notes: {
-            reason: newStatus,
+            reason: newStatus || "cancelled",
             order_id: record.id
           }
         })
@@ -133,7 +140,7 @@ Deno.serve(async (req) => {
           rejection_message: `Refund Failed: ${refundData.error?.description || "Unknown Error"}`
         }).eq("id", record.id);
 
-        return new Response(`Razorpay Error: ${refundData.error?.description}`, { status: 200 }); // Return 200 to satisfy webhook
+        return new Response(`Razorpay Error: ${refundData.error?.description}`, { status: 200 });
       }
 
       // 5. Update the Database with the Refund ID
@@ -149,8 +156,7 @@ Deno.serve(async (req) => {
     return new Response("No refund action required for this status change.", { status: 200 });
 
   } catch (err: any) {
-    console.error("Webhook exception:", err);
-    // Still return 200 to prevent Supabase from retrying endlessly
+    console.error("process-refund exception:", err);
     return new Response("Internal error (logged)", { status: 200 });
   }
 });

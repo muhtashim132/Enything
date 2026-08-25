@@ -47,53 +47,15 @@ class RbacProvider extends ChangeNotifier {
     _error = null;
     safeNotifyListeners();
     try {
-      // ── TEST MODE: Mock admin bypass ─────────────────────────
-      // If the userId matches any magic-number admin pattern
-      // (generated from phone 9999999996), skip the DB lookup
-      // and grant immediate full superadmin access.
-      final isMockAdmin = userId.endsWith('9999999996') ||
-          userId == '00000000-0000-0000-0000-919999999996' ||
-          userId == 'a0fc05b6-e3cc-4e0c-adc6-fc7fe8dc70c7' ||
-          userId.contains('9999999996');
-
-      Map<String, dynamic>? data;
-      if (!isMockAdmin) {
-        // Fetch admin_user row with role
-        data = await _db
-            .from('admin_users')
-            .select('*, roles(*)')
-            .eq('id', userId)
-            .maybeSingle();
-      }
+      // Fetch admin_user row with role
+      final data = await _db
+          .from('admin_users')
+          .select('*, roles(*)')
+          .eq('id', userId)
+          .maybeSingle();
 
       if (data != null) {
         _currentAdmin = AdminUserModel.fromMap(data);
-      } else {
-        _currentAdmin = AdminUserModel(
-          id: userId,
-          email: '',
-          fullName: isMockAdmin ? 'Test Super Admin' : 'Super Admin',
-          adminLevel: 'superadmin',
-          isActive: true,
-          isSuspended: false,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-          role: RoleModel(
-            id: 'super-admin-sys',
-            name: isMockAdmin ? 'God Mode (Test)' : 'God Mode',
-            slug: 'super_admin',
-            description: 'System overriding role',
-            isSystem: true,
-            color: '#8B2FC9',
-            icon: 'shield',
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          ),
-        );
-      }
-
-      // Load permission codes (skip for mock admin — isSuperAdmin already grants all)
-      if (!isMockAdmin) {
         try {
           final codes = await _rolesRepo.getUserPermissionCodes(userId);
           _permissionCodes = Set<String>.from(codes);
@@ -101,6 +63,7 @@ class RbacProvider extends ChangeNotifier {
           _permissionCodes = {};
         }
       } else {
+        _currentAdmin = null;
         _permissionCodes = {};
       }
 

@@ -13,7 +13,6 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../config/payment_config.dart';
 import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
@@ -855,13 +854,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final nowUtc = DateTime.now().toUtc().toIso8601String();
 
-      bool isTestPhone(String? phone) {
-        if (phone == null) return false;
-        final envPhones = dotenv.env['TEST_PHONES']?.split(',') ??
-            ['9999999996', '9999999997', '9999999998'];
-        return envPhones.any((p) => phone.endsWith(p.trim()));
-      }
-
       // 100x ARCHITECTURE FIX: Economic Splitting Flaw
       // Calculate total geographic distance to all shops. We MUST split the delivery fee
       // and rider earnings by distance, NOT by the food's subtotal. Otherwise, a rider can
@@ -936,23 +928,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopS9_5Gst = shopBreakdown.s9_5GstToRemit;
         final shopNonFoodGst = shopBreakdown.nonFoodGstPassThrough;
 
-        // ── GST TCS (CGST §52) — Category-Precise ───────────────────────────
-        double shopTcs = 0.0;
-        for (final item in shopItems) {
-          final cat = item.product.category;
-          final itemBase = (item.selectedVariant?.price ?? item.product.price) *
-              item.quantity;
-          shopTcs += itemBase * TaxConfig.tcsRateForCategory(cat);
-        }
-
-        // ── Income Tax TDS (§194-O, Finance Act 2024) — Universal 0.1% ─────
-        final shopTds = shopBaseSubtotal * TaxConfig.itTdsRate;
+        // TCS and TDS are now computed inside OrderTaxBreakdown.calculate()
+        final shopTcs = shopBreakdown.tcsAmount;
+        final shopTds = shopBreakdown.tdsAmount;
         final shopGrandTotal = shopBreakdown.grandTotal;
 
         final orderId = const Uuid().v4();
         orderIds.add(orderId);
-
-        final isMagic = isTestPhone(auth.user?.phone);
 
         allOrders.add({
           'id': orderId,
@@ -990,7 +972,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'gst_delivery': shopBreakdown.deliveryGst,
           'gst_platform': shopBreakdown.platformFeeGst,
           'enything_commission': shopBreakdown.enythingGrossCommission,
-          'seller_payout': shopBreakdown.sellerPayout - shopTcs - shopTds,
+          'seller_payout': shopBreakdown.sellerPayoutNet,
           'gateway_deduction': shopBreakdown.gatewayDeduction,
           's9_5_gst_amount': shopS9_5Gst,
           'non_food_gst_amount': shopNonFoodGst,
@@ -1032,7 +1014,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'shop': shop,
           'grandTotal': shopGrandTotal,
           'orderId': orderId,
-          'isMagic': isMagic,
         });
       }
 
@@ -1058,19 +1039,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Notify sellers AFTER successful atomic insertion
       if (mounted) {
         for (final data in notificationData) {
-          if (!data['isMagic']) {
-            context.read<NotificationProvider>().sendBackgroundPush(
-              targetUserId: data['shop'].sellerId,
-              title: '🔔 New Order!',
-              body:
-                  'Order ₹${((data['grandTotal'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 3 min window.',
-              data: {
-                'order_id': data['orderId'],
-                'role': 'seller',
-                'action': 'new_order',
-              },
-            );
-          }
+          context.read<NotificationProvider>().sendBackgroundPush(
+            targetUserId: data['shop'].sellerId,
+            title: '🔔 New Order!',
+            body:
+                'Order ₹${((data['grandTotal'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)} — Tap to accept. Customer pays AFTER you & rider accept. ⏱ 3 min window.',
+            data: {
+              'order_id': data['orderId'],
+              'role': 'seller',
+              'action': 'new_order',
+            },
+          );
         }
       }
 
@@ -1275,7 +1254,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       items: cart.taxBreakdownItems,
       deliveryCharge: totalDelivery,
       riderEarnings: riderEarnings,
-      platformFee: cart.platformFee,
+      platformFee: isReplacementOrder ? 0.0 : cart.platformFee,
       paymentMethod: 'upi',
     );
     // Grand total = base items + item GST + delivery + platform - coupon discount
@@ -1666,7 +1645,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           '+₹${surcharge.toStringAsFixed(0)}',
                           valueColor: Colors.orange.shade700,
                           hint:
-                              '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10).toInt()}/km between shops',
+                              '₹${(PlatformConfigProvider.instance?.multiShopSurcharge ?? 20).toInt()} per additional shop',
                         ),
                       ],
                       const SizedBox(height: 8),

@@ -1,5 +1,5 @@
 // =============================================================================
-// razorpay-webhook — Supabase Edge Function
+// razorpay-webhook — Supabase Edge Function (100x Hardened)
 // =============================================================================
 // Registered as a webhook endpoint in the Razorpay Dashboard.
 // Acts as an async backup for payment confirmation — critical for cases where:
@@ -20,7 +20,8 @@
 
 // @ts-nocheck
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { Buffer } from "node:buffer";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,14 +36,17 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const webhookSecret = Deno.env.get("RAZORPAY_WEBHOOK_SECRET") ?? "";
+    const webhookSecret = (Deno.env.get("RAZORPAY_WEBHOOK_SECRET") ?? "").trim();
     const rawBody = await req.text();
 
     // ── 1. Validate webhook signature ─────────────────────────────────────────
     const receivedSignature = req.headers.get("X-Razorpay-Signature") ?? "";
     if (webhookSecret) {
       const expectedSignature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
-      if (receivedSignature !== expectedSignature) {
+      const expBuf = Buffer.from(expectedSignature, "utf8");
+      const recBuf = Buffer.from(receivedSignature, "utf8");
+
+      if (expBuf.length !== recBuf.length || !timingSafeEqual(expBuf, recBuf)) {
         console.warn("Webhook signature mismatch — possible spoofing attempt.");
         return new Response("Forbidden", { status: 403, headers: corsHeaders });
       }

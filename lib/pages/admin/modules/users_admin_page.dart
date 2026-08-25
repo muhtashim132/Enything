@@ -9,6 +9,7 @@ import '../../../models/rbac/role_model.dart';
 import '../../../widgets/admin/kyc_verification_dialog.dart';
 import '../rbac/forbidden_page.dart';
 import '../../../utils/time_utils.dart';
+import '../../../config/routes.dart';
 
 void _showKycDialog(BuildContext context, Map<String, dynamic> data,
     String title, String tableName, String idColumn, VoidCallback onRefresh) {
@@ -20,6 +21,86 @@ void _showKycDialog(BuildContext context, Map<String, dynamic> data,
       tableName: tableName,
       idColumn: idColumn,
       onRefresh: onRefresh,
+    ),
+  );
+}
+
+void _showRiderStatsDialog(BuildContext context, Map<String, dynamic> rider) {
+  showDialog(
+    context: context,
+    builder: (ctx) => FutureBuilder<dynamic>(
+      future: Supabase.instance.client.rpc('get_rider_balance', params: {'p_rider_id': rider['id']}),
+      builder: (context, snapshot) {
+        final data = snapshot.data as Map<String, dynamic>?;
+        final profile = rider['profiles'] as Map?;
+        final rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+        return AlertDialog(
+          backgroundColor: AdminColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.delivery_dining_rounded, color: AdminColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  profile?['full_name'] ?? 'Rider Earnings & Stats',
+                  style: AdminStyles.title(size: 18),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: snapshot.connectionState == ConnectionState.waiting
+              ? const SizedBox(height: 120, child: Center(child: CircularProgressIndicator(color: AdminColors.primary)))
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Phone: ${profile?['phone'] ?? 'N/A'}', style: AdminStyles.body(color: AdminColors.textSecondary)),
+                    Text('Vehicle: ${rider['vehicle_type'] ?? 'Bike'} (${rider['vehicle_number'] ?? 'N/A'})', style: AdminStyles.body(color: AdminColors.textSecondary)),
+                    Text('Total Deliveries: ${rider['total_deliveries'] ?? 0}', style: AdminStyles.body(color: AdminColors.textSecondary)),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: AdminDecorations.glassCard(),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Total Earned:', style: AdminStyles.body(size: 13)),
+                              Text(rupee.format(data?['total_earned'] ?? 0), style: AdminStyles.title(size: 14, color: AdminColors.success)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Total Withdrawn:', style: AdminStyles.body(size: 13)),
+                              Text(rupee.format(data?['total_paid'] ?? 0), style: AdminStyles.title(size: 14, color: AdminColors.info)),
+                            ],
+                          ),
+                          const Divider(height: 16, color: AdminColors.cardBorder),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Available Balance:', style: AdminStyles.title(size: 13)),
+                              Text(rupee.format(data?['available_balance'] ?? 0), style: AdminStyles.title(size: 15, color: AdminColors.primary)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Close', style: AdminStyles.body(color: AdminColors.primary)),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -502,6 +583,20 @@ class _SellersTabState extends State<_SellersTab> {
                             action: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                IconButton(
+                                  icon: const Icon(
+                                      Icons.receipt_long_rounded,
+                                      size: 20),
+                                  color: AdminColors.primary,
+                                  tooltip: 'CA Report',
+                                  onPressed: () {
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.caReport,
+                                      arguments: {'shopId': s['id'].toString()},
+                                    );
+                                  },
+                                ),
                                 if (canApprove)
                                   IconButton(
                                     icon: const Icon(
@@ -683,6 +778,14 @@ class _RidersTabState extends State<_RidersTab> {
                             action: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                IconButton(
+                                  icon: const Icon(
+                                      Icons.account_balance_wallet_rounded,
+                                      size: 20),
+                                  color: AdminColors.primary,
+                                  tooltip: 'Earnings & Balance',
+                                  onPressed: () => _showRiderStatsDialog(context, r),
+                                ),
                                 if (canApprove)
                                   IconButton(
                                     icon: const Icon(

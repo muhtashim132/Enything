@@ -104,8 +104,10 @@ class TaxConfig {
 
   // ── Rider Payout ─────────────────────────────────────────────────────────────
 
-  /// Rider payout ratio: 80% means Rider gets 80% of the base delivery fee, Enything keeps 20%.
-  static const double riderPayoutRatio = 0.80;
+  /// Rider payout ratio: dynamically reads Admin-configured rider_commission_percent.
+  /// Default 80% means Rider gets 80% of the base delivery fee, Enything keeps 20%.
+  static double get riderPayoutRatio =>
+      (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) / 100.0;
 
   // ── GST on Enything's OWN services ───────────────────────────────────────────
 
@@ -351,7 +353,7 @@ class TaxConfig {
   /// Returns 0.0 for:
   ///   — Section 9(5) deemed-supplier food categories
   ///   — Zero-GST / genuinely exempt categories (fresh produce)
-  /// Returns [gcTcsRate] (1%) for all other taxable non-food categories.
+  /// Returns [gcTcsRate] (0.5%) for all other taxable non-food categories.
   static double tcsRateForCategory(String category) {
     return _tcsZeroCategories.contains(category) ? 0.0 : gcTcsRate;
   }
@@ -487,6 +489,18 @@ class OrderTaxBreakdown {
   ///   minus seller's gateway share.
   final double sellerPayout;
 
+  // ── Tax Deductions (TCS + TDS) ──────────────────────────────────────────
+
+  /// GST TCS amount (§52 CGST Act) — collected at source on taxable goods.
+  final double tcsAmount;
+
+  /// Income Tax TDS amount (§194-O) — deducted at source on all categories.
+  final double tdsAmount;
+
+  /// Net seller payout after TCS and TDS deductions.
+  /// This is what the seller actually receives in their bank account.
+  double get sellerPayoutNet => sellerPayout - tcsAmount - tdsAmount;
+
   const OrderTaxBreakdown({
     required this.itemBaseSubtotal,
     required this.itemGstTotal,
@@ -506,6 +520,8 @@ class OrderTaxBreakdown {
     required this.enythingNetCommission,
     required this.sellerPayout,
     required this.riderEarnings,
+    required this.tcsAmount,
+    required this.tdsAmount,
   });
 
   // ---------------------------------------------------------------------------
@@ -532,6 +548,8 @@ class OrderTaxBreakdown {
     double s9_5Gst = 0; // food/restaurant GST — Enything remits
     double nonFoodGst = 0; // retail GST — passed to seller
     double pureCommission = 0; // total pure commission calculated per item
+    double tcsTotal = 0; // GST TCS (§52 CGST Act)
+    double tdsTotal = 0; // Income Tax TDS (§194-O)
 
     for (final item in items) {
       final category = (item['category'] as String?) ?? 'Other';
@@ -569,6 +587,10 @@ class OrderTaxBreakdown {
       } else {
         nonFoodGst += lineGst;
       }
+
+      // ── TCS & TDS per-item accumulation ────────────────────────────────────
+      tcsTotal += lineBase * TaxConfig.tcsRateForCategory(category);
+      tdsTotal += lineBase * TaxConfig.itTdsRate;
     }
 
     final itemGross = baseSubtotal + itemGst; // what customer pays for items
@@ -629,6 +651,8 @@ class OrderTaxBreakdown {
       enythingNetCommission: enythingNet,
       sellerPayout: sellerPayout,
       riderEarnings: riderEarnings,
+      tcsAmount: tcsTotal,
+      tdsAmount: tdsTotal,
     );
   }
 
@@ -675,7 +699,10 @@ class OrderTaxBreakdown {
 ║   Base (after commission):  ₹${(itemBaseSubtotal - enythingGrossCommission).toStringAsFixed(2).padLeft(8)}           ║
 ║   Non-food GST passthrough: ₹${nonFoodGstPassThrough.toStringAsFixed(2).padLeft(8)}           ║
 ║   Seller gateway share:   - ₹${sellerGatewayShare.toStringAsFixed(2).padLeft(8)}           ║
-║   SELLER RECEIVES:          ₹${sellerPayout.toStringAsFixed(2).padLeft(8)}           ║
+║   GST TCS (§52):          - ₹${tcsAmount.toStringAsFixed(2).padLeft(8)}           ║
+║   IT TDS (§194-O):        - ₹${tdsAmount.toStringAsFixed(2).padLeft(8)}           ║
+║   SELLER GROSS PAYOUT:      ₹${sellerPayout.toStringAsFixed(2).padLeft(8)}           ║
+║   SELLER NET PAYOUT:        ₹${sellerPayoutNet.toStringAsFixed(2).padLeft(8)}           ║
 ╠══════════════════════════════════════════════════════╣
 ║ GST TO REMIT TO GOVERNMENT                           ║
 ║   S9(5) food GST (Enything):   ₹${s9_5GstToRemit.toStringAsFixed(2).padLeft(8)}           ║

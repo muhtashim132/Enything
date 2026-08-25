@@ -7,7 +7,6 @@ import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:latlong2/latlong.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -457,13 +456,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'grad': [Color(0xFF20C997), Color(0xFF0CA678)]
       },
     ];
-    // Keep a tab if its name is active, OR if it's a group-tab like "More"
-    // whose sub-categories may still have active entries
+    // Keep a tab only if at least one of its subcategories is active
     return allTabs.where((tab) {
       final name = tab['name'] as String;
-      // Group tabs 'More' always shown (sub-filtered in _tabCategories logic)
-      if (name == 'More') return true;
-      return config.isActiveCategory(name);
+      final subcategories = _tabCategories[name] ?? [name];
+      return subcategories.any((c) => config.isActiveCategory(c));
     }).toList();
   }
 
@@ -547,18 +544,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           'p_disabled_categories': disabledCats.isEmpty ? null : disabledCats,
         });
       } else {
-        final disabledCats =
-            context.read<PlatformConfigProvider>().disabledCategories.toList();
-        response = await _supabase.rpc('get_trending_keywords', params: {
-          'p_limit': 15,
-          'p_disabled_categories': disabledCats.isEmpty ? null : disabledCats,
-        });
+        // When location is not yet locked, rely on clean curated static fallback
+        response = [];
       }
 
       if (!mounted) return;
 
       final rows = response as List?;
       if (rows == null || rows.isEmpty) {
+        if (mounted && _dynamicTrendingKeywords.isNotEmpty) {
+          setState(() => _dynamicTrendingKeywords = []);
+        }
         return;
       }
 
@@ -575,6 +571,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           .toList();
 
       if (fetched.isEmpty) {
+        if (mounted && _dynamicTrendingKeywords.isNotEmpty) {
+          setState(() => _dynamicTrendingKeywords = []);
+        }
         return;
       }
 
@@ -836,6 +835,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
     try {
       final locationProvider = context.read<LocationProvider>();
+      final config = context.read<PlatformConfigProvider>();
       final String lowerQuery = query.toLowerCase().trim();
       List<String> matchedSubcategories = [];
 
@@ -845,7 +845,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             return lowerQuery.contains(k) || k.contains(lowerQuery);
           });
           if (match) {
-            matchedSubcategories.addAll(_tabCategories[catName] ?? [catName]);
+            final subs = _tabCategories[catName] ?? [catName];
+            matchedSubcategories.addAll(subs.where((c) => config.isActiveCategory(c)));
           }
         });
       }
@@ -859,8 +860,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       if (_selectedFilterCategories.isNotEmpty) {
         effectiveCategories = [];
         for (final cat in _selectedFilterCategories) {
-          effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
+          final subs = _tabCategories[cat] ?? [cat];
+          effectiveCategories.addAll(subs.where((c) => config.isActiveCategory(c)));
         }
+      } else {
+        effectiveCategories = config.activeCategoryNames;
       }
       List<dynamic> shopsByName = [];
       List<dynamic> productsByName = [];
@@ -1110,6 +1114,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       void addShops(List<dynamic> response, bool requireNameMatch) {
         for (final s in response) {
           final shop = ShopModel.fromMap(s);
+          if (!config.isActiveCategory(shop.category)) continue;
           if (!locationProvider.hasLocation &&
               requireNameMatch &&
               !shop.name.toLowerCase().contains(lowerQuery)) {
@@ -1151,7 +1156,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       void addProducts(List<dynamic> response) {
         for (final p in response) {
           final product = ProductModel.fromMap(p);
-          // Removed product.isAvailable check so unavailable items still render
+          if (!config.isActiveCategory(product.category)) continue;
           if (addedProductIds.contains(product.id)) continue;
 
           if (!locationProvider.hasLocation &&
@@ -1162,7 +1167,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive) continue;
+          if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
           if (!locationProvider.hasLocation &&
               effectiveCategories != null &&
               !effectiveCategories.contains(shop.category)) {
@@ -1250,11 +1255,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   Future<void> _checkLocationAndLoad() async {
     final locationProvider = context.read<LocationProvider>();
-    final authProvider = context.read<AuthProvider>();
-
-    final isMagic = authProvider.user?.phone.endsWith('9999999996') == true ||
-        authProvider.user?.phone.endsWith('9999999997') == true ||
-        authProvider.user?.phone.endsWith('9999999998') == true;
 
     setState(() {
       _isSearching = false;
@@ -1264,12 +1264,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       _comingSoonSubMessage = null;
     });
 
-    if (isMagic) {
-      locationProvider.setManualLocation(
-        const LatLng(34.4225, 74.6366),
-        'Main Market, Bandipora',
-      );
-    } else if (!locationProvider.hasLocation) {
+    if (!locationProvider.hasLocation) {
       await locationProvider.requestLocation();
     }
 
@@ -1347,27 +1342,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     }
     try {
       final locationProvider = context.read<LocationProvider>();
+      final config = context.read<PlatformConfigProvider>();
 
       List<String> effectiveCategories = [];
       if (_selectedFilterCategories.isNotEmpty) {
         for (final cat in _selectedFilterCategories) {
-          effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
+          final subs = _tabCategories[cat] ?? [cat];
+          effectiveCategories.addAll(subs.where((c) => config.isActiveCategory(c)));
         }
       } else {
-        // Phase 31 Fix: PostgREST 42809 Overload Resolution Bug
-        // When overloaded functions (like search_products_geospatial) receive `null` for an array parameter,
-        // PostgREST loses the type context (text[]) during JSON mapping, crashing PostgreSQL with error 42809.
-        // By passing an exhaustive array of ALL categories instead of null, PostgREST correctly types it as a string array.
-        final allTabCats = _tabCategories.values.expand((e) => e);
-        final allAppCats = AppCategories.all.map((c) => c['name']!);
-        final allAppCatsLower =
-            AppCategories.all.map((c) => c['name']!.toLowerCase());
-        effectiveCategories =
-            {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
+        effectiveCategories = config.activeCategoryNames;
       }
 
       // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
-      final shopsResponse = locationProvider.hasLocation
+      final shopsResponse = (locationProvider.hasLocation && effectiveCategories.isNotEmpty)
           ? await _supabase.rpc('get_nearby_shops', params: {
               'p_lat': locationProvider.currentLocation!.latitude,
               'p_lng': locationProvider.currentLocation!.longitude,
@@ -1380,7 +1368,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       final allShops = (shopsResponse as List)
           .map((s) => ShopModel.fromMap(s))
-          .where((s) => s.isActive)
+          .where((s) => s.isActive && config.isActiveCategory(s.category))
           .toList();
 
       List<ShopModel> nearby;
@@ -1427,14 +1415,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
-          // Removed product.isAvailable check so unavailable items still render
-          if (!effectiveCategories.contains(product.category)) {
+          if (!effectiveCategories.contains(product.category) ||
+              !config.isActiveCategory(product.category)) {
             continue;
           }
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive) continue;
+          if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
 
           if (locationProvider.hasLocation) {
             if (shop.location.latitude == 0 || shop.location.longitude == 0) {
@@ -1567,24 +1555,56 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     }
     try {
       final locationProvider = context.read<LocationProvider>();
-      final subcategories = _tabCategories[tabName] ?? [tabName];
+      final config = context.read<PlatformConfigProvider>();
+      final rawSubcategories = _tabCategories[tabName] ?? [tabName];
+      final subcategories =
+          rawSubcategories.where((c) => config.isActiveCategory(c)).toList();
+
+      // Guard: If category or all its subcategories are disabled by admin
+      if (subcategories.isEmpty) {
+        if (_fetchId != currentFetchId) return;
+        setState(() {
+          _shops = [];
+          _products = [];
+          _productShops = {};
+          _comingSoonMessage = '$tabName Coming Soon!';
+          _comingSoonSubMessage =
+              'This category is currently paused in your area. We\'ll be back soon!';
+          _isLoading = false;
+          _hasLoadedOnce = true;
+          _loadRetryCount = 0;
+        });
+        return;
+      }
 
       List<String> effectiveCategories = [];
       if (_selectedFilterCategories.isNotEmpty) {
         for (final cat in _selectedFilterCategories) {
-          effectiveCategories.addAll(_tabCategories[cat] ?? [cat]);
+          final subs = _tabCategories[cat] ?? [cat];
+          effectiveCategories.addAll(subs.where((c) => config.isActiveCategory(c)));
         }
       } else {
-        final allTabCats = _tabCategories.values.expand((e) => e);
-        final allAppCats = AppCategories.all.map((c) => c['name']!);
-        final allAppCatsLower =
-            AppCategories.all.map((c) => c['name']!.toLowerCase());
-        effectiveCategories =
-            {...allTabCats, ...allAppCats, ...allAppCatsLower}.toList();
+        effectiveCategories = config.activeCategoryNames;
       }
 
       final finalCategories =
           subcategories.where((c) => effectiveCategories.contains(c)).toList();
+
+      if (finalCategories.isEmpty) {
+        if (_fetchId != currentFetchId) return;
+        setState(() {
+          _shops = [];
+          _products = [];
+          _productShops = {};
+          _comingSoonMessage = '$tabName Coming Soon!';
+          _comingSoonSubMessage =
+              'This category is currently paused in your area. We\'ll be back soon!';
+          _isLoading = false;
+          _hasLoadedOnce = true;
+          _loadRetryCount = 0;
+        });
+        return;
+      }
 
       // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
       final shopsResponse =
@@ -1601,7 +1621,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       final allShops = (shopsResponse as List)
           .map((s) => ShopModel.fromMap(s))
-          .where((s) => s.isActive)
+          .where((s) => s.isActive && config.isActiveCategory(s.category))
           .toList();
 
       List<ShopModel> nearby;
@@ -1624,6 +1644,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
       }
 
+      // If no shops in delivery radius, show Coming Soon state
+      if (nearby.isEmpty) {
+        if (_fetchId != currentFetchId) return;
+        setState(() {
+          _shops = [];
+          _products = [];
+          _productShops = {};
+          _comingSoonMessage = '$tabName Delivery Coming Soon!';
+          _comingSoonSubMessage =
+              'We\'re partnering with top local stores to bring $tabName to your location soon!';
+          _isLoading = false;
+          _hasLoadedOnce = true;
+          _loadRetryCount = 0;
+        });
+        return;
+      }
+
       // Phase 21 Fix: Prevent Pixel Overloading by using RPC to fetch a diverse per-shop limit
       final nearbyShopIds = nearby.map((s) => s.id).take(50).toList();
 
@@ -1632,7 +1669,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           : await _supabase.rpc('get_feed_products', params: {
               'p_shop_ids': nearbyShopIds,
               'p_limit_per_shop': 5,
-              'p_categories': subcategories,
+              'p_categories': finalCategories,
             }).select('*, shops(*)');
 
       if (mounted) {
@@ -1641,14 +1678,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
-          // Removed product.isAvailable check so unavailable items still render
-          if (!effectiveCategories.contains(product.category)) {
+          if (!effectiveCategories.contains(product.category) ||
+              !config.isActiveCategory(product.category)) {
             continue;
           }
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive) continue;
+          if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
 
           if (locationProvider.hasLocation) {
             if (shop.location.latitude == 0 || shop.location.longitude == 0) {
@@ -1665,14 +1702,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         if (_fetchId != currentFetchId) return; // Prevent async tab desync
 
-        // Atomic update: swap data in a single setState so there is no
-        // intermediate blank-screen state
+        // Atomic update: swap data in a single setState
         setState(() {
           _shopsDisplayLimit = 3;
           _productsDisplayLimit = 6;
           _shops = nearby;
           _products = prods;
           _productShops = prodShops;
+          _comingSoonMessage = prods.isEmpty && nearby.isEmpty
+              ? '$tabName Delivery Coming Soon!'
+              : null;
+          _comingSoonSubMessage = prods.isEmpty && nearby.isEmpty
+              ? 'We\'re partnering with top local stores to bring $tabName to your location soon!'
+              : null;
           _isLoading = false;
           _hasLoadedOnce = true;
           _loadRetryCount = 0; // Reset retry counter on success
@@ -2858,16 +2900,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                         ),
                                         child: Center(
                                           child: Icon(
-                                            Icons.inventory_2_outlined,
+                                            Icons.rocket_launch_rounded,
                                             size: 36,
                                             color: isDark
-                                                ? AppColors.primaryLight
-                                                : AppColors.primary,
+                                              ? AppColors.primaryLight
+                                              : AppColors.primary,
                                           ),
                                         ),
                                       ),
                                       const SizedBox(height: 16),
-                                      Text('No items found',
+                                      Text(
+                                          _comingSoonMessage ??
+                                              'Delivery Coming Soon!',
+                                          textAlign: TextAlign.center,
                                           style: GoogleFonts.outfit(
                                               fontSize: 20,
                                               fontWeight: FontWeight.w800,
@@ -2879,12 +2924,41 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 32),
                                         child: Text(
-                                            'We could not find any products in this category at the moment.',
+                                            _comingSoonSubMessage ??
+                                                'We\'re partnering with top local stores to bring this category to your location soon!',
                                             textAlign: TextAlign.center,
                                             style: GoogleFonts.outfit(
                                                 fontSize: 14,
-                                                color: AppColors.textSecondary,
+                                                color: isDark
+                                                    ? Colors.white54
+                                                    : AppColors.textSecondary,
                                                 height: 1.4)),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      ElevatedButton.icon(
+                                        onPressed: () {
+                                          setState(() {
+                                            _selectedTabIndex = -1;
+                                            _selectedFilterCategories.clear();
+                                            _comingSoonMessage = null;
+                                            _comingSoonSubMessage = null;
+                                          });
+                                          _loadAllData();
+                                        },
+                                        icon: const Icon(Icons.storefront_rounded, size: 18),
+                                        label: Text('Explore All Stores',
+                                            style: GoogleFonts.outfit(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700)),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 20, vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(16)),
+                                        ),
                                       ),
                                     ],
                                   ),

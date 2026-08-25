@@ -11,52 +11,59 @@ Future<String> authUser(
   final email = _emailFromPhone(phone);
   final password = _passwordFromPhone(phone);
 
-  try {
-    final res =
-        await client.auth.signInWithPassword(email: email, password: password);
-    if (res.user != null) {
-      return res.user!.id;
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    try {
+      final res =
+          await client.auth.signInWithPassword(email: email, password: password);
+      if (res.user != null) {
+        return res.user!.id;
+      }
+    } catch (_) {}
+
+    try {
+      final signUpRes =
+          await client.auth.signUp(email: email, password: password);
+      final userId = signUpRes.user?.id;
+      if (userId != null) {
+        await client.from('profiles').upsert({
+          'id': userId,
+          'phone': phone,
+          'full_name': 'Test User $role',
+          'role': role,
+        });
+
+        if (role == 'seller') {
+          await client.from('shops').upsert({
+            'seller_id': userId,
+            'name': 'Shop_$phone',
+            'is_active': true,
+            'is_accepting_orders': true,
+            'location': 'POINT(74.7973 34.0837)',
+          });
+        } else if (role == 'delivery_partner') {
+          await client.from('delivery_partners').upsert({
+            'id': userId,
+            'is_active': true,
+            'is_accepting_orders': true,
+            'verification_status': 'verified',
+            'location': 'POINT(74.7973 34.0837)',
+            'last_location_lat': 34.0837,
+            'last_location_lng': 74.7973,
+          });
+        }
+
+        return userId;
+      }
+    } catch (e) {
+      if (attempt == 3) {
+        final res =
+            await client.auth.signInWithPassword(email: email, password: password);
+        return res.user!.id;
+      }
+      await Future.delayed(const Duration(seconds: 2));
     }
-  } catch (_) {}
-
-  try {
-    final signUpRes =
-        await client.auth.signUp(email: email, password: password);
-    final userId = signUpRes.user!.id;
-
-    await client.from('profiles').upsert({
-      'id': userId,
-      'phone': phone,
-      'full_name': 'Test User $role',
-      'role': role,
-    });
-
-    if (role == 'seller') {
-      await client.from('shops').upsert({
-        'seller_id': userId,
-        'name': 'Shop_$phone',
-        'is_active': true,
-        'is_accepting_orders': true,
-        'location': 'POINT(74.7973 34.0837)',
-      });
-    } else if (role == 'delivery_partner') {
-      await client.from('delivery_partners').upsert({
-        'id': userId,
-        'is_active': true,
-        'is_accepting_orders': true,
-        'verification_status': 'verified',
-        'location': 'POINT(74.7973 34.0837)',
-        'last_location_lat': 34.0837,
-        'last_location_lng': 74.7973,
-      });
-    }
-
-    return userId;
-  } catch (e) {
-    final res =
-        await client.auth.signInWithPassword(email: email, password: password);
-    return res.user!.id;
   }
+  throw Exception('Failed to authenticate $phone');
 }
 
 Future<void> main() async {
@@ -137,9 +144,17 @@ Future<void> main() async {
   final cartGroupId = const Uuid().v4();
   final now = DateTime.now();
 
+  double currentPlatformFee = 20.0;
+  try {
+    final pRes = await client.from('platform_config').select('value').eq('key', 'platform_fee').maybeSingle();
+    if (pRes != null && pRes['value'] != null) {
+      currentPlatformFee = (pRes['value'] is num) ? (pRes['value'] as num).toDouble() : double.parse(pRes['value'].toString());
+    }
+  } catch (_) {}
+
   const shopDeliveryFee = totalDeliveryGross / 3.0; // 23.60
   const shopSurcharge = multiShopSurchargeTotal / 3.0; // 13.33
-  const shopPlatformFee = 5.0 / 3.0; // 1.67
+  final shopPlatformFee = currentPlatformFee / 3.0;
 
   final ordersPayload = [
     {

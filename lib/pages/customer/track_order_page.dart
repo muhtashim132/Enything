@@ -96,10 +96,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   bool _isRetrying = false;
 
-  // ── Magic reviewer auto-accept (2-second delay for visual effect) ──────────
-  Timer? _magicAutoAcceptTimer;
-  bool _magicAutoAcceptFired = false;
-
   final List<Map<String, dynamic>> _steps = [
     {
       'status': 'awaiting_acceptance',
@@ -189,7 +185,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _paymentCountdownTimer?.cancel();
     _acceptanceCountdownTimer?.cancel();
     _decisionCountdownTimer?.cancel();
-    _magicAutoAcceptTimer?.cancel();
     _pollingTimer?.cancel();
     _realtimeReconnectTimer?.cancel();
     if (_channel != null) {
@@ -779,23 +774,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             (o) => o.status == 'awaiting_acceptance',
             orElse: () => _order!);
         _startAcceptanceCountdown(awaitingAcceptOrder);
-
-        // ── Magic reviewer auto-accept (2 seconds) ────────────────────────────
-        // Only fires for the 3 reviewer phone numbers. Zero impact on real orders.
-        if (!_magicAutoAcceptFired) {
-          final authUser = context.read<AuthProvider>().user;
-          final phone = authUser?.phone ?? '';
-          final isMagicUser = phone.endsWith('9999999996') ||
-              phone.endsWith('9999999997') ||
-              phone.endsWith('9999999998');
-          if (isMagicUser) {
-            _magicAutoAcceptFired = true;
-            _magicAutoAcceptTimer?.cancel();
-            _magicAutoAcceptTimer = Timer(
-                const Duration(seconds: 2), () => _performMagicAutoAccept());
-          }
-        }
-        // ─────────────────────────────────────────────────────────────────────
       } else {
         _acceptanceCountdownTimer?.cancel();
       }
@@ -840,46 +818,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     }
   }
-
-  // ── Magic reviewer auto-accept ─────────────────────────────────────────────
-  // Called 2 seconds after the track page enters 'awaiting_acceptance' status,
-  // ONLY for the 3 magic reviewer phone numbers.
-  // Uses the magic_reviewer_auto_accept SECURITY DEFINER RPC because direct
-  // UPDATE on orders is revoked from authenticated users (100x_rls_financial_fortress).
-  // Then calls _fetchOrder() which triggers the existing Razorpay open flow.
-  // Zero impact on real accounts — gated by isMagicUser check in the caller.
-  Future<void> _performMagicAutoAccept() async {
-    if (!mounted || _order == null) return;
-    try {
-      // Build the list of order IDs to auto-accept (cart group or single order)
-      final List<String> orderIds = _groupOrders.isNotEmpty
-          ? _groupOrders
-              .where((o) =>
-                  o.status == 'awaiting_acceptance' ||
-                  o.status == 'awaiting_payment')
-              .map((o) => o.id)
-              .toList()
-          : [widget.orderId];
-
-      if (orderIds.isEmpty) return;
-
-      // Call the SECURITY DEFINER RPC — bypasses RLS REVOKE on orders.
-      // Gated inside Postgres to reviewer UUIDs only.
-      await _supabase.rpc('magic_reviewer_auto_accept', params: {
-        'p_order_ids': orderIds,
-      });
-
-      if (mounted) {
-        // Refresh the page state — this triggers _handleAggregateStatusChange()
-        // which detects 'awaiting_payment' and opens Razorpay automatically.
-        await _fetchOrder();
-      }
-    } catch (e) {
-      debugPrint('Magic auto-accept error: $e');
-      // Non-fatal for reviewer — they can still tap the Pay button manually.
-    }
-  }
-  // ─────────────────────────────────────────────────────────────────────────────
 
   void _startDecisionCountdown() async {
     _decisionCountdownTimer?.cancel();
@@ -1936,12 +1874,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
       // S1 FIX: Order creation happens server-side in the Edge Function.
       // RAZORPAY_KEY_SECRET never leaves the server.
-      final razorpayKeyId = dotenv.maybeGet('RAZORPAY_KEY_ID') ?? '';
+      final razorpayKeyId = (dotenv.maybeGet('RAZORPAY_KEY_ID') ??
+              dotenv.maybeGet('RAZORPAY_KEY') ??
+              '')
+          .trim();
       if (razorpayKeyId.isEmpty) throw Exception('Razorpay key not configured');
 
       final receipt = _order!.cartGroupId != null
-          ? 'enything_group_${_order!.cartGroupId!.substring(0, 8)}'
-          : 'enything_${_order!.id.substring(0, 8)}';
+          ? 'enything_group_${_order!.cartGroupId!.substring(0, math.min(8, _order!.cartGroupId!.length))}'
+          : 'enything_${_order!.id.substring(0, math.min(8, _order!.id.length))}';
 
       final fnResponse = await _supabase.functions.invoke(
         'create-razorpay-order',
@@ -1969,6 +1910,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
 
       final auth = context.read<AuthProvider>();
+      final userPhone = (auth.user?.phone ?? '').replaceAll(RegExp(r'[^\d+]'), '');
+      final userEmail = (auth.user?.email ?? '').trim();
+      final userName = (auth.user?.fullName ?? '').trim();
 
       if (_razorpayOpened) return;
       _razorpayOpened = true;
@@ -1981,13 +1925,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         'name': 'Enything',
         'description': 'Order Payment',
         'prefill': {
-          'contact': (auth.user?.phone ?? '').isNotEmpty
-              ? auth.user?.phone ?? '9999999999'
-              : '9999999999',
-          'email': (auth.user?.email ?? '').isNotEmpty
-              ? auth.user?.email ?? 'user@enything.app'
-              : 'user@enything.app',
-          'name': auth.user?.fullName ?? '',
+          'contact': userPhone,
+          'email': userEmail.isNotEmpty ? userEmail : 'user@enything.app',
+          'name': userName.isNotEmpty ? userName : 'Customer',
         },
         'theme': {'color': '#4C6EF5'},
       });

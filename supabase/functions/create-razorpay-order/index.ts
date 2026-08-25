@@ -1,13 +1,14 @@
 // =============================================================================
-// create-razorpay-order — Supabase Edge Function
+// create-razorpay-order — Supabase Edge Function (100x Hardened)
 // =============================================================================
 // Called by the Flutter app BEFORE opening the Razorpay payment sheet.
 // Creates a Razorpay Order server-side so that:
 //  • The Key Secret never leaves the server.
-//  • Payments without a server-issued order_id are auto-refunded by Razorpay.
+//  • Payments without a server-issued order_id cannot be spoofed.
+//  • All calculations are verified against the authoritative database state.
 //
 // Request body:
-//   { "amount": 24900, "currency": "INR", "receipt": "zappy_<uuid>" }
+//   { "order_id": "<uuid>", "cart_group_id": "<uuid>", "currency": "INR", "receipt": "..." }
 //
 // Response body:
 //   { "id": "order_XXXXXX", "amount": 24900, "currency": "INR" }
@@ -39,22 +40,23 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
+        JSON.stringify({ error: "Unauthorized: Active session required." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // ── 2. Parse request body ─────────────────────────────────────────────────
-    const { order_id, cart_group_id, currency = "INR", receipt } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { order_id, cart_group_id, currency = "INR", receipt } = body;
 
     if (!order_id && !cart_group_id) {
       return new Response(
-        JSON.stringify({ error: "Missing order_id or cart_group_id" }),
+        JSON.stringify({ error: "Missing order_id or cart_group_id." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ── 2.5 Setup Admin Client & Fetch Amount ───────────────────────────────
+    // ── 3. Setup Admin Client & Authoritative Amount Resolution ───────────────
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -62,113 +64,152 @@ Deno.serve(async (req) => {
 
     let dbAmount = 0;
     if (cart_group_id) {
-      // ── BUG-2 FIX: Only sum orders that are AWAITING PAYMENT (not yet captured). ──
-      // Previously `.neq('status','cancelled').neq('status','seller_rejected')` also
-      // included confirmed / preparing / delivered orders whose payment was already
-      // captured, causing the new Razorpay order amount to double-count prior charges.
-      // Filtering strictly to 'awaiting_payment' ensures we only charge for
-      // the current outstanding balance.
+      // 100x FIX: Strictly select orders awaiting payment for this cart group
       const { data: orders, error } = await supabaseAdmin
         .from('orders')
-        .select('grand_total_collected, customer_id')
+        .select('id, grand_total_collected, customer_id, status')
         .eq('cart_group_id', cart_group_id)
         .eq('status', 'awaiting_payment');
-      
-      if (error) throw new Error("Database error: " + JSON.stringify(error));
-      if (!orders || orders.length === 0) throw new Error("No awaiting_payment orders found for cart_group_id: " + cart_group_id);
-      if (orders[0].customer_id !== user.id) throw new Error("Unauthorized");
-      
-      dbAmount = orders.reduce((sum, o) => sum + (o.grand_total_collected || 0), 0);
+
+      if (error) {
+        console.error("Database query error:", error);
+        throw new Error("Database error retrieving orders.");
+      }
+
+      if (!orders || orders.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "No active orders awaiting payment found in this cart." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 100x Fortress: Customer ID check across ALL orders in cart
+      if (orders.some(o => o.customer_id !== user.id)) {
+        console.warn(`Unauthorized cart access attempt by user ${user.id} on cart ${cart_group_id}`);
+        return new Response(
+          JSON.stringify({ error: "Unauthorized order access." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      dbAmount = orders.reduce((sum, o) => sum + (Number(o.grand_total_collected) || 0), 0);
     } else {
       const { data: order, error } = await supabaseAdmin
         .from('orders')
-        .select('grand_total_collected, customer_id, status')
+        .select('id, grand_total_collected, customer_id, status')
         .eq('id', order_id)
         .maybeSingle();
 
-      if (error || !order) throw new Error("Order not found");
-      if (order.customer_id !== user.id) throw new Error("Unauthorized");
-      if (order.status !== 'awaiting_payment') throw new Error("Order is not in awaiting_payment status. Cannot create payment.");
+      if (error || !order) {
+        return new Response(
+          JSON.stringify({ error: "Order not found." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-      dbAmount = order.grand_total_collected || 0;
+      if (order.customer_id !== user.id) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized order access." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (order.status !== 'awaiting_payment') {
+        return new Response(
+          JSON.stringify({ error: `Order is in status '${order.status}', not 'awaiting_payment'.` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      dbAmount = Number(order.grand_total_collected) || 0;
     }
 
+    // 100x Precision: Convert decimal rupees to exact integer paise
     const amount = Math.round(dbAmount * 100);
 
     if (amount < 100) {
       return new Response(
-        JSON.stringify({ error: "Invalid amount from DB. Minimum 100 paise." }),
+        JSON.stringify({ error: "Invalid payment amount. Minimum order value is ₹1.00 (100 paise)." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ── 3. Razorpay credentials ───────────────────────────────────────────────
+    // ── 4. Razorpay Credentials ───────────────────────────────────────────────
     const keyId     = (Deno.env.get("RAZORPAY_KEY_ID") ?? "").trim();
     const keySecret = (Deno.env.get("RAZORPAY_KEY_SECRET") ?? "").trim();
 
     if (!keyId || !keySecret) {
-      console.error("RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not set in Supabase secrets.");
+      console.error("RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not configured in Supabase secrets.");
       return new Response(
-        JSON.stringify({ error: "Payment gateway not configured." }),
+        JSON.stringify({ error: "Payment gateway credentials not configured." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const authHeader = "Basic " + btoa(`${keyId}:${keySecret}`);
 
-    // ── 4. Create Razorpay Order ──────────────────────────────────────────────
+    // Razorpay receipt length limit is 40 characters
+    const safeReceipt = (receipt ? String(receipt) : `eny_${user.id.slice(0, 8)}_${Date.now()}`).slice(0, 40);
+
+    // ── 5. Create Razorpay Order via API ──────────────────────────────────────
+    const razorpayPayload = {
+      amount,
+      currency: currency.toUpperCase(),
+      receipt: safeReceipt,
+      notes: {
+        user_id: user.id,
+        order_id: String(order_id || "").slice(0, 50),
+        cart_group_id: String(cart_group_id || "").slice(0, 50),
+        platform: "enything_mobile",
+      },
+    };
+
     const razorpayResponse = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": authHeader,
       },
-      body: JSON.stringify({
-        amount,           // in paise
-        currency,
-        receipt: receipt ?? `zappy_${user.id}_${Date.now()}`,
-        notes: {
-          user_id: user.id,
-          order_id: order_id || "",
-          cart_group_id: cart_group_id || "",
-          platform: "enything_mobile",
-        },
-      }),
+      body: JSON.stringify(razorpayPayload),
     });
 
-    const order = await razorpayResponse.json();
+    const orderData = await razorpayResponse.json();
 
     if (!razorpayResponse.ok) {
-      console.error("Razorpay order creation failed:", order);
+      console.error("Razorpay order creation failed:", orderData);
       return new Response(
-        JSON.stringify({ error: order?.error?.description ?? "Failed to create payment order." }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: orderData?.error?.description ?? "Failed to create payment order on gateway." }),
+        { status: razorpayResponse.status >= 500 ? 502 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Persist razorpay_order_id in the database for webhook correlation
+    // ── 6. Persist razorpay_order_id in DB for Correlation ────────────────────
     if (cart_group_id) {
       await supabaseAdmin
         .from('orders')
-        .update({ razorpay_order_id: order.id })
+        .update({ razorpay_order_id: orderData.id })
         .eq('cart_group_id', cart_group_id)
         .eq('status', 'awaiting_payment');
     } else if (order_id) {
       await supabaseAdmin
         .from('orders')
-        .update({ razorpay_order_id: order.id })
+        .update({ razorpay_order_id: orderData.id })
         .eq('id', order_id)
         .eq('status', 'awaiting_payment');
     }
 
-    // ── 5. Return Razorpay order to Flutter ───────────────────────────────────
+    // ── 7. Return Order details to Flutter ────────────────────────────────────
     return new Response(
-      JSON.stringify({ id: order.id, amount: order.amount, currency: order.currency }),
+      JSON.stringify({
+        id: orderData.id,
+        amount: orderData.amount,
+        currency: orderData.currency,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (err: any) {
-    console.error("create-razorpay-order exception:", err);
+    console.error("create-razorpay-order unhandled exception:", err);
     return new Response(
       JSON.stringify({ error: err.message ?? "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -1,15 +1,9 @@
 // =============================================================================
-// verify-razorpay-payment — Supabase Edge Function
+// verify-razorpay-payment — Supabase Edge Function (100x Hardened)
 // =============================================================================
 // Called by Flutter AFTER Razorpay payment success callback.
-// MUST be called before any order is written to the database.
-//
-// Flow:
-//  1. Receive razorpay_payment_id + razorpay_order_id + razorpay_signature + order_id/cart_group_id.
-//  2. Verify the HMAC-SHA256 signature using RAZORPAY_KEY_SECRET.
-//  3. Fetch expected amount from DB (grand_total_collected).
-//  4. Capture the payment via Razorpay API (marks it as captured).
-//  5. Confirm the order via RPC using service_role key to prevent client spoofing.
+// Verifies HMAC-SHA256 signature, validates payment status & amount with
+// Razorpay API, captures authorized payments, and updates DB status atomically.
 //
 // Request body:
 //   {
@@ -20,10 +14,10 @@
 //     "cart_group_id":       "<uuid>"
 //   }
 // =============================================================================
-
 // @ts-nocheck
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { Buffer } from "node:buffer";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,51 +42,61 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return new Response(
-        JSON.stringify({ verified: false, error: "Unauthorized" }),
+        JSON.stringify({ verified: false, error: "Unauthorized: Active user session required." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // ── 2. Parse body ─────────────────────────────────────────────────────────
-    const { razorpay_payment_id, razorpay_order_id, razorpay_signature, order_id, cart_group_id } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature, order_id, cart_group_id } = body;
 
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
       return new Response(
-        JSON.stringify({ verified: false, error: "Missing required payment fields." }),
+        JSON.stringify({ verified: false, error: "Missing required payment verification parameters." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (!order_id && !cart_group_id) {
       return new Response(
-        JSON.stringify({ verified: false, error: "Missing order or cart group reference." }),
+        JSON.stringify({ verified: false, error: "Missing order_id or cart_group_id reference." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ── 3. Load Key Secret ────────────────────────────────────────────────────
+    // ── 3. Load Gateway Secrets ───────────────────────────────────────────────
+    const keyId     = (Deno.env.get("RAZORPAY_KEY_ID") ?? "").trim();
     const keySecret = (Deno.env.get("RAZORPAY_KEY_SECRET") ?? "").trim();
-    if (!keySecret) {
-      console.error("RAZORPAY_KEY_SECRET not configured.");
+
+    if (!keyId || !keySecret) {
+      console.error("RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not configured.");
       return new Response(
-        JSON.stringify({ verified: false, error: "Gateway not configured." }),
+        JSON.stringify({ verified: false, error: "Payment gateway credentials not configured on server." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ── 4. Verify HMAC-SHA256 Signature ───────────────────────────────────────
+    // ── 4. Verify HMAC-SHA256 Signature (Timing-Safe) ─────────────────────────
     const message = `${razorpay_order_id}|${razorpay_payment_id}`;
     const expectedSignature = createHmac("sha256", keySecret).update(message).digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
-      console.warn(`Signature mismatch for payment ${razorpay_payment_id}. Possible fraud attempt.`);
+    const expectedBuf = Buffer.from(expectedSignature, "utf8");
+    const receivedBuf = Buffer.from(String(razorpay_signature), "utf8");
+
+    const isSignatureValid =
+      expectedBuf.length === receivedBuf.length &&
+      timingSafeEqual(expectedBuf, receivedBuf);
+
+    if (!isSignatureValid) {
+      console.warn(`Signature mismatch for payment ${razorpay_payment_id}. Fraud attempt blocked.`);
       return new Response(
-        JSON.stringify({ verified: false, error: "Payment signature verification failed." }),
+        JSON.stringify({ verified: false, error: "Cryptographic payment signature verification failed." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ── 5. Setup Admin Client & Validate Amount ───────────────────────────────
+    // ── 5. Setup Admin Client & Validate Expected Amount ───────────────────────
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -100,75 +104,111 @@ Deno.serve(async (req) => {
 
     let dbAmount = 0;
     if (cart_group_id) {
-      // ── BUG-2 FIX: Mirror the same filter as create-razorpay-order ──
-      // Only sum awaiting_payment orders so verification matches the exact amount
-      // that was charged. Confirmed / delivered orders are already captured and
-      // must NOT be included in the expected total.
       const { data: orders, error } = await supabaseAdmin
         .from('orders')
-        .select('grand_total_collected, status, customer_id')
+        .select('id, grand_total_collected, status, customer_id')
         .eq('cart_group_id', cart_group_id)
         .eq('status', 'awaiting_payment');
-      
+
       if (error) throw new Error("Database error: " + JSON.stringify(error));
-      if (!orders || orders.length === 0) throw new Error("No awaiting_payment orders found for cart_group_id: " + cart_group_id);
-      if (orders[0].customer_id !== user.id) throw new Error("Unauthorized order access");
-      
-      dbAmount = orders.reduce((sum, o) => sum + (o.grand_total_collected || 0), 0);
+      if (!orders || orders.length === 0) {
+        throw new Error("No awaiting_payment orders found for cart_group_id: " + cart_group_id);
+      }
+
+      if (orders.some(o => o.customer_id !== user.id)) {
+        return new Response(
+          JSON.stringify({ verified: false, error: "Unauthorized order access." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      dbAmount = orders.reduce((sum, o) => sum + (Number(o.grand_total_collected) || 0), 0);
     } else {
       const { data: order, error } = await supabaseAdmin
         .from('orders')
-        .select('grand_total_collected, status, customer_id')
+        .select('id, grand_total_collected, status, customer_id')
         .eq('id', order_id)
         .maybeSingle();
 
       if (error || !order) throw new Error("Order not found");
-      if (order.customer_id !== user.id) throw new Error("Unauthorized order access");
+      if (order.customer_id !== user.id) {
+        return new Response(
+          JSON.stringify({ verified: false, error: "Unauthorized order access." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-      dbAmount = order.grand_total_collected || 0;
+      dbAmount = Number(order.grand_total_collected) || 0;
     }
 
     const expectedPaise = Math.round(dbAmount * 100);
 
-    // ── 6. Capture the payment ────────────────────────────────────────────────
-    const keyId     = (Deno.env.get("RAZORPAY_KEY_ID") ?? "").trim();
+    // ── 6. Query Razorpay API for Authoritative Status & Amount ───────────────
     const authHeader = "Basic " + btoa(`${keyId}:${keySecret}`);
 
     const paymentCheckRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
       headers: { "Authorization": authHeader },
     });
+
     const paymentData = await paymentCheckRes.json();
 
-    if (paymentData.amount < expectedPaise - 100) { // allow 1 INR rounding diff just in case
-      console.warn(`Payment amount mismatch. Paid: ${paymentData.amount}, Expected: ${expectedPaise}`);
+    if (!paymentCheckRes.ok || !paymentData?.status) {
+      console.error("Failed to query Razorpay payment status:", paymentData);
       return new Response(
-        JSON.stringify({ verified: false, error: "Payment amount does not match order total." }),
+        JSON.stringify({ verified: false, error: "Could not verify payment status with payment gateway." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Strict Status Validation: Reject failed / created / refunded
+    if (paymentData.status !== "authorized" && paymentData.status !== "captured") {
+      console.warn(`Payment ${razorpay_payment_id} is in invalid status '${paymentData.status}'. Rejecting confirmation.`);
+      return new Response(
+        JSON.stringify({ verified: false, error: `Payment is currently '${paymentData.status}'. Only captured or authorized payments can be confirmed.` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (paymentData.status === "authorized") {
-      await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}/capture`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": authHeader },
-        body: JSON.stringify({ amount: paymentData.amount, currency: paymentData.currency }),
-      });
+    // Amount validation with safe margin
+    if (paymentData.amount < expectedPaise - 100) {
+      console.warn(`Payment amount mismatch. Gateway Paid: ${paymentData.amount} paise, Expected: ${expectedPaise} paise.`);
+      return new Response(
+        JSON.stringify({ verified: false, error: "Payment amount does not match the required order total." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // ── 7. Confirm Order in DB via RPC using Admin ────────────────────────────
+    // Capture payment if authorized
+    if (paymentData.status === "authorized") {
+      const captureRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}/capture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": authHeader },
+        body: JSON.stringify({ amount: paymentData.amount, currency: paymentData.currency || "INR" }),
+      });
+      const captureData = await captureRes.json();
+      if (!captureRes.ok) {
+        console.error("Failed to capture payment on Razorpay:", captureData);
+        return new Response(
+          JSON.stringify({ verified: false, error: "Payment authorization succeeded but capture failed." }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // ── 7. Atomic DB Order Confirmation via RPC (service_role) ────────────────
     const { error: rpcError } = await supabaseAdmin.rpc('client_confirm_payment', {
       p_order_id: order_id || null,
       p_cart_group_id: cart_group_id || null,
       p_razorpay_payment_id: razorpay_payment_id,
-      p_razorpay_order_id: razorpay_order_id
+      p_razorpay_order_id: razorpay_order_id,
     });
 
     if (rpcError) {
-      console.error("RPC confirm payment error:", rpcError);
+      console.error("RPC client_confirm_payment error:", rpcError);
       throw new Error("Failed to confirm order in database.");
     }
 
-    console.log(`Payment ${razorpay_payment_id} verified and order confirmed successfully for user ${user.id}.`);
+    console.log(`Payment ${razorpay_payment_id} successfully verified & captured for user ${user.id}.`);
     return new Response(
       JSON.stringify({ verified: true, payment_id: razorpay_payment_id }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -177,7 +217,7 @@ Deno.serve(async (req) => {
   } catch (err: any) {
     console.error("verify-razorpay-payment exception:", err);
     return new Response(
-      JSON.stringify({ verified: false, error: err.message ?? "Internal error" }),
+      JSON.stringify({ verified: false, error: err.message ?? "Internal error verifying payment." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

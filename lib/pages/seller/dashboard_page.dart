@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../widgets/common/notification_bell.dart';
@@ -36,6 +37,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   bool _isLoading = true;
   String _shopBadgeName = 'Seller';
   String _shopEmoji = '🏪';
+  String? _shopCategory;
   bool _shopIsActive = false;
   String _shopRating = '--';
   List<Map<String, dynamic>> _shopsList = [];
@@ -308,6 +310,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
             _adminSuspended = false;
           }
 
+          _shopCategory = activeShopData['category'] as String?;
           _shopIsActive = activeShopData['is_accepting_orders'] == true;
           final rawRating = activeShopData['average_rating'];
           _shopRating =
@@ -594,15 +597,63 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                           position: _slideAnim,
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                            child: _noShopFound
-                                ? Container(
-                                    padding: const EdgeInsets.all(20),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_shopCategory != null &&
+                                    !context.watch<PlatformConfigProvider>().isActiveCategory(_shopCategory))
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
+                                    margin: const EdgeInsets.only(bottom: 16),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFFFF9DB),
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
                                           color: const Color(0xFFFCC419)),
                                     ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                            Icons.pause_circle_outline_rounded,
+                                            color: Color(0xFFE67700),
+                                            size: 28),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text('Category Paused by Admin',
+                                                  style: GoogleFonts.outfit(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 14,
+                                                      color: const Color(
+                                                          0xFFE67700))),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                  'Your business category ("$_shopCategory") is currently paused by platform admin. Customers cannot place orders until it is re-enabled.',
+                                                  style: GoogleFonts.outfit(
+                                                      fontSize: 12,
+                                                      color: const Color(
+                                                          0xFFD9480F))),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                _noShopFound
+                                    ? Container(
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFF9DB),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          border: Border.all(
+                                              color: const Color(0xFFFCC419)),
+                                        ),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -804,10 +855,12 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                                               );
                                             },
                                           ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
 
                     // ── Quick Actions ─────────────────────────────────────────────
                     SliverToBoxAdapter(

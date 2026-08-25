@@ -131,37 +131,6 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     safeNotifyListeners();
 
     try {
-      final user = _supabase.auth.currentUser;
-      final phone = user?.phone ?? '';
-      final email = user?.email ?? '';
-      if (phone.endsWith('9999999996') ||
-          phone.endsWith('9999999997') ||
-          phone.endsWith('9999999998') ||
-          email.contains('9999999996') ||
-          email.contains('9999999997') ||
-          email.contains('9999999998')) {
-        _currentLocation = const LatLng(34.4225, 74.6366);
-        _currentAddress = 'bandipora, jammu and kashmir';
-        _houseNumber = 'Reviewer';
-        _landmark = 'Near Jamia Masjid';
-        _pincode = '193502';
-        _permissionGranted = true;
-        _isLoading = false;
-        safeNotifyListeners();
-        return true;
-      }
-
-      // Bypass location popup for all users
-      // _currentLocation = const LatLng(34.4225, 74.6366);
-      // _currentAddress = 'bandipora, jammu and kashmir';
-      // _houseNumber = 'User';
-      // _landmark = 'Near Jamia Masjid';
-      // _pincode = '193502';
-      // _permissionGranted = true;
-      // _isLoading = false;
-      // safeNotifyListeners();
-      // return true;
-
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _isLoading = false;

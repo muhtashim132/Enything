@@ -1,18 +1,14 @@
-import 'dart:convert';
-import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/order_model.dart';
 import '../../theme/app_colors.dart';
-import '../../services/telemetry_service.dart';
+import '../../utils/geo_utils.dart';
 import '../../widgets/common/animated_moving_marker.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,12 +22,12 @@ const _kCustomerMarkerColor = Color(0xFF00B4D8);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SellerOrderMapPage
-// Full-screen ORS map for the seller. Shows:
+// Full-screen live tracking map for the seller. Shows:
 //   • Rider → Shop   pickup polyline   (green)
 //   • Shop → Customer delivery polyline (orange)
-//   • Live rider marker, updated via Supabase Realtime
-//   • Distance chips for both legs
-//   • Call Customer / Call Rider buttons
+//   • Live animated moving rider marker with heading orientation
+//   • Distance and ETA chips for both legs
+//   • Direct Call Customer / Call Rider buttons
 // ─────────────────────────────────────────────────────────────────────────────
 class SellerOrderMapPage extends StatefulWidget {
   final OrderModel order;
@@ -61,17 +57,25 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   // Live rider position (isolated via ValueNotifier to prevent map re-renders)
   final ValueNotifier<LatLng?> _riderLatLngNotifier = ValueNotifier(null);
   final ValueNotifier<DateTime?> _riderUpdatedAtNotifier = ValueNotifier(null);
+  final ValueNotifier<int> _timeTicker = ValueNotifier(0);
+  Timer? _tickerTimer;
   RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
 
-    if (widget.order.riderLat != null && widget.order.riderLng != null) {
+    if (widget.order.riderLat != null &&
+        widget.order.riderLng != null &&
+        widget.order.riderLat != 0.0) {
       _riderLatLngNotifier.value =
           LatLng(widget.order.riderLat!, widget.order.riderLng!);
       _riderUpdatedAtNotifier.value = widget.order.riderLocationUpdatedAt;
     }
+
+    _tickerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) _timeTicker.value++;
+    });
 
     _fetchRoutes();
     _subscribeToRider();
@@ -79,10 +83,12 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
 
   @override
   void dispose() {
+    _tickerTimer?.cancel();
+    _timeTicker.dispose();
     _riderLatLngNotifier.dispose();
     _riderUpdatedAtNotifier.dispose();
     if (_channel != null) {
-      Supabase.instance.client.removeChannel(_channel!);
+      _supabase.removeChannel(_channel!);
     }
     super.dispose();
   }
@@ -106,13 +112,25 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
             final r = payload.newRecord;
             final lat = (r['rider_lat'] as num?)?.toDouble();
             final lng = (r['rider_lng'] as num?)?.toDouble();
-            if (lat != null && lng != null) {
+
+            if (lat != null && lng != null && lat != 0.0) {
               final newPos = LatLng(lat, lng);
-              if (_riderLatLngNotifier.value == null ||
-                  _riderLatLngNotifier.value!.latitude != newPos.latitude ||
-                  _riderLatLngNotifier.value!.longitude != newPos.longitude) {
+              final prevPos = _riderLatLngNotifier.value;
+
+              if (prevPos == null ||
+                  prevPos.latitude != newPos.latitude ||
+                  prevPos.longitude != newPos.longitude) {
                 _riderLatLngNotifier.value = newPos;
+
+                // Dynamically refresh pickup route if rider moved > 60 meters
+                if (prevPos == null ||
+                    const Distance().as(
+                            LengthUnit.Meter, prevPos, newPos) >
+                        60) {
+                  _refreshPickupRoute(newPos);
+                }
               }
+
               _riderUpdatedAtNotifier.value =
                   r['rider_location_updated_at'] != null
                       ? DateTime.tryParse(r['rider_location_updated_at'])
@@ -123,73 +141,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
         .subscribe();
   }
 
-  // ── ORS Route Fetching ───────────────────────────────────────────────────
-
-  Future<List<LatLng>> _fetchORSRoute(LatLng from, LatLng to) async {
-    int maxRetries = 3;
-    int retryDelaySeconds = 2;
-
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        final key = dotenv.maybeGet('ORS_API_KEY') ?? '';
-        if (key.isEmpty) throw Exception('ORS_API_KEY not set');
-
-        final url = Uri.parse(
-          'https://api.openrouteservice.org/v2/directions/driving-car'
-          '?api_key=$key'
-          '&start=${from.longitude},${from.latitude}'
-          '&end=${to.longitude},${to.latitude}',
-        );
-
-        final resp = await TelemetryService.instance
-            .trackLatency('ors_route_seller', () async {
-          return await http.get(url).timeout(const Duration(seconds: 10));
-        });
-        if (resp.statusCode != 200) throw Exception('ORS ${resp.statusCode}');
-
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        final features = data['features'] as List?;
-        if (features == null || features.isEmpty) {
-          throw Exception('No features');
-        }
-
-        final geometry = features.first['geometry'] as Map<String, dynamic>;
-        final coords = geometry['coordinates'] as List;
-
-        return coords
-            .map((c) => LatLng(
-                  (c[1] as num).toDouble(),
-                  (c[0] as num).toDouble(),
-                ))
-            .toList();
-      } catch (e, st) {
-        debugPrint('ORS route error (attempt $attempt): $e');
-        if (attempt == maxRetries) {
-          debugPrint(
-              'Falling back to straight line after $maxRetries attempts');
-          TelemetryService.instance.logError('ors_route_seller_fail', e, st);
-          return [from, to];
-        }
-        await Future.delayed(Duration(seconds: retryDelaySeconds));
-        retryDelaySeconds *= 2; // exponential backoff
-      }
-    }
-    return [from, to];
-  }
-
-  double _routeKm(List<LatLng> route) {
-    double km = 0;
-    for (int i = 1; i < route.length; i++) {
-      km += Geolocator.distanceBetween(
-            route[i - 1].latitude,
-            route[i - 1].longitude,
-            route[i].latitude,
-            route[i].longitude,
-          ) /
-          1000;
-    }
-    return km;
-  }
+  // ── Route Fetching ───────────────────────────────────────────────────────
 
   Future<void> _fetchRoutes() async {
     setState(() => _loadingRoutes = true);
@@ -203,7 +155,8 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
     if (shopLat == null ||
         shopLng == null ||
         custLat == null ||
-        custLng == null) {
+        custLng == null ||
+        shopLat == 0.0) {
       if (mounted) setState(() => _loadingRoutes = false);
       return;
     }
@@ -211,27 +164,45 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
     final shopPt = LatLng(shopLat, shopLng);
     final custPt = LatLng(custLat, custLng);
 
-    // Always fetch shop → customer
-    final deliveryRoute = await _fetchORSRoute(shopPt, custPt);
+    // 1. Fetch shop → customer delivery route
+    final deliveryRoute = await GeoUtils.fetchRoadRoute(shopPt, custPt);
+    final deliveryKm = GeoUtils.calculateRouteDistanceKm(deliveryRoute);
 
-    // Fetch rider → shop only if rider coords known
+    // 2. Fetch rider → shop pickup route (if rider coords available)
     List<LatLng> pickupRoute = [];
+    double? pickupKm;
     final riderPos = _riderLatLngNotifier.value;
-    if (riderPos != null) {
-      pickupRoute = await _fetchORSRoute(riderPos, shopPt);
+    if (riderPos != null && riderPos.latitude != 0.0) {
+      pickupRoute = await GeoUtils.fetchRoadRoute(riderPos, shopPt);
+      pickupKm = GeoUtils.calculateRouteDistanceKm(pickupRoute);
     }
 
     if (mounted) {
       setState(() {
         _deliveryRoute = deliveryRoute;
         _pickupRoute = pickupRoute;
-        _deliveryKm = _routeKm(deliveryRoute).let((v) => v > 0 ? v : null);
-        _pickupKm = pickupRoute.isNotEmpty
-            ? _routeKm(pickupRoute).let((v) => v > 0 ? v : null)
-            : null;
+        _deliveryKm = deliveryKm > 0 ? deliveryKm : null;
+        _pickupKm = pickupKm != null && pickupKm > 0 ? pickupKm : null;
         _loadingRoutes = false;
       });
       _fitMapBounds();
+    }
+  }
+
+  Future<void> _refreshPickupRoute(LatLng riderPos) async {
+    final shopLat = widget.order.shopLat;
+    final shopLng = widget.order.shopLng;
+    if (shopLat == null || shopLng == null || shopLat == 0.0) return;
+
+    final shopPt = LatLng(shopLat, shopLng);
+    final pickupRoute = await GeoUtils.fetchRoadRoute(riderPos, shopPt);
+    final pickupKm = GeoUtils.calculateRouteDistanceKm(pickupRoute);
+
+    if (mounted) {
+      setState(() {
+        _pickupRoute = pickupRoute;
+        _pickupKm = pickupKm > 0 ? pickupKm : null;
+      });
     }
   }
 
@@ -239,35 +210,29 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
     final order = widget.order;
     final riderPos = _riderLatLngNotifier.value;
     final pts = <LatLng>[
-      if (order.shopLat != null && order.shopLng != null)
+      if (order.shopLat != null &&
+          order.shopLng != null &&
+          order.shopLat != 0.0)
         LatLng(order.shopLat!, order.shopLng!),
-      if (order.deliveryLat != null && order.deliveryLng != null)
+      if (order.deliveryLat != null &&
+          order.deliveryLng != null &&
+          order.deliveryLat != 0.0)
         LatLng(order.deliveryLat!, order.deliveryLng!),
-      if (riderPos != null) riderPos,
+      if (riderPos != null && riderPos.latitude != 0.0) riderPos,
     ];
     if (pts.isEmpty) return;
 
-    double minLat = pts.first.latitude, maxLat = pts.first.latitude;
-    double minLng = pts.first.longitude, maxLng = pts.first.longitude;
-
-    for (final p in pts) {
-      minLat = math.min(minLat, p.latitude);
-      maxLat = math.max(maxLat, p.latitude);
-      minLng = math.min(minLng, p.longitude);
-      maxLng = math.max(maxLng, p.longitude);
-    }
-
-    try {
-      _mapCtrl.fitCamera(
-        CameraFit.bounds(
-          bounds: LatLngBounds(
-            LatLng(minLat - 0.005, minLng - 0.005),
-            LatLng(maxLat + 0.005, maxLng + 0.005),
+    final bounds = GeoUtils.computeBounds(pts, paddingFactor: 0.006);
+    if (bounds != null) {
+      try {
+        _mapCtrl.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.fromLTRB(48, 100, 48, 220),
           ),
-          padding: const EdgeInsets.all(56),
-        ),
-      );
-    } catch (_) {}
+        );
+      } catch (_) {}
+    }
   }
 
   // ── Marker builders ──────────────────────────────────────────────────────
@@ -301,7 +266,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
+                color: Colors.black.withValues(alpha: 0.25),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -320,8 +285,6 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
       ],
     );
   }
-
-  // ── Distance chip ────────────────────────────────────────────────────────
 
   Widget _distanceChip({
     required Color color,
@@ -347,39 +310,40 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
             child: Icon(icon, color: Colors.white, size: 16),
           ),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label,
-                  style: GoogleFonts.outfit(
-                      color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-              if (loading)
-                SizedBox(
-                  height: 10,
-                  width: 40,
-                  child: LinearProgressIndicator(
-                    color: color,
-                    backgroundColor: color.withValues(alpha: 0.2),
-                    minHeight: 2,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label,
+                    style: GoogleFonts.outfit(
+                        color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+                if (loading)
+                  SizedBox(
+                    height: 10,
+                    width: 40,
+                    child: LinearProgressIndicator(
+                      color: color,
+                      backgroundColor: color.withValues(alpha: 0.2),
+                      minHeight: 2,
+                    ),
+                  )
+                else
+                  Text(
+                    km != null ? GeoUtils.formatDistance(km) : '— km',
+                    style: GoogleFonts.outfit(
+                        color: km != null ? color : Colors.grey,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                )
-              else
-                Text(
-                  km != null ? '${km.toStringAsFixed(1)} km' : '— km',
-                  style: GoogleFonts.outfit(
-                      color: km != null ? color : Colors.grey,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800),
-                ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-
-  // ── Phone helper ─────────────────────────────────────────────────────────
 
   Future<void> _call(String phone) async {
     final uri = Uri.parse('tel:$phone');
@@ -387,8 +351,6 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
       await launchUrl(uri);
     }
   }
-
-  // ── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -402,7 +364,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
 
     final markers = <Marker>[
       // Shop marker
-      if (shopLat != null && shopLng != null)
+      if (shopLat != null && shopLng != null && shopLat != 0.0)
         Marker(
           point: LatLng(shopLat, shopLng),
           width: 90,
@@ -415,7 +377,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
                   : widget.shopName),
         ),
       // Customer marker
-      if (custLat != null && custLng != null)
+      if (custLat != null && custLng != null && custLat != 0.0)
         Marker(
           point: LatLng(custLat, custLng),
           width: 80,
@@ -426,7 +388,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
     ];
 
     // Map initial centre — shop location
-    final mapCenter = (shopLat != null && shopLng != null)
+    final mapCenter = (shopLat != null && shopLng != null && shopLat != 0.0)
         ? LatLng(shopLat, shopLng)
         : const LatLng(28.6139, 77.2090);
 
@@ -442,7 +404,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
               mapController: _mapCtrl,
               options: MapOptions(
                 initialCenter: mapCenter,
-                initialZoom: 13,
+                initialZoom: 13.5,
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all,
                 ),
@@ -483,31 +445,24 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
 
                 MarkerLayer(markers: markers),
 
-                // STRESS-TEST FIX: Live Rider moving marker completely isolated from parent setState
+                // Live Rider Moving Marker with dynamic heading orientation
                 ValueListenableBuilder<LatLng?>(
                   valueListenable: _riderLatLngNotifier,
                   builder: (context, riderLoc, child) {
                     if (riderLoc == null) return const SizedBox.shrink();
-                    return MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: riderLoc,
-                          width: 80,
-                          height: 72,
-                          child: SmoothRiderMarker(
-                            targetLocation: riderLoc,
-                            label: 'Rider',
-                            color: _kRiderMarkerColor,
-                          ),
-                        ),
-                      ],
+                    return SmoothSingleRiderMarkerLayer(
+                      riderLocation: riderLoc,
+                      label: 'Rider',
+                      color: _kRiderMarkerColor,
+                      icon: Icons.delivery_dining_rounded,
+                      rotateWithHeading: true,
                     );
                   },
                 ),
               ],
             ),
 
-            // ── Top bar ──────────────────────────────────────────────────
+            // ── Top Navigation Bar ───────────────────────────────────────
             SafeArea(
               child: Padding(
                 padding:
@@ -643,7 +598,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        Text('Loading routes…',
+                        Text('Computing routes…',
                             style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -677,11 +632,11 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
                 child: SafeArea(
                   top: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Route legend + last-updated
+                        // Route legend + last-updated ticker
                         Row(
                           children: [
                             Container(
@@ -713,19 +668,25 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
                                     fontSize: 12,
                                     color: _kDeliveryColor,
                                     fontWeight: FontWeight.w600)),
+                            const Spacer(),
                             ValueListenableBuilder<DateTime?>(
                               valueListenable: _riderUpdatedAtNotifier,
                               builder: (context, riderUpdatedAt, child) {
-                                if (riderUpdatedAt == null) return const SizedBox.shrink();
-                                return Expanded(
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Text(
+                                if (riderUpdatedAt == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return ValueListenableBuilder<int>(
+                                  valueListenable: _timeTicker,
+                                  builder: (context, _, child) {
+                                    return Text(
                                       'Rider updated ${_secondsAgo(riderUpdatedAt)}s ago',
                                       style: GoogleFonts.outfit(
-                                          fontSize: 10, color: Colors.grey),
-                                    ),
-                                  ),
+                                        fontSize: 11,
+                                        color: Colors.grey.shade500,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    );
+                                  },
                                 );
                               },
                             ),
@@ -739,7 +700,9 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
                             ValueListenableBuilder<LatLng?>(
                               valueListenable: _riderLatLngNotifier,
                               builder: (context, riderPos, child) {
-                                if (riderPos == null) return const SizedBox.shrink();
+                                if (riderPos == null) {
+                                  return const SizedBox.shrink();
+                                }
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -773,60 +736,63 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
                                 order.customerPhone!.isNotEmpty) ||
                             (order.riderPhone != null &&
                                 order.riderPhone!.isNotEmpty)) ...[
-                          Row(children: [
-                            if (order.customerPhone != null &&
-                                order.customerPhone!.isNotEmpty)
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () => _call(order.customerPhone!),
-                                  icon: const Icon(Icons.phone_outlined,
-                                      size: 16),
-                                  label: Text('Customer',
-                                      style: GoogleFonts.outfit(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700)),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.primary,
-                                    side: const BorderSide(
-                                        color: AppColors.primary),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(14)),
+                          Row(
+                            children: [
+                              if (order.customerPhone != null &&
+                                  order.customerPhone!.isNotEmpty)
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _call(order.customerPhone!),
+                                    icon: const Icon(Icons.phone_outlined,
+                                        size: 16),
+                                    label: Text('Customer',
+                                        style: GoogleFonts.outfit(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700)),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.primary,
+                                      side: const BorderSide(
+                                          color: AppColors.primary),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            if ((order.customerPhone != null &&
-                                    order.customerPhone!.isNotEmpty) &&
-                                (order.riderPhone != null &&
-                                    order.riderPhone!.isNotEmpty))
-                              const SizedBox(width: 10),
-                            if (order.riderPhone != null &&
-                                order.riderPhone!.isNotEmpty)
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () => _call(order.riderPhone!),
-                                  icon: const Icon(
-                                      Icons.delivery_dining_outlined,
-                                      size: 16),
-                                  label: Text('Rider',
-                                      style: GoogleFonts.outfit(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700)),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.accent,
-                                    side: const BorderSide(
-                                        color: AppColors.accent),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(14)),
+                              if ((order.customerPhone != null &&
+                                      order.customerPhone!.isNotEmpty) &&
+                                  (order.riderPhone != null &&
+                                      order.riderPhone!.isNotEmpty))
+                                const SizedBox(width: 10),
+                              if (order.riderPhone != null &&
+                                  order.riderPhone!.isNotEmpty)
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _call(order.riderPhone!),
+                                    icon: const Icon(
+                                        Icons.delivery_dining_outlined,
+                                        size: 16),
+                                    label: Text('Rider',
+                                        style: GoogleFonts.outfit(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700)),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.accent,
+                                      side: const BorderSide(
+                                          color: AppColors.accent),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ]),
+                            ],
+                          ),
                         ],
                       ],
                     ),
@@ -840,10 +806,6 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
     );
   }
 
-  int _secondsAgo(DateTime dt) => DateTime.now().difference(dt).inSeconds.abs();
-}
-
-// ── Extension helper ─────────────────────────────────────────────────────────
-extension _LetExt<T> on T {
-  R let<R>(R Function(T) block) => block(this);
+  int _secondsAgo(DateTime dt) =>
+      DateTime.now().toUtc().difference(dt.toUtc()).inSeconds.abs();
 }
