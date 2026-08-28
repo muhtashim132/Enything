@@ -341,6 +341,8 @@ class _SheetContentState extends State<_SheetContent> {
                         ? CachedNetworkImage(
                             imageUrl: shop.bannerImage!,
                             fit: BoxFit.cover,
+                            memCacheWidth: 600,
+                            maxWidthDiskCache: 800,
                             errorWidget: (c, e, s) => _heroBannerPlaceholder(),
                           )
                         : _heroBannerPlaceholder(),
@@ -843,7 +845,10 @@ class _SheetContentState extends State<_SheetContent> {
                                         .withValues(alpha: 0.1),
                                     backgroundImage: raterAvatar != null
                                         ? CachedNetworkImageProvider(
-                                            raterAvatar)
+                                            raterAvatar,
+                                            maxWidth: 100,
+                                            maxHeight: 100,
+                                          )
                                         : null,
                                     child: raterAvatar == null
                                         ? Text(

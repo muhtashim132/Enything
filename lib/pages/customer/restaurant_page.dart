@@ -137,6 +137,8 @@ class _RestaurantPageState extends State<RestaurantPage> {
                         ? CachedNetworkImage(
                             imageUrl: _shop!.bannerImage!,
                             fit: BoxFit.cover,
+                            memCacheWidth: 600,
+                            maxWidthDiskCache: 800,
                             errorWidget: (c, e, s) => Container(
                               decoration: const BoxDecoration(
                                   gradient: AppColors.foodGradient),

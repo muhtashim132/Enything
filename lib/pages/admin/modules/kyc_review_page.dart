@@ -744,6 +744,8 @@ class _KycCardState extends State<_KycCard> {
                                       imageUrl: doc.url,
                                       fit: BoxFit.cover,
                                       width: double.infinity,
+                                      memCacheWidth: 400,
+                                      memCacheHeight: 400,
                                       placeholder: (_, __) => const Center(
                                         child: CircularProgressIndicator(
                                           color: AdminColors.primary,
@@ -870,6 +872,8 @@ class _KycCardState extends State<_KycCard> {
             child: CachedNetworkImage(
               imageUrl: doc.url,
               fit: BoxFit.contain,
+              memCacheWidth: 1200,
+              memCacheHeight: 1200,
               placeholder: (_, __) => const Padding(
                 padding: EdgeInsets.all(40),
                 child: CircularProgressIndicator(color: AdminColors.primary),

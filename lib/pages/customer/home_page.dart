@@ -4593,6 +4593,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         CachedNetworkImage(
                           imageUrl: imageUrl,
                           fit: BoxFit.cover,
+                          memCacheWidth: 300,
+                          maxWidthDiskCache: 600,
                           fadeInDuration: const Duration(milliseconds: 250),
                           placeholder: (context, url) => Container(
                             color: grad.first.withValues(alpha: 0.25),

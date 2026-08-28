@@ -248,6 +248,8 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                 ? CachedNetworkImage(
                     imageUrl: _shop!.bannerImage!,
                     fit: BoxFit.cover,
+                    memCacheWidth: 600,
+                    maxWidthDiskCache: 800,
                     placeholder: (_, __) => _heroBannerPlaceholder(),
                     errorWidget: (_, __, ___) => _heroBannerPlaceholder(),
                   )

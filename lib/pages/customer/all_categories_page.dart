@@ -388,6 +388,8 @@ class _AllCategoriesPageState extends State<AllCategoriesPage> {
                                     CachedNetworkImage(
                                       imageUrl: imageUrl,
                                       fit: BoxFit.cover,
+                                      memCacheWidth: 400,
+                                      maxWidthDiskCache: 600,
                                       fadeInDuration:
                                           const Duration(milliseconds: 250),
                                       placeholder: (context, url) => Container(

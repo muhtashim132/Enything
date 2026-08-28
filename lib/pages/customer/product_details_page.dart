@@ -233,6 +233,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                   ? _product!.displayImage
                                   : _product!.images[i],
                               fit: BoxFit.cover,
+                              memCacheWidth: 800,
+                              maxWidthDiskCache: 1200,
                               errorWidget: (c, e, s) => Container(
                                 color: isDark
                                     ? AppColors.darkSurface

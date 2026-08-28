@@ -401,6 +401,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                   child: CachedNetworkImage(
                                     imageUrl: shop.bannerImage!,
                                     fit: BoxFit.cover,
+                                    memCacheWidth: 64,
+                                    memCacheHeight: 64,
                                     errorWidget: (c, e, s) => Container(
                                       color: AppColors.primary
                                           .withValues(alpha: 0.1),

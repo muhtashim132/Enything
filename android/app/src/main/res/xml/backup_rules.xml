@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Android 6.0 - 11 (API 23 - 30) Backup Rules Fallback
+   Defines exclusions for legacy Auto Backup.
+-->
+<full-backup-content>
+    <!-- Exclude sensitive authentication tokens and cryptographic storage -->
+    <exclude path="shared_prefs/FlutterSecureStorage.xml" domain="sharedpref" />
+    <exclude path="app_flutter_secure_storage" domain="database" />
+    
+    <!-- Exclude device-specific FCM push tokens and background service isolate states -->
+    <exclude path="shared_prefs/com.google.firebase.messaging.xml" domain="sharedpref" />
+    <exclude path="shared_prefs/flutter_background_service.xml" domain="sharedpref" />
+</full-backup-content>

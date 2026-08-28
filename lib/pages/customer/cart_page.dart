@@ -142,6 +142,8 @@ class CartPage extends StatelessWidget {
                       fit: BoxFit.cover,
                       width: 60,
                       height: 60,
+                      memCacheWidth: 150,
+                      memCacheHeight: 150,
                       errorWidget: (c, e, s) => const _CartImageFallback(),
                     )
                   : const _CartImageFallback(),

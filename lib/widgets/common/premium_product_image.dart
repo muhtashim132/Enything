@@ -63,6 +63,8 @@ class PremiumProductImage extends StatelessWidget {
           CachedNetworkImage(
             imageUrl: imageUrl,
             fit: BoxFit.cover,
+            memCacheWidth: 300,
+            maxWidthDiskCache: 600,
             fadeInDuration: const Duration(milliseconds: 250),
             placeholder: (c, url) => _buildPlaceholder(c, url),
             errorWidget: (c, e, s) => _buildFallback(isDark),
@@ -84,6 +86,8 @@ class PremiumProductImage extends StatelessWidget {
           CachedNetworkImage(
             imageUrl: imageUrl,
             fit: foregroundFit,
+            memCacheWidth: 600,
+            maxWidthDiskCache: 800,
             fadeInDuration: const Duration(milliseconds: 300),
             errorWidget: (c, e, s) =>
                 const SizedBox(), // Fallback already handled by bg
