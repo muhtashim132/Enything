@@ -38,15 +38,34 @@ import UniformTypeIdentifiers
     )
     application.registerForRemoteNotifications()
 
-    // ── 4. Register MethodChannel for Audio Picker (iOS parity) ───────────────
+    // ── 4. Register MethodChannels (iOS parity with Android) ─────────────────
     let controller = window?.rootViewController as? FlutterViewController
     if let binaryMessenger = controller?.binaryMessenger {
+      // Audio Picker
       let audioChannel = FlutterMethodChannel(name: "com.enything/audio_picker", binaryMessenger: binaryMessenger)
       audioChannel.setMethodCallHandler { [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) in
         guard let self = self else { return }
         if call.method == "pickAudioFile" {
           self.audioPickerResult = result
           self.presentAudioDocumentPicker()
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
+
+      // Screen Wake & Keep Awake (parity with Android wakeScreen / releaseWakeScreen)
+      let screenChannel = FlutterMethodChannel(name: "com.enything/screen_wake", binaryMessenger: binaryMessenger)
+      screenChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
+        if call.method == "wakeScreen" {
+          DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = true
+          }
+          result(true)
+        } else if call.method == "releaseWakeScreen" {
+          DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = false
+          }
+          result(true)
         } else {
           result(FlutterMethodNotImplemented)
         }

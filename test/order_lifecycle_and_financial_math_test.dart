@@ -12,9 +12,9 @@ void main() {
       final items = [
         {'category': 'Restaurant', 'price': 500.0, 'quantity': 1},
       ];
-      final deliveryCharge = 20.0 * 1.18; // ₹23.60 incl 18% GST
-      final riderEarnings = 20.0 * 0.80; // ₹16.00
-      final platformFee = 20.0; // ₹20.00 incl 18% GST
+      const deliveryCharge = 20.0 * 1.18; // ₹23.60 incl 18% GST
+      const riderEarnings = 20.0 * 0.80; // ₹16.00
+      const platformFee = 20.0; // ₹20.00 incl 18% GST
 
       final breakdown = OrderTaxBreakdown.calculate(
         items: items,
@@ -35,7 +35,7 @@ void main() {
       expect(breakdown.riderEarnings, 16.0);
 
       // Seller receives 95% of base - seller gateway share
-      final sellerBasePayout = 500.0 * 0.95; // ₹475
+      const sellerBasePayout = 500.0 * 0.95; // ₹475
       final sellerGwShare = sellerBasePayout * TaxConfig.effectiveGatewayDeductionPercent;
       expect(breakdown.sellerPayout, closeTo(sellerBasePayout - sellerGwShare, 0.01));
     });
@@ -45,9 +45,9 @@ void main() {
       final items = [
         {'category': 'Electronics', 'price': 1000.0, 'quantity': 1},
       ];
-      final deliveryCharge = 20.0 * 1.18; // ₹23.60
-      final riderEarnings = 16.0;
-      final platformFee = 20.0;
+      const deliveryCharge = 20.0 * 1.18; // ₹23.60
+      const riderEarnings = 16.0;
+      const platformFee = 20.0;
 
       final breakdown = OrderTaxBreakdown.calculate(
         items: items,
@@ -63,16 +63,16 @@ void main() {
       expect(breakdown.nonFoodGstPassThrough, 180.0);
 
       // Seller receives (Base ₹1000 - 5% commission ₹50) + nonFoodGst ₹180 - seller gateway share
-      final sellerGross = 950.0 + 180.0; // ₹1130
+      const sellerGross = 950.0 + 180.0; // ₹1130
       final sellerGwShare = sellerGross * TaxConfig.effectiveGatewayDeductionPercent;
       expect(breakdown.sellerPayout, closeTo(sellerGross - sellerGwShare, 0.01));
     });
 
     test('Multi-Shop 2-Shop Order with Multi-shop Surcharge', () {
       // 2 shops: Base ₹20 + Surcharge ₹20 = ₹40 pre-tax delivery -> ₹47.20 incl GST
-      final totalDelivery = (PaymentConfig.deliveryFee + PaymentConfig.multiShopSurcharge) * 1.18;
-      final shopDelivery = totalDelivery / 2; // ₹23.60 per shop
-      final shopRiderEarnings = (40.0 * 0.80) / 2; // ₹16.00 per shop
+      const totalDelivery = (PaymentConfig.deliveryFee + PaymentConfig.multiShopSurcharge) * 1.18;
+      const shopDelivery = totalDelivery / 2; // ₹23.60 per shop
+      const shopRiderEarnings = (40.0 * 0.80) / 2; // ₹16.00 per shop
 
       final itemsShop1 = [
         {'category': 'Restaurant', 'price': 300.0, 'quantity': 1},

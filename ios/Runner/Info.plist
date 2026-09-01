@@ -40,21 +40,30 @@
 		<string>Enything needs photo library access to let you choose images for your shop, products, and profile.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Enything saves receipt and order photos to your photo library.</string>
-		<!-- ─── URL Launcher (tel:, mailto:, https:) ─────────────────────── -->
+		<!-- ─── URL Launcher & Payment Queries ───────────────────────────── -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>
 			<string>https</string>
 			<string>http</string>
 			<string>tel</string>
 			<string>mailto</string>
-			<string>upi</string>
-			<string>phonepe</string>
-			<string>gpay</string>
-			<string>paytm</string>
-			<string>waze</string>
+			<string>maps</string>
 			<string>comgooglemaps</string>
+			<string>waze</string>
 			<string>googlechromes</string>
+			<string>upi</string>
+			<string>gpay</string>
+			<string>tez</string>
+			<string>phonepe</string>
+			<string>paytm</string>
+			<string>paytmmp</string>
+			<string>bhim</string>
+			<string>credpay</string>
+			<string>mobikwik</string>
 		</array>
+		<!-- ─── App Store Export Compliance ───────────────────────────────── -->
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 		<!-- ─── Razorpay callback URL scheme ─────────────────────────────── -->
 		<key>CFBundleURLTypes</key>
 		<array>

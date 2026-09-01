@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
+import 'package:image_cropper/image_cropper.dart' show CropAspectRatio, CroppedFile;
+import '../widgets/common/custom_image_cropper.dart';
 
 /// Shows a premium bottom sheet letting the user choose between
 /// Camera and Gallery. Returns the chosen [ImageSource] or null if dismissed.
@@ -181,32 +182,18 @@ class _SourceOption extends StatelessWidget {
 /// Helper function to launch the image cropper with standard UI styling.
 Future<CroppedFile?> cropImage(BuildContext context, String path,
     {CropAspectRatio? aspectRatio, String title = 'Crop Image'}) async {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+  double? ratio;
+  if (aspectRatio != null) {
+    ratio = aspectRatio.ratioX / aspectRatio.ratioY;
+  }
 
-  return await ImageCropper().cropImage(
-    sourcePath: path,
-    aspectRatio: aspectRatio,
-    uiSettings: [
-      AndroidUiSettings(
-        toolbarTitle: title,
-        toolbarColor: isDark ? const Color(0xFF1C1C2E) : Colors.white,
-        toolbarWidgetColor: isDark ? Colors.white : Colors.black,
-        initAspectRatio: CropAspectRatioPreset.original,
-        lockAspectRatio: aspectRatio != null,
-        hideBottomControls: false,
-        backgroundColor:
-            isDark ? const Color(0xFF0A0A14) : const Color(0xFFF4F6FB),
-        activeControlsWidgetColor: const Color(0xFF4C6EF5),
-        dimmedLayerColor: isDark ? Colors.black87 : Colors.black54,
-      ),
-      IOSUiSettings(
+  return await Navigator.of(context).push<CroppedFile>(
+    MaterialPageRoute(
+      builder: (ctx) => CustomImageCropperPage(
+        imagePath: path,
+        aspectRatio: ratio,
         title: title,
-        aspectRatioLockEnabled: aspectRatio != null,
-        rotateButtonsHidden: false,
-        rotateClockwiseButtonHidden: false,
-        resetButtonHidden: false,
-        hidesNavigationBar: true,
       ),
-    ],
+    ),
   );
 }

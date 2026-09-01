@@ -85,8 +85,8 @@ class NotificationProvider extends ChangeNotifier {
         if (!_isDisposed && oldId != null) {
           if (oldRole == 'customer') {
             listenAsCustomer(oldId);
-          } else if (oldRole == 'seller' && oldId.contains('-')) {
-            listenAsSellerMultiShop(oldId.split('-'));
+          } else if (oldRole == 'seller' && oldId.contains('|')) {
+            listenAsSellerMultiShop(oldId.split('|'));
           } else if (oldRole == 'seller') {
             listenAsSeller(oldId);
           } else if (oldRole == 'delivery') {
@@ -565,7 +565,7 @@ class NotificationProvider extends ChangeNotifier {
 
     // Create a deterministic key for the channel and checking if already listening
     final sortedIds = List<String>.from(shopIds)..sort();
-    final listeningKey = sortedIds.join('-');
+    final listeningKey = sortedIds.join('|');
 
     if (_listeningUserId == listeningKey && _listeningRole == 'seller') return;
     stopListening();

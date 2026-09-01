@@ -316,24 +316,28 @@ Future<void> main() async {
   // Verification Assertions:
   // 1. Total Orders: Excludes cancelled/seller_rejected -> o1, o2, o3 = 3 orders
   print('Total Orders: $totalOrders (Expected: 3)');
-  if (totalOrders != 3)
+  if (totalOrders != 3) {
     throw Exception('FAILED: Total orders expected 3, got $totalOrders');
+  }
 
   // 2. Pending Orders: Status in ('pending', 'awaiting_acceptance') -> o3 = 1 order
   print('Pending Orders: $pendingOrders (Expected: 1)');
-  if (pendingOrders != 1)
+  if (pendingOrders != 1) {
     throw Exception('FAILED: Pending orders expected 1, got $pendingOrders');
+  }
 
   // 3. Products Count: 1 product created
   print('Products Count: $productsCount (Expected: 1)');
-  if (productsCount != 1)
+  if (productsCount != 1) {
     throw Exception('FAILED: Products expected 1, got $productsCount');
+  }
 
   // 4. Today's Earning: o1 delivered seller payout
   print("Today's Earning: ₹$todaysEarning");
-  if (todaysEarning <= 0)
+  if (todaysEarning <= 0) {
     throw Exception(
         "FAILED: Today's earning must be positive for delivered order!");
+  }
 
   print(
       '✅ [TEST 2 PASSED] get_seller_daily_stats verified with 100% precision');
@@ -428,15 +432,18 @@ Future<void> main() async {
       '• CA Net Seller Payout: ₹$caPayout (Matches Total Earned: ₹$totalEarned)');
 
   if (caBaseSales != 3000.0) throw Exception('FAILED: CA Base Sales mismatch!');
-  if (caNonFoodGst != 540.0)
+  if (caNonFoodGst != 540.0) {
     throw Exception('FAILED: CA Non-Food GST mismatch!');
+  }
   if (caTcs != 15.0) throw Exception('FAILED: CA TCS mismatch!');
   if (caTds != 3.0) throw Exception('FAILED: CA TDS mismatch!');
-  if (caDeliveredCount != 1)
+  if (caDeliveredCount != 1) {
     throw Exception('FAILED: CA Delivered count mismatch!');
-  if ((caPayout - totalEarned).abs() > 0.01)
+  }
+  if ((caPayout - totalEarned).abs() > 0.01) {
     throw Exception(
         'FAILED: CA Payout ($caPayout) does not match totalEarned ($totalEarned)!');
+  }
 
   print(
       '✅ [TEST 5 PASSED] CA Report math perfectly reconciles with wallet balance!');

@@ -565,14 +565,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     if (confirmed != true || !mounted) return;
 
     try {
-      // SE2 FIX: Allow rejection even if paid. The backend will trigger a refund
-      // if the status is confirmed or preparing.
-      final latestStatus = await _supabase
+      final latestOrderRow = await _supabase
           .from('orders')
-          .select('status')
+          .select('status, delivery_partner_id')
           .eq('id', order.id)
           .maybeSingle();
-      final currentStatus = latestStatus?['status'] as String?;
+      final currentStatus = latestOrderRow?['status'] as String?;
+      final latestPartnerId =
+          latestOrderRow?['delivery_partner_id'] as String?;
       const rejectableStatuses = [
         'awaiting_acceptance',
         'awaiting_payment',
@@ -610,9 +610,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         );
       }
 
-      if (mounted && order.deliveryPartnerId != null) {
+      final partnerIdToNotify = latestPartnerId ?? order.deliveryPartnerId;
+      if (mounted && partnerIdToNotify != null) {
         context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: order.deliveryPartnerId!,
+          targetUserId: partnerIdToNotify,
           title: '❌ Order Cancelled by Shop',
           body: 'The shop declined the order. You are free for new deliveries.',
           data: {'order_id': order.id, 'role': 'rider'},

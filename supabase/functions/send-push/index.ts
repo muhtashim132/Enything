@@ -294,6 +294,8 @@ Deno.serve(async (req: Request) => {
                     badge: 1,
                     'mutable-content': 1,
                     'content-available': 1,
+                    'interruption-level': isUrgent ? 'time-sensitive' : 'active',
+                    ...(isUrgent ? { category: 'order_alert_category' } : {}),
                   },
                 },
               },

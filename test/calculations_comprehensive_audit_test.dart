@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:enythingmobilenew/config/tax_config.dart';
-import 'package:enythingmobilenew/config/payment_config.dart';
-import 'package:enythingmobilenew/providers/platform_config_provider.dart';
 
 void main() {
   group('100x Comprehensive Calculations Audit Test Suite', () {
@@ -85,17 +83,17 @@ void main() {
       // Suppose surviving shop subtotal = ₹500, GST = ₹25, platform_fee = ₹20
       // Bundled delivery_charges = ₹23.60 (which already is base ₹20 + GST ₹3.60)
       // grand_total_collected MUST BE exactly: 500 + 25 + 20 + 23.60 = 568.60
-      final totalAmount = 500.0;
-      final gstItemTotal = 25.0;
-      final newPlat = 20.0;
-      final newDel = 23.60; // bundled delivery charges
-      final newCoupon = 0.0;
+      const totalAmount = 500.0;
+      const gstItemTotal = 25.0;
+      const newPlat = 20.0;
+      const newDel = 23.60; // bundled delivery charges
+      const newCoupon = 0.0;
 
-      final correctGrandTotal = totalAmount + gstItemTotal + newPlat + newDel - newCoupon;
+      const correctGrandTotal = totalAmount + gstItemTotal + newPlat + newDel - newCoupon;
       expect(correctGrandTotal, 568.60);
 
       // If the old bug was present (re-adding small, heavy, surcharge):
-      final doubleCountedGrandTotal = correctGrandTotal + 0.0 /* small */ + 0.0 /* heavy */ + 20.0 /* surcharge */;
+      const doubleCountedGrandTotal = correctGrandTotal + 0.0 /* small */ + 0.0 /* heavy */ + 20.0 /* surcharge */;
       // We assert that correct formula differs from the buggy double-counted total
       expect(correctGrandTotal != doubleCountedGrandTotal, true);
     });
@@ -104,9 +102,9 @@ void main() {
       final items = [
         {'category': 'Restaurant', 'price': 1000.0, 'quantity': 1},
       ];
-      final deliveryCharge = 23.60;
-      final riderEarnings = 16.0;
-      final platformFee = 20.0;
+      const deliveryCharge = 23.60;
+      const riderEarnings = 16.0;
+      const platformFee = 20.0;
 
       final breakdown = OrderTaxBreakdown.calculate(
         items: items,
@@ -130,11 +128,11 @@ void main() {
       expect(breakdown.sellerGatewayShare, closeTo(950.0 * 0.0236, 0.01));
 
       // Seller Gross Payout (before TDS/TCS) = 1000 - 50 - 22.42 = 927.58
-      final expectedSellerPayoutGross = 1000.0 - 50.0 - (950.0 * 0.0236);
+      const expectedSellerPayoutGross = 1000.0 - 50.0 - (950.0 * 0.0236);
       expect(breakdown.sellerPayout, closeTo(expectedSellerPayoutGross, 0.01));
 
       // Seller Net Payout (after ₹1.0 TDS deduction) = 927.58 - 1.0 = 926.58
-      final expectedSellerPayoutNet = expectedSellerPayoutGross - 1.0;
+      const expectedSellerPayoutNet = expectedSellerPayoutGross - 1.0;
       expect(breakdown.sellerPayoutNet, closeTo(expectedSellerPayoutNet, 0.01));
     });
   });

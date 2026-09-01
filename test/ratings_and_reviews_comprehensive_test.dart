@@ -77,8 +77,9 @@ void main() {
         if (orderStatus != 'delivered') return false;
 
         if (raterRole == 'customer') return userId == customerId;
-        if (raterRole == 'seller' || raterRole == 'shop')
+        if (raterRole == 'seller' || raterRole == 'shop') {
           return userId == sellerId;
+        }
         if (raterRole == 'rider' ||
             raterRole == 'delivery' ||
             raterRole == 'delivery_partner') {

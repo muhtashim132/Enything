@@ -671,7 +671,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       double surcharge = 0.0;
       double heavyFee = 0.0;
       double smallCartFee = 0.0;
-      double effectiveBase = 25.0;
+      double effectiveBase = 0.0;
 
       if (isReplacementOrder) {
         // Replacement order fees:
@@ -734,7 +734,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           heavyFee = math.max(0.0, aggregateHeavyFee - _activeHeavyOrderFee);
         }
       } else {
-        effectiveBase = baseDelivery >= 0 ? baseDelivery : 25.0;
+        effectiveBase = baseDelivery >= 0
+            ? baseDelivery
+            : (PlatformConfigProvider.instance?.deliveryBaseFee ??
+                PaymentConfig.deliveryFee);
         surcharge = cart.multiShopSurcharge;
         heavyFee = cart.heavyOrderFee;
         smallCartFee = cart.smallCartFee;
@@ -1200,7 +1203,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (isReplacementOrder) {
       effectiveBase = 0.0;
-      surcharge = 0.0;
+      final newUniqueShopIds = cart.shops
+          .map((s) => s.id)
+          .where((id) => !_activeShopIds.contains(id))
+          .toSet();
+      final totalShopsAtEnd = _activeShopIds.length + newUniqueShopIds.length;
+      final flatSurchargeRate =
+          PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
+      final totalSurchargeAtEnd = totalShopsAtEnd > 1
+          ? flatSurchargeRate * (totalShopsAtEnd - 1)
+          : 0.0;
+
+      final oldActiveCount = _activeShopIds.length;
+      final expectedOldSurchargePaid = math.min(
+          _activeSurchargePaid,
+          oldActiveCount > 1
+              ? flatSurchargeRate * (oldActiveCount - 1)
+              : 0.0);
+
+      surcharge =
+          math.max(0.0, totalSurchargeAtEnd - expectedOldSurchargePaid);
 
       final smallCartThreshold =
           PlatformConfigProvider.instance?.smallCartThreshold ??
@@ -1229,7 +1251,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ? baseCharge
           : (PlatformConfigProvider.instance?.deliveryBaseFee ??
               PaymentConfig.deliveryFee);
-      surcharge = 0.0;
+      surcharge = cart.multiShopSurcharge;
       heavyFee = cart.heavyOrderFee;
       smallCartFee = cart.smallCartFee;
     }
