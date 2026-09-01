@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 void main() async {
-  const supabaseUrl = 'https://mmdrgcuaetwohflcvzou.supabase.co';
-  const supabaseAnonKey = 'sb_publishable_f4uHzztf4EK76hcL0-bS5A_Ga0G2K6p';
+  const supabaseUrl = 'https://hvtujaatwhyxielrlztr.supabase.co';
+  const supabaseAnonKey = 'sb_publishable_NnOTr7QGr-oQpg4EZ4GNVg_o25JykPs';
 
   print('Testing login...');
 
