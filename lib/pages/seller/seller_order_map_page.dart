@@ -47,6 +47,8 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   final MapController _mapCtrl = MapController();
   SupabaseClient get _supabase => Supabase.instance.client;
 
+  late OrderModel _currentOrder;
+
   // Route polylines
   List<LatLng> _pickupRoute = [];
   List<LatLng> _deliveryRoute = [];
@@ -64,6 +66,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   @override
   void initState() {
     super.initState();
+    _currentOrder = widget.order;
 
     if (widget.order.riderLat != null &&
         widget.order.riderLng != null &&
@@ -110,6 +113,12 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
           callback: (payload) {
             if (!mounted || payload.newRecord.isEmpty) return;
             final r = payload.newRecord;
+            final updated = OrderModel.fromMap(r);
+
+            setState(() {
+              _currentOrder = updated;
+            });
+
             final lat = (r['rider_lat'] as num?)?.toDouble();
             final lng = (r['rider_lng'] as num?)?.toDouble();
 
@@ -122,11 +131,11 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
                   prevPos.longitude != newPos.longitude) {
                 _riderLatLngNotifier.value = newPos;
 
-                // Dynamically refresh pickup route if rider moved > 60 meters
+                // Dynamically refresh pickup route if rider moved > 50 meters
                 if (prevPos == null ||
                     const Distance().as(
                             LengthUnit.Meter, prevPos, newPos) >
-                        60) {
+                        50) {
                   _refreshPickupRoute(newPos);
                 }
               }
@@ -146,7 +155,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   Future<void> _fetchRoutes() async {
     setState(() => _loadingRoutes = true);
 
-    final order = widget.order;
+    final order = _currentOrder;
     final shopLat = order.shopLat;
     final shopLng = order.shopLng;
     final custLat = order.deliveryLat;
@@ -190,8 +199,8 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   }
 
   Future<void> _refreshPickupRoute(LatLng riderPos) async {
-    final shopLat = widget.order.shopLat;
-    final shopLng = widget.order.shopLng;
+    final shopLat = _currentOrder.shopLat;
+    final shopLng = _currentOrder.shopLng;
     if (shopLat == null || shopLng == null || shopLat == 0.0) return;
 
     final shopPt = LatLng(shopLat, shopLng);
@@ -207,7 +216,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   }
 
   void _fitMapBounds() {
-    final order = widget.order;
+    final order = _currentOrder;
     final riderPos = _riderLatLngNotifier.value;
     final pts = <LatLng>[
       if (order.shopLat != null &&
@@ -317,7 +326,9 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
               children: [
                 Text(label,
                     style: GoogleFonts.outfit(
-                        color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
                 if (loading)
                   SizedBox(
                     height: 10,
@@ -355,7 +366,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final order = widget.order;
+    final order = _currentOrder;
 
     final shopLat = order.shopLat;
     final shopLng = order.shopLng;
@@ -454,7 +465,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
                       riderLocation: riderLoc,
                       label: 'Rider',
                       color: _kRiderMarkerColor,
-                      icon: Icons.delivery_dining_rounded,
+                      icon: Icons.navigation_rounded,
                       rotateWithHeading: true,
                     );
                   },

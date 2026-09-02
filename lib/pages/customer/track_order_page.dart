@@ -1595,7 +1595,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             targetLocation: riderLoc,
             width: 52,
             height: 52,
-            showPulse: false,
+            showPulse: true,
           ),
         ));
       }

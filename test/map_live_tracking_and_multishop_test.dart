@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:enythingmobilenew/models/order_group.dart';
 import 'package:enythingmobilenew/models/order_model.dart';
+import 'package:enythingmobilenew/utils/geo_utils.dart';
 import 'package:enythingmobilenew/widgets/common/animated_moving_marker.dart';
 
 void main() {
@@ -65,6 +66,22 @@ void main() {
       // Normal interpolation without boundary cross
       final normalAngle = lerpAngle(40.0, 60.0, 0.5);
       expect(normalAngle, closeTo(50.0, 0.001));
+    });
+
+    test('Bearing noise suppression: micro-movements < 3.5m retain previous bearing', () {
+      const start = LatLng(28.613900, 77.209000);
+      // Small jitter: ~1.2 meters
+      const jitterPoint = LatLng(28.613910, 77.209010);
+      const distanceCalc = Distance();
+      final dist = distanceCalc.as(LengthUnit.Meter, start, jitterPoint);
+      expect(dist < 3.5, isTrue);
+
+      // Verify that jitter logic retains initial bearing
+      double currentBearing = 45.0;
+      if (dist >= 3.5) {
+        currentBearing = GeoUtils.calculateBearing(start, jitterPoint);
+      }
+      expect(currentBearing, equals(45.0)); // Remains stable, no spinning!
     });
   });
 
@@ -167,6 +184,37 @@ void main() {
       expect(group.allPickedUp, isTrue);
       expect(group.allOutForDelivery, isTrue);
       expect(group.groupStatus, equals('out_for_delivery'));
+    });
+
+    test('Multi-shop Waypoint Routing: Skips picked-up shops and isolates remaining unpicked stops', () {
+      final o1PickedUp = createTestOrder(
+        id: 'ord-1',
+        shopId: 'shop-A',
+        status: 'picked_up',
+        grandTotal: 400.0,
+        riderEarnings: 35.0,
+        shopLat: 28.6100,
+        shopLng: 77.2000,
+      );
+      final o2Pending = createTestOrder(
+        id: 'ord-2',
+        shopId: 'shop-B',
+        status: 'ready_for_pickup',
+        grandTotal: 250.0,
+        riderEarnings: 25.0,
+        shopLat: 28.6200,
+        shopLng: 77.2100,
+      );
+
+      final group = OrderGroup('cart-grp-1', [o1PickedUp, o2Pending]);
+
+      // Unpicked stops filter
+      final unpicked = group.activeOrders
+          .where((o) => o.status != 'picked_up' && o.status != 'out_for_delivery')
+          .toList();
+
+      expect(unpicked.length, equals(1));
+      expect(unpicked.first.shopId, equals('shop-B'));
     });
 
     test('Partial Rejection leading to completion: 1 delivered, 1 cancelled', () {

@@ -33,10 +33,10 @@ class SmoothMovingRiderMarkerLayer extends StatefulWidget {
     required this.riderLocations,
     this.label = 'Rider',
     this.color = const Color(0xFF2ECC71),
-    this.icon = Icons.delivery_dining_rounded,
-    this.rotateWithHeading = false,
+    this.icon = Icons.navigation_rounded,
+    this.rotateWithHeading = true,
     this.showPulse = true,
-    this.duration = const Duration(milliseconds: 1200),
+    this.duration = const Duration(milliseconds: 1400),
   });
 
   @override
@@ -139,9 +139,14 @@ class _SmoothMovingRiderMarkerLayerState
         _startLocs[key] = currentPos;
         _targetLocs[key] = newTarget;
 
-        final newBearing = GeoUtils.calculateBearing(currentPos, newTarget);
         _startBearings[key] = _animatedBearings[key] ?? 0.0;
-        _targetBearings[key] = newBearing;
+        // 100x Heading Noise Guard: Only rotate compass bearing if moved >= 3.5m
+        if (distanceMeters >= 3.5) {
+          _targetBearings[key] =
+              GeoUtils.calculateBearing(currentPos, newTarget);
+        } else {
+          _targetBearings[key] = _startBearings[key]!;
+        }
 
         needsAnimation = true;
       }
@@ -209,15 +214,17 @@ class SmoothSingleRiderMarkerLayer extends StatelessWidget {
   final IconData icon;
   final bool rotateWithHeading;
   final bool showPulse;
+  final Duration duration;
 
   const SmoothSingleRiderMarkerLayer({
     super.key,
     required this.riderLocation,
     this.label = 'Rider',
     this.color = const Color(0xFF2ECC71),
-    this.icon = Icons.delivery_dining_rounded,
-    this.rotateWithHeading = false,
+    this.icon = Icons.navigation_rounded,
+    this.rotateWithHeading = true,
     this.showPulse = true,
+    this.duration = const Duration(milliseconds: 1400),
   });
 
   @override
@@ -235,6 +242,7 @@ class SmoothSingleRiderMarkerLayer extends StatelessWidget {
       icon: icon,
       rotateWithHeading: rotateWithHeading,
       showPulse: showPulse,
+      duration: duration,
     );
   }
 }
@@ -289,32 +297,70 @@ class _RiderPinWidgetState extends State<_RiderPinWidget>
 
   @override
   Widget build(BuildContext context) {
-    Widget content = Column(
+    final bool isNavArrow = widget.icon == Icons.navigation_rounded ||
+        widget.icon == Icons.navigation;
+
+    Widget pinBody = Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: widget.color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: widget.color.withValues(alpha: 0.5),
+            blurRadius: 14,
+            spreadRadius: 2,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(color: Colors.white, width: 2.5),
+      ),
+      child: Center(
+        child: isNavArrow
+            ? Transform.rotate(
+                angle: widget.rotateWithHeading
+                    ? (widget.bearing * (math.pi / 180.0))
+                    : 0.0,
+                child: Icon(widget.icon, color: Colors.white, size: 24),
+              )
+            : Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Upright vehicle icon
+                  Icon(widget.icon, color: Colors.white, size: 24),
+                  // Directional nose pointer if rotateWithHeading is true
+                  if (widget.rotateWithHeading)
+                    Transform.rotate(
+                      angle: widget.bearing * (math.pi / 180.0),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+      ),
+    );
+
+    if (_pulseAnim != null) {
+      pinBody = ScaleTransition(
+        scale: _pulseAnim!,
+        child: pinBody,
+      );
+    }
+
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Transform.rotate(
-          angle: widget.rotateWithHeading
-              ? (widget.bearing * (math.pi / 180.0))
-              : 0.0,
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: widget.color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: widget.color.withValues(alpha: 0.5),
-                  blurRadius: 14,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-              border: Border.all(color: Colors.white, width: 2.5),
-            ),
-            child: Icon(widget.icon, color: Colors.white, size: 26),
-          ),
-        ),
+        pinBody,
         const SizedBox(height: 2),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -340,20 +386,11 @@ class _RiderPinWidgetState extends State<_RiderPinWidget>
         ),
       ],
     );
-
-    if (_pulseAnim != null) {
-      content = ScaleTransition(
-        scale: _pulseAnim!,
-        child: content,
-      );
-    }
-
-    return content;
   }
 }
 
-/// Standalone SmoothRiderMarker kept for compatibility
-class SmoothRiderMarker extends StatelessWidget {
+/// Standalone Animated Rider Marker for preview thumbnail maps
+class SmoothRiderMarker extends StatefulWidget {
   final LatLng targetLocation;
   final Duration duration;
   final Curve curve;
@@ -374,20 +411,47 @@ class SmoothRiderMarker extends StatelessWidget {
     this.height = 72,
     this.label = 'Rider',
     this.color = const Color(0xFF2ECC71),
-    this.icon = Icons.delivery_dining_rounded,
+    this.icon = Icons.navigation_rounded,
     this.showPulse = true,
-    this.rotateWithHeading = false,
+    this.rotateWithHeading = true,
   });
+
+  @override
+  State<SmoothRiderMarker> createState() => _SmoothRiderMarkerState();
+}
+
+class _SmoothRiderMarkerState extends State<SmoothRiderMarker> {
+  double _currentBearing = 0.0;
+  LatLng? _prevPos;
+
+  @override
+  void didUpdateWidget(covariant SmoothRiderMarker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_prevPos != null &&
+        (_prevPos!.latitude != widget.targetLocation.latitude ||
+            _prevPos!.longitude != widget.targetLocation.longitude)) {
+      final dist = const Distance().as(
+        LengthUnit.Meter,
+        _prevPos!,
+        widget.targetLocation,
+      );
+      if (dist >= 3.5) {
+        _currentBearing =
+            GeoUtils.calculateBearing(_prevPos!, widget.targetLocation);
+      }
+    }
+    _prevPos = widget.targetLocation;
+  }
 
   @override
   Widget build(BuildContext context) {
     return _RiderPinWidget(
-      label: label,
-      color: color,
-      icon: icon,
-      bearing: 0.0,
-      rotateWithHeading: rotateWithHeading,
-      showPulse: showPulse,
+      label: widget.label,
+      color: widget.color,
+      icon: widget.icon,
+      bearing: _currentBearing,
+      rotateWithHeading: widget.rotateWithHeading,
+      showPulse: widget.showPulse,
     );
   }
 }

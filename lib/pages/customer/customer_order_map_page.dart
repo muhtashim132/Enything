@@ -17,6 +17,8 @@ import '../../widgets/common/animated_moving_marker.dart';
 const _kPickupColor = Color(0xFF2ECC71); // green  — rider → shop
 const _kDeliveryColor = Color(0xFFFF8C42); // orange — shop → customer
 const _kShopMarkerColor = Color(0xFFFF8C42);
+const _kShopCancelledColor = Color(0xFF95A5A6); // grey — cancelled / rejected shop
+const _kShopPickedUpColor = Color(0xFF3498DB); // blue — picked up
 const _kCustomerMarkerColor = Color(0xFF00B4D8); // cyan — customer home
 const _kRiderMarkerColor = Color(0xFF2ECC71); // green — live rider
 
@@ -29,6 +31,7 @@ const _kRiderMarkerColor = Color(0xFF2ECC71); // green — live rider
 //   • Distance + Estimated arrival chips (calculated along true road curves)
 //   • Direct Call Shop & Call Rider action buttons
 //   • Live GPS freshness ticker ("Updated X seconds ago")
+//   • Instant partial order rejection recalculations
 // ─────────────────────────────────────────────────────────────────────────────
 class CustomerOrderMapPage extends StatefulWidget {
   final OrderModel order;
@@ -49,11 +52,15 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   final MapController _mapCtrl = MapController();
   SupabaseClient get _supabase => Supabase.instance.client;
 
+  late OrderModel _currentOrder;
+  late List<OrderModel> _currentGroupOrders;
+
   // Route data
   List<List<LatLng>> _deliveryRoutes = [];
   List<LatLng> _pickupRoute = [];
   bool _loadingRoutes = true;
   double? _deliveryKm;
+  LatLng? _lastPickupFetchPos;
 
   // Live rider position (isolated via ValueNotifier to prevent map re-renders)
   final ValueNotifier<Map<String, LatLng>> _riderLocationsNotifier =
@@ -71,16 +78,19 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    _currentOrder = widget.order;
+    _currentGroupOrders = (widget.groupOrders != null &&
+            widget.groupOrders!.isNotEmpty)
+        ? List<OrderModel>.from(widget.groupOrders!)
+        : [_currentOrder];
+
     _updateTickerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) _timeTicker.value++;
     });
 
-    final shops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
-        ? widget.groupOrders!
-        : [widget.order];
     final initialLocs = <String, LatLng>{};
     final initialAts = <String, DateTime>{};
-    for (final o in shops) {
+    for (final o in _currentGroupOrders) {
       if (o.deliveryPartnerId != null) {
         _orderToRiderMap[o.id] = o.deliveryPartnerId!;
         if (o.riderLat != null && o.riderLng != null && o.riderLat != 0.0) {
@@ -131,10 +141,10 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     }
     _isIntentionalDisconnect = false;
 
-    final cartGroupId = widget.order.cartGroupId;
+    final cartGroupId = _currentOrder.cartGroupId;
     final channelName = cartGroupId != null
         ? 'customer-map-group-$cartGroupId'
-        : 'customer-map-${widget.order.id}';
+        : 'customer-map-${_currentOrder.id}';
 
     _channel = _supabase
         .channel(channelName)
@@ -145,57 +155,70 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
             column: cartGroupId != null ? 'cart_group_id' : 'id',
-            value: cartGroupId ?? widget.order.id,
+            value: cartGroupId ?? _currentOrder.id,
           ),
           callback: (payload) {
             if (!mounted || payload.newRecord.isEmpty) return;
             final r = payload.newRecord;
+            final updatedOrder = OrderModel.fromMap(r);
 
             final newStatus = r['status'] as String?;
             final pid = r['delivery_partner_id'] as String?;
             final orderId = r['id'] as String;
 
-            if (newStatus == 'delivered' ||
-                newStatus == 'cancelled' ||
-                newStatus == 'rejected') {
-              if (pid != null) {
-                if (_riderLocationsNotifier.value.containsKey(pid)) {
-                  final currentLocs =
-                      Map<String, LatLng>.from(_riderLocationsNotifier.value);
-                  currentLocs.remove(pid);
-                  _riderLocationsNotifier.value = currentLocs;
+            // 1. Update local order cache
+            final idx = _currentGroupOrders.indexWhere((o) => o.id == orderId);
+            if (idx != -1) {
+              updatedOrder.items = _currentGroupOrders[idx].items;
+              setState(() {
+                _currentGroupOrders[idx] = updatedOrder;
+                if (_currentOrder.id == orderId) {
+                  _currentOrder = updatedOrder;
                 }
-                if (_riderUpdatedAtsNotifier.value.containsKey(pid)) {
-                  final currentAts = Map<String, DateTime>.from(
-                      _riderUpdatedAtsNotifier.value);
-                  currentAts.remove(pid);
-                  _riderUpdatedAtsNotifier.value = currentAts;
-                }
-              }
+              });
+            } else {
+              setState(() {
+                _currentGroupOrders.add(updatedOrder);
+              });
+            }
 
-              if (widget.groupOrders == null || widget.groupOrders!.isEmpty) {
-                if (mounted && Navigator.canPop(context)) {
-                  Navigator.of(context).pop();
-                }
+            final activeOrders = _currentGroupOrders
+                .where((o) =>
+                    o.status != 'rejected' &&
+                    o.status != 'cancelled' &&
+                    o.status != 'seller_rejected')
+                .toList();
+
+            // 2. Handle complete order termination
+            if (activeOrders.isEmpty) {
+              if (pid != null) {
+                _removeRiderLocation(pid);
+              }
+              if (mounted && Navigator.canPop(context)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Order was cancelled or rejected.'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+                Navigator.of(context).pop();
               }
               return;
             }
 
-            // Handle Reassignments & Unassignments
+            // 3. Handle Partial Rejection or Status Change -> Recompute Routes
+            if (newStatus == 'rejected' ||
+                newStatus == 'cancelled' ||
+                newStatus == 'seller_rejected' ||
+                newStatus == 'picked_up' ||
+                newStatus == 'out_for_delivery') {
+              _fetchRoutes(silent: true);
+            }
+
+            // 4. Handle Reassignments & Unassignments
             final oldPid = _orderToRiderMap[orderId];
             if (oldPid != null && oldPid != pid) {
-              if (_riderLocationsNotifier.value.containsKey(oldPid)) {
-                final currentLocs =
-                    Map<String, LatLng>.from(_riderLocationsNotifier.value);
-                currentLocs.remove(oldPid);
-                _riderLocationsNotifier.value = currentLocs;
-              }
-              if (_riderUpdatedAtsNotifier.value.containsKey(oldPid)) {
-                final currentAts =
-                    Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
-                currentAts.remove(oldPid);
-                _riderUpdatedAtsNotifier.value = currentAts;
-              }
+              _removeRiderLocation(oldPid);
             }
 
             if (pid != null) {
@@ -204,6 +227,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
               _orderToRiderMap.remove(orderId);
             }
 
+            // 5. Handle Rider GPS Coordinates
             final lat = (r['rider_lat'] as num?)?.toDouble();
             final lng = (r['rider_lng'] as num?)?.toDouble();
 
@@ -219,6 +243,16 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                     Map<String, LatLng>.from(_riderLocationsNotifier.value);
                 currentLocs[pid] = newLoc;
                 _riderLocationsNotifier.value = currentLocs;
+
+                // Dynamically refresh pickup route if rider moved > 50m
+                if (_currentOrder.status != 'out_for_delivery' &&
+                    (_lastPickupFetchPos == null ||
+                        const Distance().as(
+                                LengthUnit.Meter, _lastPickupFetchPos!, newLoc) >
+                            50)) {
+                  _lastPickupFetchPos = newLoc;
+                  _refreshPickupRoute(newLoc);
+                }
               }
 
               final updatedStr = r['rider_location_updated_at'] as String?;
@@ -247,13 +281,30 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     });
   }
 
+  void _removeRiderLocation(String pid) {
+    if (_riderLocationsNotifier.value.containsKey(pid)) {
+      final currentLocs =
+          Map<String, LatLng>.from(_riderLocationsNotifier.value);
+      currentLocs.remove(pid);
+      _riderLocationsNotifier.value = currentLocs;
+    }
+    if (_riderUpdatedAtsNotifier.value.containsKey(pid)) {
+      final currentAts =
+          Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
+      currentAts.remove(pid);
+      _riderUpdatedAtsNotifier.value = currentAts;
+    }
+  }
+
   // ── Route Computation ──────────────────────────────────────────────────────
 
-  Future<void> _fetchRoutes() async {
-    setState(() => _loadingRoutes = true);
+  Future<void> _fetchRoutes({bool silent = false}) async {
+    if (!silent) {
+      setState(() => _loadingRoutes = true);
+    }
 
-    final custLat = widget.order.deliveryLat;
-    final custLng = widget.order.deliveryLng;
+    final custLat = _currentOrder.deliveryLat;
+    final custLng = _currentOrder.deliveryLng;
 
     if (custLat == null || custLng == null || custLat == 0.0) {
       if (mounted) setState(() => _loadingRoutes = false);
@@ -261,13 +312,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     }
     final custPt = LatLng(custLat, custLng);
 
-    final allShops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
-        ? widget.groupOrders!
-        : [widget.order];
-    final activeShops = allShops
-        .where((s) => s.status != 'rejected' && s.status != 'cancelled')
+    final activeShops = _currentGroupOrders
+        .where((s) =>
+            s.status != 'rejected' &&
+            s.status != 'cancelled' &&
+            s.status != 'seller_rejected')
         .toList();
-    final shops = activeShops.isNotEmpty ? activeShops : allShops;
+    final shops =
+        activeShops.isNotEmpty ? activeShops : _currentGroupOrders;
 
     List<List<LatLng>> deliveryRoutes = [];
     double totalDeliveryKm = 0;
@@ -275,12 +327,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     // 1. Fetch Delivery Legs (Shop -> Customer or Multi-Shop -> Customer)
     if (shops.length > 1) {
       final shopPts = shops
-          .where((s) => s.shopLat != null && s.shopLng != null && s.shopLat != 0.0)
+          .where((s) =>
+              s.shopLat != null && s.shopLng != null && s.shopLat != 0.0)
           .map((s) => LatLng(s.shopLat!, s.shopLng!))
           .toList();
 
       if (shopPts.isNotEmpty) {
-        final multiRoute = await GeoUtils.fetchMultiStopRoute([...shopPts, custPt]);
+        final multiRoute =
+            await GeoUtils.fetchMultiStopRoute([...shopPts, custPt]);
         deliveryRoutes.add(multiRoute);
         totalDeliveryKm = GeoUtils.calculateRouteDistanceKm(multiRoute);
       }
@@ -297,7 +351,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     // 2. Fetch Pickup Leg (Rider -> First Shop) if rider location is known
     List<LatLng> pickupRoute = [];
     final riderLocs = _riderLocationsNotifier.value;
-    if (riderLocs.isNotEmpty && shops.isNotEmpty && shops.first.shopLat != null) {
+    if (riderLocs.isNotEmpty &&
+        shops.isNotEmpty &&
+        shops.first.shopLat != null) {
       final riderPt = riderLocs.values.first;
       final firstShopPt = LatLng(shops.first.shopLat!, shops.first.shopLng!);
       pickupRoute = await GeoUtils.fetchRoadRoute(riderPt, firstShopPt);
@@ -310,27 +366,57 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
         _deliveryKm = totalDeliveryKm > 0 ? totalDeliveryKm : null;
         _loadingRoutes = false;
       });
-      _fitMapBounds();
+      if (!silent) {
+        _fitMapBounds();
+      }
+    }
+  }
+
+  Future<void> _refreshPickupRoute(LatLng riderPos) async {
+    final activeShops = _currentGroupOrders
+        .where((s) =>
+            s.status != 'rejected' &&
+            s.status != 'cancelled' &&
+            s.status != 'seller_rejected')
+        .toList();
+    if (activeShops.isEmpty) return;
+
+    final firstShop = activeShops.first;
+    if (firstShop.shopLat == null ||
+        firstShop.shopLng == null ||
+        firstShop.shopLat == 0.0) {
+      return;
+    }
+
+    final firstShopPt = LatLng(firstShop.shopLat!, firstShop.shopLng!);
+    final newPickupRoute =
+        await GeoUtils.fetchRoadRoute(riderPos, firstShopPt);
+
+    if (mounted) {
+      setState(() {
+        _pickupRoute = newPickupRoute;
+      });
     }
   }
 
   void _fitMapBounds() {
     final pts = <LatLng>[
-      if (widget.order.deliveryLat != null &&
-          widget.order.deliveryLng != null &&
-          widget.order.deliveryLat != 0.0)
-        LatLng(widget.order.deliveryLat!, widget.order.deliveryLng!),
+      if (_currentOrder.deliveryLat != null &&
+          _currentOrder.deliveryLng != null &&
+          _currentOrder.deliveryLat != 0.0)
+        LatLng(_currentOrder.deliveryLat!, _currentOrder.deliveryLng!),
       for (final loc in _riderLocationsNotifier.value.values)
         if (loc.latitude != 0.0) loc,
     ];
 
-    final allShops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
-        ? widget.groupOrders!
-        : [widget.order];
-    final activeShops = allShops
-        .where((s) => s.status != 'rejected' && s.status != 'cancelled')
+    final activeShops = _currentGroupOrders
+        .where((s) =>
+            s.status != 'rejected' &&
+            s.status != 'cancelled' &&
+            s.status != 'seller_rejected')
         .toList();
-    final shops = activeShops.isNotEmpty ? activeShops : allShops;
+    final shops =
+        activeShops.isNotEmpty ? activeShops : _currentGroupOrders;
 
     for (final shop in shops) {
       if (shop.shopLat != null && shop.shopLng != null && shop.shopLat != 0.0) {
@@ -432,7 +518,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
               children: [
                 Text(label,
                     style: GoogleFonts.outfit(
-                        color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
                 if (loading)
                   SizedBox(
                     height: 10,
@@ -470,7 +558,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final order = widget.order;
+    final order = _currentOrder;
     final isOutForDelivery = order.status == 'out_for_delivery';
     final isRiderActiveStatus = [
       'awaiting_payment',
@@ -484,19 +572,25 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final custLat = order.deliveryLat;
     final custLng = order.deliveryLng;
 
-    final allShops = (widget.groupOrders != null && widget.groupOrders!.isNotEmpty)
-        ? widget.groupOrders!
-        : [order];
+    final allShops = _currentGroupOrders;
     final activeShops = allShops
-        .where((s) => s.status != 'rejected' && s.status != 'cancelled')
+        .where((s) =>
+            s.status != 'rejected' &&
+            s.status != 'cancelled' &&
+            s.status != 'seller_rejected')
         .toList();
-    final effectiveShops = activeShops.isNotEmpty ? activeShops : allShops;
+    final effectiveShops =
+        activeShops.isNotEmpty ? activeShops : allShops;
 
     final isMulti = allShops.length > 1;
     final rejectedCount = allShops
-        .where((s) => s.status == 'rejected' || s.status == 'cancelled')
+        .where((s) =>
+            s.status == 'rejected' ||
+            s.status == 'cancelled' ||
+            s.status == 'seller_rejected')
         .length;
-    final hasPartialRejection = isMulti && rejectedCount > 0 && activeShops.isNotEmpty;
+    final hasPartialRejection =
+        isMulti && rejectedCount > 0 && activeShops.isNotEmpty;
 
     final seenCoords = <String>{};
     LatLng applyJitter(double lat, double lng) {
@@ -517,16 +611,24 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final markers = <Marker>[
       // Shop markers
       for (int i = 0; i < allShops.length; i++)
-        if (allShops[i].shopLat != null && allShops[i].shopLng != null && allShops[i].shopLat != 0.0)
+        if (allShops[i].shopLat != null &&
+            allShops[i].shopLng != null &&
+            allShops[i].shopLat != 0.0)
           Marker(
             point: applyJitter(allShops[i].shopLat!, allShops[i].shopLng!),
             width: 80,
             height: 70,
             child: _mapMarker(
-              (allShops[i].status == 'rejected' || allShops[i].status == 'cancelled')
-                  ? Colors.grey
-                  : _kShopMarkerColor,
-              Icons.storefront_rounded,
+              (allShops[i].status == 'rejected' ||
+                      allShops[i].status == 'cancelled' ||
+                      allShops[i].status == 'seller_rejected')
+                  ? _kShopCancelledColor
+                  : (allShops[i].status == 'picked_up'
+                      ? _kShopPickedUpColor
+                      : _kShopMarkerColor),
+              allShops[i].status == 'picked_up'
+                  ? Icons.check_circle_rounded
+                  : Icons.storefront_rounded,
               isMulti ? 'Shop ${i + 1}' : 'Shop',
             ),
           ),
@@ -547,7 +649,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                 effectiveShops.first.shopLat != null &&
                 effectiveShops.first.shopLng != null &&
                 effectiveShops.first.shopLat != 0.0)
-            ? LatLng(effectiveShops.first.shopLat!, effectiveShops.first.shopLng!)
+            ? LatLng(
+                effectiveShops.first.shopLat!, effectiveShops.first.shopLng!)
             : const LatLng(28.6139, 77.2090);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -613,7 +716,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                         riderLocations: riderLocs,
                         label: 'Rider',
                         color: _kRiderMarkerColor,
-                        icon: Icons.delivery_dining_rounded,
+                        icon: Icons.navigation_rounded,
                         rotateWithHeading: true,
                       );
                     },
@@ -920,7 +1023,8 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                 value: _loadingRoutes
                                     ? '…'
                                     : _deliveryKm != null
-                                        ? GeoUtils.estimateTravelTime(_deliveryKm!)
+                                        ? GeoUtils.estimateTravelTime(
+                                            _deliveryKm!)
                                         : '—',
                                 loading: _loadingRoutes,
                               ),

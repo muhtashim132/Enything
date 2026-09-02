@@ -1021,23 +1021,42 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
 
       // Execute atomic transaction RPC
-      await supabase.rpc('place_orders_transaction', params: {
-        'p_orders': allOrders,
-        'p_items': allItems,
-        'p_cart_group_id': cartGroupId,
-        'p_coupon_id': appliedCouponId,
-        // BUG FIX (Issue 2b): When replacing a cancelled/rejected order in an
-        // existing cart group, we MUST use a fresh UUID for the idempotency key.
-        // The old key (= cartGroupId) is already taken by the cancelled order's
-        // row in UNIQUE(idempotency_key, shop_id), causing a 23505 constraint
-        // violation. A fresh UUID lets the new replacement order be inserted
-        // cleanly while still using the SAME cartGroupId to link the group.
-        'p_idempotency_key':
-            isReplacementOrder ? const Uuid().v4() : cartGroupId,
-        if (widget.orderIdToCancelOnSuccess != null || pendingCancelId != null)
-          'p_order_id_to_cancel':
-              widget.orderIdToCancelOnSuccess ?? pendingCancelId,
-      });
+      try {
+        await supabase.rpc('place_orders_transaction', params: {
+          'p_orders': allOrders,
+          'p_items': allItems,
+          'p_cart_group_id': cartGroupId,
+          'p_coupon_id': appliedCouponId,
+          // BUG FIX (Issue 2b): When replacing a cancelled/rejected order in an
+          // existing cart group, we MUST use a fresh UUID for the idempotency key.
+          // The old key (= cartGroupId) is already taken by the cancelled order's
+          // row in UNIQUE(idempotency_key, shop_id), causing a 23505 constraint
+          // violation. A fresh UUID lets the new replacement order be inserted
+          // cleanly while still using the SAME cartGroupId to link the group.
+          'p_idempotency_key':
+              isReplacementOrder ? const Uuid().v4() : cartGroupId,
+          if (widget.orderIdToCancelOnSuccess != null || pendingCancelId != null)
+            'p_order_id_to_cancel':
+                widget.orderIdToCancelOnSuccess ?? pendingCancelId,
+        });
+      } on PostgrestException catch (e) {
+        // Additive resilience: If backend encounters PostgREST 42883 type mismatch,
+        // retry with p_idempotency_key: null so user's checkout order is never blocked.
+        if (e.code == '42883') {
+          await supabase.rpc('place_orders_transaction', params: {
+            'p_orders': allOrders,
+            'p_items': allItems,
+            'p_cart_group_id': cartGroupId,
+            'p_coupon_id': appliedCouponId,
+            'p_idempotency_key': null,
+            if (widget.orderIdToCancelOnSuccess != null || pendingCancelId != null)
+              'p_order_id_to_cancel':
+                  widget.orderIdToCancelOnSuccess ?? pendingCancelId,
+          });
+        } else {
+          rethrow;
+        }
+      }
 
       // Notify sellers AFTER successful atomic insertion
       if (mounted) {
