@@ -73,8 +73,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // Payment (Razorpay) — triggered when both seller & rider accept
   late Razorpay _razorpay;
   bool _isProcessingPayment = false;
+  bool _isOpeningRazorpay = false;
   bool _paymentAttemptFailed = false;
   Timer? _paymentCountdownTimer;
+  Timer? _autoPayTimer;
   int _paymentSecondsLeft = 600; // 10 minutes
 
   // Decision countdown (5 minutes) for partial rejections
@@ -203,6 +205,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _pollingTimer?.cancel();
     _realtimeReconnectTimer?.cancel();
     _reviewerSimTimer?.cancel();
+    _autoPayTimer?.cancel();
     if (_channel != null) {
       _isIntentionalDisconnect = true;
       final chan = _channel!;
@@ -825,11 +828,20 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
         // Auto-redirect to Razorpay if there is no partial rejection requiring a decision
         // and payment hasn't already failed/been cancelled by the user
-        if (!_hasPartialRejection && !isExpired && !_isProcessingPayment && !_paymentAttemptFailed) {
-          Future.delayed(const Duration(milliseconds: 500), () {
+        // and payment is not already actively opening
+        if (!_hasPartialRejection &&
+            !isExpired &&
+            !_isProcessingPayment &&
+            !_isOpeningRazorpay &&
+            !_paymentAttemptFailed) {
+          _autoPayTimer?.cancel();
+          // Give 1.5s delay for reviewer orders so demo tools are noticed, 700ms for regular orders
+          final delayMs = _isReviewerOrder ? 1500 : 700;
+          _autoPayTimer = Timer(Duration(milliseconds: delayMs), () {
             if (mounted &&
                 _aggregateStatus == 'awaiting_payment' &&
                 !_isProcessingPayment &&
+                !_isOpeningRazorpay &&
                 !_paymentAttemptFailed) {
               _openRazorpay();
             }
@@ -837,6 +849,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         }
       } else {
         _paymentCountdownTimer?.cancel();
+        _autoPayTimer?.cancel();
       }
 
       if (!_hasPartialRejection) {
@@ -1095,7 +1108,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   Future<void> _triggerReviewerAdvance(String targetStatus, String label) async {
     if (_isSimulatingReviewerAction || _order == null) return;
-    setState(() => _isSimulatingReviewerAction = true);
+    _autoPayTimer?.cancel();
+    _isOpeningRazorpay = false;
+    setState(() {
+      _isSimulatingReviewerAction = true;
+      _isProcessingPayment = false;
+      _paymentAttemptFailed = false;
+    });
 
     try {
       await _supabase.rpc('simulate_reviewer_order_advance', params: {
@@ -1757,6 +1776,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _onPaymentError(PaymentFailureResponse response) {
     _razorpayOpened = false;
+    _isOpeningRazorpay = false;
     setState(() {
       _isProcessingPayment = false;
       _paymentAttemptFailed = true;
@@ -1768,9 +1788,29 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
 
     if (mounted) {
+      final rawMsg = response.message ?? '';
+      final lowerMsg = rawMsg.toLowerCase();
+      final isCancelled = response.code == Razorpay.PAYMENT_CANCELLED ||
+          response.code == 0 ||
+          lowerMsg.contains('frame load interrupted') ||
+          lowerMsg.contains('cancelled') ||
+          lowerMsg.contains('canceled') ||
+          lowerMsg.contains('dismissed') ||
+          lowerMsg.contains('closed') ||
+          lowerMsg.contains('back');
+
+      final displayMsg = isCancelled
+          ? (_isReviewerOrder
+              ? 'Payment cancelled. You can retry or tap "Fast-Forward as Paid" to proceed.'
+              : 'Payment cancelled. You can retry anytime before your reservation expires.')
+          : 'Payment could not be processed: ${rawMsg.isNotEmpty ? rawMsg : "Please try again."}';
+
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Payment not completed: ${response.message ?? "Attempt cancelled"}'),
-        backgroundColor: AppColors.danger,
+        content: Text(
+          displayMsg,
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: isCancelled ? AppColors.warning : AppColors.danger,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ));
@@ -1825,7 +1865,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   Future<void> _openRazorpay() async {
-    if (_isProcessingPayment || _order == null) return;
+    if (_isProcessingPayment || _isOpeningRazorpay || _order == null) return;
     if (_isCancelled) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1835,6 +1875,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
       return;
     }
+    _isOpeningRazorpay = true;
     setState(() {
       _isProcessingPayment = true;
       _paymentAttemptFailed = false;
@@ -1844,6 +1885,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _decisionCountdownTimer?.cancel();
 
     void abortPayment() {
+      _isOpeningRazorpay = false;
       if (mounted) {
         setState(() => _isProcessingPayment = false);
         if (_hasPartialRejection) {
@@ -2034,6 +2076,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       });
     } catch (e) {
       _razorpayOpened = false;
+      _isOpeningRazorpay = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Could not initiate payment: $e'),
@@ -2043,6 +2086,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         setState(() => _isProcessingPayment = false);
       }
       debugPrint('Open Razorpay error: $e');
+    } finally {
+      _isOpeningRazorpay = false;
     }
   }
 
@@ -2715,6 +2760,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       const SizedBox(height: 20),
                     ],
 
+                    // ── 🍎 Apple App Store Reviewer Demo Toolbar (Prominent at Top) ───
+                    if (_isReviewerOrder && !isCancelled) ...[
+                      _buildAppleReviewerDemoCard(isDark),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // ── Primary Action: Complete Payment (when awaiting_payment) ──
+                    if (_aggregateStatus == 'awaiting_payment' && !isCancelled) ...[
+                      _buildPaymentActionSection(isDark),
+                      const SizedBox(height: 20),
+                    ],
+
                     // ── Tracking Steps ────────────────────────────────────────────
                     if (_groupOrders.length > 1) ...[
                       _buildShopStatusList(isDark),
@@ -2903,77 +2960,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       ),
                     const SizedBox(height: 24),
 
-                    // ── 🍎 Apple App Store Reviewer Demo Toolbar ─────────────────
-                    if (_isReviewerOrder && !isCancelled) ...[
-                      _buildAppleReviewerDemoCard(isDark),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // ── Primary Action: Complete Payment (when awaiting_payment) ──
-                    if (_aggregateStatus == 'awaiting_payment' && !isCancelled) ...[
-                      if (_paymentAttemptFailed) ...[
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: AppColors.warning.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                                color: AppColors.warning.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.info_outline_rounded,
-                                  color: AppColors.warning, size: 22),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Payment was not completed. You can retry with any UPI app, Card, or Netbanking before your reservation expires.',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: isDark ? Colors.white : AppColors.textPrimary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      SizedBox(
-                        width: double.infinity,
-                        height: 54,
-                        child: ElevatedButton.icon(
-                          onPressed: _isProcessingPayment ? null : _openRazorpay,
-                          icon: const Icon(Icons.payment_rounded, color: Colors.white),
-                          label: _isProcessingPayment
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2),
-                                )
-                              : Text(
-                                  _paymentAttemptFailed
-                                      ? 'Retry Payment · ₹${_computeGroupGrandTotal().toStringAsFixed(0)}'
-                                      : 'Complete Payment · ₹${_computeGroupGrandTotal().toStringAsFixed(0)}',
-                                  style: GoogleFonts.outfit(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
-                                      color: Colors.white),
-                                ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _paymentAttemptFailed ? AppColors.warning : AppColors.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16)),
-                            elevation: 3,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                    const SizedBox(height: 12),
 
                     // ── Back to Home (only for active orders) ─────────────────────
                     if (!isCancelled)
@@ -3123,6 +3110,104 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             ),
           ),
         ));
+  }
+
+  // ── Primary Action: Complete Payment (when awaiting_payment) ───────────────
+  Widget _buildPaymentActionSection(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_paymentAttemptFailed) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    color: AppColors.warning, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _isReviewerOrder
+                        ? 'Payment cancelled or pending. You can retry with Razorpay or tap "Fast-Forward as Paid" below to bypass.'
+                        : 'Payment was not completed. You can retry with any UPI app, Card, or Netbanking before your reservation expires.',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton.icon(
+            onPressed: _isProcessingPayment || _isOpeningRazorpay ? null : _openRazorpay,
+            icon: const Icon(Icons.payment_rounded, color: Colors.white),
+            label: _isProcessingPayment || _isOpeningRazorpay
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                : Text(
+                    _paymentAttemptFailed
+                        ? 'Retry Payment · ₹${_computeGroupGrandTotal().toStringAsFixed(0)}'
+                        : 'Complete Payment · ₹${_computeGroupGrandTotal().toStringAsFixed(0)}',
+                    style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        color: Colors.white),
+                  ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _paymentAttemptFailed ? AppColors.warning : AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              elevation: 4,
+            ),
+          ),
+        ),
+        if (_isReviewerOrder) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: OutlinedButton.icon(
+              onPressed: _isSimulatingReviewerAction
+                  ? null
+                  : () => _triggerReviewerAdvance('confirmed', 'Payment Confirmed'),
+              icon: const Icon(Icons.flash_on_rounded, color: Color(0xFF6366F1), size: 18),
+              label: Text(
+                '⚡ Fast-Forward as Paid (Reviewer Bypass)',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                  color: const Color(0xFF6366F1),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   // ── 🍎 Apple Reviewer Evaluation Tools Card ────────────────────────────────
