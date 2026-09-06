@@ -286,8 +286,6 @@ BEGIN
   ELSIF p_target_status = 'out_for_delivery' THEN
     UPDATE public.orders
     SET status = 'out_for_delivery', 
-        pickup_confirmed = true,
-        dispatched_at = NOW(),
         updated_at = NOW()
     WHERE (id = p_order_id OR (cart_group_id IS NOT NULL AND cart_group_id = v_order.cart_group_id))
       AND status IN ('confirmed', 'preparing', 'ready_for_pickup');
@@ -298,7 +296,7 @@ BEGIN
         delivered_at = NOW(),
         updated_at = NOW()
     WHERE (id = p_order_id OR (cart_group_id IS NOT NULL AND cart_group_id = v_order.cart_group_id))
-      AND status = 'out_for_delivery';
+      AND status IN ('confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery');
   ELSE
     RETURN jsonb_build_object('success', false, 'error', 'Unsupported target status: ' || p_target_status);
   END IF;
