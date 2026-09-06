@@ -1117,10 +1117,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     });
 
     try {
-      await _supabase.rpc('simulate_reviewer_order_advance', params: {
+      final res = await _supabase.rpc('simulate_reviewer_order_advance', params: {
         'p_order_id': widget.orderId,
         'p_target_status': targetStatus,
       });
+
+      if (res is Map && res['success'] == false) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Could not advance: ${res['error'] ?? 'Unknown error'}'),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+        return;
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('🍎 Demo: Order advanced to $label'),
@@ -1131,6 +1143,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     } catch (e) {
       debugPrint('Reviewer advance error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not advance: $e'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
     } finally {
       if (mounted) setState(() => _isSimulatingReviewerAction = false);
     }
