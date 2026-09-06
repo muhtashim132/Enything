@@ -53,7 +53,19 @@ To ensure Apple reviewers testing outside India (e.g. Cupertino, California) hav
 - You can freely test cart checkout, order placement, and tracking.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-3. APP STORE GUIDELINE COMPLIANCE CLARIFICATIONS
+3. SEAMLESS ORDER LIFECYCLE & PAYMENT EVALUATION (SINGLE DEVICE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Enything uses a dual-confirmation architecture where both the Merchant and Delivery Rider accept an order before payment is finalized.
+
+To enable the Apple Review team to evaluate the end-to-end checkout, payment gateway, live order tracking, and delivery milestones on a single evaluation device without juggling multiple phones:
+- Automatic Acceptance Simulation: When an order is placed using a Demo account (e.g. 9999999991 or 9999999999), the screen realistically shows "Waiting for shop & rider to accept", and automatically simulates merchant and rider acceptance after ~4 seconds.
+- Reviewer Evaluation Tools: On the Track Order screen, a dedicated "App Review Evaluation Tools" card allows reviewers to:
+  1. Seamlessly trigger payment (Razorpay payment sheet opens automatically).
+  2. Test Razorpay checkout (UPI, Card, Netbanking) or tap "Fast-Forward as Paid (Test)" to bypass banking authentication.
+  3. Step through subsequent delivery milestones ("Simulate Ready for Pickup" → "Simulate Out for Delivery" → "Simulate Order Delivered") to inspect the live map, animated delivery partner marker, and customer rating modal.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. APP STORE GUIDELINE COMPLIANCE CLARIFICATIONS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - Guideline 3.1.5 (Physical Goods & Services Exemption):
   All transactions within Enything are exclusively for physical food, grocery, and pharmacy items delivered to physical doorsteps. Therefore, in accordance with Guideline 3.1.5, in-app purchases (IAP) are not used; digital payment gateways (Razorpay) and Cash on Delivery (COD) are utilized.
@@ -105,3 +117,12 @@ Should you require any additional information, please contact our Lead Developer
    - Log in with Rider demo `9999999993`, OTP `123456`.
    - The app opens directly to the **Delivery Partner Dashboard**.
    - Reviewer can view pending orders radar, toggle online/offline availability, and view completed delivery earnings.
+
+4. **Test Customer Order Placement & Payment Gateway**:
+   - Log in with Customer demo `9999999991` (or Universal `9999999999`), OTP `123456`.
+   - Add items from "Apple Demo Store" or any store to cart and proceed to Checkout.
+   - Tap **"Place Order"**.
+   - On the Order Tracking screen, the order will automatically simulate merchant & rider acceptance within ~4 seconds (or tap **"Simulate Shop & Rider Acceptance"** immediately).
+   - The screen smoothly advances to **"Ready — Pay Now! 💳"** and launches the Razorpay payment gateway sheet.
+   - Reviewer can test payment options (UPI, Cards, Netbanking) or use the Reviewer Tools to fast-forward through packing, live map dispatch, and delivery.
+

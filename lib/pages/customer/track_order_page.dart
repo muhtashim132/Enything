@@ -97,6 +97,20 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   bool _isRetrying = false;
 
+  // 🍎 Apple Reviewer Demo Simulation
+  bool _hasSimulatedAcceptance = false;
+  bool _isSimulatingReviewerAction = false;
+  Timer? _reviewerSimTimer;
+
+  bool get _isReviewerOrder {
+    final userPhone = _supabase.auth.currentUser?.phone ?? '';
+    final orderPhone = _order?.customerPhone ?? '';
+    final shopPhone = _order?.shopPhone ?? '';
+    return userPhone.contains('999999999') ||
+        orderPhone.contains('999999999') ||
+        shopPhone.contains('999999999');
+  }
+
   final List<Map<String, dynamic>> _steps = [
     {
       'status': 'awaiting_acceptance',
@@ -188,6 +202,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     _decisionCountdownTimer?.cancel();
     _pollingTimer?.cancel();
     _realtimeReconnectTimer?.cancel();
+    _reviewerSimTimer?.cancel();
     if (_channel != null) {
       _isIntentionalDisconnect = true;
       final chan = _channel!;
@@ -778,8 +793,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             (o) => o.status == 'awaiting_acceptance',
             orElse: () => _order!);
         _startAcceptanceCountdown(awaitingAcceptOrder);
+
+        // 🍎 Apple Reviewer Simulation: Auto-accept order after 4 seconds of realistic wait
+        if (_isReviewerOrder && !_hasSimulatedAcceptance) {
+          _reviewerSimTimer?.cancel();
+          _reviewerSimTimer = Timer(const Duration(seconds: 4), () {
+            if (mounted && _aggregateStatus == 'awaiting_acceptance') {
+              _triggerReviewerAcceptance(silent: true);
+            }
+          });
+        }
       } else {
         _acceptanceCountdownTimer?.cancel();
+        _reviewerSimTimer?.cancel();
       }
 
       if (aggStatus == 'awaiting_payment') {
@@ -1037,6 +1063,57 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     } catch (e) {
       debugPrint('Active group auto-cancel error: $e');
+    }
+  }
+
+  // ── 🍎 Apple Reviewer Demo Simulator RPCs ───────────────────────────────────
+
+  Future<void> _triggerReviewerAcceptance({bool silent = false}) async {
+    if (_isSimulatingReviewerAction || _order == null) return;
+    setState(() => _isSimulatingReviewerAction = true);
+    _hasSimulatedAcceptance = true;
+
+    try {
+      await _supabase.rpc('simulate_reviewer_order_acceptance',
+          params: {'p_order_id': widget.orderId});
+      if (mounted) {
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('🍎 Demo: Order accepted by merchant & rider!'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+        await _fetchOrder();
+      }
+    } catch (e) {
+      debugPrint('Reviewer acceptance error: $e');
+    } finally {
+      if (mounted) setState(() => _isSimulatingReviewerAction = false);
+    }
+  }
+
+  Future<void> _triggerReviewerAdvance(String targetStatus, String label) async {
+    if (_isSimulatingReviewerAction || _order == null) return;
+    setState(() => _isSimulatingReviewerAction = true);
+
+    try {
+      await _supabase.rpc('simulate_reviewer_order_advance', params: {
+        'p_order_id': widget.orderId,
+        'p_target_status': targetStatus,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('🍎 Demo: Order advanced to $label'),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+        ));
+        await _fetchOrder();
+      }
+    } catch (e) {
+      debugPrint('Reviewer advance error: $e');
+    } finally {
+      if (mounted) setState(() => _isSimulatingReviewerAction = false);
     }
   }
 
@@ -2826,6 +2903,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       ),
                     const SizedBox(height: 24),
 
+                    // ── 🍎 Apple App Store Reviewer Demo Toolbar ─────────────────
+                    if (_isReviewerOrder && !isCancelled) ...[
+                      _buildAppleReviewerDemoCard(isDark),
+                      const SizedBox(height: 16),
+                    ],
+
                     // ── Primary Action: Complete Payment (when awaiting_payment) ──
                     if (_aggregateStatus == 'awaiting_payment' && !isCancelled) ...[
                       if (_paymentAttemptFailed) ...[
@@ -3040,6 +3123,132 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             ),
           ),
         ));
+  }
+
+  // ── 🍎 Apple Reviewer Evaluation Tools Card ────────────────────────────────
+  Widget _buildAppleReviewerDemoCard(bool isDark) {
+    String? nextActionLabel;
+    IconData nextActionIcon = Icons.fast_forward_rounded;
+    VoidCallback? onNextAction;
+
+    if (_aggregateStatus == 'awaiting_acceptance') {
+      nextActionLabel = 'Simulate Shop & Rider Acceptance';
+      nextActionIcon = Icons.check_circle_outline_rounded;
+      onNextAction = () => _triggerReviewerAcceptance(silent: false);
+    } else if (_aggregateStatus == 'awaiting_payment') {
+      nextActionLabel = 'Fast-Forward as Paid (Test)';
+      nextActionIcon = Icons.paid_outlined;
+      onNextAction = () => _triggerReviewerAdvance('confirmed', 'Payment Confirmed');
+    } else if (_aggregateStatus == 'confirmed' || _aggregateStatus == 'preparing') {
+      nextActionLabel = 'Simulate Ready for Pickup';
+      nextActionIcon = Icons.inventory_2_outlined;
+      onNextAction = () => _triggerReviewerAdvance('ready_for_pickup', 'Ready for Pickup');
+    } else if (_aggregateStatus == 'ready_for_pickup') {
+      nextActionLabel = 'Simulate Out for Delivery';
+      nextActionIcon = Icons.delivery_dining_outlined;
+      onNextAction = () => _triggerReviewerAdvance('out_for_delivery', 'Out for Delivery');
+    } else if (_aggregateStatus == 'out_for_delivery') {
+      nextActionLabel = 'Simulate Order Delivered';
+      nextActionIcon = Icons.celebration_outlined;
+      onNextAction = () => _triggerReviewerAdvance('delivered', 'Delivered');
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2433) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF6366F1).withValues(alpha: 0.35),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.apple, color: Color(0xFF6366F1), size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'App Review Evaluation Tools',
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'DEMO MODE',
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                    color: const Color(0xFF6366F1),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _aggregateStatus == 'awaiting_acceptance'
+                ? 'Order will automatically accept in ~4 seconds, or tap below to accept immediately.'
+                : 'Fast-forward order fulfillment stages to test live tracking, map, and delivery on this single device.',
+            style: GoogleFonts.outfit(
+              fontSize: 11.5,
+              color: isDark ? Colors.white60 : Colors.grey.shade600,
+            ),
+          ),
+          if (nextActionLabel != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: _isSimulatingReviewerAction ? null : onNextAction,
+                icon: _isSimulatingReviewerAction
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : Icon(nextActionIcon, size: 16, color: Colors.white),
+                label: Text(
+                  nextActionLabel,
+                  style: GoogleFonts.outfit(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   // ── Partial Rejection Panel ───────────────────────────────────────────
