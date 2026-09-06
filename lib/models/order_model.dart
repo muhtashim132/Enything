@@ -44,6 +44,7 @@ class OrderModel {
   final String? shopPhone;
   final String? riderPhone;
   final String? paymentMethod;
+  final String? paymentStatus;
 
   // Cancellation metadata
   final String?
@@ -175,6 +176,7 @@ class OrderModel {
     this.shopPhone,
     this.riderPhone,
     this.paymentMethod,
+    this.paymentStatus,
     this.cancelledReason,
     this.rejectionMessage,
     this.cartGroupId,
@@ -258,6 +260,7 @@ class OrderModel {
       shopPhone: map['shop_phone']?.toString(),
       riderPhone: map['rider_phone']?.toString(),
       paymentMethod: map['payment_method']?.toString(),
+      paymentStatus: map['payment_status']?.toString(),
       cancelledReason: map['cancelled_reason']?.toString(),
       rejectionMessage: map['rejection_message']?.toString(),
       cartGroupId: map['cart_group_id']?.toString(),
@@ -391,6 +394,7 @@ class OrderModel {
     double? heavyOrderFee,
     String? couponId,
     double? couponDiscount,
+    String? paymentStatus,
   }) {
     return OrderModel(
       id: id,
@@ -413,6 +417,7 @@ class OrderModel {
       shopPhone: shopPhone ?? this.shopPhone,
       riderPhone: riderPhone ?? this.riderPhone,
       paymentMethod: paymentMethod,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
       cancelledReason: cancelledReason ?? this.cancelledReason,
       rejectionMessage: rejectionMessage ?? this.rejectionMessage,
       cartGroupId: cartGroupId,

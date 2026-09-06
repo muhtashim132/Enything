@@ -206,25 +206,28 @@ Deno.serve(async (req: Request) => {
       }
 
       if (pendingOrder && pendingOrder.status === "awaiting_payment") {
-        const cancelPayload = {
-          status: "cancelled",
-          cancelled_reason: "payment_failed",
+        // 100x Edge Case: A failed or cancelled payment attempt (e.g. UPI decline, wrong PIN, bank timeout)
+        // MUST NOT cancel the order while the customer is within their 10-minute reservation window.
+        // We only mark `payment_status = 'failed'`. The order stays in `awaiting_payment` so the seller
+        // and rider hold the reservation, and the customer can retry with another payment method.
+        // The order is only cancelled when the 10-minute deadline expires via safe_auto_cancel_expired_orders.
+        const failurePayload = {
           payment_status: "failed",
         };
 
         if (pendingOrder.cart_group_id) {
           await supabaseAdmin
             .from("orders")
-            .update(cancelPayload)
+            .update(failurePayload)
             .eq("cart_group_id", pendingOrder.cart_group_id);
         } else {
           await supabaseAdmin
             .from("orders")
-            .update(cancelPayload)
+            .update(failurePayload)
             .eq("id", pendingOrder.id);
         }
 
-        console.log(`Order ${pendingOrder.id} marked as cancelled (payment_failed) via webhook.`);
+        console.log(`Order ${pendingOrder.id} payment_status marked as failed via webhook (order status preserved in awaiting_payment for customer retry).`);
       }
     }
 

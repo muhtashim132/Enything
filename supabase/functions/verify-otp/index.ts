@@ -37,6 +37,18 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // ── Apple App Store Reviewer & Demo Account Bypass ───────────────────────
+    const digits = phone.replace(/\D/g, "");
+    if (digits.startsWith("999999999") || digits.endsWith("9999999991") || digits.endsWith("9999999992") || digits.endsWith("9999999993") || digits.endsWith("9999999999")) {
+      if (otp.trim() === "123456") {
+        await supabase.from("otp_tokens").delete().eq("phone", phone);
+        return new Response(
+          JSON.stringify({ success: true, message: "Reviewer demo verified." }),
+          { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Look up OTP token for this phone
     const { data: tokenRow, error: fetchError } = await supabase
       .from("otp_tokens")

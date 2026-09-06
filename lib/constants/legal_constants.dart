@@ -90,9 +90,9 @@ class LegalConstants {
           'Your information is shared on a need-to-know basis: Seller receives your name, delivery address, and phone number to prepare and hand over your order; Delivery Partner receives your name, live delivery location, and phone number to complete delivery; Razorpay receives order amount and reference for payment processing; Indian tax authorities receive transaction data as required by law. We do not sell your data to any third party for marketing.',
     ),
     LegalSection(
-      heading: '6. Data Retention',
+      heading: '6. Data Retention & Account Deletion',
       content:
-          'We retain your account data for as long as your account is active. Order records are retained for 7 years as required by Indian accounting standards. You may request account deletion by emailing support@enything.in; this will anonymise your personal data within 30 days while retaining transaction records for legal compliance.',
+          'We retain your account data for as long as your account is active. Order records are retained for 7 years as required by Indian accounting standards. You may delete your account and associated personal data at any time directly within the app under Profile Settings > Delete Account, or by emailing support@enything.in. Initiating deletion permanently removes your profile, saved addresses, and credentials.',
     ),
     LegalSection(
       heading: '7. Your Rights',

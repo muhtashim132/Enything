@@ -261,6 +261,28 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       _savedAddresses =
           (response as List).map((m) => SavedAddress.fromMap(m)).toList();
       _autoMatchSavedAddress();
+
+      // If user has saved addresses and either no GPS locked or GPS is far outside
+      // serviceable region (e.g. Apple Reviewer testing in California), auto-select
+      // the default saved address so nearby stores and menus display properly.
+      if (_savedAddresses.isNotEmpty && _selectedAddress == null) {
+        final defaultAddr = _savedAddresses.firstWhere(
+          (a) => a.isDefault && a.hasValidCoordinates,
+          orElse: () => _savedAddresses.firstWhere(
+            (a) => a.hasValidCoordinates,
+            orElse: () => _savedAddresses.first,
+          ),
+        );
+        if (defaultAddr.hasValidCoordinates) {
+          const distCalc = Distance();
+          final isFarAway = _currentLocation == null ||
+              distCalc(_currentLocation!, defaultAddr.location) > 50000;
+          if (isFarAway) {
+            selectSavedAddress(defaultAddr);
+          }
+        }
+      }
+
       safeNotifyListeners();
     } catch (e) {
       debugPrint('loadSavedAddresses error: $e');
@@ -402,6 +424,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> loadAddressFromDb(String userId) async {
     try {
+      await loadSavedAddresses(userId);
       final db = _supabase;
       final response = await db
           .from('customers')

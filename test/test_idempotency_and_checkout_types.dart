@@ -20,14 +20,14 @@ void main() {
     });
 
     test('PostgrestException 42883 handler identification and fallback resolution', () {
-      final err42883 = PostgrestException(
+      const err42883 = PostgrestException(
         message: 'operator does not exist: text = uuid',
         code: '42883',
         details: 'Not Found',
         hint: 'No operator matches the given name and argument types. You might need to add explicit type casts.',
       );
 
-      final otherErr = PostgrestException(
+      const otherErr = PostgrestException(
         message: 'Insufficient stock',
         code: 'P0001',
       );

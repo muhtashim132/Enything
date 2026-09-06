@@ -1538,7 +1538,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 slivers: [
                 // ── Animated Header ───────────────────────────────────────────
                 SliverAppBar(
-                  expandedHeight: 180,
+                  expandedHeight: 220,
                   pinned: true,
                   elevation: 0,
                   backgroundColor: const Color(0xFF0D2137),
@@ -1581,7 +1581,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             SafeArea(
                               child: Padding(
                                 padding:
-                                    const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                                    const EdgeInsets.fromLTRB(20, 10, 20, 16),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1625,7 +1625,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                           () => Navigator.pushNamed(
                                               context, AppRoutes.settings)),
                                     ]),
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 16),
 
                                     // Stats row
                                     Row(children: [

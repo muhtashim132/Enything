@@ -86,6 +86,26 @@ Deno.serve(async (req: Request) => {
       auth: { persistSession: false },
     });
 
+    // ── Apple App Store Reviewer & Demo Account Bypass ───────────────────────
+    // Allows US-based Apple reviewers to test Customer, Seller, and Rider roles without an Indian SIM card.
+    if (number.startsWith("999999999")) {
+      const demoOtp = "123456";
+      const otpHash = await hashOtp(demoOtp, phone);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+
+      await supabaseAdmin.from("otp_tokens").delete().eq("phone", phone);
+      await supabaseAdmin.from("otp_tokens").insert({
+        phone,
+        otp_hash: otpHash,
+        expires_at: expiresAt,
+      });
+
+      return jsonResponse({
+        success: true,
+        message: "Reviewer Demo OTP generated successfully. Use 123456.",
+      }, 200);
+    }
+
     // 2. Generate and Hash OTP
     const otp = generateOtp();
     const otpHash = await hashOtp(otp, phone);

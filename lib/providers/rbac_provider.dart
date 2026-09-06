@@ -47,12 +47,36 @@ class RbacProvider extends ChangeNotifier {
     _error = null;
     safeNotifyListeners();
     try {
-      // Fetch admin_user row with role
-      final data = await _db
-          .from('admin_users')
-          .select('*, roles(*)')
-          .eq('id', userId)
-          .maybeSingle();
+      // Fetch admin_user row with role (with resilient fallback)
+      Map<String, dynamic>? data;
+      try {
+        data = await _db
+            .from('admin_users')
+            .select('*, roles(*)')
+            .eq('id', userId)
+            .maybeSingle();
+      } catch (e) {
+        debugPrint('[RbacProvider] select(*, roles(*)) failed: $e, falling back to direct query');
+        try {
+          data = await _db
+              .from('admin_users')
+              .select('*')
+              .eq('id', userId)
+              .maybeSingle();
+          if (data != null && data['role_id'] != null) {
+            try {
+              final roleData = await _db
+                  .from('roles')
+                  .select('*')
+                  .eq('id', data['role_id'])
+                  .maybeSingle();
+              if (roleData != null) {
+                data['roles'] = roleData;
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
 
       if (data != null) {
         _currentAdmin = AdminUserModel.fromMap(data);

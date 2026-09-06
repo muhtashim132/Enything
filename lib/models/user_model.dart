@@ -53,8 +53,12 @@ class UserModel {
       avatarUrl: map['avatar_url'],
       createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
       activeRoles:
-          (map['activeRoles'] as List<dynamic>?)?.cast<String>() ?? [role],
-      activeSessionRole: map['activeSessionRole'] as String? ?? role,
+          (map['activeRoles'] as List<dynamic>?)?.cast<String>() ??
+          (map['active_roles'] as List<dynamic>?)?.cast<String>() ??
+          [role],
+      activeSessionRole: map['activeSessionRole'] as String? ??
+          map['active_session_role'] as String? ??
+          role,
       averageRating: (map['average_rating'] ?? 0.0).toDouble(),
       totalReviews: map['total_reviews'] ?? 0,
       verificationStatus: map['verification_status'] as String? ?? 'verified',

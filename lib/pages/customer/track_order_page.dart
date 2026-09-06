@@ -73,6 +73,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // Payment (Razorpay) — triggered when both seller & rider accept
   late Razorpay _razorpay;
   bool _isProcessingPayment = false;
+  bool _paymentAttemptFailed = false;
   Timer? _paymentCountdownTimer;
   int _paymentSecondsLeft = 600; // 10 minutes
 
@@ -265,6 +266,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           _order = order;
           _groupOrders = group;
           _isLoading = false;
+          if (group.any((o) => o.paymentStatus == 'failed') || order.paymentStatus == 'failed') {
+            _paymentAttemptFailed = true;
+          }
           final newLocs = <String, LatLng>{};
           for (final o in group) {
             if (o.deliveryPartnerId != null &&
@@ -794,11 +798,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         _startPaymentCountdown(awaitingPayOrder);
 
         // Auto-redirect to Razorpay if there is no partial rejection requiring a decision
-        if (!_hasPartialRejection && !isExpired && !_isProcessingPayment) {
+        // and payment hasn't already failed/been cancelled by the user
+        if (!_hasPartialRejection && !isExpired && !_isProcessingPayment && !_paymentAttemptFailed) {
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted &&
                 _aggregateStatus == 'awaiting_payment' &&
-                !_isProcessingPayment) {
+                !_isProcessingPayment &&
+                !_paymentAttemptFailed) {
               _openRazorpay();
             }
           });
@@ -1641,6 +1647,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         if (_paymentSecondsLeft <= 0) {
           return 'Payment time expired. Cancelling...';
         }
+        if (_paymentAttemptFailed) {
+          return 'Payment incomplete. Please retry before timer expires ⏳';
+        }
         return 'Both confirmed! Please complete payment now 💳';
       case 'pending':
         return 'Waiting for shop & rider to accept...';
@@ -1671,7 +1680,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _onPaymentError(PaymentFailureResponse response) {
     _razorpayOpened = false;
-    setState(() => _isProcessingPayment = false);
+    setState(() {
+      _isProcessingPayment = false;
+      _paymentAttemptFailed = true;
+    });
 
     // 100x Edge Case: Unfreeze the decision timer if Razorpay aborted
     if (_hasPartialRejection && mounted) {
@@ -1680,7 +1692,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Payment failed: ${response.message ?? "Unknown error"}'),
+        content: Text('Payment not completed: ${response.message ?? "Attempt cancelled"}'),
         backgroundColor: AppColors.danger,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1737,7 +1749,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   Future<void> _openRazorpay() async {
     if (_isProcessingPayment || _order == null) return;
-    setState(() => _isProcessingPayment = true);
+    if (_isCancelled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('This order has been cancelled and cannot be paid.'),
+          backgroundColor: AppColors.danger,
+        ));
+      }
+      return;
+    }
+    setState(() {
+      _isProcessingPayment = true;
+      _paymentAttemptFailed = false;
+    });
 
     // 100x Edge Case: Freeze the local decision timer so it doesn't auto-cancel while paying
     _decisionCountdownTimer?.cancel();
@@ -2804,6 +2828,36 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
                     // ── Primary Action: Complete Payment (when awaiting_payment) ──
                     if (_aggregateStatus == 'awaiting_payment' && !isCancelled) ...[
+                      if (_paymentAttemptFailed) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: AppColors.warning.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline_rounded,
+                                  color: AppColors.warning, size: 22),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Payment was not completed. You can retry with any UPI app, Card, or Netbanking before your reservation expires.',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? Colors.white : AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       SizedBox(
                         width: double.infinity,
                         height: 54,
@@ -2818,14 +2872,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                       color: Colors.white, strokeWidth: 2),
                                 )
                               : Text(
-                                  'Complete Payment · ₹${_computeGroupGrandTotal().toStringAsFixed(0)}',
+                                  _paymentAttemptFailed
+                                      ? 'Retry Payment · ₹${_computeGroupGrandTotal().toStringAsFixed(0)}'
+                                      : 'Complete Payment · ₹${_computeGroupGrandTotal().toStringAsFixed(0)}',
                                   style: GoogleFonts.outfit(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 16,
                                       color: Colors.white),
                                 ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: _paymentAttemptFailed ? AppColors.warning : AppColors.primary,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16)),

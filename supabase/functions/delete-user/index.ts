@@ -53,23 +53,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Verify caller is an admin
-    const { data: adminUser, error: adminError } = await supabaseAdmin
-      .from('admin_users')
-      .select('admin_level, is_active')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    const allowedLevels = ['super_admin', 'superadmin', 'admin'];
-    const isAdmin = adminUser && (allowedLevels.includes(adminUser.admin_level) || adminUser.is_active === true);
-
-    if (adminError || !isAdmin) {
-      return new Response(JSON.stringify({ error: 'Forbidden. Only admins can perform this action.' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     // Extract target user ID
     let reqBody: { target_user_id?: string } = {};
     try {
@@ -90,6 +73,28 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Check if user is self-deleting (Apple App Store Guideline 5.1.1(v))
+    const isSelfDelete = target_user_id === user.id;
+
+    if (!isSelfDelete) {
+      // Verify caller is an admin if deleting another user
+      const { data: adminUser, error: adminError } = await supabaseAdmin
+        .from('admin_users')
+        .select('admin_level, is_active')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const allowedLevels = ['super_admin', 'superadmin', 'admin'];
+      const isAdmin = adminUser && (allowedLevels.includes(adminUser.admin_level) || adminUser.is_active === true);
+
+      if (adminError || !isAdmin) {
+        return new Response(JSON.stringify({ error: 'Forbidden. Only admins can delete other users.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Delete the user from auth.users
     const { data, error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(target_user_id);
 
@@ -104,6 +109,9 @@ Deno.serve(async (req: Request) => {
 
     // Manually delete related records sequentially to avoid foreign key deadlocks/conflicts
     const cleanupQueries = [
+      { table: 'device_tokens', query: supabaseAdmin.from('device_tokens').delete().eq('user_id', target_user_id) },
+      { table: 'saved_addresses', query: supabaseAdmin.from('saved_addresses').delete().eq('user_id', target_user_id) },
+      { table: 'favorites', query: supabaseAdmin.from('favorites').delete().eq('user_id', target_user_id) },
       { table: 'shops', query: supabaseAdmin.from('shops').delete().eq('seller_id', target_user_id) },
       { table: 'delivery_partners', query: supabaseAdmin.from('delivery_partners').delete().eq('id', target_user_id) },
       { table: 'admin_users', query: supabaseAdmin.from('admin_users').delete().eq('id', target_user_id) },

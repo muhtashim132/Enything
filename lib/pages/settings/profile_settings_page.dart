@@ -191,6 +191,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                         _buildContactSupportButton(isDark),
                         const SizedBox(height: 16),
                         _buildLogoutButton(auth, isDark),
+                        const SizedBox(height: 12),
+                        _buildDeleteAccountButton(auth, isDark),
                         const SizedBox(height: 20),
                         Center(
                           child: Text(
@@ -709,6 +711,161 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                 color: AppColors.danger,
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteAccountButton(AuthProvider auth, bool isDark) {
+    return PressScaleButton(
+      scaleDown: 0.97,
+      onTap: () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: isDark ? const Color(0xFF1A1D30) : Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    color: AppColors.danger, size: 28),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Delete Account?',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'This action is permanent and cannot be undone. All your personal data, profile information, and saved delivery addresses will be permanently deleted.',
+              style: GoogleFonts.outfit(
+                color: isDark ? Colors.white70 : AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(
+                  'Keep Account',
+                  style: GoogleFonts.outfit(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  'Delete Forever',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmed != true || !mounted) return;
+
+        // Show loading progress
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => Center(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1A1D30) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: AppColors.danger),
+                  SizedBox(height: 16),
+                  Text('Deleting account...'),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        final navigator = Navigator.of(context, rootNavigator: true);
+        final success = await auth.deleteCurrentAccount();
+
+        // Dismiss progress dialog
+        if (navigator.canPop()) {
+          navigator.pop();
+        }
+
+        if (!mounted) return;
+
+        if (success) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/auth/role', (_) => false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Your account has been deleted.',
+                style: GoogleFonts.outfit(),
+              ),
+              backgroundColor: AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                auth.error ?? 'Failed to delete account. Please try again.',
+                style: GoogleFonts.outfit(),
+              ),
+              backgroundColor: AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? Colors.white12 : Colors.grey.shade300,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.delete_outline_rounded,
+                color: isDark ? Colors.white54 : AppColors.textSecondary,
+                size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'Delete Account',
+              style: GoogleFonts.outfit(
+                color: isDark ? Colors.white54 : AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
               ),
             ),
           ],

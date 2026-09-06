@@ -971,6 +971,16 @@ class AuthProvider extends ChangeNotifier {
       // Establish unique active session in DB and start realtime listener
       await _establishActiveSession(userId);
 
+      // ── Apple App Store Reviewer / Demo Accounts Auto-Provisioning ──────
+      final digits = phone.replaceAll(RegExp(r'\D'), '');
+      if (digits.startsWith('999999999') ||
+          digits.endsWith('9999999991') ||
+          digits.endsWith('9999999992') ||
+          digits.endsWith('9999999993') ||
+          digits.endsWith('9999999999')) {
+        await _provisionReviewerDemoAccount(userId, phone, digits, preferredRole);
+      }
+
       // 3️⃣ Check if this user already has a profile or is an admin
       final existing = await _supabase
           .from('profiles')
@@ -1481,6 +1491,191 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
 
     safeNotifyListeners();
+  }
+
+  /// Apple App Store Guideline 5.1.1(v) Compliant In-App Account Deletion:
+  /// Permanently deletes the authenticated user from auth.users, profiles,
+  /// customers, shops, delivery_partners, and saved_addresses, then cleans up
+  /// local caches and signs out.
+  Future<bool> deleteCurrentAccount() async {
+    final userId = currentUserId;
+    if (userId == null) return false;
+
+    _isLoading = true;
+    _error = null;
+    safeNotifyListeners();
+
+    try {
+      final response = await _supabase.functions.invoke(
+        'delete-user',
+        body: {'target_user_id': userId},
+      );
+
+      if (response.status != 200) {
+        final errorMsg = response.data is Map ? response.data['error'] : 'Failed to delete account';
+        _error = errorMsg?.toString() ?? 'Deletion failed. Please try again.';
+        _isLoading = false;
+        safeNotifyListeners();
+        return false;
+      }
+
+      await signOut();
+      _isLoading = false;
+      safeNotifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('deleteCurrentAccount error: $e');
+      _error = 'Failed to delete account. Please check your connection.';
+      _isLoading = false;
+      safeNotifyListeners();
+      return false;
+    }
+  }
+
+  /// Automatically provisions reviewer / demo accounts so Apple App Reviewers
+  /// can test all 3 roles (Customer, Seller, Rider) immediately without KYC delays.
+  Future<void> _provisionReviewerDemoAccount(
+    String userId,
+    String phone,
+    String digits,
+    String? preferredRole,
+  ) async {
+    try {
+      final isCustomerDemo = digits.endsWith('9999999991') || digits.endsWith('9999999996');
+      final isSellerDemo = digits.endsWith('9999999992') || digits.endsWith('9999999997');
+      final isRiderDemo = digits.endsWith('9999999993') || digits.endsWith('9999999998');
+      final isUniversalDemo = digits.endsWith('9999999999');
+
+      String role = 'customer';
+      if (isSellerDemo) {
+        role = 'seller';
+      } else if (isRiderDemo) {
+        role = 'delivery_partner';
+      } else if (preferredRole != null) {
+        role = preferredRole;
+      }
+
+      String fullName = 'Apple Reviewer';
+      if (isCustomerDemo) {
+        fullName = 'Apple Reviewer (Customer)';
+      } else if (isSellerDemo) {
+        fullName = 'Apple Reviewer (Seller)';
+      } else if (isRiderDemo) {
+        fullName = 'Apple Reviewer (Rider)';
+      } else if (isUniversalDemo) {
+        fullName = 'Apple Reviewer (Universal)';
+      }
+
+      // 1. Profile
+      await _supabase.from('profiles').upsert({
+        'id': userId,
+        'full_name': fullName,
+        'role': role,
+        'phone': phone,
+      });
+
+      // 2. Customer & Address (For customer & universal)
+      if (isCustomerDemo || isUniversalDemo) {
+        await _supabase.from('customers').upsert({
+          'id': userId,
+          'address_home': {
+            'house': 'Ward No. 2',
+            'landmark': 'Near Jamia Masjid',
+            'area': 'Plan Bandipora',
+          },
+        });
+
+        final existingAddresses = await _supabase
+            .from('saved_addresses')
+            .select('id')
+            .eq('user_id', userId);
+
+        if ((existingAddresses as List).isEmpty) {
+          await _supabase.from('saved_addresses').insert({
+            'user_id': userId,
+            'label': 'Home',
+            'address': 'Plan Bandipora, Ward No. 2, Bandipora, Jammu & Kashmir — 193502',
+            'flat_number': 'Ward No. 2',
+            'landmark': 'Near Jamia Masjid',
+            'pincode': '193502',
+            'latitude': 34.4225,
+            'longitude': 74.6366,
+            'is_default': true,
+          });
+        }
+      }
+
+      // 3. Seller (For seller & universal)
+      if (isSellerDemo || isUniversalDemo) {
+        final existingShop = await _supabase
+            .from('shops')
+            .select('id')
+            .eq('seller_id', userId)
+            .maybeSingle();
+
+        if (existingShop == null) {
+          await _supabase.from('shops').insert({
+            'seller_id': userId,
+            'name': 'Apple Demo Store',
+            'description': 'Verified demo store for Apple App Review evaluation.',
+            'address': 'Main Market, Bandipora, Jammu & Kashmir — 193502',
+            'phone': phone,
+            'category': 'grocery',
+            'is_verified': true,
+            'is_approved': true,
+            'is_active': true,
+            'is_open': true,
+            'is_accepting_orders': true,
+            'verification_status': 'verified',
+          });
+        } else {
+          await _supabase.from('shops').update({
+            'verification_status': 'verified',
+            'is_verified': true,
+            'is_approved': true,
+            'is_active': true,
+            'is_open': true,
+            'is_accepting_orders': true,
+          }).eq('seller_id', userId);
+        }
+      }
+
+      // 4. Delivery Partner (For rider & universal)
+      if (isRiderDemo || isUniversalDemo) {
+        final existingRider = await _supabase
+            .from('delivery_partners')
+            .select('id')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (existingRider == null) {
+          await _supabase.from('delivery_partners').insert({
+            'id': userId,
+            'name': fullName,
+            'phone': phone,
+            'vehicle_type': 'Bike',
+            'vehicle_number': 'JK15-9999',
+            'is_verified': true,
+            'is_active': true,
+            'is_available': true,
+            'is_accepting_orders': true,
+            'verification_status': 'verified',
+            'status': 'approved',
+          });
+        } else {
+          await _supabase.from('delivery_partners').update({
+            'verification_status': 'verified',
+            'status': 'approved',
+            'is_verified': true,
+            'is_active': true,
+            'is_available': true,
+            'is_accepting_orders': true,
+          }).eq('id', userId);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error provisioning demo account: $e');
+    }
   }
 
   @override

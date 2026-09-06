@@ -483,7 +483,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(
-          20, 0, 20, bottomPadding > 0 ? bottomPadding + 8.0 : 20.0),
+          20, 0, 20, bottomPadding > 0 ? bottomPadding * 0.4 : 10.0),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(
