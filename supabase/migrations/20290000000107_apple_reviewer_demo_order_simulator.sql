@@ -1,6 +1,73 @@
 -- 20290000000107_apple_reviewer_demo_order_simulator.sql
 -- Enables seamless demo order simulation exclusively for Apple App Review evaluation.
 
+-- 0. Server-Side Instant Pre-Acceptance Trigger on orders INSERT
+CREATE OR REPLACE FUNCTION public.tr_auto_accept_reviewer_orders_fn()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_demo_rider_id uuid;
+  v_demo_rider_phone text;
+  v_is_reviewer boolean := false;
+BEGIN
+  -- Check customer phone on the order
+  IF COALESCE(NEW.customer_phone, '') LIKE '%999999999%' THEN
+    v_is_reviewer := true;
+  END IF;
+
+  -- Check customer profile phone
+  IF NOT v_is_reviewer AND NEW.customer_id IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM public.profiles WHERE id = NEW.customer_id AND phone LIKE '%999999999%') THEN
+      v_is_reviewer := true;
+    END IF;
+  END IF;
+
+  -- Check if order is from Apple Demo Store
+  IF NOT v_is_reviewer AND NEW.shop_id IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM public.shops WHERE id = NEW.shop_id AND (phone LIKE '%999999999%' OR name ILIKE '%Apple Demo%')) THEN
+      v_is_reviewer := true;
+    END IF;
+  END IF;
+
+  -- If it's a reviewer/demo order, instantly pre-accept both merchant and rider!
+  IF v_is_reviewer THEN
+    -- Find demo delivery partner
+    SELECT id, phone INTO v_demo_rider_id, v_demo_rider_phone
+    FROM public.delivery_partners
+    WHERE phone LIKE '%999999999%' AND is_active = true
+    LIMIT 1;
+
+    IF v_demo_rider_id IS NULL THEN
+      v_demo_rider_id := '821a4442-34da-4032-b31c-bc5a8d0fa06f';
+      v_demo_rider_phone := '+919999999999';
+    END IF;
+
+    NEW.seller_accepted := true;
+    NEW.partner_accepted := true;
+    NEW.delivery_partner_id := COALESCE(NEW.delivery_partner_id, v_demo_rider_id);
+    NEW.rider_phone := COALESCE(NEW.rider_phone, v_demo_rider_phone, '+919999999999');
+    
+    IF NEW.payment_method = 'cod' THEN
+      NEW.status := 'confirmed';
+    ELSE
+      NEW.status := 'awaiting_payment';
+      NEW.payment_deadline := (NOW() AT TIME ZONE 'utc') + INTERVAL '10 minutes';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_auto_accept_reviewer_orders ON public.orders;
+CREATE TRIGGER tr_auto_accept_reviewer_orders
+BEFORE INSERT ON public.orders
+FOR EACH ROW
+EXECUTE FUNCTION public.tr_auto_accept_reviewer_orders_fn();
+
 -- 1. Function to simulate acceptance by both shop & rider
 CREATE OR REPLACE FUNCTION public.simulate_reviewer_order_acceptance(p_order_id uuid)
 RETURNS jsonb
