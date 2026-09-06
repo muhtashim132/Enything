@@ -105,12 +105,29 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Timer? _reviewerSimTimer;
 
   bool get _isReviewerOrder {
-    final userPhone = _supabase.auth.currentUser?.phone ?? '';
+    // STRICT SECURITY: Demo Mode is EXCLUSIVELY for authenticated Demo / Reviewer accounts.
+    // Regular customers, sellers, and riders MUST NEVER see Demo Mode under any circumstances.
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) return false;
+
+    final userPhone = currentUser.phone ?? '';
+    final userEmail = currentUser.email ?? '';
+    final userMetaPhone = currentUser.userMetadata?['phone']?.toString() ?? '';
+
+    String profilePhone = '';
+    try {
+      profilePhone = context.read<AuthProvider?>()?.user?.phone ?? '';
+    } catch (_) {}
+
+    final isUserDemo = userPhone.contains('999999999') ||
+        userEmail.contains('999999999') ||
+        userMetaPhone.contains('999999999') ||
+        profilePhone.contains('999999999');
+
     final orderPhone = _order?.customerPhone ?? '';
-    final shopPhone = _order?.shopPhone ?? '';
-    return userPhone.contains('999999999') ||
-        orderPhone.contains('999999999') ||
-        shopPhone.contains('999999999');
+    final isOrderPlacedByDemo = orderPhone.contains('999999999');
+
+    return isUserDemo && isOrderPlacedByDemo;
   }
 
   final List<Map<String, dynamic>> _steps = [
