@@ -19,7 +19,6 @@ AS $$
 DECLARE
   v_last_char text;
 BEGIN
-  -- Check if this is a known reviewer/demo account or demo phone pattern
   IF NEW.phone LIKE '%999999999%' THEN
     v_last_char := RIGHT(NEW.phone, 1);
     IF v_last_char NOT BETWEEN '0' AND '9' THEN
@@ -57,9 +56,15 @@ DECLARE
   v_demo_rider_phone text;
   v_is_reviewer boolean := false;
 BEGIN
-  -- STRICT GUARD: Check if the customer who placed this order is a demo account
+  -- STRICT GUARD: ONLY demo reviewer accounts (999999999 or 987650000)
   IF COALESCE(NEW.customer_phone, '') LIKE '%999999999%' 
      OR COALESCE(NEW.customer_phone, '') LIKE '%987650000%' THEN
+    v_is_reviewer := true;
+  ELSIF NEW.customer_id IN (
+    '821a4442-34da-4032-b31c-bc5a8d0fa06f'::uuid,
+    '00000000-0000-0000-0000-919999999991'::uuid,
+    '00000000-0000-0000-0000-919999999999'::uuid
+  ) THEN
     v_is_reviewer := true;
   ELSIF NEW.customer_id IS NOT NULL AND EXISTS (
     SELECT 1 FROM public.profiles 
@@ -70,7 +75,11 @@ BEGIN
   ELSIF NEW.customer_id IS NOT NULL AND EXISTS (
     SELECT 1 FROM auth.users 
     WHERE id = NEW.customer_id 
-      AND (email LIKE '%999999999%' OR raw_user_meta_data->>'phone' LIKE '%999999999%')
+      AND (
+        email LIKE '%999999999%' 
+        OR raw_user_meta_data->>'phone' LIKE '%999999999%'
+        OR raw_user_meta_data->>'phone' LIKE '%987650000%'
+      )
   ) THEN
     v_is_reviewer := true;
   END IF;
@@ -112,7 +121,105 @@ BEGIN
 END;
 $$;
 
--- 3. Update simulate_reviewer_order_advance
+DROP TRIGGER IF EXISTS tr_auto_accept_reviewer_orders ON public.orders;
+CREATE TRIGGER tr_auto_accept_reviewer_orders
+BEFORE INSERT ON public.orders
+FOR EACH ROW
+EXECUTE FUNCTION public.tr_auto_accept_reviewer_orders_fn();
+
+-- 3. Update simulate_reviewer_order_acceptance
+CREATE OR REPLACE FUNCTION public.simulate_reviewer_order_acceptance(p_order_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_order RECORD;
+  v_demo_rider_id uuid;
+  v_demo_rider_phone text;
+BEGIN
+  SELECT o.id, o.status, o.customer_phone, o.customer_id, o.shop_id, o.cart_group_id, o.payment_status
+  INTO v_order
+  FROM public.orders o
+  WHERE o.id = p_order_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Order not found');
+  END IF;
+
+  IF NOT (
+    COALESCE(v_order.customer_phone, '') LIKE '%999999999%' 
+    OR COALESCE(v_order.customer_phone, '') LIKE '%987650000%'
+    OR v_order.customer_id IN (
+      '821a4442-34da-4032-b31c-bc5a8d0fa06f'::uuid,
+      '00000000-0000-0000-0000-919999999991'::uuid,
+      '00000000-0000-0000-0000-919999999999'::uuid
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND (phone LIKE '%999999999%' OR phone LIKE '%987650000%')
+    )
+    OR EXISTS (
+      SELECT 1 FROM auth.users 
+      WHERE id = auth.uid() AND (
+        email LIKE '%999999999%' 
+        OR raw_user_meta_data->>'phone' LIKE '%999999999%'
+        OR raw_user_meta_data->>'phone' LIKE '%987650000%'
+      )
+    )
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Demo simulator is only available for Apple Review demo accounts');
+  END IF;
+
+  IF v_order.status NOT IN ('awaiting_acceptance', 'pending') THEN
+    RETURN jsonb_build_object('success', true, 'message', 'Order already accepted');
+  END IF;
+
+  SELECT id, phone INTO v_demo_rider_id, v_demo_rider_phone
+  FROM public.delivery_partners
+  WHERE (phone LIKE '%999999999%' OR phone LIKE '%987650000%') AND is_active = true
+  LIMIT 1;
+
+  IF v_demo_rider_id IS NULL THEN
+    v_demo_rider_id := '821a4442-34da-4032-b31c-bc5a8d0fa06f';
+    v_demo_rider_phone := '+919999999999';
+  END IF;
+
+  IF v_order.cart_group_id IS NOT NULL THEN
+    UPDATE public.orders
+    SET 
+      customer_phone = '+919999999999',
+      seller_accepted = true,
+      partner_accepted = true,
+      delivery_partner_id = v_demo_rider_id,
+      rider_phone = v_demo_rider_phone,
+      status = 'awaiting_payment',
+      payment_deadline = (NOW() AT TIME ZONE 'utc') + INTERVAL '10 minutes',
+      updated_at = NOW()
+    WHERE cart_group_id = v_order.cart_group_id
+      AND status IN ('awaiting_acceptance', 'pending');
+  ELSE
+    UPDATE public.orders
+    SET 
+      customer_phone = '+919999999999',
+      seller_accepted = true,
+      partner_accepted = true,
+      delivery_partner_id = v_demo_rider_id,
+      rider_phone = v_demo_rider_phone,
+      status = 'awaiting_payment',
+      payment_deadline = (NOW() AT TIME ZONE 'utc') + INTERVAL '10 minutes',
+      updated_at = NOW()
+    WHERE id = p_order_id
+      AND status IN ('awaiting_acceptance', 'pending');
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'message', 'Order accepted by demo seller and rider');
+END;
+$$;
+
+-- 4. Update simulate_reviewer_order_advance
 CREATE OR REPLACE FUNCTION public.simulate_reviewer_order_advance(p_order_id uuid, p_target_status text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -132,21 +239,37 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Order not found');
   END IF;
 
-  -- Security Guard: ONLY demo customer accounts can advance orders
   IF NOT (
     COALESCE(v_order.customer_phone, '') LIKE '%999999999%' 
+    OR COALESCE(v_order.customer_phone, '') LIKE '%987650000%'
+    OR v_order.customer_id IN (
+      '821a4442-34da-4032-b31c-bc5a8d0fa06f'::uuid,
+      '00000000-0000-0000-0000-919999999991'::uuid,
+      '00000000-0000-0000-0000-919999999999'::uuid
+    )
     OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (phone LIKE '%999999999%' OR phone LIKE '%987650000%'))
-    OR EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND (email LIKE '%999999999%' OR raw_user_meta_data->>'phone' LIKE '%999999999%'))
+    OR EXISTS (
+      SELECT 1 FROM auth.users 
+      WHERE id = auth.uid() AND (
+        email LIKE '%999999999%' 
+        OR raw_user_meta_data->>'phone' LIKE '%999999999%'
+        OR raw_user_meta_data->>'phone' LIKE '%987650000%'
+      )
+    )
   ) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Demo simulator is only available for Apple Review demo accounts');
   END IF;
 
-  -- State transitions
   IF p_target_status = 'confirmed' THEN
     UPDATE public.orders
-    SET status = 'confirmed', payment_status = 'captured', updated_at = NOW()
+    SET status = 'confirmed', 
+        payment_status = 'captured', 
+        customer_phone = '+919999999999',
+        seller_accepted = true,
+        partner_accepted = true,
+        updated_at = NOW()
     WHERE (id = p_order_id OR (cart_group_id IS NOT NULL AND cart_group_id = v_order.cart_group_id))
-      AND status = 'awaiting_payment';
+      AND status IN ('awaiting_payment', 'awaiting_acceptance', 'pending');
 
   ELSIF p_target_status = 'preparing' THEN
     UPDATE public.orders
@@ -188,7 +311,7 @@ BEGIN
 END;
 $$;
 
--- 4. Apply phone update to active demo customer profiles
+-- 5. Apply phone update to active demo customer profiles
 UPDATE public.profiles
 SET phone = '+919876500009'
 WHERE id = '821a4442-34da-4032-b31c-bc5a8d0fa06f'::uuid OR phone = '+919999999999';
