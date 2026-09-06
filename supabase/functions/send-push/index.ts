@@ -277,12 +277,14 @@ Deno.serve(async (req: Request) => {
                   visibility: 'PUBLIC',
                   default_sound: false,
                   click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                  ...(orderId ? { tag: `order_${orderId}` } : {}),
                 },
               },
               apns: {
                 headers: {
                   'apns-priority': '10',
                   'apns-push-type': 'alert',
+                  ...(orderId ? { 'apns-collapse-id': `order_${orderId}` } : {}),
                 },
                 payload: {
                   aps: {

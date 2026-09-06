@@ -77,6 +77,24 @@ async function getFcmAccessToken(sa: Record<string, string>): Promise<string> {
   return json.access_token as string;
 }
 
+// ── Server-Side Deduplication Cache (15s TTL) ─────────────────────────────
+const recentBroadcasts = new Map<string, number>();
+
+function isDuplicateBroadcast(key: string): boolean {
+  const now = Date.now();
+  for (const [k, timestamp] of recentBroadcasts.entries()) {
+    if (now - timestamp > 30000) {
+      recentBroadcasts.delete(k);
+    }
+  }
+  const lastTime = recentBroadcasts.get(key);
+  if (lastTime && now - lastTime < 15000) {
+    return true;
+  }
+  recentBroadcasts.set(key, now);
+  return false;
+}
+
 // ── Chunk helper ───────────────────────────────────────────────────────────
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -121,6 +139,17 @@ Deno.serve(async (req: Request) => {
       for (const [k, v] of Object.entries(data)) {
         safeData[k] = String(v ?? '').substring(0, 512);
       }
+    }
+
+    // Server-side deduplication check to prevent duplicate broadcast pushes (15s TTL)
+    const orderId = safeData.order_id;
+    const dedupKey = orderId ? `${audience}_${orderId}` : `${audience}_${title}`;
+    if (isDuplicateBroadcast(dedupKey)) {
+      console.log(`[send-broadcast] Deduplicated broadcast skipped for key: ${dedupKey}`);
+      return new Response(
+        JSON.stringify({ message: 'Duplicate broadcast skipped by server dedup cache', sent: 0 }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
 
     // Admin Supabase client
@@ -195,6 +224,10 @@ Deno.serve(async (req: Request) => {
         query = query.inFilter('role', roleMap[audience]);
       }
 
+      if (safeData.exclude_user_id) {
+        query = query.neq('user_id', safeData.exclude_user_id);
+      }
+
       const res = await query;
       if (res.error) {
         pushError(`DB Fetch Error (lastId ${lastId}): ${JSON.stringify(res.error)}`);
@@ -257,12 +290,14 @@ Deno.serve(async (req: Request) => {
                     visibility: 'PUBLIC',
                     default_sound: false,
                     click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                    ...(safeData.order_id ? { tag: `order_${safeData.order_id}` } : {}),
                   },
                 },
                 apns: {
                   headers: {
                     'apns-priority': '10',
                     'apns-push-type': 'alert',
+                    ...(safeData.order_id ? { 'apns-collapse-id': `order_${safeData.order_id}` } : {}),
                   },
                   payload: {
                     aps: {

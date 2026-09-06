@@ -257,32 +257,68 @@ void main() {
       expect(bellFile.contains('removePendingOrder'), true);
     });
   });
-}
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+  group('🎯 Dual Push Elimination & OS Collapse Parity', () {
+    test(
+        'Background handler gates plugin.show() on message.notification == null',
+        () {
+      final mainFile =
+          File('${Directory.current.path}/lib/main.dart').readAsStringSync();
 
-/// Extracts the FCM message construction block from send-push/index.ts
-String? _extractMessageBlock(String source) {
-  // Find the block starting with `const message = {` inside the token loop
-  final start = source.indexOf('const message = {');
-  if (start == -1) return null;
+      expect(mainFile.contains('if (message.notification == null)'), true,
+          reason:
+              '_fcmBackgroundHandler must only call plugin.show() if message.notification is null to prevent duplicate card');
+    });
 
-  // Find the matching closing `};` by counting braces
-  int braceCount = 0;
-  int end = start;
-  for (int i = start; i < source.length; i++) {
-    if (source[i] == '{') braceCount++;
-    if (source[i] == '}') braceCount--;
-    if (braceCount == 0) {
-      end = i + 1;
-      break;
-    }
-  }
+    test(
+        'send-push has android.notification.tag and apns-collapse-id',
+        () {
+      final sendPushFile = File(
+              '${Directory.current.path}/supabase/functions/send-push/index.ts')
+          .readAsStringSync();
 
-  return source.substring(start, end);
-}
+      expect(sendPushFile.contains('tag: `order_\${orderId}`'), true,
+          reason:
+              'send-push must set android tag for OS notification collapsing');
+      expect(sendPushFile.contains("'apns-collapse-id': `order_\${orderId}`"), true,
+          reason:
+              'send-push must set apns-collapse-id for iOS notification collapsing');
+    });
 
-/// Extracts the FCM message construction block from send-broadcast/index.ts
-String? _extractBroadcastMessageBlock(String source) {
-  return _extractMessageBlock(source); // Same structure
+    test(
+        'send-broadcast has deduplication cache and collapse IDs',
+        () {
+      final broadcastFile = File(
+              '${Directory.current.path}/supabase/functions/send-broadcast/index.ts')
+          .readAsStringSync();
+
+      expect(broadcastFile.contains('isDuplicateBroadcast'), true,
+          reason:
+              'send-broadcast must have isDuplicateBroadcast deduplication cache');
+      expect(broadcastFile.contains('tag: `order_\${safeData.order_id}`'), true,
+          reason:
+              'send-broadcast must set android tag for OS notification collapsing');
+      expect(broadcastFile.contains("'apns-collapse-id': `order_\${safeData.order_id}`"), true,
+          reason:
+              'send-broadcast must set apns-collapse-id for iOS notification collapsing');
+      expect(broadcastFile.contains('safeData.exclude_user_id'), true,
+          reason:
+              'send-broadcast must support excluding the order seller from rider broadcast');
+    });
+
+    test(
+        'NotificationProvider._add deduplicates same order new_order alerts within 60s',
+        () {
+      final providerFile = File(
+              '${Directory.current.path}/lib/providers/notification_provider.dart')
+          .readAsStringSync();
+
+      expect(providerFile.contains('.contains(\'new order\')'), true,
+          reason:
+              '_add() must check if both titles refer to new order to bridge FCM and Realtime');
+      expect(providerFile.contains('.inSeconds.abs() < 60'), true,
+          reason:
+              '_add() order deduplication window must be 60s');
+    });
+  });
 }

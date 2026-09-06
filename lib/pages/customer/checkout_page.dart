@@ -1123,6 +1123,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
               final firstOrderId = notificationData.isNotEmpty
                   ? (notificationData.first['orderId'] as String?)
                   : null;
+              final sellerId = notificationData.isNotEmpty
+                  ? (notificationData.first['shop']?.sellerId as String?)
+                  : null;
               notifProv.sendBroadcastToAudience(
                 audience: 'Riders',
                 title: '🛵 New Order Available!',
@@ -1132,6 +1135,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   'role': 'delivery',
                   'action': 'new_order',
                   if (firstOrderId != null) 'order_id': firstOrderId,
+                  if (sellerId != null) 'exclude_user_id': sellerId,
                 },
               );
               debugPrint('Broadcasted new order notification to all Riders audience.');

@@ -386,30 +386,46 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
         : null,
   );
 
-  // Deterministic Notification ID: prevents duplicate cards in shade
-  final int notifId = orderId != null
-      ? orderId.hashCode
-      : (title.hashCode ^ (role?.hashCode ?? 0));
+  // ── DUAL PUSH NOTIFICATION FIX ─────────────────────────────────────────────
+  // If the incoming FCM message contains a top-level `notification` payload
+  // (message.notification != null), the OS (Google Play Services on Android,
+  // APNs on iOS) has ALREADY created and displayed the notification card/banner!
+  //
+  // Calling `plugin.show()` on top of the OS-rendered notification causes the
+  // user to see TWO notifications for the exact same order in their tray.
+  //
+  // Therefore:
+  // - If message.notification != null: Skip plugin.show() — OS already displayed it.
+  // - If message.notification == null: Data-only fallback — invoke plugin.show().
+  // ───────────────────────────────────────────────────────────────────────────
+  if (message.notification == null) {
+    final int notifId = orderId != null
+        ? orderId.hashCode
+        : (title.hashCode ^ (role?.hashCode ?? 0));
 
-  await plugin.show(
-    notifId,
-    title,
-    body,
-    NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(
-        presentSound: true,
-        presentBadge: true,
-        presentAlert: true,
-        sound: 'enything_bell.wav',
-        categoryIdentifier: isUrgent ? 'order_alert_category' : null,
-        interruptionLevel: isUrgent
-            ? InterruptionLevel.timeSensitive
-            : InterruptionLevel.active,
+    await plugin.show(
+      notifId,
+      title,
+      body,
+      NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(
+          presentSound: true,
+          presentBadge: true,
+          presentAlert: true,
+          sound: 'enything_bell.wav',
+          categoryIdentifier: isUrgent ? 'order_alert_category' : null,
+          interruptionLevel: isUrgent
+              ? InterruptionLevel.timeSensitive
+              : InterruptionLevel.active,
+        ),
       ),
-    ),
-    payload: jsonEncode(message.data),
-  );
+      payload: jsonEncode(message.data),
+    );
+  } else {
+    debugPrint(
+        'FCM background: OS auto-displayed notification for "$title" — skipping plugin.show() to prevent duplicate card.');
+  }
 
   // Trigger native screen wake and keyguard dismissal
   if (isUrgent) {

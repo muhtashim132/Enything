@@ -286,12 +286,12 @@ class NotificationProvider extends ChangeNotifier {
         if (title.isEmpty && body.isEmpty) return;
 
         // ── In-app bell notification (dedup + DB persist via _add) ─────────────
-        // For order-related FCM pushes: the Supabase Realtime path (_add) already
-        // adds the in-app entry. Using _add() here as well is safe because _add()
-        // deduplicates by id — the second call is a no-op.
-        // For non-order pushes (broadcasts, admin messages): this is the only path.
+        // Align new-order FCM ID with the Realtime scheme ('${orderId}_new') so
+        // that both paths share the identical canonical key and dedup cleanly.
         final fcmId = orderId != null
-            ? '${orderId}_fcm_foreground' // stable dedup key per order
+            ? (title.toLowerCase().contains('new order')
+                ? '${orderId}_new'
+                : '${orderId}_fcm_foreground')
             : (message.messageId ?? DateTime.now().toIso8601String());
 
         _add(AppNotification(
@@ -918,8 +918,10 @@ class NotificationProvider extends ChangeNotifier {
       final isDuplicate = recentItems.any((n) =>
           n.id == notification.id ||
           (n.orderId == notification.orderId &&
-              n.title == notification.title &&
-              DateTime.now().difference(n.createdAt).inSeconds.abs() < 5));
+              (n.title == notification.title ||
+                  (n.title.toLowerCase().contains('new order') &&
+                      notification.title.toLowerCase().contains('new order'))) &&
+              DateTime.now().difference(n.createdAt).inSeconds.abs() < 60));
       if (isDuplicate) {
         debugPrint(
             'Skipping duplicate notification for order ${notification.orderId}');
