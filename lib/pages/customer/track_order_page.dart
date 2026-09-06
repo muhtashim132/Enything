@@ -1622,15 +1622,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   /// Returns the best available map centre for this order.
-  /// Priority: rider live position → customer delivery address → Delhi fallback.
+  /// Priority: rider live position → customer delivery address → shop location → Bandipora fallback.
   LatLng _mapCenter(Map<String, LatLng> riderLocs) {
     if (riderLocs.isNotEmpty && _aggregateStatus == 'out_for_delivery') {
       return riderLocs.values.first;
     }
-    if (_order?.deliveryLat != null && _order?.deliveryLng != null) {
+    if (_order?.deliveryLat != null && _order?.deliveryLng != null && _order!.deliveryLat != 0.0) {
       return LatLng(_order!.deliveryLat!, _order!.deliveryLng!);
     }
-    return const LatLng(28.6139, 77.2090);
+    if (_order?.shopLat != null && _order?.shopLng != null && _order!.shopLat != 0.0) {
+      return LatLng(_order!.shopLat!, _order!.shopLng!);
+    }
+    return const LatLng(34.4230, 74.6360);
   }
 
   /// Builds the map markers including all shops, customer, and live rider.
@@ -1638,44 +1641,53 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     final markers = <Marker>[];
 
     // Customer delivery address pin (always shown)
-    if (_order?.deliveryLat != null && _order?.deliveryLng != null) {
-      markers.add(Marker(
-        point: LatLng(_order!.deliveryLat!, _order!.deliveryLng!),
-        width: 44,
-        height: 44,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.home_rounded,
-              color: AppColors.primary, size: 26),
+    final custLat = (_order?.deliveryLat != null && _order?.deliveryLat != 0.0)
+        ? _order!.deliveryLat!
+        : 34.4230;
+    final custLng = (_order?.deliveryLng != null && _order?.deliveryLng != 0.0)
+        ? _order!.deliveryLng!
+        : 74.6360;
+
+    markers.add(Marker(
+      point: LatLng(custLat, custLng),
+      width: 44,
+      height: 44,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
         ),
-      ));
-    }
+        child: const Icon(Icons.home_rounded,
+            color: AppColors.primary, size: 26),
+      ),
+    ));
 
     // All shop locations
     final shops =
         _groupOrders.isEmpty && _order != null ? [_order!] : _groupOrders;
     for (final shopOrd in shops) {
-      if (shopOrd.shopLat != null && shopOrd.shopLng != null) {
-        final isRejected = shopOrd.status == 'rejected' || shopOrd.status == 'cancelled';
-        markers.add(Marker(
-          point: LatLng(shopOrd.shopLat!, shopOrd.shopLng!),
-          width: 36,
-          height: 36,
-          child: Container(
-            decoration: BoxDecoration(
-              color: isRejected
-                  ? Colors.grey.withValues(alpha: 0.2)
-                  : AppColors.accent.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.store_rounded,
-                color: isRejected ? Colors.grey : AppColors.accent, size: 20),
+      final sLat = (shopOrd.shopLat != null && shopOrd.shopLat != 0.0)
+          ? shopOrd.shopLat!
+          : 34.4250;
+      final sLng = (shopOrd.shopLng != null && shopOrd.shopLng != 0.0)
+          ? shopOrd.shopLng!
+          : 74.6380;
+      final isRejected = shopOrd.status == 'rejected' || shopOrd.status == 'cancelled';
+      markers.add(Marker(
+        point: LatLng(sLat, sLng),
+        width: 36,
+        height: 36,
+        child: Container(
+          decoration: BoxDecoration(
+            color: isRejected
+                ? Colors.grey.withValues(alpha: 0.2)
+                : AppColors.accent.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
           ),
-        ));
-      }
+          child: Icon(Icons.store_rounded,
+              color: isRejected ? Colors.grey : AppColors.accent, size: 20),
+        ),
+      ));
     }
 
     // Live rider marker (shown starting from 'confirmed')
@@ -4571,27 +4583,58 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Widget _buildMapPreview() {
     if (_order == null) return const SizedBox.shrink();
 
-    final hasCoords = _order!.shopLat != null &&
-        _order!.shopLng != null &&
-        _order!.deliveryLat != null &&
-        _order!.deliveryLng != null;
-
     final isCancelled = _terminalRejectionStatuses.contains(_aggregateStatus);
 
-    // Show full-screen button only for active/trackable statuses
-    final canShowMap = hasCoords && !isCancelled;
+    // Show full-screen map preview for all active (non-cancelled) orders
+    final canShowMap = !isCancelled;
 
     return GestureDetector(
       onTap: canShowMap
           ? () {
               if (_isMapOpening) return;
               _isMapOpening = true;
+
+              // Ensure coordinates are non-null so CustomerOrderMapPage can compute route & markers
+              final effectiveOrder = _order!.copyWith(
+                shopLat: (_order!.shopLat != null && _order!.shopLat != 0.0)
+                    ? _order!.shopLat
+                    : 34.4250,
+                shopLng: (_order!.shopLng != null && _order!.shopLng != 0.0)
+                    ? _order!.shopLng
+                    : 74.6380,
+                deliveryLat: (_order!.deliveryLat != null && _order!.deliveryLat != 0.0)
+                    ? _order!.deliveryLat
+                    : 34.4230,
+                deliveryLng: (_order!.deliveryLng != null && _order!.deliveryLng != 0.0)
+                    ? _order!.deliveryLng
+                    : 74.6360,
+              );
+
+              final effectiveGroupOrders = _groupOrders.map((o) {
+                return o.copyWith(
+                  shopLat: (o.shopLat != null && o.shopLat != 0.0)
+                      ? o.shopLat
+                      : 34.4250,
+                  shopLng: (o.shopLng != null && o.shopLng != 0.0)
+                      ? o.shopLng
+                      : 74.6380,
+                  deliveryLat: (o.deliveryLat != null && o.deliveryLat != 0.0)
+                      ? o.deliveryLat
+                      : 34.4230,
+                  deliveryLng: (o.deliveryLng != null && o.deliveryLng != 0.0)
+                      ? o.deliveryLng
+                      : 74.6360,
+                );
+              }).toList();
+
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => CustomerOrderMapPage(
-                    order: _order!,
-                    groupOrders: _groupOrders,
+                    order: effectiveOrder,
+                    groupOrders: effectiveGroupOrders.isNotEmpty
+                        ? effectiveGroupOrders
+                        : [effectiveOrder],
                   ),
                 ),
               ).then((_) => _isMapOpening = false);

@@ -78,11 +78,37 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _currentOrder = widget.order;
-    _currentGroupOrders = (widget.groupOrders != null &&
+    const defaultShopLat = 34.4250;
+    const defaultShopLng = 74.6380;
+    const defaultCustLat = 34.4230;
+    const defaultCustLng = 74.6360;
+
+    _currentOrder = widget.order.copyWith(
+      shopLat: (widget.order.shopLat != null && widget.order.shopLat != 0.0)
+          ? widget.order.shopLat
+          : defaultShopLat,
+      shopLng: (widget.order.shopLng != null && widget.order.shopLng != 0.0)
+          ? widget.order.shopLng
+          : defaultShopLng,
+      deliveryLat: (widget.order.deliveryLat != null && widget.order.deliveryLat != 0.0)
+          ? widget.order.deliveryLat
+          : defaultCustLat,
+      deliveryLng: (widget.order.deliveryLng != null && widget.order.deliveryLng != 0.0)
+          ? widget.order.deliveryLng
+          : defaultCustLng,
+    );
+
+    final rawGroup = (widget.groupOrders != null &&
             widget.groupOrders!.isNotEmpty)
         ? List<OrderModel>.from(widget.groupOrders!)
         : [_currentOrder];
+
+    _currentGroupOrders = rawGroup.map((o) => o.copyWith(
+      shopLat: (o.shopLat != null && o.shopLat != 0.0) ? o.shopLat : defaultShopLat,
+      shopLng: (o.shopLng != null && o.shopLng != 0.0) ? o.shopLng : defaultShopLng,
+      deliveryLat: (o.deliveryLat != null && o.deliveryLat != 0.0) ? o.deliveryLat : defaultCustLat,
+      deliveryLng: (o.deliveryLng != null && o.deliveryLng != 0.0) ? o.deliveryLng : defaultCustLng,
+    )).toList();
 
     _updateTickerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) _timeTicker.value++;
@@ -160,7 +186,19 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
           callback: (payload) {
             if (!mounted || payload.newRecord.isEmpty) return;
             final r = payload.newRecord;
-            final updatedOrder = OrderModel.fromMap(r);
+            var updatedOrder = OrderModel.fromMap(r);
+            if (updatedOrder.shopLat == null || updatedOrder.shopLat == 0.0) {
+              updatedOrder = updatedOrder.copyWith(
+                shopLat: _currentOrder.shopLat ?? 34.4250,
+                shopLng: _currentOrder.shopLng ?? 74.6380,
+              );
+            }
+            if (updatedOrder.deliveryLat == null || updatedOrder.deliveryLat == 0.0) {
+              updatedOrder = updatedOrder.copyWith(
+                deliveryLat: _currentOrder.deliveryLat ?? 34.4230,
+                deliveryLng: _currentOrder.deliveryLng ?? 74.6360,
+              );
+            }
 
             final newStatus = r['status'] as String?;
             final pid = r['delivery_partner_id'] as String?;
@@ -303,13 +341,12 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
       setState(() => _loadingRoutes = true);
     }
 
-    final custLat = _currentOrder.deliveryLat;
-    final custLng = _currentOrder.deliveryLng;
-
-    if (custLat == null || custLng == null || custLat == 0.0) {
-      if (mounted) setState(() => _loadingRoutes = false);
-      return;
-    }
+    final custLat = (_currentOrder.deliveryLat != null && _currentOrder.deliveryLat != 0.0)
+        ? _currentOrder.deliveryLat!
+        : 34.4230;
+    final custLng = (_currentOrder.deliveryLng != null && _currentOrder.deliveryLng != 0.0)
+        ? _currentOrder.deliveryLng!
+        : 74.6360;
     final custPt = LatLng(custLat, custLng);
 
     final activeShops = _currentGroupOrders
@@ -651,7 +688,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                 effectiveShops.first.shopLat != 0.0)
             ? LatLng(
                 effectiveShops.first.shopLat!, effectiveShops.first.shopLng!)
-            : const LatLng(28.6139, 77.2090);
+            : const LatLng(34.4230, 74.6360);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
