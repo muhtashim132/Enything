@@ -3301,31 +3301,33 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             ),
           ),
           if (nextActionLabel != null) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              height: 40,
+              height: 48,
               child: ElevatedButton.icon(
                 onPressed: _isSimulatingReviewerAction ? null : onNextAction,
                 icon: _isSimulatingReviewerAction
                     ? const SizedBox(
-                        width: 14,
-                        height: 14,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
-                    : Icon(nextActionIcon, size: 16, color: Colors.white),
+                    : Icon(nextActionIcon, size: 18, color: Colors.white),
                 label: Text(
                   nextActionLabel,
                   style: GoogleFonts.outfit(
-                    fontSize: 12.5,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
+                    height: 1.1,
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6366F1),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
               ),
