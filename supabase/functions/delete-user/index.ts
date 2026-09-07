@@ -109,9 +109,10 @@ Deno.serve(async (req: Request) => {
 
     // Manually delete related records sequentially to avoid foreign key deadlocks/conflicts
     const cleanupQueries = [
+      { table: 'ratings', query: supabaseAdmin.from('ratings').delete().or(`rater_id.eq.${target_user_id},ratee_id.eq.${target_user_id},customer_id.eq.${target_user_id},delivery_partner_id.eq.${target_user_id}`) },
       { table: 'device_tokens', query: supabaseAdmin.from('device_tokens').delete().eq('user_id', target_user_id) },
       { table: 'saved_addresses', query: supabaseAdmin.from('saved_addresses').delete().eq('user_id', target_user_id) },
-      { table: 'favorites', query: supabaseAdmin.from('favorites').delete().eq('user_id', target_user_id) },
+      { table: 'customer_favorites', query: supabaseAdmin.from('customer_favorites').delete().eq('customer_id', target_user_id) },
       { table: 'shops', query: supabaseAdmin.from('shops').delete().eq('seller_id', target_user_id) },
       { table: 'delivery_partners', query: supabaseAdmin.from('delivery_partners').delete().eq('id', target_user_id) },
       { table: 'admin_users', query: supabaseAdmin.from('admin_users').delete().eq('id', target_user_id) },
