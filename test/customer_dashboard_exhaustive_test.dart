@@ -211,7 +211,7 @@ void main() {
         prepTimeMinutes: 10,
         isVegOnly: false,
         address: 'Addr 2',
-        location: const LatLng(34.01, 74.01), // ~1.4 km away
+        location: const LatLng(34.004, 74.004), // ~0.55 km away (<= 1 km -> ₹20 floor)
         category: 'Food',
         categories: ['Food'],
         isActive: true,
@@ -228,7 +228,7 @@ void main() {
         prepTimeMinutes: 10,
         isVegOnly: false,
         address: 'Addr 3',
-        location: const LatLng(34.03, 74.03),
+        location: const LatLng(34.008, 74.008), // ~0.55 km from shop 2 (<= 1 km -> ₹20 floor)
         category: 'Food',
         categories: ['Food'],
         isActive: true,
@@ -243,8 +243,8 @@ void main() {
       expect(
           DeliveryCalculator.calculateMultiShopSurcharge([shop1, shop2, shop3]),
           40.0);
-      expect(DeliveryCalculator.calculateDeliveryCharges(2.0, 100.0), 20.0);
-      expect(DeliveryCalculator.calculateDeliveryCharges(5.0, 200.0), 20.0);
+      expect(DeliveryCalculator.calculateDeliveryCharges(2.0, 100.0), 40.0);
+      expect(DeliveryCalculator.calculateDeliveryCharges(5.0, 200.0), 100.0);
     });
   });
 

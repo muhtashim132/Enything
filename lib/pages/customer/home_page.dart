@@ -851,10 +851,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         });
       }
 
-      String? specialTag;
-      if (_selectedSearchDemographic != 'All') {
-        specialTag = '#$_selectedSearchDemographic';
-      }
 
       List<String>? effectiveCategories;
       if (_selectedFilterCategories.isNotEmpty) {
@@ -931,22 +927,39 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               q = q.ilike('name', '%$term%');
             }
 
-            if (specialTag != null) {
-              q = q.contains('special_tags', [specialTag]);
-            }
-
             final allProducts = await q;
 
-            // Phase 31 Fix: Pre-truncation Local Size Filter (Solves JSONB + Pagination Edge Cases)
-            final filteredProducts = _selectedSizes.isEmpty
-                ? allProducts
-                : allProducts.where((p) {
-                    final variants = p['variants'] as List<dynamic>? ?? [];
-                    return variants.any((v) {
-                      final name = (v['name'] as String?)?.trim() ?? '';
-                      return _selectedSizes.contains(name);
-                    });
-                  }).toList();
+            // Pre-truncation Local Size & Demographic Filter (Avoids PostgREST JSONB operator mismatch)
+            final filteredProducts = allProducts.where((p) {
+              if (_selectedSizes.isNotEmpty) {
+                final variants = p['variants'] as List<dynamic>? ?? [];
+                final matchesSize = variants.any((v) {
+                  final name = (v['name'] as String?)?.trim() ?? '';
+                  return _selectedSizes.contains(name);
+                });
+                if (!matchesSize) return false;
+              }
+
+              if (_selectedSearchDemographic != 'All') {
+                final tagsRaw = p['special_tags'];
+                final List<String> tags = (tagsRaw is List)
+                    ? tagsRaw.map((t) => t.toString().trim()).toList()
+                    : [];
+                final targetTag = '#$_selectedSearchDemographic';
+                final allowedTags = <String>[targetTag, '#Unisex'];
+                if (_selectedSearchDemographic == 'Boys' ||
+                    _selectedSearchDemographic == 'Girls') {
+                  allowedTags.add('#Kids');
+                } else if (_selectedSearchDemographic == 'Kids') {
+                  allowedTags.addAll(['#Boys', '#Girls']);
+                }
+                final matchesDemographic =
+                    tags.any((t) => allowedTags.contains(t));
+                if (!matchesDemographic) return false;
+              }
+
+              return true;
+            }).toList();
 
             // Group, sort by rating, limit 5 per shop
             final productsByShop = <String, List<dynamic>>{};
@@ -1015,16 +1028,37 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   .eq('is_available', true)
                   .inFilter('shop_id', shopIds);
 
-              // Phase 31 Fix: Pre-truncation Local Size Filter
-              final filteredProducts = _selectedSizes.isEmpty
-                  ? allProducts
-                  : allProducts.where((p) {
-                      final variants = p['variants'] as List<dynamic>? ?? [];
-                      return variants.any((v) {
-                        final name = (v['name'] as String?)?.trim() ?? '';
-                        return _selectedSizes.contains(name);
-                      });
-                    }).toList();
+              // Pre-truncation Local Size & Demographic Filter (Avoids PostgREST JSONB operator mismatch)
+              final filteredProducts = allProducts.where((p) {
+                if (_selectedSizes.isNotEmpty) {
+                  final variants = p['variants'] as List<dynamic>? ?? [];
+                  final matchesSize = variants.any((v) {
+                    final name = (v['name'] as String?)?.trim() ?? '';
+                    return _selectedSizes.contains(name);
+                  });
+                  if (!matchesSize) return false;
+                }
+
+                if (_selectedSearchDemographic != 'All') {
+                  final tagsRaw = p['special_tags'];
+                  final List<String> tags = (tagsRaw is List)
+                      ? tagsRaw.map((t) => t.toString().trim()).toList()
+                      : [];
+                  final targetTag = '#$_selectedSearchDemographic';
+                  final allowedTags = <String>[targetTag, '#Unisex'];
+                  if (_selectedSearchDemographic == 'Boys' ||
+                      _selectedSearchDemographic == 'Girls') {
+                    allowedTags.add('#Kids');
+                  } else if (_selectedSearchDemographic == 'Kids') {
+                    allowedTags.addAll(['#Boys', '#Girls']);
+                  }
+                  final matchesDemographic =
+                      tags.any((t) => allowedTags.contains(t));
+                  if (!matchesDemographic) return false;
+                }
+
+                return true;
+              }).toList();
 
               final productsByShop = <String, List<dynamic>>{};
               for (final p in filteredProducts) {

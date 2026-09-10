@@ -42,7 +42,7 @@ void main() {
         prepTimeMinutes: 10,
         isVegOnly: false,
         address: 'Main Market, Shop 2',
-        location: const LatLng(34.01, 74.01),
+        location: const LatLng(34.004, 74.004),
         category: 'Grocery',
         categories: ['Grocery'],
         isActive: true,
@@ -59,7 +59,7 @@ void main() {
         prepTimeMinutes: 5,
         isVegOnly: false,
         address: 'Main Market, Shop 3',
-        location: const LatLng(34.02, 74.02),
+        location: const LatLng(34.008, 74.008),
         category: 'Pharmacy',
         categories: ['Pharmacy'],
         isActive: true,
@@ -70,8 +70,8 @@ void main() {
     });
 
     test('1. Delivery Fee & Multi-Shop Surcharge Progression for 1, 2, and 3 Shops', () {
-      // 1 Shop
-      expect(DeliveryCalculator.calculateDeliveryCharges(1.5, 200.0), 20.0);
+      // 1 Shop (1.5 km -> 2 km * 20 = 40.0)
+      expect(DeliveryCalculator.calculateDeliveryCharges(1.5, 200.0), 40.0);
       expect(DeliveryCalculator.calculateMultiShopSurcharge([shop1]), 0.0);
 
       // 2 Shops

@@ -10,8 +10,8 @@ void main() {
       });
 
       test('clamps correctly', () {
-        // Distance 15.0 within maxRadiusKm -> flat delivery fee
-        expect(DeliveryCalculator.calculateDeliveryCharges(15.0, 500), 20.0);
+        // Distance 15.0 within maxRadiusKm -> 15 km * 20 = 300.0
+        expect(DeliveryCalculator.calculateDeliveryCharges(15.0, 500), 300.0);
       });
 
       test('returns -1 for out of bounds', () {

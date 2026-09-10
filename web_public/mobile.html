@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enything — Mobile Device Preview Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg-canvas: #060914;
+            --accent: #3b82f6;
+            --accent-glow: #60a5fa;
+            --border-glass: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-canvas);
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(10, 23, 76, 0.6) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(59, 130, 246, 0.15) 0%, transparent 40%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Studio Navigation Toolbar */
+        .studio-toolbar {
+            height: 64px;
+            padding: 0 2rem;
+            background: rgba(11, 19, 41, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-glass);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .studio-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: white;
+        }
+
+        .studio-brand img {
+            height: 32px;
+            width: auto;
+        }
+
+        .studio-brand span {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+        }
+
+        .studio-badge {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-glow);
+            padding: 3px 10px;
+            border-radius: 9999px;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            font-weight: 700;
+        }
+
+        /* Device Switcher Pills */
+        .device-switcher {
+            display: flex;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 4px;
+            border-radius: 9999px;
+            border: 1px solid var(--border-glass);
+            gap: 4px;
+        }
+
+        .device-btn {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            padding: 7px 16px;
+            border-radius: 9999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .device-btn:hover {
+            color: #ffffff;
+        }
+
+        .device-btn.active {
+            background: var(--accent);
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Action Buttons */
+        .studio-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .studio-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-glass);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .studio-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .studio-btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .studio-btn-primary:hover {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Main Workspace Stage */
+        .stage-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            position: relative;
+        }
+
+        /* Interactive Phone Frame (Physical iPhone Casing) */
+        .simulator-phone {
+            width: 417px; /* 393px screen + 24px bezel padding */
+            height: 876px; /* 852px screen + 24px bezel padding */
+            background: #020617;
+            border-radius: 56px;
+            padding: 12px;
+            box-shadow: 
+                0 0 0 4px #334155,
+                0 0 0 7px #0f172a,
+                0 30px 90px -10px rgba(0, 0, 0, 0.95),
+                0 0 60px rgba(59, 130, 246, 0.25);
+            position: relative;
+            transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        /* Inner Phone Screen Display */
+        .simulator-bezel {
+            width: 100%;
+            height: 100%;
+            background: #02061A;
+            border-radius: 44px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        /* Realistic iOS Status Bar (Sits Above the Web View, Never Overlaps Content) */
+        .ios-status-bar {
+            height: 44px;
+            background: #02061A;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 22px;
+            z-index: 100;
+            flex-shrink: 0;
+            user-select: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .status-time {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.2px;
+            width: 54px;
+        }
+
+        .dynamic-island {
+            width: 108px;
+            height: 28px;
+            background: #000000;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            box-shadow: 0 0 1px rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .island-camera {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #1e293b, #000000 70%);
+            box-shadow: inset 0 0 2px rgba(255, 255, 255, 0.4);
+        }
+
+        .island-sensor {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #090d16;
+        }
+
+        .status-icons {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.72rem;
+            color: #ffffff;
+            width: 54px;
+            justify-content: flex-end;
+        }
+
+        /* Embedded Iframe Viewport */
+        .simulator-iframe {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: #02061A;
+            display: block;
+        }
+
+        /* Realistic iOS Home Indicator Bar */
+        .ios-home-bar {
+            height: 20px;
+            background: #02061A;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            user-select: none;
+        }
+
+        .ios-home-pill {
+            width: 134px;
+            height: 4.5px;
+            background: rgba(255, 255, 255, 0.45);
+            border-radius: 9999px;
+        }
+
+        /* Real Phone QR Side Panel */
+        .real-device-panel {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid var(--border-glass);
+            backdrop-filter: blur(20px);
+            border-radius: 18px;
+            padding: 1.2rem;
+            max-width: 280px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+            z-index: 90;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 10px;
+        }
+
+        .real-device-panel h4 {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .real-device-panel p {
+            font-size: 0.78rem;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+
+        .qr-box {
+            background: white;
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            margin: 4px 0;
+        }
+
+        .network-url {
+            font-family: monospace;
+            font-size: 0.82rem;
+            color: var(--accent-glow);
+            background: rgba(255, 255, 255, 0.06);
+            padding: 4px 8px;
+            border-radius: 6px;
+            word-break: break-all;
+        }
+
+        @media (max-width: 900px) {
+            .real-device-panel {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Studio Toolbar -->
+    <div class="studio-toolbar">
+        <a href="index.html" class="studio-brand">
+            <img src="logo.png" alt="Logo">
+            <span>Enything</span>
+            <span class="studio-badge">Mobile Studio</span>
+        </a>
+
+        <!-- Device Selector -->
+        <div class="device-switcher">
+            <button class="device-btn active" data-width="393" data-height="852" data-name="iPhone 16 Pro">
+                <i class="fas fa-mobile-screen"></i> iPhone 16 Pro (393px)
+            </button>
+            <button class="device-btn" data-width="430" data-height="932" data-name="iPhone 16 Pro Max">
+                <i class="fas fa-mobile-screen-button"></i> Pro Max (430px)
+            </button>
+            <button class="device-btn" data-width="375" data-height="667" data-name="iPhone SE">
+                <i class="fas fa-mobile"></i> iPhone SE (375px)
+            </button>
+        </div>
+
+        <!-- Toolbar Actions -->
+        <div class="studio-actions">
+            <button class="studio-btn" id="reload-btn" title="Reload Frame">
+                <i class="fas fa-rotate-right"></i> Reload
+            </button>
+            <a href="index.html" class="studio-btn studio-btn-primary" target="_blank">
+                <i class="fas fa-arrow-up-right-from-square"></i> Full Web
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Simulator Stage -->
+    <div class="stage-container">
+        <div class="simulator-phone" id="phone-frame">
+            <div class="simulator-bezel" id="phone-bezel">
+                <!-- Top Native iOS Status Bar -->
+                <div class="ios-status-bar" id="status-bar">
+                    <div class="status-time" id="status-clock">9:41</div>
+                    <div class="dynamic-island" id="dynamic-island-el">
+                        <div class="island-camera"></div>
+                        <div class="island-sensor"></div>
+                    </div>
+                    <div class="status-icons">
+                        <i class="fas fa-signal"></i>
+                        <i class="fas fa-wifi"></i>
+                        <i class="fas fa-battery-full"></i>
+                    </div>
+                </div>
+
+                <!-- Web Page Viewport -->
+                <iframe src="index.html?v=100x" class="simulator-iframe" id="mobile-iframe" title="Enything Mobile Preview"></iframe>
+
+                <!-- Bottom Native iOS Home Indicator Bar -->
+                <div class="ios-home-bar" id="home-bar">
+                    <div class="ios-home-pill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real Phone LAN QR Panel -->
+    <div class="real-device-panel">
+        <h4><i class="fas fa-wifi"></i> Real Phone Test</h4>
+        <p>Scan with your iPhone or Android camera to view the live site on your actual mobile phone:</p>
+        <div class="qr-box" id="lan-qr"></div>
+        <div class="network-url" id="lan-url">http://192.168.29.76:8080</div>
+    </div>
+
+    <script>
+        const phoneFrame = document.getElementById('phone-frame');
+        const phoneBezel = document.getElementById('phone-bezel');
+        const iframe = document.getElementById('mobile-iframe');
+        const deviceBtns = document.querySelectorAll('.device-btn');
+        const reloadBtn = document.getElementById('reload-btn');
+        const dynamicIsland = document.getElementById('dynamic-island-el');
+        const homeBar = document.getElementById('home-bar');
+        const statusClock = document.getElementById('status-clock');
+
+        // Update live time on status bar
+        function updateClock() {
+            const now = new Date();
+            let hours = now.getHours();
+            let minutes = now.getMinutes();
+            if (hours > 12) hours -= 12;
+            if (hours === 0) hours = 12;
+            statusClock.textContent = `${hours}:${minutes < 10 ? '0' + minutes : minutes}`;
+        }
+        updateClock();
+        setInterval(updateClock, 30000);
+
+        // Device Switcher logic: screen width + 24px physical bezel padding
+        deviceBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                deviceBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const width = parseInt(btn.getAttribute('data-width'), 10);
+                const height = parseInt(btn.getAttribute('data-height'), 10);
+                const deviceName = btn.getAttribute('data-name');
+
+                // Set outer frame to screen + 24px bezel
+                phoneFrame.style.width = `${width + 24}px`;
+                phoneFrame.style.height = `${height + 24}px`;
+
+                if (deviceName.includes('SE')) {
+                    dynamicIsland.style.display = 'none';
+                    homeBar.style.display = 'none';
+                    phoneFrame.style.borderRadius = '40px';
+                    phoneBezel.style.borderRadius = '30px';
+                } else {
+                    dynamicIsland.style.display = 'flex';
+                    homeBar.style.display = 'flex';
+                    phoneFrame.style.borderRadius = '56px';
+                    phoneBezel.style.borderRadius = '44px';
+                }
+            });
+        });
+
+        // Instant Cache-Busting Reload
+        reloadBtn.addEventListener('click', () => {
+            iframe.src = 'index.html?t=' + Date.now();
+        });
+
+        // Render QR code for actual mobile device connection on LAN
+        const lanUrl = "http://192.168.29.76:8080";
+        new QRCode(document.getElementById('lan-qr'), {
+            text: lanUrl,
+            width: 140,
+            height: 140,
+            colorDark: "#02061A",
+            colorLight: "#FFFFFF",
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    </script>
+</body>
+</html>

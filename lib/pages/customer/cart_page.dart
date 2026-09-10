@@ -356,11 +356,7 @@ class CartPage extends StatelessWidget {
       LocationProvider location, bool isDark) {
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
-      distanceKm = 0.0;
-      for (var s in cart.shops) {
-        final d = location.distanceTo(s.location);
-        if (d > distanceKm) distanceKm = d;
-      }
+      distanceKm = location.distanceTo(cart.shops.first.location);
     }
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
     final surcharge = cart.multiShopSurcharge;
@@ -467,7 +463,7 @@ class CartPage extends StatelessWidget {
                 '+₹${surcharge.toStringAsFixed(0)}',
                 valueColor: Colors.orange.shade700,
                 hint:
-                    '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10).toInt()}/km between shops',
+                    '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 20).toInt()}/km between shops',
                 isDark: isDark,
               ),
             ],

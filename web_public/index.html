@@ -1,753 +1,1246 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-    <title>Enything - Everything. Everywhere. Instantly.</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css?v=3">
-    <style>
-        .hero-mini {
-            text-align: center;
-            padding: 2rem 0;
-        }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Enything — Everything. Everywhere. Instantly. | Official App</title>
+    <meta name="description"
+        content="Download Enything, Kashmir's premier hyper-local delivery app. Order food, bakery, groceries, and daily essentials from local stores with transparent ₹20/km delivery, multi-shop checkout, and live GPS tracking.">
+    <meta name="theme-color" content="#02061A">
 
-        .hero-mini h1 {
-            font-size: 3.5rem;
-            font-weight: 800;
-            margin-bottom: 0.5rem;
-        }
+    <!-- Open Graph / Meta -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Enything — Everything. Everywhere. Instantly.">
+    <meta property="og:description"
+        content="Hyperlocal delivery in Jammu & Kashmir. Order from top local restaurants and shops with transparent ₹20/km delivery and multi-shop cart.">
+    <meta property="og:image" content="logo.png">
 
-        .filter-scroll {
-            display: flex;
-            overflow-x: auto;
-            gap: 1rem;
-            padding: 1rem 0;
-            margin-bottom: 2rem;
-            scrollbar-width: none; /* Firefox */
-        }
-        .filter-scroll::-webkit-scrollbar {
-            display: none; /* Chrome, Safari, Opera */
-        }
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-        .filter-bubble {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 30px;
-            padding: 0.5rem 1.5rem;
-            white-space: nowrap;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+    <link rel="stylesheet" href="styles.css?v=120">
+    <link rel="icon" type="image/png" href="logo.png">
 
-        .filter-bubble img {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            object-fit: cover;
-        }
-
-        .filter-bubble:hover {
-            border-color: var(--accent-color);
-        }
-
-        .filter-bubble.active {
-            background: var(--accent-color);
-            color: white;
-            border-color: var(--accent-color);
-        }
-
-        .menu-container {
-            display: grid;
-            grid-template-columns: 1fr 380px;
-            gap: 3rem;
-        }
-
-        @media (max-width: 900px) {
-            .menu-container {
-                grid-template-columns: 1fr;
-            }
-            .products-grid {
-                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-                gap: 1rem;
-            }
-        }
-        @media (max-width: 400px) {
-            .products-grid {
-                grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-                gap: 0.8rem;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .hero-mini {
-                padding: 1rem 0;
-            }
-            .hero-mini h1 {
-                font-size: 2rem;
-                margin-bottom: 0.2rem;
-            }
-            .hero-mini p {
-                font-size: 0.9rem !important;
-                margin-bottom: 1rem !important;
-                padding: 0 1rem;
-            }
-            #search-input {
-                font-size: 0.95rem !important;
-                padding: 0.8rem 1rem 0.8rem 2.5rem !important;
-            }
-            .hero-mini .fa-search {
-                font-size: 1rem !important;
-                left: 1rem !important;
-            }
-            .product-card {
-                padding: 1rem;
-            }
-            .products-grid {
-                gap: 1rem;
-            }
-        }
-
-        .products-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .product-card {
-            background-color: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 15px;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.3s ease;
-        }
-
-        .product-card:hover {
-            transform: translateY(-5px);
-            border-color: var(--accent-color);
-        }
-
-        .product-image {
-            width: 100%;
-            aspect-ratio: 1 / 1;
-            border-radius: 10px;
-            object-fit: cover;
-            margin-bottom: 1rem;
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-
-        .product-info {
-            flex: 1;
-        }
-
-        .product-name {
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .product-shop-name {
-            font-size: 0.8rem;
-            color: var(--accent-color);
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            display: block;
-        }
-
-        .product-desc {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-bottom: 1rem;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
-        .product-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: auto;
-        }
-
-        .price-container {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .price {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--accent-color);
-            background: none;
-            padding: 0;
-        }
-
-        .original-price {
-            text-decoration: line-through;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-
-        .add-to-cart {
-            background: var(--accent-color);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 8px 16px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: transform 0.2s ease;
-        }
-
-        .add-to-cart:hover {
-            transform: scale(1.05);
-        }
-
-        .add-to-cart:disabled {
-            background: #555;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-
-
-        .veg-icon {
-            width: 12px;
-            height: 12px;
-            display: inline-block;
-            border: 1px solid #4ade80;
-            margin-right: 6px;
-            position: relative;
-        }
-        .veg-icon::after {
-            content: '';
-            position: absolute;
-            top: 2px; left: 2px; right: 2px; bottom: 2px;
-            background: #4ade80;
-            border-radius: 50%;
-        }
-        .dropdown {
-            position: relative;
-            display: inline-block;
-        }
-
-        /* Dropdown styles are managed in styles.css */
-        
-        .non-veg-icon {
-            border-color: #f87171;
-        }
-        .non-veg-icon::after {
-            background: #f87171;
-        }
-
-        .loader-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 300px;
-            width: 100%;
-            grid-column: 1/-1;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid var(--glass-border);
-            border-top-color: var(--accent-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
+    <!-- Standalone lightweight QR Code Library for desktop scanner modal -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
+
 <body>
-    <div id="app-wrapper" style="overflow-x: clip; width: 100%; position: relative;">
-    <header>
+
+    <!-- Ambient Glowing Background Spheres -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+    <div class="ambient-glow glow-3"></div>
+
+    <!-- Navigation Header -->
+    <header id="main-header">
         <a href="index.html" class="logo">
             <img src="logo.png" alt="Enything Logo" class="logo-img">
-            <span class="logo-text">Enything</span>
-        </a>
-        <nav style="display: flex; align-items: center; width: 100%; justify-content: flex-end;">
-            <div id="location-container" style="margin-right: auto; margin-left: 1rem; display: flex; align-items: center;"></div>
-            <div style="position: relative; margin-left: 2rem; display: inline-block;">
-                <a href="cart.html" style="margin-left:0; color:var(--text-main);"><i class="fas fa-shopping-cart"></i></a>
-                <span id="cart-count" style="position: absolute; top: -10px; right: -10px; background: var(--accent-color); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.7rem; display: none; align-items: center; justify-content: center; font-weight: bold;">0</span>
+            <div class="logo-text-group">
+                <span class="logo-text">Enything</span>
+                <span class="logo-badge">Official App</span>
             </div>
-            <span id="auth-container" style="margin-left: 2rem;"></span>
+        </a>
+
+        <nav id="nav-menu">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#app-showcase">App Experience</a>
+            <a href="#pricing">Transparent Pricing</a>
+            <a href="#faq">FAQ</a>
+            <a href="#download" class="nav-cta"><i class="fas fa-download"></i> Get the App</a>
         </nav>
+
+        <button class="mobile-menu-btn" id="mobile-menu-toggle" aria-label="Toggle menu">
+            <i class="fas fa-bars"></i>
+        </button>
     </header>
 
     <main>
-        <section class="hero-mini">
-            <h1>Everything. Everywhere. Instantly.</h1>
-            <p style="color: var(--text-muted); font-size: 1.2rem; max-width: 600px; margin: 0 auto; margin-bottom: 2rem;">Your hyper-local marketplace. Order from the best local restaurants in Jammu & Kashmir.</p>
-            
-            <div style="max-width: 600px; margin: 0 auto; padding: 0 1rem;">
-                <div style="position: relative; width: 100%;">
-                    <input type="text" id="search-input" placeholder="Search for food, groceries, or anything..." 
-                        style="width: 100%; padding: 1rem 1.5rem 1rem 3.5rem; border-radius: 30px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-main); font-size: 1.1rem; outline: none; transition: border-color 0.3s;"
-                        onkeydown="if(event.key === 'Enter' && this.value.trim().length > 0) window.location.href='search.html?q=' + encodeURIComponent(this.value.trim())">
-                    <i class="fas fa-search" style="position: absolute; left: 1.5rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 1.2rem; cursor: pointer;" onclick="const val = document.getElementById('search-input').value.trim(); if(val.length > 0) window.location.href='search.html?q=' + encodeURIComponent(val)"></i>
+        <!-- HERO SECTION -->
+        <section class="hero" id="hero">
+            <div class="hero-content">
+                <div class="hero-pill">
+                    <span class="pulse-dot"></span>
+                    <span>Official Delivery App &bull; Bandipora, J&amp;K</span>
                 </div>
-            </div>
-        </section>
 
-        <section id="restaurants-filter-section" style="display: none;">
-            <div id="filter-scroll" class="filter-scroll">
-                <!-- Filters injected here -->
-            </div>
-        </section>
-        
-        <div class="menu-container">
-            <div style="min-width: 0;">
-                <div id="trending-section" style="display: none; margin-bottom: 2.5rem; overflow: hidden; width: 100%;">
-                    <h2 style="margin-bottom: 1rem; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; color: var(--text-muted);">
-                        <i class="fas fa-fire" style="color: #ef4444;"></i> Trending Searches
-                    </h2>
-                    <div class="trending-marquee-wrapper">
-                        <div id="trending-marquee" class="trending-marquee">
-                            <!-- Trending products injected here -->
+                <h1>Everything You Need.<br><span class="gradient-text">Delivered Instantly.</span></h1>
+
+                <p class="hero-subtitle">
+                    Order restaurant food, fresh bakery &amp; daily groceries from multiple Bandipora shops in one
+                    checkout. Transparent &pound;20/km distance delivery, zero surge fees &amp; live GPS rider tracking.
+                </p>
+
+                <!-- Official Download Buttons (Above the Fold!) -->
+                <div class="store-badges-group" id="download">
+                    <!-- Apple App Store -->
+                    <a href="https://apps.apple.com/in/app/enything/id6809016496" target="_blank"
+                        rel="noopener noreferrer" class="store-badge store-badge-apple"
+                        aria-label="Download on the Apple App Store">
+                        <div class="store-badge-icon">
+                            <svg viewBox="0 0 170 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path fill-rule="evenodd" clip-rule="evenodd"
+                                    d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-5.34.22-10.38-1.99-15.1-6.64-3.23-3.03-7.14-7.89-11.75-14.58-6.19-9.15-11.09-19.46-14.7-30.93-3.61-11.48-5.42-22.38-5.42-32.72 0-14.62 3.72-26.68 11.16-36.19 7.44-9.51 16.71-14.39 27.81-14.62 5.09 0 10.42 1.25 15.98 3.76 5.56 2.51 9.17 3.82 10.83 3.93 2.14-.34 6.09-1.87 11.85-4.59 5.76-2.73 11.01-3.93 15.75-3.6 11.83.79 21.6 5.25 29.31 13.39-10.49 6.35-15.62 15.02-15.39 26.01.23 8.65 3.51 15.91 9.84 21.79 6.33 5.88 13.88 9.28 22.65 10.2-2.37 7.21-5.18 14.54-8.43 22zM119.22 33.72c0-7.3 2.66-14.16 7.98-20.59 5.32-6.43 11.8-10.84 19.44-13.23.45 1.57.68 3.1.68 4.59 0 7.3-2.74 14.23-8.22 20.78-5.48 6.55-11.95 10.86-19.41 12.92-.15-1.46-.47-3.04-.47-4.47z"
+                                    fill="white" />
+                            </svg>
+                        </div>
+                        <div class="store-badge-text">
+                            <span class="store-badge-subtext">Download on the</span>
+                            <span class="store-badge-title">App Store</span>
+                            <span class="store-badge-tag">iOS 15.0 or later</span>
+                        </div>
+                    </a>
+
+                    <!-- Google Play Store -->
+                    <a href="https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything" target="_blank"
+                        rel="noopener noreferrer" class="store-badge store-badge-google"
+                        aria-label="Get it on Google Play">
+                        <div class="store-badge-icon">
+                            <svg viewBox="0 0 170 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M21.1 14.3c-2.3 2.4-3.7 6.2-3.7 11.2v119c0 5 1.4 8.8 3.7 11.2l.6.6 68.7-68.7v-1.6L21.7 13.7l-.6.6z"
+                                    fill="#00D3FF" />
+                                <path
+                                    d="M113.3 110.5l-22.9-22.9v-1.6l22.9-22.9.5.3 27.2 15.4c7.8 4.4 7.8 11.6 0 16l-27.2 15.4-.5.3z"
+                                    fill="#FFCF00" />
+                                <path d="M113.8 110.2L90.4 86.8 21.1 156.1c2.6 2.7 6.8 3.1 11.6.4l81.1-46.3z"
+                                    fill="#FF3A44" />
+                                <path d="M113.8 59.8L32.7 13.5c-4.8-2.7-9.1-2.3-11.6.4l69.3 69.3 23.4-23.4z"
+                                    fill="#00F777" />
+                            </svg>
+                        </div>
+                        <div class="store-badge-text">
+                            <span class="store-badge-subtext">GET IT ON</span>
+                            <span class="store-badge-title">Google Play</span>
+                            <span class="store-badge-tag">Android 8.0 or later</span>
+                        </div>
+                    </a>
+
+                    <!-- Scan QR Modal Trigger -->
+                    <button class="btn-qr-scan" id="open-qr-btn" aria-label="Scan QR Code to install">
+                        <i class="fas fa-qrcode"></i> Scan QR
+                    </button>
+                </div>
+
+                <!-- Mobile App Store Hero Card (Directly Under Download Buttons) -->
+                <div class="mobile-app-card">
+                    <div class="mobile-app-card-header">
+                        <div class="mobile-app-icon-wrap">
+                            <img src="logo.png" alt="Enything App Icon">
+                        </div>
+                        <div class="mobile-app-details">
+                            <div class="mobile-app-title">Enything</div>
+                            <div class="mobile-app-subtitle">Everything. Everywhere. Instantly.</div>
+                            <div class="mobile-app-meta-strip">
+                                <i class="fas fa-star"></i> <strong>4.9</strong>
+                                <span>(500+ Reviews)</span>
+                                <span>&bull;</span>
+                                <span>Bandipora Live</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mobile-app-badges-row">
+                        <div class="mobile-meta-cell">
+                            <strong>#1</strong>
+                            <span>Hyperlocal</span>
+                        </div>
+                        <div class="mobile-meta-cell">
+                            <strong>₹20/km</strong>
+                            <span>Fair Delivery</span>
+                        </div>
+                        <div class="mobile-meta-cell">
+                            <strong>&lt; 3 Min</strong>
+                            <span>Fast Kitchen SLA</span>
                         </div>
                     </div>
                 </div>
-                <div id="recent-section" style="display: none; margin-bottom: 2.5rem;">
-                    <h2 style="margin-bottom: 1.5rem; font-size: 1.8rem; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-history" style="color: var(--accent-color);"></i> Recently Visited
-                    </h2>
-                    <div id="recent-grid" class="products-grid" style="display: flex; gap: 1.5rem; overflow-x: auto; padding-bottom: 1rem; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;">
-                        <!-- Recent products injected here -->
+
+                <!-- Trust Indicators (Desktop & Tablet) -->
+                <div class="hero-trust-bar">
+                    <div class="trust-item">
+                        <i class="fas fa-star"></i>
+                        <span><strong>4.9/5</strong> Rating</span>
+                    </div>
+                    <div class="trust-item">
+                        <i class="fas fa-bolt"></i>
+                        <span><strong>&lt; 3 Mins</strong> Shop SLA</span>
+                    </div>
+                    <div class="trust-item">
+                        <i class="fas fa-shield-check"></i>
+                        <span><strong>100%</strong> Verified Stores</span>
+                    </div>
+                    <div class="trust-item">
+                        <i class="fas fa-map-pin"></i>
+                        <span><strong>₹20 / km</strong> Fair Delivery</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hero Visual: 3D Realistic iPhone 16 Pro Mockup -->
+            <div class="hero-visual">
+                <div class="phone-mockup-wrapper">
+                    <!-- Floating interactive widgets -->
+                    <div class="floating-badge floating-badge-1">
+                        <div class="floating-badge-icon emerald">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="floating-badge-text">
+                            <strong>3-Min Shop Accepted</strong>
+                            <span>Kitchen preparing fresh order</span>
+                        </div>
+                    </div>
+
+                    <div class="floating-badge floating-badge-2">
+                        <div class="floating-badge-icon blue">
+                            <i class="fas fa-motorcycle"></i>
+                        </div>
+                        <div class="floating-badge-text">
+                            <strong>Live Rider En Route</strong>
+                            <span>Transparent ₹20/km distance</span>
+                        </div>
+                    </div>
+
+                    <div class="floating-badge floating-badge-3">
+                        <div class="floating-badge-icon violet">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div class="floating-badge-text">
+                            <strong>Multi-Shop Cart</strong>
+                            <span>Order from 2+ shops in 1 order</span>
+                        </div>
+                    </div>
+
+                    <!-- iPhone Device Frame -->
+                    <div class="phone-mockup">
+                        <div class="phone-bezel">
+                            <div class="dynamic-island">
+                                <div class="island-camera"></div>
+                                <div class="island-sensor"></div>
+                            </div>
+                            <div class="phone-glare"></div>
+                            <picture>
+                                <source srcset="screenshots/1.webp" type="image/webp">
+                                <img src="screenshots/1.png" alt="Enything App Interface" class="phone-screen"
+                                    id="hero-phone-img">
+                            </picture>
+                        </div>
                     </div>
                 </div>
 
-                <h2 style="margin-bottom: 1.5rem; font-size: 1.8rem;" id="products-heading">All Products</h2>
-                <div id="products-grid" class="products-grid">
-                    <div class="loader-container">
-                        <div class="spinner"></div>
+                <!-- Mobile Interactive Status Badges Strip (Under phone on mobile) -->
+                <div class="mobile-status-strip">
+                    <div class="mobile-status-chip">
+                        <div class="mobile-status-chip-icon"
+                            style="background: rgba(16, 185, 129, 0.2); color: #34d399;">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="mobile-status-chip-text">
+                            <strong>3-Min Shop SLA</strong>
+                            <span>Fresh food prep</span>
+                        </div>
+                    </div>
+                    <div class="mobile-status-chip">
+                        <div class="mobile-status-chip-icon"
+                            style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">
+                            <i class="fas fa-motorcycle"></i>
+                        </div>
+                        <div class="mobile-status-chip-text">
+                            <strong>₹20/km Rate</strong>
+                            <span>Zero surge pricing</span>
+                        </div>
+                    </div>
+                    <div class="mobile-status-chip">
+                        <div class="mobile-status-chip-icon"
+                            style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div class="mobile-status-chip-text">
+                            <strong>Multi-Shop Cart</strong>
+                            <span>Combine orders</span>
+                        </div>
                     </div>
                 </div>
-                <div id="load-more-container" style="text-align: center; margin-top: 2rem; display: none;">
-                    <button class="checkout-btn" style="width: auto; padding: 0.8rem 3rem;" onclick="loadMoreProducts()">See More</button>
-                </div>
             </div>
-            
-            <div class="cart-sidebar">
-                <div class="cart-header">Your Cart</div>
-                <div id="cart-items" class="cart-items-container">
-                    <!-- Cart items will be injected here -->
-                </div>
-                <div class="cart-footer">
-                    <div class="cart-total-row" style="display: block;">
-                        <div id="cart-total" style="width: 100%;">₹0.00</div>
-                    </div>
-                    <button id="checkout-btn" class="checkout-btn" onclick="window.location.href='checkout.html'" disabled>Proceed to Checkout</button>
-                </div>
-            </div>
-        </div>
+        </section>
 
-        <section id="contact" class="contact-section" style="margin-top: 5rem; border-top: 1px solid var(--glass-border); padding-top: 5rem;">
-            <h2 class="section-title">Contact Us</h2>
-            <div class="contact-card">
-                <h3>Enything Technologies (Muhtaashim Kamran Nazki)</h3>
-                <div class="contact-info">
-                    <p><strong><i class="fas fa-map-marker-alt"></i> Registered Address:</strong> Plan Bandipora, Ward No. 2, Bandipora, J&K — 193502, India</p>
-                    <p><strong><i class="fas fa-envelope"></i> Email:</strong> <a href="mailto:support@enything.in">support@enything.in</a></p>
-                    <p><strong><i class="fas fa-phone"></i> Phone:</strong> +91 7006464241</p>
+        <!-- LIVE METRICS STRIP -->
+        <section class="metrics-section" id="pricing">
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value">₹20 / km</div>
+                    <div class="metric-label">Transparent Distance Delivery</div>
+                    <div class="metric-desc">Charged purely by physical distance from store to your door. No rain surges
+                        or dynamic markups.</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-value">&lt; 3 Mins</div>
+                    <div class="metric-label">Automated Merchant SLA</div>
+                    <div class="metric-desc">Shops confirm orders in real time. Never wait indefinitely for food
+                        preparation to start.</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-value">1 Checkout</div>
+                    <div class="metric-label">Multi-Shop Cart Routing</div>
+                    <div class="metric-desc">Order groceries, bakery items, and restaurant meals together with fair
+                        leg-by-leg surcharges.</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-value">3-in-1</div>
+                    <div class="metric-label">Unified Platform</div>
+                    <div class="metric-desc">Shoppers, Merchants, and Delivery Partners all connected in one seamless
+                        ecosystem.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 100x TECHNICAL INNOVATIONS -->
+        <section class="innovations-section" id="features">
+            <div class="section-header">
+                <span class="section-tag">Engineering Excellence</span>
+                <h2 class="section-title">Built with 100x Precision for Kashmir</h2>
+                <p class="section-description">
+                    Enything solves the core pain points of traditional food and grocery apps with cutting-edge
+                    hyperlocal architecture, fair pricing, and real-time coordination.
+                </p>
+            </div>
+
+            <div class="innovations-grid">
+                <!-- Innovation 1 -->
+                <div class="innovation-card">
+                    <div class="innovation-icon-wrap blue">
+                        <i class="fas fa-route"></i>
+                    </div>
+                    <span class="innovation-badge badge-blue">Patented Routing Logic</span>
+                    <h3>Sequential Multi-Shop Checkout</h3>
+                    <p>
+                        Need fresh bread from the bakery and hot Wazwan from a restaurant? Traditional apps force you to
+                        place two separate orders and pay double full delivery fees. Enything chains multiple nearby
+                        stops into a single optimized delivery run with incremental leg surcharges.
+                    </p>
+                    <ul class="innovation-points">
+                        <li><i class="fas fa-check"></i> Single unified cart across multiple local stores</li>
+                        <li><i class="fas fa-check"></i> Fair distance leg calculation between shops</li>
+                        <li><i class="fas fa-check"></i> One rider handles the combined pickup route</li>
+                    </ul>
+                </div>
+
+                <!-- Innovation 2 -->
+                <div class="innovation-card">
+                    <div class="innovation-icon-wrap emerald">
+                        <i class="fas fa-calculator"></i>
+                    </div>
+                    <span class="innovation-badge badge-emerald">Zero Surge Pricing</span>
+                    <h3>Pure ₹20/km Distance Calculation</h3>
+                    <p>
+                        We believe in complete pricing honesty. Instead of opaque algorithms that hike delivery charges
+                        during peak hours or light rain, Enything uses an admin-regulated ₹20 per kilometer base
+                        distance calculation. 100% of fair delivery earnings go directly to support our riders.
+                    </p>
+                    <ul class="innovation-points">
+                        <li><i class="fas fa-check"></i> Verified GPS-measured driving distance</li>
+                        <li><i class="fas fa-check"></i> No hidden platform surge multipliers</li>
+                        <li><i class="fas fa-check"></i> Complete fare breakdown shown prior to payment</li>
+                    </ul>
+                </div>
+
+                <!-- Innovation 3 -->
+                <div class="innovation-card">
+                    <div class="innovation-icon-wrap amber">
+                        <i class="fas fa-stopwatch-20"></i>
+                    </div>
+                    <span class="innovation-badge badge-amber">Lightning Dispatch</span>
+                    <h3>Strict 3-Minute Kitchen Acceptance SLA</h3>
+                    <p>
+                        Orders placed on Enything trigger immediate high-priority audio alarms in merchant kitchens.
+                        Store owners have exactly 3 minutes to review and accept the order. If an item is out of stock,
+                        intelligent cascade logic frees your cart immediately so you’re never left stranded.
+                    </p>
+                    <ul class="innovation-points">
+                        <li><i class="fas fa-check"></i> Urgent real-time store alerts and sound cues</li>
+                        <li><i class="fas fa-check"></i> Instant automated status synchronization</li>
+                        <li><i class="fas fa-check"></i> Eliminates unfulfilled food waiting times</li>
+                    </ul>
+                </div>
+
+                <!-- Innovation 4 -->
+                <div class="innovation-card">
+                    <div class="innovation-icon-wrap violet">
+                        <i class="fas fa-location-crosshairs"></i>
+                    </div>
+                    <span class="innovation-badge badge-violet">Live GPS Navigation</span>
+                    <h3>Turn-by-Turn Route Tracking</h3>
+                    <p>
+                        Watch your order’s journey in real time on an interactive map. From the moment the merchant
+                        packs your items to the rider navigating through Bandipora streets, our live telemetry displays
+                        precise arrival estimates and route progress.
+                    </p>
+                    <ul class="innovation-points">
+                        <li><i class="fas fa-check"></i> Real-time rider location coordinates</li>
+                        <li><i class="fas fa-check"></i> Accurate street-level ETA updates</li>
+                        <li><i class="fas fa-check"></i> Direct in-app call connection with your delivery partner</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SCREENSHOT SHOWCASE & ROLE SWITCHER -->
+        <section class="showcase-section" id="app-showcase">
+            <div class="section-header">
+                <span class="section-tag">Interactive Preview</span>
+                <h2 class="section-title">Explore the Enything Experience</h2>
+                <p class="section-description">
+                    Built natively for performance. Switch between roles to see how Shoppers, Merchants, and Delivery
+                    Partners interact with our live mobile interface.
+                </p>
+            </div>
+
+            <!-- Role Tabs -->
+            <div class="role-tabs-container">
+                <div class="role-tabs" role="tablist">
+                    <button class="role-tab active" data-role="customer" role="tab" aria-selected="true">
+                        <i class="fas fa-shopping-bag"></i> Customer
+                    </button>
+                    <button class="role-tab" data-role="seller" role="tab" aria-selected="false">
+                        <i class="fas fa-store"></i> Merchant
+                    </button>
+                    <button class="role-tab" data-role="rider" role="tab" aria-selected="false">
+                        <i class="fas fa-motorcycle"></i> Rider
+                    </button>
+                </div>
+            </div>
+
+            <!-- Interactive Stage -->
+            <div class="showcase-stage">
+                <!-- Phone Frame Preview -->
+                <div class="showcase-phone-col">
+                    <div class="phone-mockup">
+                        <div class="phone-bezel">
+                            <div class="dynamic-island">
+                                <div class="island-camera"></div>
+                                <div class="island-sensor"></div>
+                            </div>
+                            <div class="phone-glare"></div>
+                            <picture>
+                                <source id="showcase-source" srcset="screenshots/1.webp" type="image/webp">
+                                <img src="screenshots/1.png" alt="App Screen" class="phone-screen"
+                                    id="showcase-screen-img">
+                            </picture>
+                        </div>
+                    </div>
+                    <!-- Swipe Hint for Touch Users -->
+                    <div class="swipe-hint">
+                        <i class="fas fa-hand-pointer"></i>
+                        <span>Swipe left or right on phone to flip screens</span>
+                    </div>
+                </div>
+
+                <!-- Info & Controller Column -->
+                <div class="showcase-info-col">
+                    <span class="screen-step-badge" id="screen-badge">Screen 1 of 6 &bull; Shopper Experience</span>
+                    <h3 class="screen-title" id="screen-title">Choose Your Role</h3>
+                    <p class="screen-description" id="screen-desc">
+                        One unified account with instant role switching. Join as a Customer to shop from local stores,
+                        register your storefront as a Seller, or earn on your own schedule as a Delivery Partner.
+                    </p>
+
+                    <ul class="screen-feature-list" id="screen-features">
+                        <li class="screen-feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Single phone number login with secure OTP verification</span>
+                        </li>
+                        <li class="screen-feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Zero friction role onboarding for local businesses and youth</span>
+                        </li>
+                        <li class="screen-feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Switch profiles anytime without logging out</span>
+                        </li>
+                    </ul>
+
+                    <!-- Controls -->
+                    <div class="showcase-controls">
+                        <button class="showcase-btn" id="prev-screen-btn" aria-label="Previous screenshot">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <div class="showcase-dots" id="showcase-dots">
+                            <!-- Dots injected dynamically -->
+                        </div>
+                        <button class="showcase-btn" id="next-screen-btn" aria-label="Next screenshot">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <!-- Thumbnails Strip -->
+                    <div class="showcase-thumbnails" id="showcase-thumbnails">
+                        <!-- Thumbnails injected dynamically -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- HOW IT WORKS TIMELINE -->
+        <section class="how-it-works-section" id="how-it-works">
+            <div class="section-header">
+                <span class="section-tag">Frictionless Experience</span>
+                <h2 class="section-title">How Enything Delivers in 3 Steps</h2>
+                <p class="section-description">
+                    From browsing your favorite neighborhood shops to welcoming your rider at your gate.
+                </p>
+            </div>
+
+            <div class="steps-timeline">
+                <div class="timeline-step">
+                    <div class="step-circle">1</div>
+                    <h3>Discover &amp; Build Cart</h3>
+                    <p>
+                        Explore verified local restaurants, bakeries, and grocery stores across Bandipora. Combine
+                        cravings from multiple stores into one order with clear itemized pricing.
+                    </p>
+                </div>
+
+                <div class="timeline-step">
+                    <div class="step-circle">2</div>
+                    <h3>3-Min Shop Confirmation</h3>
+                    <p>
+                        Merchants receive immediate alerts and accept your order within 3 minutes. Your items are
+                        prepared fresh while a nearby delivery rider is dispatched.
+                    </p>
+                </div>
+
+                <div class="timeline-step">
+                    <div class="step-circle">3</div>
+                    <h3>Live GPS Doorstep Delivery</h3>
+                    <p>
+                        Track your rider’s route on a live map with real-time GPS coordinates. Enjoy transparent ₹20/km
+                        distance rates and pay conveniently via Cash on Delivery or Razorpay UPI.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ ACCORDION -->
+        <section class="faq-section" id="faq">
+            <div class="section-header">
+                <span class="section-tag">Frequently Asked Questions</span>
+                <h2 class="section-title">Everything You Want to Know</h2>
+                <p class="section-description">
+                    Got questions? Here is how Enything operates in Jammu &amp; Kashmir.
+                </p>
+            </div>
+
+            <div class="faq-container">
+                <details class="faq-item" open>
+                    <summary class="faq-question">
+                        <span>Where is Enything currently operational?</span>
+                        <i class="fas fa-chevron-down faq-icon"></i>
+                    </summary>
+                    <div class="faq-answer">
+                        Enything is headquartered in Bandipora, Jammu &amp; Kashmir, and is actively serving customers,
+                        local restaurants, grocery markets, and pharmacies across the Bandipora district, with upcoming
+                        expansions across the Kashmir valley.
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>How does multi-shop ordering work?</span>
+                        <i class="fas fa-chevron-down faq-icon"></i>
+                    </summary>
+                    <div class="faq-answer">
+                        With Enything’s multi-shop technology, you can add items from different nearby stores into a
+                        single cart. Instead of paying multiple full delivery charges, you only pay a fair distance
+                        surcharge for the physical route connecting the shops, saving you substantial delivery fees.
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>How is the delivery fee calculated?</span>
+                        <i class="fas fa-chevron-down faq-icon"></i>
+                    </summary>
+                    <div class="faq-answer">
+                        Delivery charges are strictly transparent: exactly ₹20 per kilometer base distance rate measured
+                        accurately from the store to your delivery address. There are zero surge multipliers or
+                        artificial rain charges, and delivery earnings are passed on to empower local riders.
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>How can a local restaurant or merchant sell on Enything?</span>
+                        <i class="fas fa-chevron-down faq-icon"></i>
+                    </summary>
+                    <div class="faq-answer">
+                        Simply download the Enything app from the App Store or Google Play, select "Seller" during
+                        onboarding, input your shop details, and upload your menu. Our onboarding team verifies your
+                        store within 24 hours so you can start accepting orders immediately.
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>How do delivery riders earn with Enything?</span>
+                        <i class="fas fa-chevron-down faq-icon"></i>
+                    </summary>
+                    <div class="faq-answer">
+                        Riders earn guaranteed payouts calculated per kilometer driven, along with order incentives. Our
+                        app provides built-in GPS navigation and a real-time earnings dashboard where you can track
+                        every completed trip.
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>What payment options are available?</span>
+                        <i class="fas fa-chevron-down faq-icon"></i>
+                    </summary>
+                    <div class="faq-answer">
+                        We support convenient Cash on Delivery (COD) as well as 100% secure online digital payments
+                        (UPI, Google Pay, PhonePe, Debit/Credit Cards, and Netbanking) powered by Razorpay.
+                    </div>
+                </details>
+            </div>
+        </section>
+
+        <!-- BOTTOM DOWNLOAD CTA BANNER -->
+        <section class="bottom-download-banner">
+            <div class="bottom-banner-content">
+                <h2>Experience Hyperlocal Shopping Today</h2>
+                <p>
+                    Download Enything on iOS or Android and discover the fastest, fairest, and most reliable way to get
+                    anything delivered to your door.
+                </p>
+
+                <div class="bottom-badges-wrap">
+                    <a href="https://apps.apple.com/in/app/enything/id6809016496" target="_blank"
+                        rel="noopener noreferrer" class="store-badge store-badge-apple">
+                        <div class="store-badge-icon">
+                            <svg viewBox="0 0 170 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path fill-rule="evenodd" clip-rule="evenodd"
+                                    d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-5.34.22-10.38-1.99-15.1-6.64-3.23-3.03-7.14-7.89-11.75-14.58-6.19-9.15-11.09-19.46-14.7-30.93-3.61-11.48-5.42-22.38-5.42-32.72 0-14.62 3.72-26.68 11.16-36.19 7.44-9.51 16.71-14.39 27.81-14.62 5.09 0 10.42 1.25 15.98 3.76 5.56 2.51 9.17 3.82 10.83 3.93 2.14-.34 6.09-1.87 11.85-4.59 5.76-2.73 11.01-3.93 15.75-3.6 11.83.79 21.6 5.25 29.31 13.39-10.49 6.35-15.62 15.02-15.39 26.01.23 8.65 3.51 15.91 9.84 21.79 6.33 5.88 13.88 9.28 22.65 10.2-2.37 7.21-5.18 14.54-8.43 22zM119.22 33.72c0-7.3 2.66-14.16 7.98-20.59 5.32-6.43 11.8-10.84 19.44-13.23.45 1.57.68 3.1.68 4.59 0 7.3-2.74 14.23-8.22 20.78-5.48 6.55-11.95 10.86-19.41 12.92-.15-1.46-.47-3.04-.47-4.47z"
+                                    fill="white" />
+                            </svg>
+                        </div>
+                        <div class="store-badge-text">
+                            <span class="store-badge-subtext">Download on the</span>
+                            <span class="store-badge-title">App Store</span>
+                            <span class="store-badge-tag">iOS 15.0+</span>
+                        </div>
+                    </a>
+
+                    <a href="https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything" target="_blank"
+                        rel="noopener noreferrer" class="store-badge store-badge-google">
+                        <div class="store-badge-icon">
+                            <svg viewBox="0 0 170 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M21.1 14.3c-2.3 2.4-3.7 6.2-3.7 11.2v119c0 5 1.4 8.8 3.7 11.2l.6.6 68.7-68.7v-1.6L21.7 13.7l-.6.6z"
+                                    fill="#00D3FF" />
+                                <path
+                                    d="M113.3 110.5l-22.9-22.9v-1.6l22.9-22.9.5.3 27.2 15.4c7.8 4.4 7.8 11.6 0 16l-27.2 15.4-.5.3z"
+                                    fill="#FFCF00" />
+                                <path d="M113.8 110.2L90.4 86.8 21.1 156.1c2.6 2.7 6.8 3.1 11.6.4l81.1-46.3z"
+                                    fill="#FF3A44" />
+                                <path d="M113.8 59.8L32.7 13.5c-4.8-2.7-9.1-2.3-11.6.4l69.3 69.3 23.4-23.4z"
+                                    fill="#00F777" />
+                            </svg>
+                        </div>
+                        <div class="store-badge-text">
+                            <span class="store-badge-subtext">GET IT ON</span>
+                            <span class="store-badge-title">Google Play</span>
+                            <span class="store-badge-tag">Android 8.0+</span>
+                        </div>
+                    </a>
                 </div>
             </div>
         </section>
     </main>
 
-    <footer>
-        <div class="footer-content">
-            <div class="footer-info footer-accordion">
-                <details>
-                    <summary><h3>Contact Support <i class="fas fa-chevron-down accordion-icon"></i></h3></summary>
-                    <div class="accordion-content">
-                        <p>Email: <a href="mailto:support@enything.in" style="color: var(--accent-color); text-decoration: none;">support@enything.in</a></p>
-                <p>Phone: +91 7006464241</p>
-                <p>Address: Plan Bandipora, Ward No. 2, Bandipora, J&K — 193502, India</p>
-                    </div>
-                </details>
+    <!-- QR CODE SCANNER MODAL -->
+    <div class="qr-modal" id="qr-modal" role="dialog" aria-modal="true">
+        <div class="qr-modal-card">
+            <button class="qr-close-btn" id="close-qr-btn" aria-label="Close dialog">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3>Scan to Install App</h3>
+            <p>Point your mobile camera at the QR code below to download Enything instantly.</p>
+
+            <div class="qr-tabs">
+                <button class="qr-tab-btn active" data-platform="ios">iOS (App Store)</button>
+                <button class="qr-tab-btn" data-platform="android">Android (Google Play)</button>
             </div>
-            <div class="footer-legal footer-accordion">
-                <details>
-                    <summary><h3>Legal &amp; Policies <i class="fas fa-chevron-down accordion-icon"></i></h3></summary>
-                    <div class="accordion-content">
-                        <ul style="list-style: none; padding: 0; line-height: 2;">
-                    <li><a href="privacy.html" style="color: var(--text-muted); text-decoration: none;">Privacy Policy</a></li>
-                    <li><a href="terms.html" style="color: var(--text-muted); text-decoration: none;">Terms & Conditions</a></li>
-                    <li><a href="refunds.html" style="color: var(--text-muted); text-decoration: none;">Refunds & Cancellations</a></li>
-                    <li><a href="shipping.html" style="color: var(--text-muted); text-decoration: none;">Shipping & Delivery</a></li>
-                </ul>
-                    </div>
-                </details>
+
+            <div class="qr-render-box" id="qr-code-container">
+                <!-- Dynamic QR code rendered here -->
             </div>
-            <div class="footer-legal">
-                <h3>Grievance Officer</h3>
-                <p>Muhtaashim Kamran Nazki (Nodal Contact)</p>
-                <p style="font-size: 0.85em; opacity: 0.8;">Complaints are acknowledged within 48h and resolved within 1 month.</p>
-                <br>
-                <p>&copy; 2026 Enything. All rights reserved.</p>
-                <p>Operated by Muhtaashim Kamran Nazki (UDYAM-JK-02-0019684 | GST REG NO. 01CQQPN6775H1ZD | Municipal Trade License No. JK-ULB-NOC/2026/08565)</p>
+
+            <div class="qr-subtext" id="qr-subtext">
+                Direct link: https://apps.apple.com/in/app/enything/id6809016496
             </div>
         </div>
-    </footer>
     </div>
 
-    <!-- Modals & Auth -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/config.js?v=2"></script>
-    <script src="js/supabase-client.js?v=2"></script>
-    <script src="js/auth.js?v=15"></script>
-    <script src="js/tax_config.js?v=2"></script>
-    <script src="js/cart.js?v=2"></script>
-    
+    <!-- REGULATORY & LEGAL FOOTER -->
+    <footer>
+        <div class="footer-content">
+            <!-- Brand Column -->
+            <div class="footer-brand">
+                <h3>
+                    <img src="logo.png" alt="Logo" style="height: 32px; width: auto;">
+                    Enything
+                </h3>
+                <p>
+                    Everything. Everywhere. Instantly. Kashmir’s pioneering hyper-local marketplace app connecting
+                    consumers with local restaurants, bakeries, grocery stores, and independent riders.
+                </p>
+                <p style="font-size: 0.85rem; color: #94a3b8;">
+                    <strong>Enything Technologies</strong><br>
+                    Sole Proprietorship of Muhtaashim Kamran Nazki
+                </p>
+            </div>
+
+            <!-- Quick Links -->
+            <div class="footer-col">
+                <h4>Navigation</h4>
+                <ul>
+                    <li><a href="#hero">Home</a></li>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#app-showcase">Screenshots</a></li>
+                    <li><a href="#pricing">₹20/km Pricing</a></li>
+                    <li><a href="#faq">FAQ</a></li>
+                </ul>
+            </div>
+
+            <!-- Legal & Compliance -->
+            <div class="footer-col">
+                <h4>Legal &amp; Policies</h4>
+                <ul>
+                    <li><a href="privacy.html">Privacy Policy</a></li>
+                    <li><a href="terms.html">Terms of Service</a></li>
+                    <li><a href="refunds.html">Refunds &amp; Cancellations</a></li>
+                    <li><a href="shipping.html">Shipping &amp; Delivery</a></li>
+                    <li><a href="contact.html">Contact Us</a></li>
+                </ul>
+            </div>
+
+            <!-- Contact & Grievance -->
+            <div class="footer-col footer-contact-info">
+                <h4>Registered Entity</h4>
+                <p>
+                    <i class="fas fa-building"></i>
+                    <span>Plan Bandipora, Ward No. 2, Bandipora, J&amp;K — 193502, India</span>
+                </p>
+                <p>
+                    <i class="fas fa-envelope"></i>
+                    <a href="mailto:support@enything.in">support@enything.in</a>
+                </p>
+                <p>
+                    <i class="fas fa-phone"></i>
+                    <span>+91 7006464241</span>
+                </p>
+                <p>
+                    <i class="fas fa-user-shield"></i>
+                    <span>Grievance Officer: Muhtaashim Kamran Nazki (Complaints resolved within 30 days)</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <p>&copy; 2026 Enything Technologies. All rights reserved.</p>
+            <p>
+                Operated by <strong>Muhtaashim Kamran Nazki</strong> |
+                UDYAM: <strong>UDYAM-JK-02-0019684</strong> |
+                GST REG NO: <strong>01CQQPN6775H1ZD</strong> |
+                Municipal Trade License No: <strong>JK-ULB-NOC/2026/08565</strong>
+            </p>
+        </div>
+    </footer>
+
+
+    <!-- Sticky Frosted Glass Mobile Bottom Bar (Slides in after scrolling hero) -->
+    <div class="mobile-sticky-bar" id="mobile-sticky-bar">
+        <div class="sticky-app-info">
+            <div class="sticky-app-icon">
+                <img src="logo.png" alt="Enything Icon">
+            </div>
+            <div class="sticky-text-wrap">
+                <div class="sticky-title">Enything</div>
+                <div class="sticky-rating">
+                    <i class="fas fa-star"></i> 4.9 <span>&bull; Bandipora</span>
+                </div>
+            </div>
+        </div>
+        <div class="sticky-btn-group">
+            <a href="https://apps.apple.com/in/app/enything/id6809016496" target="_blank" rel="noopener noreferrer"
+                class="sticky-btn sticky-btn-primary" id="sticky-primary-btn">
+                <i class="fab fa-apple"></i> Get App
+            </a>
+            <a href="https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything" target="_blank"
+                rel="noopener noreferrer" class="sticky-btn sticky-btn-secondary" id="sticky-secondary-btn"
+                title="Get it on Google Play">
+                <i class="fab fa-google-play"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- INTERACTIVE SCRIPT CONTROLLER -->
     <script>
-        let allProducts = [];
-        let allShops = [];
-        let shopMap = {};
-        
-        // Pagination state
-        let currentDisplayedCount = 9;
-        let currentDisplayedProducts = [];
-
-        function renderTrendingProducts(products) {
-            const container = document.getElementById('trending-marquee');
-            const section = document.getElementById('trending-section');
-            if (!container) return; // safety
-            container.innerHTML = '';
-            
-            if (!products || products.length === 0) {
-                section.style.display = 'none';
-                return;
+        // Screen Data with real desktop screenshots
+        const screenData = [
+            {
+                id: 1,
+                role: 'customer',
+                badge: 'Screen 1 &bull; Unified Account',
+                title: 'Choose Your Role',
+                desc: 'One account &mdash; multiple roles. Pick one to start. Whether you are shopping for your family, running a local business, or looking to earn as a delivery rider, Enything gives you direct access in a single tap.',
+                imgPng: 'screenshots/1.png',
+                imgWebp: 'screenshots/1.webp',
+                features: [
+                    'Single phone number login with instant OTP',
+                    'Zero friction role onboarding for local businesses and youth',
+                    'Switch between Customer, Seller, and Rider profiles anytime'
+                ]
+            },
+            {
+                id: 2,
+                role: 'customer',
+                badge: 'Screen 2 &bull; Instant Discovery',
+                title: 'Hyperlocal Store & Product Search',
+                desc: 'Browse restaurants and stores along Bandipora - Sopore Road and surrounding neighborhoods. Real-time autocomplete helps you find Wazwan, medicines, bakery items, or cotton clothing in seconds.',
+                imgPng: 'screenshots/2.png',
+                imgWebp: 'screenshots/2.webp',
+                features: [
+                    'Location-aware search for Bandipora & J&K',
+                    'Trending local searches and quick category chips',
+                    'Direct access to restaurants, groceries, and pharmacies'
+                ]
+            },
+            {
+                id: 3,
+                role: 'customer',
+                badge: 'Screen 3 &bull; Curated Storefronts',
+                title: 'Popular in Your Area',
+                desc: 'View active stores, customer ratings, distance, and real-time delivery estimates. Compare prices and discover top-rated local bakeries, cafes, and supermarkets.',
+                imgPng: 'screenshots/3.png',
+                imgWebp: 'screenshots/3.webp',
+                features: [
+                    'Filter by Best Rating, Nearest, and Price',
+                    'Live open/closed store indicators',
+                    'Verified customer reviews from your community'
+                ]
+            },
+            {
+                id: 4,
+                role: 'customer',
+                badge: 'Screen 4 &bull; In-Store Catalogs',
+                title: 'Seamless Menus & Item Customization',
+                desc: 'Browse detailed food and item menus with genuine photos, descriptions, and portion sizes. Add items to your cart with instant stock availability checks.',
+                imgPng: 'screenshots/4.png',
+                imgWebp: 'screenshots/4.webp',
+                features: [
+                    'In-store search to locate specific dishes or items',
+                    'Transparent unit pricing with no hidden charges',
+                    'One-tap add to sequential multi-shop cart'
+                ]
+            },
+            {
+                id: 5,
+                role: 'customer',
+                badge: 'Screen 5 &bull; Order Confirmation',
+                title: 'Shop & Rider Confirmed',
+                desc: 'Your order is securely dispatched. Watch the multi-leg route across SK Stadium, Bypass, and Bandipora roads. Shops verify items and prepare fresh orders without delay.',
+                imgPng: 'screenshots/5.png',
+                imgWebp: 'screenshots/5.webp',
+                features: [
+                    'Instant visual order confirmation screen',
+                    'Strict 3-minute kitchen acceptance SLA',
+                    'Complete order history and receipt details'
+                ]
+            },
+            {
+                id: 6,
+                role: 'customer',
+                badge: 'Screen 6 &bull; Live Route Tracking',
+                title: 'Real-Time Delivery Route & ETA',
+                desc: 'Follow your delivery partner on a live GPS map from store pickup to your doorstep. Receive notifications when your rider arrives at your gate.',
+                imgPng: 'screenshots/6.png',
+                imgWebp: 'screenshots/6.webp',
+                features: [
+                    'Street-level map visualization with dynamic ETA',
+                    'Verified distance tracking matching our ₹20/km rate',
+                    'Direct rider call & safety verification'
+                ]
+            },
+            {
+                id: 7,
+                role: 'seller',
+                badge: 'Screen 7 &bull; Merchant Command',
+                title: 'Merchant Command Center',
+                desc: 'Empowering local store owners in Kashmir with real-time revenue analytics, active orders overview, and one-tap shop open/close switches.',
+                imgPng: 'screenshots/7.png',
+                imgWebp: 'screenshots/7.webp',
+                features: [
+                    'Today’s earnings and sales performance metrics',
+                    'Manage restaurant status and operating hours',
+                    'Instant payout settlements to local bank accounts'
+                ]
+            },
+            {
+                id: 8,
+                role: 'seller',
+                badge: 'Screen 8 &bull; 3-Min Dispatch',
+                title: 'Lightning 3-Minute Order Dispatch',
+                desc: 'Incoming orders alert kitchen staff with urgent sound notifications. Review item details and accept in under 3 minutes to keep food preparation lightning fast.',
+                imgPng: 'screenshots/8.png',
+                imgWebp: 'screenshots/8.webp',
+                features: [
+                    'Pending, Active, and Done status pipelines',
+                    'Detailed customer item notes and dietary preferences',
+                    'Automated rider dispatch upon order acceptance'
+                ]
+            },
+            {
+                id: 9,
+                role: 'rider',
+                badge: 'Screen 9 &bull; Rider Performance',
+                title: 'Fair ₹20/km Distance Earnings',
+                desc: 'Our delivery partners earn fair, transparent compensation calculated directly on total kilometers driven. Track your daily earnings and trips with zero hidden commissions.',
+                imgPng: 'screenshots/9.png',
+                imgWebp: 'screenshots/9.webp',
+                features: [
+                    'Live trip odometer tracking total kilometers driven',
+                    'Daily & weekly earnings summaries',
+                    'Fair compensation model protecting rider livelihoods'
+                ]
+            },
+            {
+                id: 10,
+                role: 'rider',
+                badge: 'Screen 10 &bull; Rider Navigation',
+                title: 'Turn-by-Turn Pickup & Dropoff',
+                desc: 'Clear route instructions from Nowpora to customer drop points with precise estimated arrival times, eliminating delivery confusion and delays.',
+                imgPng: 'screenshots/10.png',
+                imgWebp: 'screenshots/10.webp',
+                features: [
+                    'Integrated store-to-customer waypoint navigation',
+                    'Estimated trip duration and optimal road path',
+                    'Direct customer contact and contactless delivery options'
+                ]
             }
+        ];
 
-            // Get up to 10 random products to simulate trending searches
-            const shuffled = [...products].sort(() => 0.5 - Math.random());
-            const trending = shuffled.slice(0, 10);
+        // Active State
+        let currentRole = 'customer';
+        let currentScreens = screenData.filter(s => s.role === currentRole);
+        let currentIndex = 0;
 
-            let pillsHtml = '';
-            trending.forEach(product => {
-                pillsHtml += `
-                    <a href="product.html?id=${product.id}" class="trending-pill">
-                        <i class="fas fa-search" style="font-size: 0.8rem; color: var(--text-muted);"></i>
-                        ${product.name}
-                    </a>
-                `;
+        // Elements
+        const screenBadge = document.getElementById('screen-badge');
+        const screenTitle = document.getElementById('screen-title');
+        const screenDesc = document.getElementById('screen-desc');
+        const screenFeatures = document.getElementById('screen-features');
+        const showcaseSource = document.getElementById('showcase-source');
+        const showcaseImg = document.getElementById('showcase-screen-img');
+        const dotsContainer = document.getElementById('showcase-dots');
+        const thumbsContainer = document.getElementById('showcase-thumbnails');
+        const prevBtn = document.getElementById('prev-screen-btn');
+        const nextBtn = document.getElementById('next-screen-btn');
+        const roleTabs = document.querySelectorAll('.role-tab');
+
+        // Render Active Screen
+        function renderScreen(index) {
+            if (index < 0) index = currentScreens.length - 1;
+            if (index >= currentScreens.length) index = 0;
+            currentIndex = index;
+
+            const item = currentScreens[currentIndex];
+
+            // Smooth image transition
+            showcaseImg.style.opacity = '0.3';
+            setTimeout(() => {
+                showcaseSource.srcset = item.imgWebp;
+                showcaseImg.src = item.imgPng;
+                showcaseImg.alt = item.title;
+                showcaseImg.style.opacity = '1';
+            }, 150);
+
+            // Text info
+            screenBadge.innerHTML = `${item.badge}`;
+            screenTitle.textContent = item.title;
+            screenDesc.textContent = item.desc;
+
+            // Features list
+            screenFeatures.innerHTML = item.features.map(f => `
+                <li class="screen-feature-item">
+                    <i class="fas fa-check-circle"></i>
+                    <span>${f}</span>
+                </li>
+            `).join('');
+
+            // Update Dots
+            const dots = dotsContainer.querySelectorAll('.showcase-dot');
+            dots.forEach((dot, idx) => {
+                dot.classList.toggle('active', idx === currentIndex);
             });
-            
-            // Duplicate the pills to create a seamless infinite scrolling marquee
-            container.innerHTML = pillsHtml + pillsHtml;
-            section.style.display = 'block';
-            section.style.display = 'block';
-        }
 
-        function renderRecentProducts(products) {
-            const container = document.getElementById('recent-grid');
-            const section = document.getElementById('recent-section');
-            if (!container || !section) return;
-            
-            try {
-                const recentIds = JSON.parse(localStorage.getItem('recently_visited') || '[]');
-                if (recentIds.length === 0) {
-                    section.style.display = 'none';
-                    return;
+            // Update Thumbnails
+            const thumbs = thumbsContainer.querySelectorAll('.thumbnail-card');
+            thumbs.forEach((thumb, idx) => {
+                thumb.classList.toggle('active', idx === currentIndex);
+                if (idx === currentIndex) {
+                    thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                 }
-                
-                const allRecentProducts = recentIds.map(id => products.find(p => p.id === id)).filter(p => p);
-                const recentProducts = allRecentProducts.slice(0, 8);
-                
-                if (recentProducts.length === 0) {
-                    section.style.display = 'none';
-                    return;
-                }
-                
-                container.innerHTML = '';
-                recentProducts.forEach(product => {
-                    const price = product.price;
-                    const originalPriceHtml = product.original_price ? `<span class="original-price" style="font-size:0.8rem;">₹${product.original_price}</span>` : '';
-                    
-                    let imageUrl = 'https://via.placeholder.com/300x200?text=No+Image';
-                    if (product.images && product.images.length > 0) imageUrl = product.images[0];
-                    else if (product.image_url) imageUrl = product.image_url;
-                    
-                    const shopName = shopMap[product.shop_id] ? shopMap[product.shop_id].name : 'Restaurant';
-                    
-                    container.innerHTML += `
-                        <div class="product-card" style="width: 220px; flex: 0 0 auto;">
-                            <a href="product.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
-                                <img src="${imageUrl}" alt="${product.name}" class="product-image">
-                                <div class="product-info">
-                                    <span class="product-shop-name">${shopName}</span>
-                                    <div class="product-name" style="font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${product.name}</div>
-                                </div>
-                            </a>
-                            <div class="product-footer" style="margin-top: 10px;">
-                                <div class="price-container">
-                                    ${originalPriceHtml}
-                                    <span class="price" style="font-size:1.1rem;">₹${price}</span>
-                                </div>
-                                <button class="add-to-cart" style="padding: 6px 12px; font-size: 0.9rem;" ${!product.is_available ? 'disabled' : ''} 
-                                    onclick='cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>
-                                    ${product.is_available ? 'Add +' : 'Out'}
-                                </button>
-                            </div>
-                        </div>
-                        </div>
-                    `;
-                });
-                
-                if (allRecentProducts.length > 8) {
-                    container.innerHTML += `
-                        <div class="product-card" style="width: 220px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); cursor: pointer; border: 2px dashed var(--glass-border);" onclick="window.location.href='recent.html'">
-                            <div style="text-align: center; color: var(--accent-color);">
-                                <i class="fas fa-arrow-right" style="font-size: 2.5rem; margin-bottom: 15px; display: block;"></i>
-                                <div style="font-size: 1.1rem; font-weight: 600;">See More</div>
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                section.style.display = 'block';
-            } catch(e) {
-                console.error("Error rendering recent products", e);
-                section.style.display = 'none';
-            }
-        }
-        
-        function renderProducts(products, isLoadMore = false) {
-            const container = document.getElementById('products-grid');
-            const loadMoreBtn = document.getElementById('load-more-container');
-            
-            window.renderedProductsMap = window.renderedProductsMap || {};
-            
-            if (!isLoadMore) {
-                container.innerHTML = '';
-                currentDisplayedCount = 9;
-                currentDisplayedProducts = products || [];
-                window.renderedProductsMap = {};
-            }
-            
-            if (!currentDisplayedProducts || currentDisplayedProducts.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No products available at the moment.</p>';
-                if(loadMoreBtn) loadMoreBtn.style.display = 'none';
-                return;
-            }
-
-            const startIndex = isLoadMore ? currentDisplayedCount - 9 : 0;
-            const endIndex = Math.min(currentDisplayedCount, currentDisplayedProducts.length);
-            const productsToShow = currentDisplayedProducts.slice(startIndex, endIndex);
-
-            productsToShow.forEach(product => {
-                const price = product.price;
-                const originalPriceHtml = product.original_price ? `<span class="original-price">₹${product.original_price}</span>` : '';
-                
-                let imageUrl = 'https://via.placeholder.com/300x200?text=No+Image';
-                if (product.images && product.images.length > 0) {
-                    imageUrl = product.images[0];
-                } else if (product.image_url) {
-                    imageUrl = product.image_url;
-                }
-                
-                const vegIcon = product.is_veg === true ? '<div class="veg-icon"></div>' : (product.is_veg === false ? '<div class="veg-icon non-veg-icon"></div>' : '');
-                const shopName = shopMap[product.shop_id] ? shopMap[product.shop_id].name : 'Restaurant';
-                product.shop_category = shopMap[product.shop_id] ? shopMap[product.shop_id].category : 'Other';
-                
-                container.innerHTML += `
-                    <div class="product-card">
-                        <a href="product.html?id=${product.id}" style="text-decoration: none; color: inherit; display: block;">
-                            <img src="${imageUrl}" alt="${product.name}" class="product-image">
-                            <div class="product-info">
-                                <span class="product-shop-name">${shopName}</span>
-                                <div class="product-name">${vegIcon}${product.name}</div>
-                                <div class="product-desc">${product.description || ''}</div>
-                            </div>
-                        </a>
-                        <div class="product-footer">
-                            <div class="price-container">
-                                ${originalPriceHtml}
-                                <span class="price">₹${price}</span>
-                            </div>
-                            <div class="product-action-container" id="action-container-${product.id}">
-                                ${getActionButtonHtml(product)}
-                            </div>
-                        </div>
-                    </div>
-                `;
             });
-            
-            if (currentDisplayedCount < currentDisplayedProducts.length) {
-                if(loadMoreBtn) loadMoreBtn.style.display = 'block';
-            } else {
-                if(loadMoreBtn) loadMoreBtn.style.display = 'none';
-            }
         }
-        
-        function getActionButtonHtml(product) {
-            window.renderedProductsMap[product.id] = product;
-            
-            if (!product.is_available) {
-                return `<button class="add-to-cart" disabled>Out of stock</button>`;
-            }
-            
-            const cartItem = cart.items.find(i => i.id === product.id);
-            if (cartItem && cartItem.quantity > 0) {
-                return `
-                    <div class="cart-qty-controls" style="display: flex; align-items: center; justify-content: space-between; background: rgba(91, 139, 255, 0.1); border: 1px solid var(--accent-color); border-radius: 8px; overflow: hidden; height: 35px; width: 80px;">
-                        <button onclick='event.preventDefault(); event.stopPropagation(); cart.updateQuantity("${product.id}", -1)' style="background: none; border: none; color: white; padding: 0 8px; cursor: pointer; height: 100%; display: flex; align-items: center;"><i class="fas fa-minus" style="font-size: 0.7rem;"></i></button>
-                        <span style="color: white; font-weight: 600; font-size: 0.9rem;">${cartItem.quantity}</span>
-                        <button onclick='event.preventDefault(); event.stopPropagation(); cart.updateQuantity("${product.id}", 1)' style="background: none; border: none; color: white; padding: 0 8px; cursor: pointer; height: 100%; display: flex; align-items: center;"><i class="fas fa-plus" style="font-size: 0.7rem;"></i></button>
-                    </div>
+
+        // Initialize UI for Active Role
+        function setupRole(roleName) {
+            currentRole = roleName;
+            currentScreens = screenData.filter(s => s.role === currentRole);
+            currentIndex = 0;
+
+            // Build Dots
+            dotsContainer.innerHTML = '';
+            currentScreens.forEach((_, idx) => {
+                const dot = document.createElement('div');
+                dot.className = `showcase-dot ${idx === 0 ? 'active' : ''}`;
+                dot.addEventListener('click', () => renderScreen(idx));
+                dotsContainer.appendChild(dot);
+            });
+
+            // Build Thumbnails
+            thumbsContainer.innerHTML = '';
+            currentScreens.forEach((s, idx) => {
+                const thumb = document.createElement('div');
+                thumb.className = `thumbnail-card ${idx === 0 ? 'active' : ''}`;
+                thumb.innerHTML = `
+                    <picture>
+                        <source srcset="${s.imgWebp}" type="image/webp">
+                        <img src="${s.imgPng}" alt="${s.title}">
+                    </picture>
                 `;
-            } else {
-                return `<button class="add-to-cart" onclick='event.preventDefault(); event.stopPropagation(); cart.addItem(${JSON.stringify(product).replace(/'/g, "&#39;")}, "${product.shop_id}")'>Add +</button>`;
+                thumb.addEventListener('click', () => renderScreen(idx));
+                thumbsContainer.appendChild(thumb);
+            });
+
+            renderScreen(0);
+        }
+
+        // Role Tab Event Listeners
+        roleTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                roleTabs.forEach(t => {
+                    t.classList.remove('active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                tab.classList.add('active');
+                tab.setAttribute('aria-selected', 'true');
+                setupRole(tab.getAttribute('data-role'));
+            });
+        });
+
+        // Prev / Next Controls
+        prevBtn.addEventListener('click', () => renderScreen(currentIndex - 1));
+        nextBtn.addEventListener('click', () => renderScreen(currentIndex + 1));
+
+        // Keyboard Navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') renderScreen(currentIndex - 1);
+            if (e.key === 'ArrowRight') renderScreen(currentIndex + 1);
+        });
+
+        // ======================================================================
+        // Touch Swipe Gestures for Mobile (100x Ergonomics)
+        // ======================================================================
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+
+        const phoneMockupTouch = document.querySelector('.showcase-phone-col .phone-mockup');
+        if (phoneMockupTouch) {
+            phoneMockupTouch.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+                touchStartY = e.changedTouches[0].screenY;
+            }, { passive: true });
+
+            phoneMockupTouch.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                touchEndY = e.changedTouches[0].screenY;
+                handleSwipeGesture();
+            }, { passive: true });
+        }
+
+        function handleSwipeGesture() {
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            // Only trigger if horizontal swipe is dominant and > 35px
+            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 35) {
+                if (diffX < 0) {
+                    // Swiped Left -> Next Screen
+                    renderScreen(currentIndex + 1);
+                } else {
+                    // Swiped Right -> Previous Screen
+                    renderScreen(currentIndex - 1);
+                }
             }
         }
-        
-        window.addEventListener('cartUpdated', () => {
-            if (window.renderedProductsMap) {
-                Object.values(window.renderedProductsMap).forEach(product => {
-                    const container = document.getElementById(`action-container-${product.id}`);
-                    if (container) {
-                        container.innerHTML = getActionButtonHtml(product);
-                    }
-                });
+
+        // ======================================================================
+        // OS Detection & Smart Sticky Bottom Bar
+        // ======================================================================
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isAndroid = /Android/.test(navigator.userAgent);
+        const stickyPrimaryBtn = document.getElementById('sticky-primary-btn');
+        const stickySecondaryBtn = document.getElementById('sticky-secondary-btn');
+
+        if (isAndroid) {
+            if (stickyPrimaryBtn && stickySecondaryBtn) {
+                stickyPrimaryBtn.href = "https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything";
+                stickyPrimaryBtn.innerHTML = '<i class="fab fa-google-play"></i> Install App';
+                stickySecondaryBtn.href = "https://apps.apple.com/in/app/enything/id6809016496";
+                stickySecondaryBtn.innerHTML = '<i class="fab fa-apple"></i>';
+                stickySecondaryBtn.title = "Download on Apple App Store";
+            }
+        } else {
+            // Default to iOS (Apple App Store)
+            if (stickyPrimaryBtn && stickySecondaryBtn) {
+                stickyPrimaryBtn.href = "https://apps.apple.com/in/app/enything/id6809016496";
+                stickyPrimaryBtn.innerHTML = '<i class="fab fa-apple"></i> Get App';
+                stickySecondaryBtn.href = "https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything";
+                stickySecondaryBtn.innerHTML = '<i class="fab fa-google-play"></i>';
+                stickySecondaryBtn.title = "Get it on Google Play";
+            }
+        }
+
+        // Scroll listener: Header blur & Sticky bar slide-in after hero
+        const stickyBar = document.getElementById('mobile-sticky-bar');
+        const header = document.getElementById('main-header');
+
+        function updateScrollEffects() {
+            const scrollY = window.scrollY;
+            if (scrollY > 30) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+
+            // Show sticky bar ONLY when scrolled past hero (e.g. scrollY > 280)
+            // and hide when near the bottom footer
+            if (stickyBar) {
+                const footer = document.querySelector('footer');
+                const footerVisible = footer && footer.getBoundingClientRect().top < (window.innerHeight + 60);
+                if (scrollY > 280 && !footerVisible) {
+                    stickyBar.classList.add('visible');
+                } else {
+                    stickyBar.classList.remove('visible');
+                }
+            }
+        }
+
+        window.addEventListener('scroll', updateScrollEffects, { passive: true });
+        updateScrollEffects();
+
+        // Mobile Menu Toggle
+        const mobileToggle = document.getElementById('mobile-menu-toggle');
+        const navMenu = document.getElementById('nav-menu');
+        mobileToggle.addEventListener('click', () => {
+            const isVisible = navMenu.style.display === 'flex';
+            navMenu.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible) {
+                navMenu.style.position = 'absolute';
+                navMenu.style.top = '100%';
+                navMenu.style.left = '0';
+                navMenu.style.right = '0';
+                navMenu.style.background = 'rgba(2, 6, 26, 0.98)';
+                navMenu.style.flexDirection = 'column';
+                navMenu.style.padding = '1.5rem';
+                navMenu.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
             }
         });
 
-        window.loadMoreProducts = function() {
-            currentDisplayedCount += 9;
-            renderProducts(currentDisplayedProducts, true);
-        };
-
-        function renderFilters() {
-            const scrollContainer = document.getElementById('filter-scroll');
-            scrollContainer.innerHTML = `<div class="filter-bubble active" id="filter-all" onclick="filterByShop('all')">All Products</div>`;
-            
-            allShops.forEach(shop => {
-                const banner = shop.banner_url || shop.banner_image;
-                const imgHtml = banner ? `<img src="${banner}" alt="" onerror="this.style.display='none'">` : '';
-                scrollContainer.innerHTML += `
-                    <div class="filter-bubble" id="filter-${shop.id}" onclick="filterByShop('${shop.id}')">
-                        ${imgHtml}
-                        ${shop.name}
-                    </div>
-                `;
+        // Close mobile nav when clicking a link
+        navMenu.querySelectorAll('a').forEach(a => {
+            a.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    navMenu.style.display = 'none';
+                }
             });
-            document.getElementById('restaurants-filter-section').style.display = 'block';
+        });
+
+        // QR Code Modal & Mobile Share Logic
+        const qrModal = document.getElementById('qr-modal');
+        const openQrBtn = document.getElementById('open-qr-btn');
+        const closeQrBtn = document.getElementById('close-qr-btn');
+        const qrContainer = document.getElementById('qr-code-container');
+        const qrSubtext = document.getElementById('qr-subtext');
+        const qrTabBtns = document.querySelectorAll('.qr-tab-btn');
+
+        const IOS_URL = "https://apps.apple.com/in/app/enything/id6809016496";
+        const ANDROID_URL = "https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything";
+        let activeQrPlatform = isAndroid ? 'android' : 'ios';
+        let qrInstance = null;
+
+        function renderQr(url) {
+            qrContainer.innerHTML = '';
+            qrInstance = new QRCode(qrContainer, {
+                text: url,
+                width: 200,
+                height: 200,
+                colorDark: "#02061A",
+                colorLight: "#FFFFFF",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            qrSubtext.textContent = `Direct link: ${url}`;
         }
 
-        window.filterByShop = function(shopId) {
-            document.querySelectorAll('.filter-bubble').forEach(b => b.classList.remove('active'));
-            document.getElementById('search-input').value = '';
-            
-            const trendingSection = document.getElementById('trending-section');
-            const recentSection = document.getElementById('recent-section');
-            if (shopId === 'all') {
-                document.querySelector('.filter-bubble').classList.add('active');
-                document.getElementById('products-heading').innerText = "All Products";
-                renderProducts(allProducts);
-                trendingSection.style.display = 'block';
-                if (JSON.parse(localStorage.getItem('recently_visited') || '[]').length > 0) {
-                    recentSection.style.display = 'block';
-                }
-            } else {
-                document.getElementById(`filter-${shopId}`).classList.add('active');
-                document.getElementById('products-heading').innerText = shopMap[shopId].name + " Menu";
-                const filtered = allProducts.filter(p => p.shop_id === shopId);
-                renderProducts(filtered);
-                trendingSection.style.display = 'none';
-                recentSection.style.display = 'none';
-            }
-        };
-
-        window.handleSearch = function(query) {
-            query = query.toLowerCase().trim();
-            const activeShopId = document.querySelector('.filter-bubble.active').id.replace('filter-', '');
-            
-            let baseProducts = allProducts;
-            if (activeShopId !== 'all') {
-                baseProducts = allProducts.filter(p => p.shop_id === activeShopId);
-            }
-            
-            const trendingSection = document.getElementById('trending-section');
-            const recentSection = document.getElementById('recent-section');
-            if (!query) {
-                renderProducts(baseProducts);
-                if (activeShopId === 'all') {
-                    trendingSection.style.display = 'block';
-                    if (JSON.parse(localStorage.getItem('recently_visited') || '[]').length > 0) {
-                        recentSection.style.display = 'block';
-                    }
-                }
-                return;
-            }
-            
-            trendingSection.style.display = 'none';
-            recentSection.style.display = 'none';
-            const searchedProducts = baseProducts.filter(p => 
-                p.name.toLowerCase().includes(query) || 
-                (p.description && p.description.toLowerCase().includes(query))
-            );
-            
-            renderProducts(searchedProducts);
-        };
-
-        window.addEventListener('DOMContentLoaded', async () => {
-            const container = document.getElementById('products-grid');
-            
-            try {
-                if (window.supabaseInitError) {
-                    throw window.supabaseInitError;
-                }
-                if (typeof getActiveShops !== 'function' || typeof getAllActiveProducts !== 'function') {
-                    throw new Error("Application scripts failed to load properly. Please refresh the page or disable adblockers.");
-                }
-
-                // 1. Fetch Shops
-                allShops = await getActiveShops();
-                
-                if (allShops.length === 0) {
-                    container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No restaurants available right now.</p>';
-                    return;
-                }
-
-                // Build shop map
-                const shopIds = [];
-                allShops.forEach(s => {
-                    shopMap[s.id] = s;
-                    shopIds.push(s.id);
+        openQrBtn.addEventListener('click', () => {
+            // If native share is available on mobile, offer native share
+            if (navigator.share && window.innerWidth <= 768) {
+                navigator.share({
+                    title: 'Enything — Everything. Everywhere. Instantly.',
+                    text: 'Download Enything for instant hyperlocal deliveries in Kashmir!',
+                    url: isAndroid ? ANDROID_URL : IOS_URL
+                }).catch(() => {
+                    // Fallback to modal if cancelled or fails
+                    qrModal.classList.add('active');
+                    renderQr(activeQrPlatform === 'ios' ? IOS_URL : ANDROID_URL);
                 });
-
-                renderFilters();
-
-                // 2. Fetch Products
-                allProducts = await getAllActiveProducts(shopIds);
-                renderTrendingProducts(allProducts);
-                renderRecentProducts(allProducts);
-                renderProducts(allProducts);
-
-            } catch (err) {
-                console.error(err);
-                container.innerHTML = `<div style="color: #f87171; text-align: center; padding: 2rem; background: rgba(255,0,0,0.1); border-radius: 10px; border: 1px solid rgba(255,0,0,0.2); grid-column: 1/-1;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                    <h3 style="margin-bottom: 0.5rem;">Failed to load data</h3>
-                    <p style="font-size: 0.9rem; font-family: monospace; white-space: pre-wrap; word-break: break-all; opacity: 0.8;">${err.message || String(err)}</p>
-                </div>`;
+            } else {
+                qrModal.classList.add('active');
+                renderQr(activeQrPlatform === 'ios' ? IOS_URL : ANDROID_URL);
             }
+        });
+
+        closeQrBtn.addEventListener('click', () => {
+            qrModal.classList.remove('active');
+        });
+
+        qrModal.addEventListener('click', (e) => {
+            if (e.target === qrModal) {
+                qrModal.classList.remove('active');
+            }
+        });
+
+        qrTabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                qrTabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeQrPlatform = btn.getAttribute('data-platform');
+                renderQr(activeQrPlatform === 'ios' ? IOS_URL : ANDROID_URL);
+            });
         });
     </script>
 </body>
+
 </html>

@@ -145,29 +145,38 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
               .eq('is_available', true)
               .inFilter('shop_id', shopIds);
 
-          if (_selectedDemographic != 'All') {
-            final List<String> overlapTags = [
-              '#$_selectedDemographic',
-              '#Unisex'
-            ];
-            if (_selectedDemographic == 'Boys' ||
-                _selectedDemographic == 'Girls') {
-              overlapTags.add('#Kids');
-            }
-            q = q.overlaps('special_tags', overlapTags);
-          }
-
           final allProducts = await q;
 
-          final filteredProducts = _selectedSize == 'All'
-              ? allProducts
-              : allProducts.where((p) {
-                  final variants = p['variants'] as List<dynamic>? ?? [];
-                  return variants.any((v) {
-                    final name = (v['name'] as String?)?.trim() ?? '';
-                    return name == _selectedSize;
-                  });
-                }).toList();
+          // In-memory size and demographic filter (avoids PostgREST JSONB operator mismatch)
+          final filteredProducts = allProducts.where((p) {
+            if (_selectedSize != 'All') {
+              final variants = p['variants'] as List<dynamic>? ?? [];
+              final matchesSize = variants.any((v) {
+                final name = (v['name'] as String?)?.trim() ?? '';
+                return name == _selectedSize;
+              });
+              if (!matchesSize) return false;
+            }
+
+            if (_selectedDemographic != 'All') {
+              final tagsRaw = p['special_tags'];
+              final List<String> tags = (tagsRaw is List)
+                  ? tagsRaw.map((t) => t.toString().trim()).toList()
+                  : [];
+              final allowedTags = <String>['#$_selectedDemographic', '#Unisex'];
+              if (_selectedDemographic == 'Boys' ||
+                  _selectedDemographic == 'Girls') {
+                allowedTags.add('#Kids');
+              } else if (_selectedDemographic == 'Kids') {
+                allowedTags.addAll(['#Boys', '#Girls']);
+              }
+              final matchesDemographic =
+                  tags.any((t) => allowedTags.contains(t));
+              if (!matchesDemographic) return false;
+            }
+
+            return true;
+          }).toList();
 
           final productsByShop = <String, List<dynamic>>{};
           for (final p in filteredProducts) {

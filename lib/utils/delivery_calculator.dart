@@ -11,7 +11,8 @@ class DeliveryCalculator {
 
   /// Rate per km — used for both base delivery AND multi-shop surcharge.
   static double get _ratePerKm =>
-      PlatformConfigProvider.instance?.deliveryRatePerKm ?? 10.0;
+      PlatformConfigProvider.instance?.deliveryRatePerKm ??
+      PaymentConfig.deliveryRatePerKm;
 
   /// Flat base delivery fee per cart/order (covers 1-3 shops in cart)
   static double get flatDeliveryFee =>
@@ -22,11 +23,12 @@ class DeliveryCalculator {
   // Base delivery charge (customer ↔ nearest shop)
   // ---------------------------------------------------------------------------
 
-  /// Flat delivery charge per order/cart: flatDeliveryFee (₹20 default).
+  /// Dynamic per-km delivery charge: ceil(distanceKm) * ratePerKm, with flatDeliveryFee as floor.
   /// Returns -1 if beyond maxRadiusKm.
   static double calculateDeliveryCharges(double distanceKm, double orderValue) {
     if (distanceKm > maxRadiusKm) return -1;
-    return flatDeliveryFee;
+    final km = math.max(1, distanceKm.ceil());
+    return math.max(flatDeliveryFee, km * _ratePerKm);
   }
 
   /// Returns the label string for the delivery charge.
@@ -62,14 +64,35 @@ class DeliveryCalculator {
   // Multi-shop surcharge
   // ---------------------------------------------------------------------------
 
-  /// Multi-shop surcharge:
+  /// Distance-based Multi-Shop Surcharge:
   /// • 1 shop: ₹0
-  /// • 2+ shops: multiShopSurcharge (default ₹20.0 from Admin) per additional shop.
+  /// • 2 shops: Leg 0->1 surcharge = max(1, ceil(dist(Shop 1, Shop 2))) * ratePerKm
+  /// • 3 shops: Leg 1->2 surcharge = max(1, ceil(dist(Shop 2, Shop 3))) * ratePerKm
+  /// Returns the sum of all inter-shop leg surcharges.
   static double calculateMultiShopSurcharge(List<ShopModel> shops) {
     if (shops.length <= 1) return 0.0;
-    final ratePerExtraShop =
-        PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
-    return ratePerExtraShop * (shops.length - 1);
+    double total = 0.0;
+    for (int i = 0; i < shops.length - 1; i++) {
+      final d = haversineKm(shops[i].location, shops[i + 1].location);
+      final km = math.max(1, d.ceil());
+      total += km * _ratePerKm;
+    }
+    return total;
+  }
+
+  /// Returns individual leg surcharges per shop index in cart order:
+  /// Index 0 (Shop 1): 0.0
+  /// Index 1 (Shop 2): max(1, ceil(dist(Shop 1, Shop 2))) * ratePerKm
+  /// Index 2 (Shop 3): max(1, ceil(dist(Shop 2, Shop 3))) * ratePerKm
+  static List<double> calculateLegSurcharges(List<ShopModel> shops) {
+    if (shops.isEmpty) return [];
+    final surcharges = <double>[0.0];
+    for (int i = 0; i < shops.length - 1; i++) {
+      final d = haversineKm(shops[i].location, shops[i + 1].location);
+      final km = math.max(1, d.ceil());
+      surcharges.add(km * _ratePerKm);
+    }
+    return surcharges;
   }
 
   // ---------------------------------------------------------------------------

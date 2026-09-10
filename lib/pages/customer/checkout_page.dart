@@ -653,14 +653,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
-      double maxDistanceKm = 0.0;
+      double firstShopDistanceKm = 3.0;
       if (location.currentLocation != null && cart.shops.isNotEmpty) {
-        for (var s in cart.shops) {
-          final d = location.distanceTo(s.location);
-          if (d > maxDistanceKm) maxDistanceKm = d;
-        }
+        firstShopDistanceKm = location.distanceTo(cart.shops.first.location);
       }
-      final baseDelivery = cart.calculateDeliveryCharges(maxDistanceKm);
+      final baseDelivery = cart.calculateDeliveryCharges(firstShopDistanceKm);
       if (baseDelivery < 0) {
         throw Exception('Your delivery address is outside our delivery zone.');
       }
@@ -668,7 +665,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final isReplacementOrder = widget.existingCartGroupId != null ||
           cart.pendingCartGroupId != null;
 
-      double surcharge = 0.0;
       double heavyFee = 0.0;
       double smallCartFee = 0.0;
       double effectiveBase = 0.0;
@@ -677,36 +673,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         // Replacement order fees:
         // • effectiveBase = 0.0 — delivery charge stays the SAME because it's
         //   still one rider delivering to one address. We don't double-charge.
-        // • Multi-shop surcharge uses the flat admin rate, NOT distance-based calc,
-        //   because the SQL validation checks: flatRate × (shopCount − 1).
-        //   Rule (confirmed): 2 total active shops at end = ₹20, 3 = ₹40.
-        //   If new items are from an already-accepted shop → ₹0 extra surcharge.
         effectiveBase = 0.0;
-
-        // Count total unique active shops at the end of this replacement:
-        //   existing active shops + new shops from this checkout (if different)
-        final newUniqueShopIds = cart.shops
-            .map((s) => s.id)
-            .where((id) => !_activeShopIds.contains(id))
-            .toSet();
-        final totalShopsAtEnd = _activeShopIds.length + newUniqueShopIds.length;
-        final flatSurchargeRate =
-            PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
-        final totalSurchargeAtEnd = totalShopsAtEnd > 1
-            ? flatSurchargeRate * (totalShopsAtEnd - 1)
-            : 0.0;
-
-        // 100x FIX: Anticipate the database's reallocation.
-        // The DB will reduce the old payment pool's surcharge to match its active count.
-        final oldActiveCount = _activeShopIds.length;
-        final expectedOldSurchargePaid = math.min(
-            _activeSurchargePaid,
-            oldActiveCount > 1
-                ? flatSurchargeRate * (oldActiveCount - 1)
-                : 0.0);
-
-        surcharge =
-            math.max(0.0, totalSurchargeAtEnd - expectedOldSurchargePaid);
 
         // Small cart fee (aggregate check)
         final smallCartThreshold =
@@ -738,25 +705,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ? baseDelivery
             : (PlatformConfigProvider.instance?.deliveryBaseFee ??
                 PaymentConfig.deliveryFee);
-        surcharge = cart.multiShopSurcharge;
         heavyFee = cart.heavyOrderFee;
         smallCartFee = cart.smallCartFee;
       }
 
-      final riderBase = effectiveBase + surcharge + heavyFee;
       // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
       // Admin can change rider_commission_percent in Admin → Commission & Fees.
       // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
       final riderPayoutRatio =
           (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) /
               100.0;
-      final riderEarnings = riderBase * riderPayoutRatio;
-
-      double totalWithoutGst =
-          effectiveBase + surcharge + heavyFee + smallCartFee;
-      if (totalWithoutGst < 0) totalWithoutGst = 0.0;
-      double totalDelivery = totalWithoutGst * (1 + TaxConfig.deliveryGstRate);
-
       // Payment method is always 'upi' now (COD removed)
       const paymentMethod = 'upi';
 
@@ -857,20 +815,33 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final nowUtc = DateTime.now().toUtc().toIso8601String();
 
-      // 100x ARCHITECTURE FIX: Economic Splitting Flaw
-      // Calculate total geographic distance to all shops. We MUST split the delivery fee
-      // and rider earnings by distance, NOT by the food's subtotal. Otherwise, a rider can
-      // drop a distant shop with cheap items, and the replacement rider gets paid pennies
-      // for a long drive, while the first rider pockets the entire fee for a short drive.
-      double totalCartDistanceKm = 0.0;
-      for (final shop in cart.shops) {
-        totalCartDistanceKm += location.currentLocation != null
-            ? location.distanceTo(shop.location)
-            : 3.0;
+      // 100x LEG-SPECIFIC ATTRIBUTION:
+      // Shop 1 holds Base Delivery Fee + Full Handling Fee.
+      // Subsequent shops hold their respective Leg Surcharges (Shop 2 = Leg 1-2, Shop 3 = Leg 2-3).
+      final List<double> legSurcharges;
+      if (isReplacementOrder) {
+        final rate = PlatformConfigProvider.instance?.deliveryRatePerKm ?? 20.0;
+        legSurcharges = cart.shops.map((s) {
+          if (_activeShopIds.contains(s.id)) return 0.0;
+          double minDistKm = double.infinity;
+          for (final activeShop in cart.shops.where((act) => _activeShopIds.contains(act.id))) {
+            final d = DeliveryCalculator.haversineKm(activeShop.location, s.location);
+            if (d < minDistKm) minDistKm = d;
+          }
+          if (minDistKm == double.infinity) minDistKm = 1.0;
+          final km = math.max(1, minDistKm.ceil());
+          return km * rate;
+        }).toList();
+      } else {
+        legSurcharges = DeliveryCalculator.calculateLegSurcharges(cart.shops);
       }
-      if (totalCartDistanceKm == 0.0) totalCartDistanceKm = 1.0;
+      final totalPlatformFee = isReplacementOrder
+          ? 0.0
+          : (PlatformConfigProvider.instance?.platformFee ??
+              PaymentConfig.platformFee);
 
-      for (final shop in cart.shops) {
+      for (int shopIndex = 0; shopIndex < cart.shops.length; shopIndex++) {
+        final shop = cart.shops[shopIndex];
         final shopItems =
             cart.items.where((i) => i.shop.id == shop.id).toList();
         final shopBaseSubtotal =
@@ -885,17 +856,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ? (shopBaseSubtotal / cart.subtotal)
             : (1.0 / numShops);
 
-        // 100x FIX: Distribute flat cart delivery and rider earnings equally across shops
-        final shopDelivery = totalDelivery / (numShops > 0 ? numShops : 1);
-        final shopRiderEarnings = riderEarnings / (numShops > 0 ? numShops : 1);
-
-        // 100x FIX: Handling Fee (Platform Fee) is a fixed flat fee per cart (NOT per shop)
-        final totalPlatformFee = isReplacementOrder
+        // 100x Leg-specific fee attribution
+        final double shopBaseFee = (shopIndex == 0)
+            ? (effectiveBase + smallCartFee + heavyFee)
+            : (shopIndex < legSurcharges.length ? legSurcharges[shopIndex] : 0.0);
+        final double shopDelivery = shopBaseFee * (1 + TaxConfig.deliveryGstRate);
+        final double shopRiderEarnings = ((shopIndex == 0)
+            ? (effectiveBase + heavyFee)
+            : (shopIndex < legSurcharges.length ? legSurcharges[shopIndex] : 0.0)) * riderPayoutRatio;
+        final double shopPlatformFee = (shopIndex == 0) ? totalPlatformFee : 0.0;
+        final double shopSurcharge = (shopIndex == 0)
             ? 0.0
-            : (PlatformConfigProvider.instance?.platformFee ??
-                PaymentConfig.platformFee);
-        final shopPlatformFee =
-            totalPlatformFee / (numShops > 0 ? numShops : 1);
+            : (shopIndex < legSurcharges.length ? legSurcharges[shopIndex] : 0.0);
 
         final shopTaxBreakdownItems = shopItems.map((i) {
           return {
@@ -953,9 +925,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'total_amount': shopBaseSubtotal,
           'delivery_charges': shopDelivery,
           'rider_earnings': shopRiderEarnings,
-          'multi_shop_surcharge': surcharge * proportion,
-          'small_cart_fee': smallCartFee * proportion,
-          'heavy_order_fee': heavyFee * proportion,
+          'multi_shop_surcharge': shopSurcharge,
+          'small_cart_fee': (shopIndex == 0) ? smallCartFee : 0.0,
+          'heavy_order_fee': (shopIndex == 0) ? heavyFee : 0.0,
           'platform_fee': shopPlatformFee,
           'address': location.currentAddress,
           'address_label': location.activeLabel.isNotEmpty
@@ -1206,11 +1178,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
-      distanceKm = 0.0;
-      for (var s in cart.shops) {
-        final d = location.distanceTo(s.location);
-        if (d > distanceKm) distanceKm = d;
-      }
+      distanceKm = location.distanceTo(cart.shops.first.location);
     }
 
     final baseCharge = cart.calculateDeliveryCharges(distanceKm);
@@ -1226,26 +1194,24 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (isReplacementOrder) {
       effectiveBase = 0.0;
-      final newUniqueShopIds = cart.shops
-          .map((s) => s.id)
-          .where((id) => !_activeShopIds.contains(id))
-          .toSet();
-      final totalShopsAtEnd = _activeShopIds.length + newUniqueShopIds.length;
-      final flatSurchargeRate =
-          PlatformConfigProvider.instance?.multiShopSurcharge ?? 20.0;
-      final totalSurchargeAtEnd = totalShopsAtEnd > 1
-          ? flatSurchargeRate * (totalShopsAtEnd - 1)
-          : 0.0;
-
-      final oldActiveCount = _activeShopIds.length;
-      final expectedOldSurchargePaid = math.min(
-          _activeSurchargePaid,
-          oldActiveCount > 1
-              ? flatSurchargeRate * (oldActiveCount - 1)
-              : 0.0);
-
-      surcharge =
-          math.max(0.0, totalSurchargeAtEnd - expectedOldSurchargePaid);
+      final newUniqueShops = cart.shops
+          .where((s) => !_activeShopIds.contains(s.id))
+          .toList();
+      double replacementSurcharge = 0.0;
+      if (newUniqueShops.isNotEmpty) {
+        final rate = PlatformConfigProvider.instance?.deliveryRatePerKm ?? 20.0;
+        for (final newShop in newUniqueShops) {
+          double minDistKm = double.infinity;
+          for (final activeShop in cart.shops.where((s) => _activeShopIds.contains(s.id))) {
+            final d = DeliveryCalculator.haversineKm(activeShop.location, newShop.location);
+            if (d < minDistKm) minDistKm = d;
+          }
+          if (minDistKm == double.infinity) minDistKm = 1.0;
+          final km = math.max(1, minDistKm.ceil());
+          replacementSurcharge += km * rate;
+        }
+      }
+      surcharge = replacementSurcharge;
 
       final smallCartThreshold =
           PlatformConfigProvider.instance?.smallCartThreshold ??

@@ -25,6 +25,9 @@ class PaymentConfig {
   /// Flat delivery fee per cart/order (covers 1, 2, or 3 shops in cart).
   static const double deliveryFee = 20.0;
 
+  /// Dynamic delivery rate per km.
+  static const double deliveryRatePerKm = 20.0;
+
   /// Multi-shop surcharge per additional shop beyond the 1st shop.
   static const double multiShopSurcharge = 20.0;
 

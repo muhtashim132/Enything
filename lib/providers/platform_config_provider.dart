@@ -33,7 +33,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   double _riderNotificationRadiusKm = 15.0;
   double _heavyOrderThresholdKg = 10.0;
   double _maxDeliveryRadiusKm = 15.0;
-  double _deliveryRatePerKm = 10.0;
+  double _deliveryRatePerKm = 20.0;
   double _referralBonusAmount = 50.0;
   double _deliveryGstRate = 0.18;
   double _platformFeeGstRate = 0.18;
