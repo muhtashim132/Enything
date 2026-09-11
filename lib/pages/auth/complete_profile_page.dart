@@ -371,7 +371,10 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         Navigator.pushReplacementNamed(
           context,
           AppRoutes.sellerKycUpload,
-          arguments: {'shop_id': extra['shop_id']},
+          arguments: {
+            'shop_id': extra['shop_id'],
+            'category': _shopCategory,
+          },
         );
         break;
       case _Role.delivery:

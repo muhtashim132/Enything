@@ -126,22 +126,45 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
-      // Bug 3.1: Fetch actual weight from order_items joined with products
+      // 100x Intelligent Weight Resolution: Prioritize oi.weight_kg and canonical unit conversions
       double weight = 0.0;
       if (activeOrderIds.isNotEmpty) {
         try {
           final weightResponse = await supabase
               .from('order_items')
-              .select('quantity, product:products!inner(weight_per_unit, is_deleted)')
+              .select('quantity, weight_kg, weight_in_grams, product:products!inner(weight_per_unit, unit_type, category, is_deleted)')
               .inFilter('order_id', activeOrderIds)
               .eq('product.is_deleted', false);
           for (var row in (weightResponse as List)) {
-            final qty = (row['quantity'] as num?)?.toDouble() ?? 0.0;
+            final qty = (row['quantity'] as num?)?.toDouble() ?? 1.0;
+            final itemWeightKg = (row['weight_kg'] as num?)?.toDouble();
+            final weightInGrams = (row['weight_in_grams'] as num?)?.toDouble();
             final product = row['product'];
-            final weightPerUnit = product != null
-                ? (product['weight_per_unit'] as num?)?.toDouble() ?? 0.5
-                : 0.5;
-            weight += qty * weightPerUnit;
+
+            if (itemWeightKg != null && itemWeightKg > 0 && itemWeightKg <= 25.0) {
+              weight += qty * itemWeightKg;
+            } else if (weightInGrams != null && weightInGrams > 0) {
+              weight += qty * (weightInGrams / 1000.0);
+            } else if (product != null) {
+              final rawW = (product['weight_per_unit'] as num?)?.toDouble() ?? 0.5;
+              final unit = (product['unit_type'] as String?)?.toLowerCase().trim() ?? '';
+              final cat = (product['category'] as String?) ?? '';
+              double resolved = rawW;
+              if (['g', 'gm', 'gms', 'gram', 'grams', 'ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres'].contains(unit)) {
+                resolved = rawW / 1000.0;
+              } else if (['mg', 'milligram', 'milligrams'].contains(unit)) {
+                resolved = rawW / 1000000.0;
+              } else if (['pieces', 'piece', 'pcs', 'pc'].contains(unit) && rawW > 25.0) {
+                resolved = rawW / 1000.0;
+              } else if (['Clothing', 'Footwear', 'Pharmacy', 'Medical Store', 'Restaurant', 'Bakery', 'Fast Food', 'Beverages'].contains(cat) && rawW > 20.0) {
+                resolved = rawW / 1000.0;
+              } else if (rawW > 25.0) {
+                resolved = rawW / 1000.0;
+              }
+              weight += qty * resolved;
+            } else {
+              weight += qty * 0.5;
+            }
           }
         } catch (e) {
           debugPrint('Error fetching active order weight: $e');
@@ -990,6 +1013,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'grandTotal': shopGrandTotal,
           'orderId': orderId,
         });
+      }
+
+      // If this is a replacement order, restart payment timer on surviving sibling orders
+      if (isReplacementOrder && cartGroupId.isNotEmpty) {
+        try {
+          await supabase.rpc('restart_payment_timer',
+              params: {'p_cart_group_id': cartGroupId});
+        } catch (e) {
+          debugPrint('Non-critical pre-checkout timer restart: $e');
+        }
       }
 
       // Execute atomic transaction RPC

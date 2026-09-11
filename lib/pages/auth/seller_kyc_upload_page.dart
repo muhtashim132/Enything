@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
+import '../../config/app_categories.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
 
@@ -24,10 +25,17 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
   final _aadharCtrl = TextEditingController();
   final _panCtrl = TextEditingController();
   final _gstCtrl = TextEditingController();
+  final _enrolmentIdCtrl = TextEditingController();
   final _tradeLicenseCtrl = TextEditingController();
   final _accountHolderCtrl = TextEditingController();
   final _bankAccountCtrl = TextEditingController();
   final _ifscCtrl = TextEditingController();
+
+  String? _shopCategory;
+  String? _shopName;
+  bool _argsRead = false;
+  bool _isGstRegistered = true; // Non-food: true = has GSTIN, false = exempt <40L
+  bool _exemptionDeclared = false;
 
   File? _aadharFront;
   File? _aadharBack;
@@ -38,10 +46,69 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
   File? _bankProof;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_argsRead) {
+      _argsRead = true;
+      _initCategory();
+    }
+  }
+
+  Future<void> _initCategory() async {
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final catArg = args?['category'] as String?;
+    final shopId = args?['shop_id'] as String?;
+
+    if (catArg != null && catArg.isNotEmpty) {
+      if (mounted) setState(() => _shopCategory = catArg);
+      return;
+    }
+
+    if (shopId != null && shopId.isNotEmpty) {
+      try {
+        final res = await _db
+            .from('shops')
+            .select('category, name')
+            .eq('id', shopId)
+            .maybeSingle();
+        if (res != null && mounted) {
+          setState(() {
+            _shopCategory = res['category'] as String?;
+            _shopName = res['name'] as String?;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading shop category: $e');
+      }
+    }
+  }
+
+  bool get _isFoodCategory {
+    if (_shopCategory == null) return false;
+    final cat = _shopCategory!.trim().toLowerCase();
+    if (cat == 'food' ||
+        cat == 'restaurant' ||
+        cat == 'fast food' ||
+        cat == 'bakery' ||
+        cat == 'sweets & mithai' ||
+        cat == 'sweets and mithai' ||
+        cat == 'tea & coffee' ||
+        cat == 'ice cream' ||
+        cat == 'paan shop' ||
+        cat == 'cafe' ||
+        cat == 'beverages') {
+      return true;
+    }
+    return AppCategories.groupFor(_shopCategory!) == CategoryGroup.food;
+  }
+
+  @override
   void dispose() {
     _aadharCtrl.dispose();
     _panCtrl.dispose();
     _gstCtrl.dispose();
+    _enrolmentIdCtrl.dispose();
     _tradeLicenseCtrl.dispose();
     _accountHolderCtrl.dispose();
     _bankAccountCtrl.dispose();
@@ -82,14 +149,84 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
   }
 
   Future<void> _submit() async {
-    if (_aadharCtrl.text.isEmpty ||
-        _panCtrl.text.isEmpty ||
-        _accountHolderCtrl.text.isEmpty ||
-        _bankAccountCtrl.text.isEmpty ||
-        _ifscCtrl.text.isEmpty) {
+    if (_aadharCtrl.text.trim().isEmpty ||
+        _panCtrl.text.trim().isEmpty ||
+        _accountHolderCtrl.text.trim().isEmpty ||
+        _bankAccountCtrl.text.trim().isEmpty ||
+        _ifscCtrl.text.trim().isEmpty) {
       _showSnack('Please fill all mandatory text fields', isError: true);
       return;
     }
+
+    // Validate PAN format (10 characters: 5 letters, 4 numbers, 1 letter)
+    final pan = _panCtrl.text.trim().toUpperCase();
+    final panRegex = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$');
+    if (!panRegex.hasMatch(pan)) {
+      _showSnack('Please enter a valid 10-character PAN (e.g. ABCDE1234F)',
+          isError: true);
+      return;
+    }
+
+    // Category-specific GST validation
+    if (_isFoodCategory) {
+      final gst = _gstCtrl.text.trim().toUpperCase();
+      if (gst.isNotEmpty) {
+        final gstRegex = RegExp(
+            r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$');
+        if (!gstRegex.hasMatch(gst)) {
+          _showSnack('Invalid GSTIN format. Example: 07AAAAA0000A1Z5',
+              isError: true);
+          return;
+        }
+        final gstinPan = gst.substring(2, 12);
+        if (gstinPan != pan) {
+          _showSnack(
+              'GSTIN PAN ($gstinPan) does not match your entered PAN ($pan)',
+              isError: true);
+          return;
+        }
+      }
+    } else {
+      if (_isGstRegistered) {
+        final gst = _gstCtrl.text.trim().toUpperCase();
+        if (gst.isEmpty) {
+          _showSnack('GSTIN is required for registered non-food businesses',
+              isError: true);
+          return;
+        }
+        final gstRegex = RegExp(
+            r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$');
+        if (!gstRegex.hasMatch(gst)) {
+          _showSnack(
+              'Invalid 15-character GSTIN format (e.g. 07AAAAA0000A1Z5)',
+              isError: true);
+          return;
+        }
+        final gstinPan = gst.substring(2, 12);
+        if (gstinPan != pan) {
+          _showSnack(
+              'The PAN embedded in GSTIN ($gstinPan) does not match your PAN ($pan)',
+              isError: true);
+          return;
+        }
+      } else {
+        if (!_exemptionDeclared) {
+          _showSnack(
+              'Please confirm the statutory declaration for GST exemption under Notification 34/2023-CT',
+              isError: true);
+          return;
+        }
+        if (_enrolmentIdCtrl.text.trim().isNotEmpty) {
+          final enr = _enrolmentIdCtrl.text.trim();
+          if (enr.length < 8 || enr.length > 25) {
+            _showSnack('Enrolment ID must be between 8 and 25 characters',
+                isError: true);
+            return;
+          }
+        }
+      }
+    }
+
     if (_aadharFront == null || _aadharBack == null) {
       _showSnack('Aadhaar Front and Back images are required', isError: true);
       return;
@@ -136,6 +273,10 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
           : null;
       final bankProofUrl = await _uploadFile(_bankProof!, '${userId}_bank');
 
+      final cleanGst = (_isFoodCategory || _isGstRegistered)
+          ? _gstCtrl.text.trim().toUpperCase()
+          : '';
+
       final kycDocs = {
         'aadhar_front': aadharFrontUrl,
         'aadhar_back': aadharBackUrl,
@@ -144,18 +285,30 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
         'shop_proof_1': shopProof1Url,
         if (shopProof2Url != null) 'shop_proof_2': shopProof2Url,
         'bank_proof': bankProofUrl,
+        'gst_mode': _isFoodCategory
+            ? 'food_optional'
+            : (_isGstRegistered ? 'registered' : 'exempt_under_40l'),
+        'is_gst_exempt': !_isFoodCategory && !_isGstRegistered,
+        if (!_isFoodCategory &&
+            !_isGstRegistered &&
+            _enrolmentIdCtrl.text.trim().isNotEmpty)
+          'enrolment_id': _enrolmentIdCtrl.text.trim().toUpperCase(),
+        if (!_isFoodCategory && !_isGstRegistered)
+          'exemption_declared': true,
+        if (!_isFoodCategory && !_isGstRegistered)
+          'exemption_declared_at': DateTime.now().toIso8601String(),
       };
 
       // Update Shops Table via RPC
       await _db.rpc('submit_seller_kyc_v2', params: {
         'p_shop_id': shopId,
-        'p_aadhar_number': _aadharCtrl.text.trim(),
-        'p_pan_number': _panCtrl.text.trim(),
-        'p_gst_number': _gstCtrl.text.trim(),
+        'p_aadhar_number': _aadharCtrl.text.trim().toUpperCase(),
+        'p_pan_number': pan,
+        'p_gst_number': cleanGst.isEmpty ? null : cleanGst,
         'p_trade_license': _tradeLicenseCtrl.text.trim(),
         'p_bank_account_holder': _accountHolderCtrl.text.trim(),
         'p_bank_account_number': _bankAccountCtrl.text.trim(),
-        'p_bank_ifsc': _ifscCtrl.text.trim(),
+        'p_bank_ifsc': _ifscCtrl.text.trim().toUpperCase(),
         'p_kyc_documents': kycDocs,
       });
 
@@ -223,7 +376,9 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
                         fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 Text(
-                    'Please provide your tax details and upload verification documents. Clear images speed up the approval process.',
+                    _shopName != null
+                        ? 'Please provide tax details and verification documents for $_shopName. Clear images speed up the approval process.'
+                        : 'Please provide your tax details and upload verification documents. Clear images speed up the approval process.',
                     style: GoogleFonts.outfit(
                         color: Colors.white54, fontSize: 14)),
                 const SizedBox(height: 32),
@@ -236,10 +391,7 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
                 _DarkField(
                     label: 'PAN Number *', controller: _panCtrl, caps: true),
                 const SizedBox(height: 16),
-                _DarkField(
-                    label: 'GSTIN (Optional depending on category)',
-                    controller: _gstCtrl,
-                    caps: true),
+                _buildGstSection(),
                 const SizedBox(height: 16),
                 _DarkField(
                     label: 'Trade License Number (Optional)',
@@ -356,6 +508,270 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGstSection() {
+    if (_isFoodCategory) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4DABF7).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: const Color(0xFF4DABF7).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.restaurant_rounded,
+                    color: Color(0xFF4DABF7), size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Food Category: Section 9(5) Deemed Platform',
+                        style: GoogleFonts.outfit(
+                            color: const Color(0xFF4DABF7),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'As a Food & Beverage partner, Enything collects and pays 5% GST directly to the government on your behalf under Section 9(5) of the CGST Act. Providing a GSTIN is optional.',
+                        style: GoogleFonts.outfit(
+                            color: Colors.white70, fontSize: 12, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DarkField(
+            label: 'GSTIN (Optional for Food Outlets)',
+            controller: _gstCtrl,
+            caps: true,
+          ),
+        ],
+      );
+    }
+
+    // Non-food category: Dual-Path compliance selector
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'GST Registration Status *',
+          style: GoogleFonts.outfit(
+              color: Colors.white70,
+              fontSize: 13,
+              fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildSelectorTile(
+                title: 'I have a GSTIN',
+                subtitle: 'Registered Business',
+                isSelected: _isGstRegistered,
+                icon: Icons.verified_rounded,
+                onTap: () => setState(() => _isGstRegistered = true),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildSelectorTile(
+                title: 'Turnover < ₹40L',
+                subtitle: 'Exempt (Notif 34/2023)',
+                isSelected: !_isGstRegistered,
+                icon: Icons.shield_outlined,
+                onTap: () => setState(() => _isGstRegistered = false),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (_isGstRegistered) ...[
+          _DarkField(
+            label: 'GSTIN (Mandatory - 15 Characters) *',
+            controller: _gstCtrl,
+            caps: true,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '• Mandatory for registered non-food sellers under Section 52 (GSTR-8 TCS).\n• Characters 3-12 must match your PAN entered above.',
+            style: GoogleFonts.outfit(
+                color: Colors.white38, fontSize: 11, height: 1.4),
+          ),
+        ] else ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4C542).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: const Color(0xFFF4C542).withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline_rounded,
+                        color: Color(0xFFF4C542), size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'CBIC Notification No. 34/2023-Central Tax',
+                      style: GoogleFonts.outfit(
+                          color: const Color(0xFFF4C542),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Small sellers with annual turnover up to ₹40 Lakhs are legally exempt from mandatory GST registration to sell goods online. Your PAN entered above will be used for Income Tax Section 194-O TDS compliance.',
+                  style: GoogleFonts.outfit(
+                      color: Colors.white70, fontSize: 12, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DarkField(
+            label: 'GST Enrolment ID (Optional)',
+            controller: _enrolmentIdCtrl,
+            caps: true,
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: () =>
+                setState(() => _exemptionDeclared = !_exemptionDeclared),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _exemptionDeclared
+                    ? const Color(0xFF51CF66).withValues(alpha: 0.08)
+                    : Colors.white.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _exemptionDeclared
+                      ? const Color(0xFF51CF66).withValues(alpha: 0.4)
+                      : Colors.white.withValues(alpha: 0.1),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Checkbox(
+                    value: _exemptionDeclared,
+                    activeColor: const Color(0xFF51CF66),
+                    checkColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
+                    onChanged: (val) =>
+                        setState(() => _exemptionDeclared = val ?? false),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'I declare that my aggregate annual turnover is under ₹40 Lakhs and I am exempt from mandatory GST registration under Notification 34/2023-CT. My PAN is genuine and valid for Income Tax Section 194-O TDS compliance. *',
+                        style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 12,
+                            height: 1.4,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSelectorTile({
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFFF4C542).withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFFF4C542)
+                : Colors.white.withValues(alpha: 0.1),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: isSelected ? const Color(0xFFF4C542) : Colors.white38,
+                ),
+                const Spacer(),
+                if (isSelected)
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 16,
+                    color: Color(0xFFF4C542),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: GoogleFonts.outfit(
+                color: isSelected ? const Color(0xFFF4C542) : Colors.white38,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

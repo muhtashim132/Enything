@@ -512,10 +512,12 @@ class _SellersTabState extends State<_SellersTab> {
   }
 
   void _filter() {
-    final q = _searchCtrl.text.toLowerCase();
+    final q = _searchCtrl.text.toLowerCase().trim();
     setState(() {
       _filtered = _sellers.where((s) {
         final name = (s['shop_name'] ?? '').toString().toLowerCase();
+        final gst = (s['gst_number'] ?? '').toString().toLowerCase();
+        final pan = (s['pan_number'] ?? '').toString().toLowerCase();
         final profileData = s['profiles'];
         String ownerStr = '';
         if (profileData is Map) {
@@ -526,7 +528,10 @@ class _SellersTabState extends State<_SellersTab> {
           ownerStr =
               (profileData[0]['full_name'] ?? '').toString().toLowerCase();
         }
-        return name.contains(q) || ownerStr.contains(q);
+        return name.contains(q) ||
+            ownerStr.contains(q) ||
+            gst.contains(q) ||
+            pan.contains(q);
       }).toList();
     });
   }
@@ -571,6 +576,22 @@ class _SellersTabState extends State<_SellersTab> {
                               'unverified') as String;
                           final isActive = s['is_active'] == true;
                           final (kycColor, kycLabel) = _kycBadge(kycStatus);
+                          final gst = (s['gst_number']?.toString() ?? '').trim();
+                          final cat = (s['category']?.toString() ?? '').toLowerCase();
+                          final isFood = cat == 'food' || cat == 'restaurant' || cat == 'bakery' || cat == 'cafe';
+                          final String gstLabel;
+                          final Color gstColor;
+                          if (gst.isNotEmpty) {
+                            gstLabel = 'GST: $gst';
+                            gstColor = AdminColors.success;
+                          } else if (isFood) {
+                            gstLabel = 'Food S.9(5)';
+                            gstColor = AdminColors.info;
+                          } else {
+                            gstLabel = 'No GSTIN';
+                            gstColor = AdminColors.warning;
+                          }
+
                           return _UserCard(
                             name: s['shop_name'] ?? 'Unknown Shop',
                             sub: profile?['full_name'] ??
@@ -578,6 +599,8 @@ class _SellersTabState extends State<_SellersTab> {
                                 '',
                             badge: kycLabel,
                             badgeColor: kycColor,
+                            extraBadge: gstLabel,
+                            extraBadgeColor: gstColor,
                             joined: '',
                             avatarUrl: s['logo_url'],
                             action: Row(
@@ -886,6 +909,8 @@ class _UserCard extends StatelessWidget {
   final String joined;
   final String? avatarUrl;
   final Widget? action;
+  final String? extraBadge;
+  final Color? extraBadgeColor;
 
   const _UserCard({
     required this.name,
@@ -895,6 +920,8 @@ class _UserCard extends StatelessWidget {
     required this.joined,
     this.avatarUrl,
     this.action,
+    this.extraBadge,
+    this.extraBadgeColor,
   });
 
   @override
@@ -928,7 +955,18 @@ class _UserCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
-            AdminBadge(label: badge, color: badgeColor),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                AdminBadge(label: badge, color: badgeColor),
+                if (extraBadge != null && extraBadge!.isNotEmpty)
+                  AdminBadge(
+                    label: extraBadge!,
+                    color: extraBadgeColor ?? AdminColors.info,
+                  ),
+              ],
+            ),
           ]),
         ),
         if (action != null) action!,

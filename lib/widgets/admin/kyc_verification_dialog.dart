@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -78,6 +79,12 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
     final kycDocs = widget.data['kyc_documents'] as Map<String, dynamic>? ?? {};
     final isShop = widget.tableName == 'shops';
     final profile = widget.data['profiles'] as Map<String, dynamic>?;
+    final isGstExempt = kycDocs['is_gst_exempt'] == true ||
+        kycDocs['gst_mode'] == 'exempt_under_40l';
+    final enrolmentId =
+        widget.data['enrolment_id'] ?? kycDocs['enrolment_id'];
+    final gstNum = widget.data['gst_number']?.toString();
+    final hasGst = gstNum != null && gstNum.trim().isNotEmpty;
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -185,10 +192,18 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
                           Expanded(
                             child: _buildDataCard(
                                 'Identity Info', Icons.person_outline_rounded, {
+                              if (isShop && hasGst) 'GSTIN': gstNum,
+                              if (isShop && isGstExempt)
+                                'GST Status': 'Exempt (< ₹40L)',
+                              if (isShop &&
+                                  enrolmentId != null &&
+                                  enrolmentId.toString().trim().isNotEmpty)
+                                'Enrolment ID': enrolmentId.toString().trim(),
                               'Aadhaar': widget.data['aadhar_number'],
                               'PAN': widget.data['pan_number'],
-                              'DL': widget.data['driving_license'],
-                              'RC': widget.data['vehicle_reg_number'],
+                              if (isShop) 'Trade Lic.': widget.data['trade_license'],
+                              if (!isShop) 'DL': widget.data['driving_license'],
+                              if (!isShop) 'RC': widget.data['vehicle_reg_number'],
                             }),
                           ),
                           const SizedBox(width: 16),
@@ -362,23 +377,54 @@ class _KycVerificationDialogState extends State<KycVerificationDialog> {
             Text('No data provided',
                 style: GoogleFonts.outfit(color: Colors.white38, fontSize: 13))
           else
-            ...activeFields.map((e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(e.key,
-                          style: GoogleFonts.outfit(
-                              color: Colors.white54, fontSize: 12)),
-                      const SizedBox(height: 2),
-                      Text(e.value.toString(),
-                          style: GoogleFonts.outfit(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                )),
+            ...activeFields.map((e) {
+              final val = e.value.toString();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(e.key,
+                        style: GoogleFonts.outfit(
+                            color: Colors.white54, fontSize: 12)),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            val,
+                            style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded,
+                              size: 15, color: Color(0xFFF4C542)),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                              minWidth: 28, minHeight: 28),
+                          splashRadius: 16,
+                          tooltip: 'Copy ${e.key}',
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: val));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('${e.key} copied to clipboard!'),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: const Color(0xFF1E2139),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );

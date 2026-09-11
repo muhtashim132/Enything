@@ -10,6 +10,9 @@ import '../../../config/tax_config.dart';
 import '../rbac/forbidden_page.dart';
 import '../../../theme/admin_theme.dart';
 import '../../../utils/time_utils.dart';
+import '../../../models/admin_tax_package_model.dart';
+import '../../../services/tax_export_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 class FinanceAdminPage extends StatefulWidget {
   final int initialTabIndex;
@@ -563,24 +566,19 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
   // ── Seller-owned (not Enything's liability) ──
   double _nonFoodGst = 0; // Passed through to seller; seller remits
-  // GST TCS §52: 1% ONLY on taxable non-food supplies. 0 for §9(5) food &
-  // 0% GST categories (Fruits/Vegs, Butcher, Fish/Seafood). Enything files GSTR-8.
   double _tcsCollected = 0;
-  // IT TDS §194-O: 0.1% on ALL gross sales. Finance Act 2024 (eff. Oct 1 2024).
-  // Enything files Form 26QE by 7th of next month. Seller claims via Form 26AS.
   double _tdsCollected = 0;
-
   int _deliveredOrders = 0;
 
-  // ── Category × slab breakdown ──
-  // Key = GST slab label  e.g. "0%", "5%", "18%"
-  // Value = Map<category, _CategoryGstRow>
-  final Map<String, Map<String, _CategoryGstRow>> _slabMap = {};
+  // ── God Mode CA Tax Package Model ──
+  AdminTaxPackage? _taxPackage;
+  String _vendorFilter = 'ALL';
+  final TextEditingController _searchCtrl = TextEditingController();
 
-  // Standard slab display order
+  // ── Category × slab breakdown ──
+  final Map<String, Map<String, _CategoryGstRow>> _slabMap = {};
   static const _slabOrder = ['0%', '3%', '5%', '18%', '28%'];
 
-  // ── Colors per slab ─────────────────────────────────────────
   static Color _slabColor(String slab) => switch (slab) {
         '0%' => const Color(0xFF868E96),
         '3%' => const Color(0xFF51CF66),
@@ -596,6 +594,12 @@ class _GstStatementTabState extends State<_GstStatementTab> {
     _loadGstData();
   }
 
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   String get _monthLabel {
     const months = [
       'January',
@@ -609,7 +613,7 @@ class _GstStatementTabState extends State<_GstStatementTab> {
       'September',
       'October',
       'November',
-      'December',
+      'December'
     ];
     return '${months[_selectedMonth.month - 1]} ${_selectedMonth.year}';
   }
@@ -635,6 +639,21 @@ class _GstStatementTabState extends State<_GstStatementTab> {
   Future<void> _loadGstData() async {
     setState(() => _loading = true);
     try {
+      // 1. Fetch comprehensive God Mode CA Tax Package
+      try {
+        final pkgRes = await _db.rpc('admin_get_ca_monthly_package', params: {
+          'p_month': _selectedMonth.month,
+          'p_year': _selectedMonth.year,
+        });
+        if (pkgRes != null && pkgRes is Map) {
+          _taxPackage =
+              AdminTaxPackage.fromJson(Map<String, dynamic>.from(pkgRes));
+        }
+      } catch (pkgErr) {
+        debugPrint('admin_get_ca_monthly_package notice: $pkgErr');
+      }
+
+      // 2. Fetch category slabs breakdown
       final res = await _db.rpc('admin_get_gst_statement', params: {
         'p_month': _selectedMonth.month,
         'p_year': _selectedMonth.year
@@ -677,18 +696,12 @@ class _GstStatementTabState extends State<_GstStatementTab> {
           _slabMap[slab]![category]!.itemCount += qty;
         }
       }
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
     } catch (e) {
       debugPrint('GstStatement load error: $e');
-      if (mounted) setState(() => _loading = false);
     }
+    if (mounted) setState(() => _loading = false);
   }
 
-  // Total Enything must pay to government
   double get _enythingTotalPayable =>
       _s9_5Gst + _deliveryGst + _platformGst + _commissionGst;
 
@@ -696,8 +709,37 @@ class _GstStatementTabState extends State<_GstStatementTab> {
       NumberFormat.currency(locale: 'en_IN', symbol: '₹').format(v);
   String _fraw(double v) => v.toStringAsFixed(2);
 
-  // ── Copy full GST report to clipboard ─────────────────────────────────────
+  void _copyToClipboard(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$label copied to clipboard ✓',
+          style: GoogleFonts.outfit(
+              color: Colors.white, fontWeight: FontWeight.w600)),
+      backgroundColor: AdminColors.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      duration: const Duration(seconds: 2),
+    ));
+  }
+
+  Future<void> _shareExport(String content, String subject) async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(text: content, subject: subject),
+      );
+    } catch (_) {
+      _copyToClipboard(content, subject);
+    }
+  }
+
   void _copyReport(BuildContext ctx) {
+    if (_taxPackage != null) {
+      final dossier = TaxExportService.generateFullCaTextReport(_taxPackage!);
+      _copyToClipboard(dossier, 'Complete CA Compliance Dossier');
+      return;
+    }
+
+    // Fallback if tax package is loading
     final sortedSlabs = _slabOrder.where(_slabMap.containsKey).toList()
       ..addAll(_slabMap.keys.where((k) => !_slabOrder.contains(k)));
 
@@ -720,73 +762,29 @@ class _GstStatementTabState extends State<_GstStatementTab> {
     sb.writeln("ENYTHING'S GST PAYABLE TO GOVERNMENT");
     sb.writeln('════════════════════════════════════════════════');
     sb.writeln('S.9(5) Food GST (Deemed Supplier)    : ₹${_fraw(_s9_5Gst)}');
-    sb.writeln(
-        'Delivery Service GST (SAC 9965/9967) : ₹${_fraw(_deliveryGst)}');
-    sb.writeln(
-        'Platform Fee GST    (SAC 9985)        : ₹${_fraw(_platformGst)}');
-    sb.writeln(
-        'Commission GST      (18% on comm.)   : ₹${_fraw(_commissionGst)}');
+    sb.writeln('Delivery Service GST (SAC 9965/9967) : ₹${_fraw(_deliveryGst)}');
+    sb.writeln('Platform Fee GST    (SAC 9985)        : ₹${_fraw(_platformGst)}');
+    sb.writeln('Commission GST      (18% on comm.)   : ₹${_fraw(_commissionGst)}');
     sb.writeln('──────────────────────────────────────────────');
-    sb.writeln(
-        'TOTAL ENYTHING GST PAYABLE            : ₹${_fraw(_enythingTotalPayable)}');
+    sb.writeln('TOTAL ENYTHING GST PAYABLE            : ₹${_fraw(_enythingTotalPayable)}');
     sb.writeln();
     sb.writeln('════════════════════════════════════════════════');
-    sb.writeln(
-        "SELLER PASS-THROUGH & TAX DEDUCTIONS (NOT ENYTHING'S GST LIABILITY)");
+    sb.writeln("SELLER PASS-THROUGH & TAX DEDUCTIONS (NOT ENYTHING'S GST LIABILITY)");
     sb.writeln('════════════════════════════════════════════════');
     sb.writeln('Non-Food Item GST (Seller remits)    : ₹${_fraw(_nonFoodGst)}');
-    sb.writeln(
-        'GST TCS 1% (§52, non-food only)      : ₹${_fraw(_tcsCollected)}');
-    sb.writeln('  (§9(5) food & 0% GST categories exempt from TCS)');
-    sb.writeln(
-        'IT TDS 0.1% (§194-O, all categories)  : ₹${_fraw(_tdsCollected)}');
-    sb.writeln('  (Finance Act 2024, eff. Oct 1 2024. File Form 26QE by 7th.)');
+    sb.writeln('GST TCS 0.5% (§52, non-food only)    : ₹${_fraw(_tcsCollected)}');
+    sb.writeln('IT TDS 0.1% (§194-O, all categories) : ₹${_fraw(_tdsCollected)}');
     sb.writeln();
-    sb.writeln('════════════════════════════════════════════════');
-    sb.writeln('CATEGORY-WISE GST BREAKDOWN');
-    sb.writeln('════════════════════════════════════════════════');
+    sb.writeln('GRAND TOTAL: Taxable ₹${_fraw(grandTaxable)}  |  GST ₹${_fraw(grandGst)}');
 
-    for (final slab in sortedSlabs) {
-      final categories = _slabMap[slab]!;
-      final slabTaxable =
-          categories.values.fold<double>(0, (s, r) => s + r.taxableAmount);
-      final slabGst =
-          categories.values.fold<double>(0, (s, r) => s + r.gstAmount);
-      sb.writeln();
-      sb.writeln('$slab GST SLAB');
-      final sorted = categories.values.toList()
-        ..sort((a, b) => b.taxableAmount.compareTo(a.taxableAmount));
-      for (final row in sorted) {
-        final star = row.isDeemedSupplier ? ' [S.9(5) - Enything pays]' : '';
-        sb.writeln('  ${row.category}$star');
-        sb.writeln(
-            '    Items: ${row.itemCount}  Taxable: ₹${_fraw(row.taxableAmount)}  GST: ₹${_fraw(row.gstAmount)}');
-      }
-      sb.writeln(
-          '  ── Slab Total: Taxable ₹${_fraw(slabTaxable)}  |  GST ₹${_fraw(slabGst)}');
-    }
-
-    sb.writeln();
-    sb.writeln('════════════════════════════════════════════════');
-    sb.writeln(
-        'GRAND TOTAL: Taxable ₹${_fraw(grandTaxable)}  |  GST ₹${_fraw(grandGst)}');
-    sb.writeln('════════════════════════════════════════════════');
-
-    Clipboard.setData(ClipboardData(text: sb.toString()));
-    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-      content: Text('GST Statement copied ✓',
-          style: GoogleFonts.outfit(
-              color: Colors.white, fontWeight: FontWeight.w600)),
-      backgroundColor: AdminColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      duration: const Duration(seconds: 2),
-    ));
+    _copyToClipboard(sb.toString(), 'GST Statement');
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) return _loadingSkeleton();
+
+    final pkg = _taxPackage;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
@@ -797,72 +795,135 @@ class _GstStatementTabState extends State<_GstStatementTab> {
 
         // ── Summary banner ───────────────────────────────────────────────
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           decoration: BoxDecoration(
             gradient: AdminGradients.primary,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: AdminColors.primary.withValues(alpha: 0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Enything GST Statement — $_monthLabel',
-                    style: AdminStyles.caption(color: Colors.white70)),
-                Text(
-                  '$_deliveredOrders orders · Enything pays ${_f(_enythingTotalPayable)}',
-                  style: AdminStyles.body(color: Colors.white),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.shield_rounded,
+                            color: Colors.amberAccent, size: 16),
+                        const SizedBox(width: 6),
+                        Text('GOD MODE — CA TAX DOSSIER',
+                            style: GoogleFonts.outfit(
+                              color: Colors.amberAccent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.1,
+                            )),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text('$_monthLabel · $_deliveredOrders delivered',
+                        style: AdminStyles.title(size: 15).copyWith(color: Colors.white)),
+                    if (pkg != null)
+                      Text(
+                        'Gross GMV: ${_f(pkg.grossGmv)} · Net Cash Tax: ${_f(pkg.netCashPayableGovt)}',
+                        style: AdminStyles.caption(color: Colors.white70),
+                      ),
+                  ],
                 ),
-              ]),
-              const Icon(Icons.receipt_long_rounded,
-                  color: Colors.white54, size: 24),
+              ),
+              IconButton(
+                icon: const Icon(Icons.share_rounded, color: Colors.white),
+                tooltip: 'Export / Share CA Dossier',
+                onPressed: () => _copyReport(context),
+              ),
             ],
           ),
         ).animate().fadeIn(delay: 50.ms),
         const SizedBox(height: 16),
 
-        // ── Card 1: Enything's GST Payable ──────────────────────────────
+        // ── Card 1: Enything's Output Tax & Razorpay ITC Reconciliation ──
         _GstSectionCard(
-          title: "Enything's GST Payable to Government",
-          subtitle: 'File in GSTR-3B by 20th of next month',
+          title: "GSTR-3B Tax Payable & Cash Reconciliation",
+          subtitle: 'Output tax minus claimable Razorpay Input Tax Credit (ITC)',
           accentColor: AdminColors.danger,
           icon: Icons.account_balance_rounded,
           rows: [
             _GstLineItem('S.9(5) Food GST (5% - Deemed Supplier)', _s9_5Gst,
-                tag: 'S.9(5)', tagColor: const Color(0xFF51CF66)),
+                tag: 'Table 3.1.1(i)', tagColor: const Color(0xFF51CF66)),
             _GstLineItem('Delivery GST 18% (SAC 9965/9967)', _deliveryGst),
             _GstLineItem('Platform Fee GST 18% (SAC 9985)', _platformGst),
             _GstLineItem('Commission GST (18% on commission)', _commissionGst),
             const _GstDivider(),
-            _GstLineItem('TOTAL PAYABLE TO GOVT', _enythingTotalPayable,
+            _GstLineItem('TOTAL OUTPUT GST PAYABLE', _enythingTotalPayable,
                 isBold: true, color: AdminColors.danger),
+            if (pkg != null) ...[
+              const SizedBox(height: 6),
+              _GstLineItem(
+                'LESS: Razorpay Gateway Input Credit',
+                -pkg.gatewayClaimableItc,
+                tag: 'GSTR-2B ITC',
+                tagColor: const Color(0xFF51CF66),
+                color: const Color(0xFF51CF66),
+              ),
+              const _GstDivider(),
+              _GstLineItem(
+                '★ NET CASH PAYABLE TO GOVT',
+                pkg.netCashPayableGovt,
+                isBold: true,
+                color: Colors.amberAccent,
+                tag: 'PMT-06 Challan',
+                tagColor: Colors.amberAccent,
+              ),
+            ],
           ],
         ).animate().fadeIn(delay: 100.ms),
         const SizedBox(height: 12),
 
-        // ── Card 2: Seller Pass-Through + TDS (not Enything's liability) ────────
+        // ── Card 2: Vendor Compliance Monitor (God Mode Red-Flag Bar) ────
+        if (pkg != null) ...[
+          _buildComplianceHealthMonitor(pkg.complianceStats)
+              .animate()
+              .fadeIn(delay: 130.ms),
+          const SizedBox(height: 12),
+        ],
+
+        // ── Card 3: Vendor-by-Vendor GSTR-8 & Section 194-O Schedule ────
+        if (pkg != null && pkg.vendorSchedule.isNotEmpty) ...[
+          _buildVendorScheduleSection(pkg).animate().fadeIn(delay: 160.ms),
+          const SizedBox(height: 12),
+        ],
+
+        // ── Card 4: Seller Pass-Through + TDS (not Enything's liability) ─
         _GstSectionCard(
           title: "Seller GST Pass-Through & Tax Deductions",
-          subtitle:
-              'Collected on behalf of sellers — NOT Enything\'s liability',
+          subtitle: 'Collected on behalf of sellers — NOT Enything\'s liability',
           accentColor: AdminColors.warning,
           icon: Icons.store_rounded,
           rows: [
             _GstLineItem(
                 "Non-Food Item GST (Sellers remit via GSTR-1/3B)", _nonFoodGst,
                 tag: 'SELLER', tagColor: AdminColors.warning),
-            _GstLineItem("GST TCS 1% — §52 (non-food only; 0 for food/exempt)",
+            _GstLineItem("GST TCS 0.5% — §52 (non-food only; 0 for food/exempt)",
                 _tcsCollected,
                 tag: 'GSTR-8', tagColor: AdminColors.info),
             _GstLineItem(
                 "IT TDS 0.1% — §194-O (all categories, Finance Act 2024)",
                 _tdsCollected,
-                tag: '26QE',
+                tag: 'Form 26Q',
                 tagColor: const Color(0xFF4DABF7)),
           ],
-        ).animate().fadeIn(delay: 150.ms),
+        ).animate().fadeIn(delay: 180.ms),
         const SizedBox(height: 16),
 
-        // ── Card 3: Category-wise GST Breakdown ─────────────────────────
+        // ── Card 5: Category-wise GST Breakdown ─────────────────────────
         _buildCategoryBreakdown().animate().fadeIn(delay: 200.ms),
         const SizedBox(height: 20),
 
@@ -870,12 +931,468 @@ class _GstStatementTabState extends State<_GstStatementTab> {
         _buildLegend(),
         const SizedBox(height: 16),
 
-        // ── Copy Button ──────────────────────────────────────────────────
+        // ── God Mode Export Action Deck ──────────────────────────────────
+        _buildExportActionDeck(pkg).animate().fadeIn(delay: 250.ms),
+        const SizedBox(height: 12),
+
+        Text(
+          '📌 Legal Deadlines for CA:\n'
+          '   • 7th: Deposit IT TDS §194-O (Challan 281)\n'
+          '   • 10th: File GSTR-8 (TCS Statement on Table 3)\n'
+          '   • 11th: File GSTR-1 (Commission B2B Invoices)\n'
+          '   • 20th: File GSTR-3B (Cash Tax after Razorpay ITC)',
+          style: AdminStyles.caption(color: AdminColors.textMuted)
+              .copyWith(height: 1.6),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  // ── Compliance Health Monitor Widget ───────────────────────────────────────
+  Widget _buildComplianceHealthMonitor(TaxComplianceStats stats) {
+    final hasActionRequired = stats.actionRequiredCount > 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AdminColors.cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: hasActionRequired
+              ? AdminColors.danger.withValues(alpha: 0.5)
+              : AdminColors.cardBorder,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                hasActionRequired
+                    ? Icons.warning_amber_rounded
+                    : Icons.verified_user_rounded,
+                color: hasActionRequired
+                    ? AdminColors.danger
+                    : const Color(0xFF51CF66),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Vendor Tax Compliance Monitor',
+                  style: AdminStyles.body(color: Colors.white)
+                      .copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (hasActionRequired
+                          ? AdminColors.danger
+                          : const Color(0xFF51CF66))
+                      .withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${stats.totalActiveShops} Active Shops',
+                  style: GoogleFonts.outfit(
+                    color: hasActionRequired
+                        ? AdminColors.danger
+                        : const Color(0xFF51CF66),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // 4 Status Pills
+          Row(
+            children: [
+              _buildStatusPill(
+                '${stats.compliantGstCount} Reg. GST',
+                const Color(0xFF51CF66),
+                () => setState(() => _vendorFilter =
+                    _vendorFilter == 'COMPLIANT' ? 'ALL' : 'COMPLIANT'),
+                isSelected: _vendorFilter == 'COMPLIANT',
+              ),
+              const SizedBox(width: 6),
+              _buildStatusPill(
+                '${stats.foodDeemedCount} S.9(5) Food',
+                const Color(0xFF4DABF7),
+                () => setState(() => _vendorFilter =
+                    _vendorFilter == 'FOOD_DEEMED' ? 'ALL' : 'FOOD_DEEMED'),
+                isSelected: _vendorFilter == 'FOOD_DEEMED',
+              ),
+              const SizedBox(width: 6),
+              _buildStatusPill(
+                '${stats.exemptUnregisteredCount} Exempt <40L',
+                const Color(0xFFF4C542),
+                () => setState(() => _vendorFilter =
+                    _vendorFilter == 'EXEMPT_UNREGISTERED'
+                        ? 'ALL'
+                        : 'EXEMPT_UNREGISTERED'),
+                isSelected: _vendorFilter == 'EXEMPT_UNREGISTERED',
+              ),
+              const SizedBox(width: 6),
+              _buildStatusPill(
+                '${stats.actionRequiredCount} Missing',
+                AdminColors.danger,
+                () => setState(() => _vendorFilter =
+                    _vendorFilter == 'ACTION_REQUIRED'
+                        ? 'ALL'
+                        : 'ACTION_REQUIRED'),
+                isSelected: _vendorFilter == 'ACTION_REQUIRED',
+              ),
+            ],
+          ),
+          if (hasActionRequired) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AdminColors.danger.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AdminColors.danger.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded,
+                      color: AdminColors.danger, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${stats.actionRequiredCount} non-food shop(s) made sales without a valid GSTIN or PAN! Contact them before the 10th to file GSTR-8.',
+                      style: GoogleFonts.outfit(
+                          color: Colors.white, fontSize: 11, height: 1.4),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        setState(() => _vendorFilter = 'ACTION_REQUIRED'),
+                    child: Text(
+                      'VIEW',
+                      style: GoogleFonts.outfit(
+                          color: AdminColors.danger,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusPill(String label, Color color, VoidCallback onTap,
+      {bool isSelected = false}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+                color: color, fontSize: 10, fontWeight: FontWeight.w700),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Vendor Tax Schedule Section Widget ─────────────────────────────────────
+  Widget _buildVendorScheduleSection(AdminTaxPackage pkg) {
+    final q = _searchCtrl.text.toLowerCase().trim();
+    final vendors = pkg.vendorSchedule.where((v) {
+      if (_vendorFilter != 'ALL' && v.complianceStatus != _vendorFilter) {
+        return false;
+      }
+      if (q.isNotEmpty) {
+        final match = v.shopName.toLowerCase().contains(q) ||
+            v.gstNumber.toLowerCase().contains(q) ||
+            v.panNumber.toLowerCase().contains(q) ||
+            v.ownerName.toLowerCase().contains(q);
+        if (!match) return false;
+      }
+      return true;
+    }).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AdminColors.cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AdminColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: AdminColors.primary.withValues(alpha: 0.08),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AdminColors.primary.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.table_chart_rounded,
+                      color: AdminColors.primary, size: 16),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Vendor-Wise GSTR-8 & TDS Schedule',
+                          style: AdminStyles.body(color: AdminColors.textPrimary)),
+                      Text(
+                          '${vendors.length} vendor${vendors.length == 1 ? '' : 's'} · Tap any field to copy',
+                          style: AdminStyles.caption(color: AdminColors.textMuted)),
+                    ],
+                  ),
+                ),
+                if (_vendorFilter != 'ALL')
+                  TextButton(
+                    onPressed: () => setState(() => _vendorFilter = 'ALL'),
+                    child: Text('Reset',
+                        style: GoogleFonts.outfit(
+                            color: AdminColors.primary, fontSize: 12)),
+                  ),
+              ],
+            ),
+          ),
+
+          // Search Field
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => setState(() {}),
+              style: AdminStyles.body(),
+              decoration: InputDecoration(
+                hintText: 'Search vendor, GSTIN, PAN...',
+                hintStyle: AdminStyles.caption(),
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: AdminColors.textMuted, size: 18),
+                filled: true,
+                fillColor: AdminColors.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AdminColors.cardBorder),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                isDense: true,
+              ),
+            ),
+          ),
+
+          // Vendor Cards List
+          if (vendors.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text('No vendors match filter',
+                    style: AdminStyles.caption()),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              itemCount: vendors.length,
+              separatorBuilder: (_, __) =>
+                  const Divider(color: Colors.white10, height: 16),
+              itemBuilder: (_, i) {
+                final v = vendors[i];
+                final statusColor = switch (v.complianceStatus) {
+                  'COMPLIANT' => const Color(0xFF51CF66),
+                  'FOOD_DEEMED' => const Color(0xFF4DABF7),
+                  'EXEMPT_UNREGISTERED' => const Color(0xFFF4C542),
+                  _ => AdminColors.danger,
+                };
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            v.shopName,
+                            style: AdminStyles.body(color: Colors.white)
+                                .copyWith(fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                                color: statusColor.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            v.complianceStatus,
+                            style: GoogleFonts.outfit(
+                              color: statusColor,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${v.category} · ${v.ownerName} (${v.ownerPhone}) · ${v.orderCount} orders',
+                      style: AdminStyles.caption(color: AdminColors.textMuted),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Copyable Tax Chips (GSTIN, PAN, Invoice)
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _buildCopyChip('GSTIN', v.gstNumber,
+                            isWarning: !v.hasValidGstin && !v.isDeemedSupplier),
+                        _buildCopyChip('PAN', v.panNumber,
+                            isWarning: !v.hasValidPan),
+                        _buildCopyChip('Inv', v.invoiceNumber),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Financial metrics row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _metricCol('Base Sales', _f(v.grossSales)),
+                        _metricCol(
+                          v.isDeemedSupplier ? 'S.9(5) Food GST' : 'TCS (0.5%)',
+                          v.isDeemedSupplier ? _f(v.s9_5Gst) : _f(v.tcsAmount),
+                          color: v.isDeemedSupplier
+                              ? const Color(0xFF4DABF7)
+                              : AdminColors.info,
+                        ),
+                        _metricCol('TDS (0.1%)', _f(v.tdsAmount)),
+                        _metricCol('Comm. + 18%',
+                            _f(v.commission + v.commissionGst)),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCopyChip(String tag, String value, {bool isWarning = false}) {
+    final displayVal = value.isEmpty ? 'NOT_PROVIDED' : value;
+    return InkWell(
+      onTap: () => _copyToClipboard(value, tag),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: isWarning
+              ? AdminColors.danger.withValues(alpha: 0.15)
+              : AdminColors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isWarning
+                ? AdminColors.danger.withValues(alpha: 0.4)
+                : AdminColors.cardBorder,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$tag: ',
+              style: GoogleFonts.outfit(
+                color: isWarning ? AdminColors.danger : AdminColors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              displayVal,
+              style: GoogleFonts.outfit(
+                color: isWarning ? Colors.white : Colors.white70,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.copy_rounded,
+                size: 10,
+                color: isWarning ? AdminColors.danger : AdminColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metricCol(String label, String value, {Color? color}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: AdminStyles.caption(color: AdminColors.textMuted)
+                .copyWith(fontSize: 10)),
+        Text(value,
+            style: GoogleFonts.outfit(
+              color: color ?? Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            )),
+      ],
+    );
+  }
+
+  // ── God Mode Export Action Deck ────────────────────────────────────────────
+  Widget _buildExportActionDeck(AdminTaxPackage? pkg) {
+    return Column(
+      children: [
+        // Primary: Copy Full CA Dossier
         ElevatedButton.icon(
           onPressed: () => _copyReport(context),
           icon: const Icon(Icons.content_copy_rounded, size: 18),
           label: Text(
-            'Copy Full GST Statement for CA',
+            'Copy Full CA Compliance Dossier',
             style:
                 GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15),
           ),
@@ -887,19 +1404,79 @@ class _GstStatementTabState extends State<_GstStatementTab> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 0,
           ),
-        ).animate().fadeIn(delay: 250.ms),
-        const SizedBox(height: 8),
-        Text(
-          '📌  Copy this report and share with your CA via WhatsApp or email.\n'
-          '    File GSTR-3B by 20th. File Form 26QE (TDS) by 7th.\n'
-          '    Sellers check GSTR-2B after Enything files GSTR-8 by 10th.',
-          style: AdminStyles.caption(color: AdminColors.textMuted)
-              .copyWith(height: 1.6),
-          textAlign: TextAlign.center,
         ),
+        if (pkg != null) ...[
+          const SizedBox(height: 10),
+          // 3-Button CSV Export Bar
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    final csv = TaxExportService.generateGstr8Csv(pkg);
+                    _shareExport(csv, 'GSTR-8_Table3_${_selectedMonth.year}_${_selectedMonth.month}.csv');
+                  },
+                  icon: const Icon(Icons.share_rounded, size: 14),
+                  label: Text('GSTR-8 CSV',
+                      style: GoogleFonts.outfit(
+                          fontSize: 11, fontWeight: FontWeight.w700)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF51CF66),
+                    side: const BorderSide(color: Color(0xFF51CF66)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    final csv = TaxExportService.generateSection194OTdsCsv(pkg);
+                    _shareExport(csv, 'TDS_Form26Q_${_selectedMonth.year}_${_selectedMonth.month}.csv');
+                  },
+                  icon: const Icon(Icons.share_rounded, size: 14),
+                  label: Text('TDS 26Q CSV',
+                      style: GoogleFonts.outfit(
+                          fontSize: 11, fontWeight: FontWeight.w700)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF4DABF7),
+                    side: const BorderSide(color: Color(0xFF4DABF7)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    final csv =
+                        TaxExportService.generateCommissionInvoicesCsv(pkg);
+                    _shareExport(csv, 'Commission_Invoices_${_selectedMonth.year}_${_selectedMonth.month}.csv');
+                  },
+                  icon: const Icon(Icons.share_rounded, size: 14),
+                  label: Text('Invoices CSV',
+                      style: GoogleFonts.outfit(
+                          fontSize: 11, fontWeight: FontWeight.w700)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFF4C542),
+                    side: const BorderSide(color: Color(0xFFF4C542)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
+
 
   // ── Month Selector Widget ──────────────────────────────────────────────────
   Widget _buildMonthSelector() {

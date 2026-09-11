@@ -808,10 +808,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
 
       if (aggStatus == 'awaiting_acceptance') {
-        // Find the correct active order that holds the real acceptance deadline
-        final awaitingAcceptOrder = _groupOrders.firstWhere(
-            (o) => o.status == 'awaiting_acceptance',
-            orElse: () => _order!);
+        // Find the active order with the maximum (latest) acceptance deadline
+        final activeAccepting = _groupOrders
+            .where((o) => o.status == 'awaiting_acceptance')
+            .toList();
+        final awaitingAcceptOrder = activeAccepting.isNotEmpty
+            ? activeAccepting.reduce((curr, next) =>
+                (curr.acceptanceDeadline?.isAfter(next.acceptanceDeadline ??
+                            DateTime.fromMillisecondsSinceEpoch(0)) ??
+                        false)
+                    ? curr
+                    : next)
+            : _order!;
         _startAcceptanceCountdown(awaitingAcceptOrder);
 
         // 🍎 Apple Reviewer Simulation: Auto-accept order after 4 seconds of realistic wait
@@ -829,10 +837,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
 
       if (aggStatus == 'awaiting_payment') {
-        // Find the deadline from any active awaiting_payment order
-        final awaitingPayOrder = _groupOrders.firstWhere(
-            (o) => o.status == 'awaiting_payment',
-            orElse: () => _order!);
+        // Find the active order with the maximum (latest) payment deadline
+        final activePaying = _groupOrders
+            .where((o) => o.status == 'awaiting_payment')
+            .toList();
+        final awaitingPayOrder = activePaying.isNotEmpty
+            ? activePaying.reduce((curr, next) =>
+                (curr.paymentDeadline?.isAfter(next.paymentDeadline ??
+                            DateTime.fromMillisecondsSinceEpoch(0)) ??
+                        false)
+                    ? curr
+                    : next)
+            : _order!;
 
         // 100x FIX: Prevent Razorpay UI Lock if order expired while user was offline
         bool isExpired = false;
@@ -871,8 +887,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
       if (!_hasPartialRejection) {
         _decisionCountdownTimer?.cancel();
+        _decisionCountdownTimer = null;
+        _partialRejectionResolved = true;
         _partnersNotifiedOfHolding = false;
         _wasPartialRejectionTimerStarted = false;
+        if (_order?.cartGroupId != null) {
+          SharedPreferences.getInstance().then((p) => p.remove(
+              'partial_rejection_timer_start_${_order!.cartGroupId}'));
+        }
       }
 
       if (aggStatus == 'delivered' && !_order!.hasCustomerRated) {
@@ -883,6 +905,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _startDecisionCountdown() async {
     _decisionCountdownTimer?.cancel();
+    if (!_hasPartialRejection || _partialRejectionResolved) {
+      _decisionCountdownTimer = null;
+      return;
+    }
 
     // POINT 5: Timer fixed decreasing, persistent across page reloads
     final prefs = await SharedPreferences.getInstance();
@@ -932,6 +958,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         t.cancel();
         return;
       }
+      if (!_hasPartialRejection || _partialRejectionResolved) {
+        t.cancel();
+        _decisionCountdownTimer = null;
+        return;
+      }
       setState(() {
         // TIMER FIX: deadline.difference(DateTime.now().toUtc()) is always accurate.
         final remaining = deadline.difference(DateTime.now().toUtc()).inSeconds;
@@ -939,9 +970,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           _decisionSecondsLeft.value = remaining;
         } else {
           t.cancel();
+          _decisionCountdownTimer = null;
           // BUG FIX: Remove the prefs key AFTER cancel RPC fires, not before.
           // Chained so key is only cleaned up once cancel is attempted.
-          _cancelActiveGroupOnTimeout().then((_) => prefs.remove(timerKey));
+          if (_hasPartialRejection && !_partialRejectionResolved) {
+            _cancelActiveGroupOnTimeout().then((_) => prefs.remove(timerKey));
+          } else {
+            prefs.remove(timerKey);
+          }
         }
       });
     });
@@ -1021,17 +1057,34 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       // 100x Edge Case: Concurrent resilient cancellation so a single failure doesn't halt the loop
       await Future.wait(targetOrders.map((order) async {
         try {
-          // Fetch fresh status for each individual sibling order
+          // Fetch fresh status and deadlines for each individual sibling order
           final fresh = await _supabase
               .from('orders')
-              .select('status')
+              .select('status, acceptance_deadline, payment_deadline')
               .eq('id', order.id)
               .maybeSingle();
 
           if (fresh != null && fresh['status'] == expectedStatus) {
-            await _supabase.rpc('cancel_order',
-                params: {'p_order_id': order.id, 'p_reason': 'timeout'});
-            anyCancelled = true;
+            DateTime? deadline;
+            if (expectedStatus == 'awaiting_acceptance' &&
+                fresh['acceptance_deadline'] != null) {
+              deadline =
+                  DateTime.tryParse(fresh['acceptance_deadline'].toString());
+            } else if (expectedStatus == 'awaiting_payment' &&
+                fresh['payment_deadline'] != null) {
+              deadline =
+                  DateTime.tryParse(fresh['payment_deadline'].toString());
+            }
+
+            // Only cancel if deadline is genuinely in the past (or missing)
+            if (deadline == null || deadline.isBefore(DateTime.now().toUtc())) {
+              await _supabase.rpc('cancel_order', params: {
+                'p_order_id': order.id,
+                'p_reason': 'timeout',
+                'p_cancel_entire_group': false,
+              });
+              anyCancelled = true;
+            }
           }
         } catch (e) {
           debugPrint('Error auto-canceling order ${order.id}: $e');
@@ -3660,7 +3713,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             color: const Color(0xFF6366F1), // Indigo
             isDark: isDark,
             loading: false,
-            onTap: () {
+            onTap: () async {
               // BUG FIX (Issue 3): Store the existing cart group ID so checkout
               // links the new order to this rejected group, not a brand new group.
               final cartProvider = context.read<CartProvider>();
@@ -3674,9 +3727,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 orElse: () => _groupOrders.first,
               );
               cartProvider.setPendingOrderIdToCancel(firstRejected.id);
+
+              // 100x FIX: Bump deadlines immediately so active shops don't expire while user is browsing
+              if (_order?.cartGroupId != null) {
+                try {
+                  await _supabase.rpc('restart_payment_timer',
+                      params: {'p_cart_group_id': _order!.cartGroupId});
+                } catch (e) {
+                  debugPrint('Error restarting timer for Search for Different Items: $e');
+                }
+              }
+
               // Use pushNamed (not pushNamedAndRemoveUntil) so the track page
               // stays alive — its 5-min timer keeps running in the background.
-              Navigator.pushNamed(context, AppRoutes.customerHome);
+              if (mounted) {
+                Navigator.pushNamed(context, AppRoutes.customerHome);
+              }
             },
           ),
         ],
