@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../config/app_categories.dart';
 import '../../config/tax_config.dart';
 import '../../theme/app_colors.dart';
@@ -163,11 +164,17 @@ class _AddProductPageState extends State<AddProductPage> {
       // Derive the union of CategoryGroups for this shop
       final shopGroups = shopCatNames.map(AppCategories.groupFor).toSet();
 
+      // 100x ADDITIVE FIX: Filter allowed categories by Admin active status
+      final activeNames = AppCategories.names
+          .where((name) =>
+              PlatformConfigProvider.instance?.isActiveCategory(name) ?? true)
+          .toList();
+
       // Only app-level categories whose group is within the shop's groups are allowed
       // Exception: Supermarkets can sell anything.
       final allowed = shopCatNames.contains('Supermarket / Hypermarket')
-          ? AppCategories.names
-          : AppCategories.names
+          ? activeNames
+          : activeNames
               .where(
                   (name) => shopGroups.contains(AppCategories.groupFor(name)))
               .toList();
@@ -182,7 +189,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
       setState(() {
         _shopId = resp!['id'];
-        _allowedCategories = allowed.isNotEmpty ? allowed : AppCategories.names;
+        _allowedCategories = allowed.isNotEmpty ? allowed : activeNames;
 
         // If editing an existing product whose category is already valid, keep it.
         // Otherwise snap to the shop's primary category.

@@ -110,6 +110,11 @@ class _KycReviewPageState extends State<KycReviewPage>
         'p_type': 'shop',
         'p_status': 'approved'
       });
+      await _supabase.rpc('admin_toggle_active', params: {
+        'p_target_id': shopId,
+        'p_type': 'shop',
+        'p_is_active': true
+      });
       await _supabase.rpc('admin_update_kyc', params: {
         'p_target_id': sellerId,
         'p_type': 'customer',
@@ -144,6 +149,11 @@ class _KycReviewPageState extends State<KycReviewPage>
         'p_type': 'shop',
         'p_status': 'rejected'
       });
+      await _supabase.rpc('admin_toggle_active', params: {
+        'p_target_id': shopId,
+        'p_type': 'shop',
+        'p_is_active': false
+      });
       await _supabase.rpc('admin_update_kyc', params: {
         'p_target_id': sellerId,
         'p_type': 'customer',
@@ -174,6 +184,11 @@ class _KycReviewPageState extends State<KycReviewPage>
         'p_target_id': riderId,
         'p_type': 'rider',
         'p_status': 'approved'
+      });
+      await _supabase.rpc('admin_toggle_active', params: {
+        'p_target_id': riderId,
+        'p_type': 'rider',
+        'p_is_active': true
       });
       final userId = rider['user_id'] as String? ??
           (rider['profiles'] is Map
@@ -212,6 +227,11 @@ class _KycReviewPageState extends State<KycReviewPage>
         'p_target_id': riderId,
         'p_type': 'rider',
         'p_status': 'rejected'
+      });
+      await _supabase.rpc('admin_toggle_active', params: {
+        'p_target_id': riderId,
+        'p_type': 'rider',
+        'p_is_active': false
       });
       final userId = rider['user_id'] as String? ??
           (rider['profiles'] is Map

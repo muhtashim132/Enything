@@ -755,6 +755,35 @@ class PlatformConfigProvider extends ChangeNotifier {
     }
   }
 
+  /// Public additive helper to apply key-value config rows
+  void applyConfigRow(String key, dynamic value) {
+    if (key == 'disabled_categories') {
+      try {
+        final decoded = value is List ? value : jsonDecode(value.toString());
+        if (decoded is List) {
+          _disabledCategories.clear();
+          _disabledCategories.addAll(decoded.map((e) => e.toString()));
+        }
+      } catch (e) {
+        debugPrint('[CategoryMgmt] applyConfigRow error: $e');
+      }
+    } else {
+      final val = double.tryParse(value.toString()) ?? 0.0;
+      _setValue(key, val);
+    }
+    safeNotifyListeners();
+  }
+
+  /// Additive helper to batch update multiple config rows from maps
+  void updateConfigsFromList(List<Map<String, dynamic>> configs) {
+    for (final c in configs) {
+      final key = c['key'] as String?;
+      if (key != null) {
+        applyConfigRow(key, c['value']);
+      }
+    }
+  }
+
   void _setValue(String key, double val) {
     if (key.startsWith('commission_percent_')) {
       final cat = key.replaceFirst('commission_percent_', '');

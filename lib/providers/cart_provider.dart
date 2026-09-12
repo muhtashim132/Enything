@@ -171,6 +171,16 @@ class CartProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Additive safeguard: Clears in-memory and persisted pending replacement state
+  /// so that if a replacement browse is abandoned, future checkouts won't be
+  /// incorrectly linked to the previous cart group.
+  void clearPendingReplacement() {
+    _pendingCartGroupId = null;
+    _pendingOrderIdToCancel = null;
+    _clearPersistedPendingFields();
+    safeNotifyListeners();
+  }
+
   CartNotification? _recentNotification;
   CartNotification? get recentNotification => _recentNotification;
   Timer? _notificationTimer;

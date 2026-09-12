@@ -206,11 +206,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     try {
       final productIds = cart.items.map((i) => i.product.id).toList();
-      // Phase 25 Fix: Deep join with shops to verify shop is still active, and fetch variants/price to check spoofing.
+      // Phase 25 Fix: Deep join with shops to verify shop is still active, accepting orders, and verified.
       final latestProducts = await Supabase.instance.client
           .from('products')
           .select(
-              'id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
+              'id, name, price, variants, is_available, total_quantity, shops(id, name, is_active, is_accepting_orders, verification_status)')
           .eq('is_deleted', false)
           .inFilter('id', productIds);
 
@@ -233,12 +233,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
           continue;
         }
 
-        // 1. Ghost Kitchens II (Banned Shop Checkout) Guard
-        if (dbProduct['shops'] != null &&
-            dbProduct['shops']['is_active'] == false) {
-          issues.add(
-              "${dbProduct['shops']['name']} is currently not accepting orders.");
-          continue;
+        // 1. Ghost Kitchens II (Banned / Closed / Unverified Shop Checkout) Guard
+        if (dbProduct['shops'] != null) {
+          final shop = dbProduct['shops'] as Map<String, dynamic>;
+          if (shop['is_active'] == false) {
+            issues.add(
+                "${shop['name']} is currently suspended by administration.");
+            continue;
+          }
+          if (shop['is_accepting_orders'] == false) {
+            issues.add(
+                "${shop['name']} is currently closed and not accepting orders.");
+            continue;
+          }
+          if (shop['verification_status'] != null &&
+              !['verified', 'approved'].contains(shop['verification_status'])) {
+            issues.add(
+                "${shop['name']} is currently pending verification.");
+            continue;
+          }
         }
 
         // 2. Availability Guard
@@ -588,6 +601,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
+      // 100x ADDITIVE FIX: Customer Profile Suspension Guard
+      if (auth.currentUserId != null) {
+        final profileResp = await supabase
+            .from('profiles')
+            .select('is_active')
+            .eq('id', auth.currentUserId!)
+            .maybeSingle();
+        if (profileResp != null && profileResp['is_active'] == false) {
+          throw Exception("Your customer account has been suspended by administration.");
+        }
+      }
+
       // Add Shop Open validation
       final closedShops = cart.shops.where((s) => !s.isOpenRightNow).toList();
       if (closedShops.isNotEmpty) {
@@ -597,11 +622,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       // Stock Validation
       final productIds = cart.items.map((i) => i.product.id).toList();
-      // Phase 25 Fix: Deep join with shops to verify shop is still active, and fetch variants/price to check spoofing.
+      // Phase 25 Fix: Deep join with shops to verify shop is still active, accepting orders, and verified.
       final latestProducts = await supabase
           .from('products')
           .select(
-              'id, name, price, variants, is_available, total_quantity, shops(id, name, is_active)')
+              'id, name, price, variants, is_available, total_quantity, shops(id, name, is_active, is_accepting_orders, verification_status)')
           .eq('is_deleted', false)
           .inFilter('id', productIds);
 
@@ -621,11 +646,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
           throw Exception("${cartItem.product.name} is no longer available.");
         }
 
-        // 1. Ghost Kitchens II (Banned Shop Checkout) Guard
-        if (dbProduct['shops'] != null &&
-            dbProduct['shops']['is_active'] == false) {
-          throw Exception(
-              "${dbProduct['shops']['name']} is currently not accepting orders.");
+        // 1. Ghost Kitchens II (Banned / Closed / Unverified Shop Checkout) Guard
+        if (dbProduct['shops'] != null) {
+          final shop = dbProduct['shops'] as Map<String, dynamic>;
+          if (shop['is_active'] == false) {
+            throw Exception(
+                "${shop['name']} is currently suspended by administration.");
+          }
+          if (shop['is_accepting_orders'] == false) {
+            throw Exception(
+                "${shop['name']} is currently closed and not accepting orders.");
+          }
+          if (shop['verification_status'] != null &&
+              !['verified', 'approved'].contains(shop['verification_status'])) {
+            throw Exception(
+                "${shop['name']} is currently not verified to accept orders.");
+          }
         }
 
         // 2. Availability Guard
@@ -844,10 +880,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final List<double> legSurcharges;
       if (isReplacementOrder) {
         final rate = PlatformConfigProvider.instance?.deliveryRatePerKm ?? 20.0;
+        final candidateShops = _activeShops.isNotEmpty
+            ? _activeShops
+            : cart.shops.where((act) => _activeShopIds.contains(act.id)).toList();
         legSurcharges = cart.shops.map((s) {
           if (_activeShopIds.contains(s.id)) return 0.0;
           double minDistKm = double.infinity;
-          for (final activeShop in cart.shops.where((act) => _activeShopIds.contains(act.id))) {
+          for (final activeShop in candidateShops) {
             final d = DeliveryCalculator.haversineKm(activeShop.location, s.location);
             if (d < minDistKm) minDistKm = d;
           }
@@ -880,17 +919,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
             : (1.0 / numShops);
 
         // 100x Leg-specific fee attribution
+        final bool isExtraLeg = isReplacementOrder && _activeShopIds.isNotEmpty;
+        final double currentLegSurcharge =
+            (shopIndex < legSurcharges.length) ? legSurcharges[shopIndex] : 0.0;
+        final double shopSurcharge =
+            (shopIndex == 0 && !isExtraLeg) ? 0.0 : currentLegSurcharge;
         final double shopBaseFee = (shopIndex == 0)
-            ? (effectiveBase + smallCartFee + heavyFee)
-            : (shopIndex < legSurcharges.length ? legSurcharges[shopIndex] : 0.0);
+            ? (effectiveBase + smallCartFee + heavyFee + (isExtraLeg ? currentLegSurcharge : 0.0))
+            : currentLegSurcharge;
         final double shopDelivery = shopBaseFee * (1 + TaxConfig.deliveryGstRate);
         final double shopRiderEarnings = ((shopIndex == 0)
-            ? (effectiveBase + heavyFee)
-            : (shopIndex < legSurcharges.length ? legSurcharges[shopIndex] : 0.0)) * riderPayoutRatio;
+            ? (effectiveBase + heavyFee + (isExtraLeg ? currentLegSurcharge : 0.0))
+            : currentLegSurcharge) * riderPayoutRatio;
         final double shopPlatformFee = (shopIndex == 0) ? totalPlatformFee : 0.0;
-        final double shopSurcharge = (shopIndex == 0)
-            ? 0.0
-            : (shopIndex < legSurcharges.length ? legSurcharges[shopIndex] : 0.0);
 
         final shopTaxBreakdownItems = shopItems.map((i) {
           return {
@@ -1208,6 +1249,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.watch<CartProvider>();
     final location = context.watch<LocationProvider>();
     final couponProv = context.watch<CouponProvider>();
+    context.watch<PlatformConfigProvider>();
 
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
@@ -1233,9 +1275,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       double replacementSurcharge = 0.0;
       if (newUniqueShops.isNotEmpty) {
         final rate = PlatformConfigProvider.instance?.deliveryRatePerKm ?? 20.0;
+        final candidateShops = _activeShops.isNotEmpty
+            ? _activeShops
+            : cart.shops.where((s) => _activeShopIds.contains(s.id)).toList();
         for (final newShop in newUniqueShops) {
           double minDistKm = double.infinity;
-          for (final activeShop in cart.shops.where((s) => _activeShopIds.contains(s.id))) {
+          for (final activeShop in candidateShops) {
             final d = DeliveryCalculator.haversineKm(activeShop.location, newShop.location);
             if (d < minDistKm) minDistKm = d;
           }
@@ -1689,7 +1734,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           '+₹${surcharge.toStringAsFixed(0)}',
                           valueColor: Colors.orange.shade700,
                           hint:
-                              '₹${(PlatformConfigProvider.instance?.multiShopSurcharge ?? 20).toInt()} per additional shop',
+                              'Distance-based leg surcharge between shops',
                         ),
                       ],
                       const SizedBox(height: 8),

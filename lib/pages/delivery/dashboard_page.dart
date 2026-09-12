@@ -89,6 +89,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   // FCM foreground message subscription — triggers _loadOrders() on push
   StreamSubscription? _fcmForegroundSub;
   RealtimeChannel? _realtimeChannel;
+  RealtimeChannel? _partnerRealtimeChannel;
+  bool _adminSuspended = false;
   Timer? _debounceTimer;
 
   void _debouncedLoadOrders() {
@@ -228,6 +230,26 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         });
       }
     });
+
+    // 100x ADDITIVE FIX: Subscribe to delivery_partners table for real-time KYC/suspension sync
+    _partnerRealtimeChannel = _supabase
+        .channel('delivery-partner-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'delivery_partners',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: userId,
+          ),
+          callback: (payload) {
+            if (mounted) {
+              _debouncedLoadOrders();
+            }
+          },
+        )
+        .subscribe();
   }
 
   Timer? _pollingTimer;
@@ -241,6 +263,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     _fcmForegroundSub?.cancel();
     if (_realtimeChannel != null) {
       _supabase.removeChannel(_realtimeChannel!);
+    }
+    if (_partnerRealtimeChannel != null) {
+      _supabase.removeChannel(_partnerRealtimeChannel!);
     }
     // D2+APP5 FIX: Stop background GPS service when the delivery page is
     // disposed (e.g., user switches role or logs out). Without this, the
@@ -286,6 +311,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   Future<void> _setOnlineStatus(bool val, {StateSetter? setSheetState}) async {
+    if (val && _adminSuspended) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Your account has been suspended by administration. You cannot go online.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
     if (val && _locationUnavailable) {
       _promptEnableLocation();
       return;
@@ -493,7 +530,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             .eq('id', auth.currentUserId!)
             .maybeSingle();
         if (partnerResp != null) {
-          if (partnerResp['is_accepting_orders'] != null) {
+          _adminSuspended = partnerResp['is_active'] == false;
+          if (_adminSuspended) {
+            _isOnline = false;
+          } else if (partnerResp['is_accepting_orders'] != null) {
             _isOnline = partnerResp['is_accepting_orders'] as bool;
           }
           if (partnerResp['preferred_nav_app'] != null) {
@@ -695,6 +735,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   Future<void> _acceptOrderGroup(OrderGroup group) async {
+    if (_adminSuspended) {
+      if (mounted) {
+        _showSnack('⚠️ Your rider account is suspended by administration.',
+            isError: true);
+      }
+      return;
+    }
     if (_isLoading) return;
     setState(() => _isLoading = true);
     int failedCount = 0;
@@ -799,6 +846,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   Future<bool> _acceptOrder(OrderModel order,
       {bool skipReload = false, bool notifyCustomer = true}) async {
+    if (_adminSuspended) {
+      if (mounted) {
+        _showSnack('⚠️ Your rider account is suspended by administration.',
+            isError: true);
+      }
+      return false;
+    }
     final auth = context.read<AuthProvider>();
     try {
       double? shopLat;
@@ -963,7 +1017,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     } on PostgrestException catch (pe) {
       debugPrint('Accept Postgrest error: $pe');
       if (mounted) {
-        if (pe.message.contains('ORDER_CANCELLED')) {
+        if (pe.message.contains('RIDER_SUSPENDED')) {
+          _showSnack(
+              '⚠️ Your rider account has been suspended by administration.',
+              isError: true);
+        } else if (pe.message.contains('ORDER_CANCELLED')) {
           _showSnack('⚠️ The customer just cancelled this order.',
               isError: true);
         } else if (pe.message.contains('MAX_ORDERS_REACHED')) {
@@ -1791,6 +1849,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       // Full-width Online Toggle Card
                       GestureDetector(
                         onTap: () async {
+                          if (_adminSuspended) {
+                            _showSnack(
+                                '⚠️ Your account has been suspended by administration.',
+                                isError: true);
+                            return;
+                          }
                           await _setOnlineStatus(!_isOnline);
                         },
                         child: AnimatedContainer(
@@ -1799,28 +1863,40 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               horizontal: 20, vertical: 16),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: _isOnline
+                              colors: _adminSuspended
                                   ? [
-                                      const Color(0xFF2ECC71),
-                                      const Color(0xFF27AE60)
+                                      const Color(0xFFC0392B),
+                                      const Color(0xFF962D22),
                                     ]
-                                  : isDark
+                                  : _isOnline
                                       ? [
-                                          const Color(0xFF2A2A3A),
-                                          const Color(0xFF1E1E2E)
+                                          const Color(0xFF2ECC71),
+                                          const Color(0xFF27AE60)
                                         ]
-                                      : [
-                                          Colors.grey.shade300,
-                                          Colors.grey.shade200
-                                        ],
+                                      : isDark
+                                          ? [
+                                              const Color(0xFF2A2A3A),
+                                              const Color(0xFF1E1E2E)
+                                            ]
+                                          : [
+                                              Colors.grey.shade300,
+                                              Colors.grey.shade200
+                                            ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
-                              if (_isOnline)
+                              if (_isOnline && !_adminSuspended)
                                 BoxShadow(
                                   color: const Color(0xFF2ECC71)
+                                      .withValues(alpha: 0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              if (_adminSuspended)
+                                BoxShadow(
+                                  color: const Color(0xFFC0392B)
                                       .withValues(alpha: 0.4),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
@@ -1836,10 +1912,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  _isOnline
-                                      ? Icons.power_rounded
-                                      : Icons.power_off_rounded,
-                                  color: _isOnline
+                                  _adminSuspended
+                                      ? Icons.block_rounded
+                                      : _isOnline
+                                          ? Icons.power_rounded
+                                          : Icons.power_off_rounded,
+                                  color: _adminSuspended || _isOnline
                                       ? Colors.white
                                       : (isDark
                                           ? Colors.white54
@@ -1853,13 +1931,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      _isOnline
-                                          ? 'You\'re Online'
-                                          : 'You\'re Offline',
+                                      _adminSuspended
+                                          ? 'Account Suspended'
+                                          : _isOnline
+                                              ? 'You\'re Online'
+                                              : 'You\'re Offline',
                                       style: GoogleFonts.outfit(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: _isOnline
+                                        color: _adminSuspended || _isOnline
                                             ? Colors.white
                                             : (isDark
                                                 ? Colors.white
@@ -1867,12 +1947,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                       ),
                                     ),
                                     Text(
-                                      _isOnline
-                                          ? 'Receiving delivery requests'
-                                          : 'Tap to start receiving orders',
+                                      _adminSuspended
+                                          ? 'Suspended by administration. You cannot accept orders.'
+                                          : _isOnline
+                                              ? 'Receiving delivery requests'
+                                              : 'Tap to start receiving orders',
                                       style: GoogleFonts.outfit(
                                         fontSize: 13,
-                                        color: _isOnline
+                                        color: _adminSuspended || _isOnline
                                             ? Colors.white
                                                 .withValues(alpha: 0.8)
                                             : (isDark
@@ -1884,10 +1966,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                 ),
                               ),
                               Switch(
-                                value: _isOnline,
-                                onChanged: (val) async {
-                                  await _setOnlineStatus(val);
-                                },
+                                value: _adminSuspended ? false : _isOnline,
+                                onChanged: _adminSuspended
+                                    ? null
+                                    : (val) async {
+                                        await _setOnlineStatus(val);
+                                      },
                                 activeThumbColor: Colors.white,
                                 activeTrackColor:
                                     Colors.white.withValues(alpha: 0.3),
@@ -1981,6 +2065,53 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           const Color(0xFFFF8C42),
                           isDark),
                       const SizedBox(height: 14),
+
+                      // Rider suspended banner
+                      if (_adminSuspended)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF4B4B)
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: const Color(0xFFFF4B4B)
+                                    .withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded,
+                                  color: Color(0xFFFF4B4B), size: 28),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Rider Account Suspended',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFFFF4B4B),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Your delivery partner account has been deactivated by administration. You cannot go online or accept new deliveries.',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 12,
+                                        color: isDark
+                                            ? Colors.white70
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
 
                       // Location unavailable warning (kept):
                       if (_locationUnavailable && _isOnline)
@@ -2468,7 +2599,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       const SizedBox(width: 8),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: (_isLoading || isExpired)
+                          onPressed: (_isLoading || isExpired || _adminSuspended)
                               ? null
                               : () => _acceptOrderGroup(group),
                           style: ElevatedButton.styleFrom(

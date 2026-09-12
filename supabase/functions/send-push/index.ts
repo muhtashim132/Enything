@@ -191,7 +191,7 @@ Deno.serve(async (req: Request) => {
 
     // Server-side deduplication check to prevent duplicate push cards (15s TTL)
     const orderId = (data && data.order_id) || (rawBody && rawBody.record && rawBody.record.order_id);
-    const dedupKey = orderId ? `${user_id}_${orderId}` : `${user_id}_${title}`;
+    const dedupKey = orderId ? `${user_id}_${orderId}_${title}` : `${user_id}_${title}`;
     if (isDuplicatePush(dedupKey)) {
       console.log(`[send-push] Deduplicated push skipped for key: ${dedupKey}`);
       return new Response(

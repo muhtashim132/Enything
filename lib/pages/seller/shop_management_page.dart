@@ -32,6 +32,8 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   String? _shopId;
   bool _isActive = false;
   String? _currentAddress;
+  bool _adminSuspended = false;
+
   double? _shopLat;
   double? _shopLng;
   List<Map<String, dynamic>> _shops = [];
@@ -60,12 +62,14 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
 
   Future<void> _loadShop() async {
     final auth = context.read<AuthProvider>();
+    if (auth.currentUserId == null) return;
+
     try {
       final shopsResp = await _supabase
           .from('shops')
           .select(
               'id, name, is_active, is_accepting_orders, banner_url, open_time, close_time, address')
-          .eq('seller_id', auth.currentUserId ?? '');
+          .eq('seller_id', auth.currentUserId!);
 
       final shopsList = List<Map<String, dynamic>>.from(shopsResp as List);
 
@@ -83,6 +87,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
       setState(() {
         _shops = shopsList;
         _shopId = resp['id'];
+        _adminSuspended = resp['is_active'] == false;
         _isActive = resp['is_accepting_orders'] ?? false;
         _currentAddress = resp['address'];
         _bannerCtrl.text = resp['banner_url'] ?? '';
@@ -97,6 +102,10 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
 
   Future<void> _toggleShopStatus(bool value) async {
     if (_shopId == null) return;
+    if (_adminSuspended) {
+      _showSnack('Your shop has been suspended by administration. You cannot open the store.', isError: true);
+      return;
+    }
     setState(() => _isActive = value);
     try {
       await _supabase
@@ -362,20 +371,24 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                                                   ? Colors.white
                                                   : const Color(0xFF0A0A14))),
                                       Text(
-                                          _isActive
-                                              ? 'Open — accepting orders'
-                                              : 'Closed — not visible to customers',
+                                          _adminSuspended
+                                              ? 'Suspended by Administration'
+                                              : _isActive
+                                                  ? 'Open — accepting orders'
+                                                  : 'Closed — not visible to customers',
                                           style: GoogleFonts.outfit(
                                               fontSize: 12,
-                                              color: _isActive
-                                                  ? AppColors.success
-                                                  : AppColors.danger)),
+                                              color: _adminSuspended
+                                                  ? AppColors.danger
+                                                  : _isActive
+                                                      ? AppColors.success
+                                                      : AppColors.danger)),
                                     ],
                                   ),
                                 ),
                                 Switch(
-                                  value: _isActive,
-                                  onChanged: _toggleShopStatus,
+                                  value: _adminSuspended ? false : _isActive,
+                                  onChanged: _adminSuspended ? null : _toggleShopStatus,
                                   activeThumbColor: AppColors.success,
                                   inactiveThumbColor: AppColors.danger,
                                 ),

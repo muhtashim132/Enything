@@ -268,6 +268,27 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         return;
       }
 
+      // 100x ADDITIVE FIX: Check if shop is suspended
+      if (order.shopId != null) {
+        final shopResp = await _supabase
+            .from('shops')
+            .select('is_active, verification_status')
+            .eq('id', order.shopId!)
+            .maybeSingle();
+        if (shopResp != null &&
+            (shopResp['is_active'] == false ||
+                (shopResp['verification_status'] != null &&
+                    !['verified', 'approved']
+                        .contains(shopResp['verification_status'])))) {
+          if (mounted) {
+            _showSnack(
+                'Your shop is currently suspended or unverified by administration.',
+                isError: true);
+          }
+          return;
+        }
+      }
+
       // Update DB and capture boolean return value to prevent TOCTOU races
       final result = await _supabase
           .rpc('accept_order_seller', params: {'p_order_id': order.id});
@@ -383,6 +404,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       debugPrint('Seller accept error: $e');
       if (e.toString().contains('ORDER_CANCELLED')) {
         _showSnack('The customer just cancelled this order.', isError: true);
+      } else if (e.toString().contains('SHOP_SUSPENDED')) {
+        _showSnack('Your shop has been suspended by administration.', isError: true);
       } else {
         _showSnack('Failed to accept: $e', isError: true);
       }

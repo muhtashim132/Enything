@@ -128,27 +128,51 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
   void _setupRealtimeOrders(String shopId) {
     final channelName = 'seller-dashboard-$shopId';
     // Phase 9: Scale to multiple shops without duplicating subscriptions
-    if (_realtimeChannels.containsKey(channelName)) return;
+    if (!_realtimeChannels.containsKey(channelName)) {
+      final channel = _supabase
+          .channel(channelName)
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'orders',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'shop_id',
+              value: shopId,
+            ),
+            callback: (payload) {
+              if (mounted) {
+                _debouncedLoadStats();
+              }
+            },
+          )
+          .subscribe();
+      _realtimeChannels[channelName] = channel;
+    }
 
-    final channel = _supabase
-        .channel(channelName)
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'orders',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'shop_id',
-            value: shopId,
-          ),
-          callback: (payload) {
-            if (mounted) {
-              _debouncedLoadStats();
-            }
-          },
-        )
-        .subscribe();
-    _realtimeChannels[channelName] = channel;
+    // 100x ADDITIVE FIX: Subscribe to shop record updates (suspension, KYC, store status)
+    final shopChannelName = 'seller-shop-status-$shopId';
+    if (!_realtimeChannels.containsKey(shopChannelName)) {
+      final shopChannel = _supabase
+          .channel(shopChannelName)
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'shops',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'id',
+              value: shopId,
+            ),
+            callback: (payload) {
+              if (mounted) {
+                _debouncedLoadStats();
+              }
+            },
+          )
+          .subscribe();
+      _realtimeChannels[shopChannelName] = shopChannel;
+    }
   }
 
   Future<void> _loadStats() async {

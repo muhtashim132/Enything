@@ -631,15 +631,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (_partialRejectionResolved) return false;
     if (_groupOrders.isEmpty) return false;
 
-    // 100x FIX: Dynamic backend state check — if customer placed a replacement order, resolution is complete.
-    final hasReplacedOrder = _groupOrders.any((o) => o.cancelledReason == 'customer_replaced');
-    if (hasReplacedOrder) return false;
-
-    final hasRejected = _groupOrders
-        .any((o) => _terminalRejectionStatuses.contains(o.status));
+    // 100x FIX: Dynamic backend state check — partial rejection is active if there is
+    // at least one unhandled rejection (not yet replaced, proceeded, or cancelled by customer)
+    // AND at least one surviving active shop.
+    final hasUnhandledRejection = _groupOrders.any((o) =>
+        _terminalRejectionStatuses.contains(o.status) &&
+        !(o.cancelledReason?.startsWith('customer') ?? false));
     final hasActive = _groupOrders
         .any((o) => !_terminalRejectionStatuses.contains(o.status));
-    return hasRejected && hasActive;
+    return hasUnhandledRejection && hasActive;
   }
 
   List<OrderModel> get _activeGroupOrders {
@@ -885,6 +885,33 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         _autoPayTimer?.cancel();
       }
 
+      // 100x UX Fix: If all active orders in the group have safely progressed to confirmed+,
+      // the remaining order is locked in and will not be cancelled. Auto-resolve the partial rejection.
+      final allActiveSafe = _activeGroupOrders.isNotEmpty &&
+          _activeGroupOrders.every((o) => [
+                'confirmed',
+                'preparing',
+                'ready_for_pickup',
+                'picked_up',
+                'out_for_delivery',
+                'delivered'
+              ].contains(o.status));
+      if (allActiveSafe && !_partialRejectionResolved) {
+        _partialRejectionResolved = true;
+        _decisionCountdownTimer?.cancel();
+        _decisionCountdownTimer = null;
+        _wasPartialRejectionTimerStarted = false;
+        if (_order?.cartGroupId != null) {
+          SharedPreferences.getInstance().then((p) => p.remove(
+              'partial_rejection_timer_start_${_order!.cartGroupId}'));
+        }
+        try {
+          if (mounted) {
+            context.read<CartProvider>().clearPendingReplacement();
+          }
+        } catch (_) {}
+      }
+
       if (!_hasPartialRejection) {
         _decisionCountdownTimer?.cancel();
         _decisionCountdownTimer = null;
@@ -895,6 +922,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           SharedPreferences.getInstance().then((p) => p.remove(
               'partial_rejection_timer_start_${_order!.cartGroupId}'));
         }
+        try {
+          if (mounted) {
+            context.read<CartProvider>().clearPendingReplacement();
+          }
+        } catch (_) {}
       }
 
       if (aggStatus == 'delivered' && !_order!.hasCustomerRated) {
@@ -910,6 +942,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       return;
     }
 
+    final unhandledRejections = _groupOrders
+        .where((o) =>
+            _terminalRejectionStatuses.contains(o.status) &&
+            !(o.cancelledReason?.startsWith('customer') ?? false))
+        .toList();
+    if (unhandledRejections.isEmpty) {
+      _partialRejectionResolved = true;
+      _decisionCountdownTimer = null;
+      return;
+    }
+
     // POINT 5: Timer fixed decreasing, persistent across page reloads
     final prefs = await SharedPreferences.getInstance();
     final cartGroupId = _order?.cartGroupId ?? _order?.id ?? 'unknown';
@@ -919,12 +962,24 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     DateTime startTime;
 
     if (storedStartTimeStr != null) {
-      startTime = DateTime.parse(storedStartTimeStr);
+      final parsedStart = DateTime.parse(storedStartTimeStr);
+      // Check if any unhandled rejection occurred AFTER the stored timer start
+      final newestRejection = unhandledRejections
+          .map((o) => o.updatedAt)
+          .whereType<DateTime>()
+          .fold<DateTime?>(null,
+              (prev, curr) => (prev == null || curr.isAfter(prev)) ? curr : prev);
+      if (newestRejection != null &&
+          newestRejection.isAfter(parsedStart.add(const Duration(seconds: 10)))) {
+        startTime = newestRejection;
+        await prefs.setString(timerKey, startTime.toIso8601String());
+      } else {
+        startTime = parsedStart;
+      }
     } else {
-      // Look for the database rejection time as a fallback
+      // Look for the database rejection time as a fallback across all terminal statuses
       DateTime? rejectionTime;
-      for (var o in _groupOrders.where(
-          (o) => o.status == 'seller_rejected' || o.status == 'cancelled')) {
+      for (var o in unhandledRejections) {
         if (o.updatedAt != null &&
             (rejectionTime == null || o.updatedAt!.isBefore(rejectionTime))) {
           rejectionTime = o.updatedAt;
@@ -1110,32 +1165,26 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   Future<void> _cancelActiveGroupOnTimeout() async {
     if (_order == null) return;
     try {
-      final targetOrders = _groupOrders.isEmpty ? [_order!] : _groupOrders;
-      bool anyCancelled = false;
-
-      // 100x Edge Case: Concurrent resilient cancellation for all active siblings on decision timeout
-      await Future.wait(targetOrders.map((order) async {
-        try {
-          final fresh = await _supabase
-              .from('orders')
-              .select('status')
-              .eq('id', order.id)
-              .maybeSingle();
-
-          if (fresh != null &&
-              ['awaiting_acceptance', 'awaiting_payment', 'pending']
-                  .contains(fresh['status'])) {
-            await _supabase.rpc('cancel_order',
-                params: {'p_order_id': order.id, 'p_reason': 'timeout'});
-            anyCancelled = true;
-          }
-        } catch (e) {
-          debugPrint('Error auto-canceling active group order ${order.id}: $e');
+      try {
+        if (mounted) {
+          context.read<CartProvider>().clearPendingReplacement();
         }
-      }));
+      } catch (_) {}
 
-      if (anyCancelled && mounted) {
-        // Re-fetch all group orders to sync sibling order states
+      final targetOrders = _groupOrders.isEmpty ? [_order!] : _groupOrders;
+      final cancellableOrders = targetOrders.where((o) =>
+          ['awaiting_acceptance', 'awaiting_payment', 'pending'].contains(o.status)).toList();
+
+      if (cancellableOrders.isNotEmpty) {
+        // Single atomic call to cancel the entire group with DB row lock and single reallocation
+        await _supabase.rpc('cancel_order', params: {
+          'p_order_id': cancellableOrders.first.id,
+          'p_reason': 'timeout',
+          'p_cancel_entire_group': true,
+        });
+      }
+
+      if (mounted) {
         await _fetchOrder();
         if (mounted && targetOrders.length == 1) {
           setState(() {
@@ -3643,6 +3692,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setBool(
                           'partial_rejection_resolved_$cartGroupId', true);
+                      try {
+                        if (mounted) {
+                          context.read<CartProvider>().clearPendingReplacement();
+                        }
+                      } catch (_) {}
                       if (mounted) {
                         setState(() {
                           _partialRejectionResolved = true;
@@ -3723,7 +3777,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               // and bypasses the delivery floor check (floor check only runs on
               // brand-new orders, not on orders replacing a rejected one).
               final firstRejected = _groupOrders.firstWhere(
-                (o) => o.status == 'seller_rejected',
+                (o) => _terminalRejectionStatuses.contains(o.status),
                 orElse: () => _groupOrders.first,
               );
               cartProvider.setPendingOrderIdToCancel(firstRejected.id);
