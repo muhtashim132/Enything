@@ -122,10 +122,11 @@ class CartProvider extends ChangeNotifier {
   static const String _legacyCartKey = 'enything_cart_v1';
   static const String _pendingCartGroupKey = 'enything_pending_cart_group_id';
   static const String _pendingOrderCancelKey = 'enything_pending_order_to_cancel';
+  static const String _pendingActiveShopsKey = 'enything_pending_active_shops';
   final List<CartItem> _items = [];
   final Set<String> _inFlightRestores = {};
 
-  // ── Partial Rejection: pending group linking ──────────────────────────────
+  // ── Partial Rejection: pending group linking & active shops ───────────────
   // Set this before navigating to home for "Search Different Items" / "Find
   // Missing Items" so the checkout page knows to link new orders to the
   // existing cart group instead of starting a brand new one.
@@ -145,6 +146,17 @@ class CartProvider extends ChangeNotifier {
     _persistPendingFields();
   }
 
+  List<ShopModel> _activePendingShops = [];
+  List<ShopModel> get activePendingShops => List.unmodifiable(_activePendingShops);
+  bool get isPendingReplacementActive =>
+      _pendingCartGroupId != null || _activePendingShops.isNotEmpty;
+
+  void setActivePendingShops(List<ShopModel> shops) {
+    _activePendingShops = List.from(shops);
+    _persistPendingFields();
+    safeNotifyListeners();
+  }
+
   /// Persists pending group/order fields to SharedPrefs for app-kill survival.
   Future<void> _persistPendingFields() async {
     try {
@@ -159,6 +171,12 @@ class CartProvider extends ChangeNotifier {
       } else {
         await prefs.remove(_pendingOrderCancelKey);
       }
+      if (_activePendingShops.isNotEmpty) {
+        final encoded = jsonEncode(_activePendingShops.map((s) => s.toMap()).toList());
+        await prefs.setString(_pendingActiveShopsKey, encoded);
+      } else {
+        await prefs.remove(_pendingActiveShopsKey);
+      }
     } catch (_) {}
   }
 
@@ -168,6 +186,7 @@ class CartProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_pendingCartGroupKey);
       await prefs.remove(_pendingOrderCancelKey);
+      await prefs.remove(_pendingActiveShopsKey);
     } catch (_) {}
   }
 
@@ -177,6 +196,7 @@ class CartProvider extends ChangeNotifier {
   void clearPendingReplacement() {
     _pendingCartGroupId = null;
     _pendingOrderIdToCancel = null;
+    _activePendingShops = [];
     _clearPersistedPendingFields();
     safeNotifyListeners();
   }
@@ -358,9 +378,17 @@ class CartProvider extends ChangeNotifier {
       return 'Maximum weight of ${PaymentConfig.maxWeightKg} kg allowed per order';
     }
 
-    // Enforce max 3 unique shops
+    // Enforce max 3 unique shops (including active shops from pending replacement order if active)
+    final pendingShopIds = isPendingReplacementActive
+        ? _activePendingShops.map((s) => s.id).toSet()
+        : <String>{};
     final currentShops = shops.map((s) => s.id).toSet();
-    if (!currentShops.contains(shop.id) && currentShops.length >= 3) {
+    final allEffectiveShopIds = {...pendingShopIds, ...currentShops};
+
+    if (!allEffectiveShopIds.contains(shop.id) && allEffectiveShopIds.length >= 3) {
+      if (pendingShopIds.isNotEmpty) {
+        return 'Maximum 3 shops allowed per order (${pendingShopIds.length} active in your pending order).';
+      }
       return 'Maximum 3 shops allowed per order. Please complete your current order first.';
     }
 
@@ -402,9 +430,15 @@ class CartProvider extends ChangeNotifier {
         ),
       );
     } else {
-      final remaining = 3 - shops.length;
+      final pendingShopIds = isPendingReplacementActive
+          ? _activePendingShops.map((s) => s.id).toSet()
+          : <String>{};
+      final currentShops = shops.map((s) => s.id).toSet();
+      final allEffectiveShopIds = {...pendingShopIds, ...currentShops};
+      final totalCount = allEffectiveShopIds.length;
+      final remaining = 3 - totalCount;
       final msg = remaining > 0
-          ? '${shops.length} shop${shops.length > 1 ? 's' : ''} selected, $remaining remaining if needed'
+          ? '$totalCount shop${totalCount > 1 ? 's' : ''} selected, $remaining remaining if needed'
           : 'Added successfully. Cart is full (Max 3 shops).';
 
       final variantText =
@@ -556,6 +590,15 @@ class CartProvider extends ChangeNotifier {
       // Bug E1: Restore pending replacement fields from SharedPrefs
       _pendingCartGroupId ??= prefs.getString(_pendingCartGroupKey);
       _pendingOrderIdToCancel ??= prefs.getString(_pendingOrderCancelKey);
+      final rawShops = prefs.getString(_pendingActiveShopsKey);
+      if (rawShops != null && rawShops.isNotEmpty && _activePendingShops.isEmpty) {
+        try {
+          final List decoded = jsonDecode(rawShops);
+          _activePendingShops = decoded
+              .map((m) => ShopModel.fromMap(m as Map<String, dynamic>))
+              .toList();
+        } catch (_) {}
+      }
 
       safeNotifyListeners();
     } catch (e) {

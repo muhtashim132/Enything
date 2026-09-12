@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../utils/responsive_layout.dart';
 import '../../providers/cart_provider.dart';
+import '../../models/shop_model.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/sensory_haptics.dart';
 import '../../config/routes.dart';
@@ -165,7 +166,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         if (cartGroupId != null) {
           final siblings = await supabase
               .from('orders')
-              .select('status, updated_at')
+              .select('id, status, updated_at, shop_id')
               .eq('cart_group_id', cartGroupId);
 
           DateTime? rejectionTime;
@@ -215,6 +216,54 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                     DateTime.tryParse(createdAtStr ?? '') ??
                     DateTime.now().toUtc())
                 .add(const Duration(minutes: 5));
+
+            if (mounted) {
+              try {
+                final cartProvider = context.read<CartProvider>();
+                cartProvider.setPendingCartGroupId(cartGroupId);
+                final firstRejected = siblings.firstWhere(
+                  (s) => {'seller_rejected', 'partner_rejected', 'rider_rejected', 'verification_failed', 'cancelled'}.contains(s['status']),
+                  orElse: () => siblings.first,
+                );
+                if (firstRejected['id'] != null) {
+                  cartProvider.setPendingOrderIdToCancel(
+                      firstRejected['id'] as String);
+                }
+                final activeShopIds = siblings
+                    .where((s) => !{'seller_rejected', 'partner_rejected', 'rider_rejected', 'verification_failed', 'cancelled'}.contains(s['status']))
+                    .map((s) => s['shop_id'] as String?)
+                    .whereType<String>()
+                    .where((id) => id.isNotEmpty)
+                    .toSet()
+                    .toList();
+                if (activeShopIds.isNotEmpty) {
+                  final shopsResp = await supabase
+                      .from('shops')
+                      .select()
+                      .inFilter('id', activeShopIds);
+                  final activeShops = (shopsResp as List)
+                      .map((m) =>
+                          ShopModel.fromMap(m as Map<String, dynamic>))
+                      .toList();
+                  if (mounted) {
+                    cartProvider.setActivePendingShops(activeShops);
+                  }
+                }
+              } catch (e) {
+                debugPrint(
+                    'MainPage: Failed to synchronize pending active shops: $e');
+              }
+            }
+          } else {
+            if (mounted) {
+              try {
+                final cartProvider = context.read<CartProvider>();
+                if (cartProvider.isPendingReplacementActive &&
+                    cartProvider.pendingCartGroupId == cartGroupId) {
+                  cartProvider.clearPendingReplacement();
+                }
+              } catch (_) {}
+            }
           }
         }
 
@@ -274,6 +323,14 @@ class _CustomerMainPageState extends State<CustomerMainPage>
       } else {
         _globalPendingTimer.value = null;
         _globalCountdown?.cancel();
+        if (mounted) {
+          try {
+            final cartProvider = context.read<CartProvider>();
+            if (cartProvider.isPendingReplacementActive) {
+              cartProvider.clearPendingReplacement();
+            }
+          } catch (_) {}
+        }
       }
     } catch (e) {
       debugPrint('Error checking pending timer: $e');

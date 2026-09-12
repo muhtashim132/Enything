@@ -80,8 +80,8 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
 
   bool _isCartInteracting = false;
 
-  void _handleTap(List<ShopModel> shops) {
-    if (_isCartInteracting || shops.isEmpty) return;
+  void _handleTap(List<ShopModel> allShops, {List<ShopModel> pendingShops = const []}) {
+    if (_isCartInteracting || allShops.isEmpty) return;
     _isCartInteracting = true;
 
     final contextForNav = navigatorKey.currentState?.context;
@@ -90,16 +90,17 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
       return;
     }
 
-    if (shops.length == 1) {
-      // Instant navigation for 1 shop
+    if (allShops.length == 1 && pendingShops.isEmpty) {
+      // Instant navigation for 1 regular cart shop
       navigatorKey.currentState?.pushNamed(
         AppRoutes.restaurant,
-        arguments: {'shopId': shops.first.id},
+        arguments: {'shopId': allShops.first.id},
       ).then((_) {
         _isCartInteracting = false;
       });
     } else {
-      // Show Bottom Sheet for multiple shops
+      // Show Bottom Sheet for multiple shops or replacement mode
+      final pendingShopIds = pendingShops.map((s) => s.id).toSet();
       bool isNavigating = false;
       showModalBottomSheet(
         context: contextForNav,
@@ -117,45 +118,120 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
                   Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 24.0, vertical: 8.0),
-                    child: Text(
-                      'Active Shops in Cart',
-                      style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          pendingShops.isNotEmpty
+                              ? 'Order Shops (${allShops.length}/3)'
+                              : 'Active Shops in Cart',
+                          style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        if (allShops.length < 3)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${3 - allShops.length} slot${3 - allShops.length > 1 ? 's' : ''} left',
+                              style: const TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
+                      ],
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24.0),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Text(
-                      'Tap a shop to quickly add more items and save on delivery fees.',
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                      pendingShops.isNotEmpty
+                          ? 'Your active order includes items from up to 3 shops. Tap a shop to view its menu.'
+                          : 'Tap a shop to quickly add more items and save on delivery fees.',
+                      style: const TextStyle(color: Colors.grey, fontSize: 14),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  ...shops.map((shop) => ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 24.0, vertical: 8.0),
-                        leading: CircleAvatar(
-                          backgroundColor:
-                              Theme.of(ctx).primaryColor.withValues(alpha: 0.1),
-                          child: const Icon(Icons.storefront,
-                              color: Colors.green), // Assuming green is primary
+                  ...allShops.map((shop) {
+                    final isPending = pendingShopIds.contains(shop.id);
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 24.0, vertical: 8.0),
+                      leading: CircleAvatar(
+                        backgroundColor: isPending
+                            ? Colors.orange.withValues(alpha: 0.15)
+                            : Theme.of(ctx).primaryColor.withValues(alpha: 0.1),
+                        child: Icon(
+                          Icons.storefront,
+                          color: isPending ? Colors.orange.shade700 : Colors.green,
                         ),
-                        title: Text(shop.name,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text(shop.category),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          if (isNavigating) return;
-                          isNavigating = true;
-                          Navigator.pop(ctx);
-                          navigatorKey.currentState?.pushNamed(
-                            AppRoutes.restaurant,
-                            arguments: {'shopId': shop.id},
-                          ).then((_) => isNavigating = false);
-                        },
-                      )),
+                      ),
+                      title: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              shop.name,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (isPending)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'In Order',
+                                style: TextStyle(
+                                  color: Colors.orange.shade800,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'In Cart',
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      subtitle: Text(shop.category),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        if (isNavigating) return;
+                        isNavigating = true;
+                        Navigator.pop(ctx);
+                        navigatorKey.currentState?.pushNamed(
+                          AppRoutes.restaurant,
+                          arguments: {'shopId': shop.id},
+                        ).then((_) => isNavigating = false);
+                      },
+                    );
+                  }),
                 ],
               ),
             ),
@@ -179,10 +255,22 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
 
         return Consumer<CartProvider>(
           builder: (context, cartProvider, _) {
-            final shops = cartProvider.shops;
+            final pendingShops = cartProvider.isPendingReplacementActive
+                ? cartProvider.activePendingShops
+                : <ShopModel>[];
+            final cartShops = cartProvider.shops;
 
-            // Only show if there are items in the cart
-            if (shops.isEmpty) {
+            final seenIds = <String>{};
+            final allShops = <ShopModel>[];
+            for (final s in pendingShops) {
+              if (seenIds.add(s.id)) allShops.add(s);
+            }
+            for (final s in cartShops) {
+              if (seenIds.add(s.id)) allShops.add(s);
+            }
+
+            // Only show if there are items in the cart OR active shops in pending replacement
+            if (allShops.isEmpty) {
               return const SizedBox.shrink();
             }
 
@@ -191,7 +279,7 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
               top: _position?.dy ?? 0,
               child: GestureDetector(
                 onPanUpdate: _onPanUpdate,
-                onTap: () => _handleTap(shops),
+                onTap: () => _handleTap(allShops, pendingShops: pendingShops),
                 child: Container(
                   width: _bubbleSize,
                   height: _bubbleSize,
@@ -215,18 +303,20 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble> {
                         color: Colors.white,
                         size: 28,
                       ),
-                      if (shops.length > 1)
+                      if (allShops.length > 1 || pendingShops.isNotEmpty)
                         Positioned(
                           right: -4,
                           top: -4,
                           child: Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
+                            decoration: BoxDecoration(
+                              color: pendingShops.isNotEmpty
+                                  ? const Color(0xFFEF4444)
+                                  : Colors.red,
                               shape: BoxShape.circle,
                             ),
                             child: Text(
-                              '${shops.length}',
+                              '${allShops.length}',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,

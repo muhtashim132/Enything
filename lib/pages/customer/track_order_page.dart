@@ -87,6 +87,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   // Fix 3: tracks that customer already decided (placed replacement or paid for remaining).
   // Persisted in SharedPrefs so it survives banner-tap page recreations.
   bool _partialRejectionResolved = false;
+  // State flag: customer proceeded with accepted items, waiting for rider assignment
+  bool _isWaitingForRiderAfterProceed = false;
   // Bug E7: Track rejected order count to detect sequential rejections
   int _lastKnownRejectedCount = 0;
 
@@ -592,6 +594,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   String get _aggregateStatusDisplay {
+    if (_hasPartialRejection) {
+      return 'Action Needed: Partial Rejection';
+    }
     final s = _aggregateStatus;
     switch (s) {
       case 'awaiting_acceptance':
@@ -645,6 +650,43 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   List<OrderModel> get _activeGroupOrders {
     if (_groupOrders.isEmpty) return _order != null ? [_order!] : [];
     return _groupOrders.where((o) => !_terminalRejectionStatuses.contains(o.status)).toList();
+  }
+
+  Future<List<ShopModel>> _fetchActivePendingShops() async {
+    final activeOrders = _activeGroupOrders;
+    final activeShopIds = activeOrders
+        .map((o) => o.shopId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (activeShopIds.isEmpty) return [];
+
+    try {
+      final res = await _supabase
+          .from('shops')
+          .select()
+          .inFilter('id', activeShopIds);
+      return (res as List)
+          .map((m) => ShopModel.fromMap(m as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching active pending shops: $e');
+      return activeOrders
+          .where((o) => o.shopId != null && o.shopId!.isNotEmpty)
+          .map((o) => ShopModel(
+                id: o.shopId!,
+                sellerId: '',
+                name: o.items.isNotEmpty ? (o.items.first.productName) : 'Active Shop',
+                shopType: 'General',
+                address: o.address ?? '',
+                location: LatLng(o.deliveryLat ?? 0.0, o.deliveryLng ?? 0.0),
+                category: 'General',
+                categories: const [],
+                isActive: true,
+              ))
+          .toList();
+    }
   }
 
   double _computeGroupTotalAmount() =>
@@ -772,6 +814,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (aggStatus != _lastAggStatus) {
       _lastAggStatus = aggStatus;
       NotificationService().updateOrderNotificationFromStatus(aggStatus);
+      if (aggStatus == 'awaiting_payment') {
+        if (_isWaitingForRiderAfterProceed) {
+          _isWaitingForRiderAfterProceed = false;
+          SensoryHaptics.success();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _openRazorpay();
+          });
+        }
+      }
       if (aggStatus == 'delivered') {
         SensoryHaptics.success();
       }
@@ -1856,6 +1907,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   String _statusSubtitle(bool isDelivered, bool isCancelled) {
+    if (_hasPartialRejection) {
+      final m = (_decisionSecondsLeft.value ~/ 60).toString().padLeft(2, '0');
+      final s = (_decisionSecondsLeft.value % 60).toString().padLeft(2, '0');
+      return 'Some items unavailable. Please choose an option within $m:$s!';
+    }
     if (isCancelled) {
       switch (_order?.cancelledReason) {
         case 'shop_rejected':
@@ -2047,25 +2103,36 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     bool canPay = false;
     try {
       if (_order!.cartGroupId != null) {
-        final statusesResp = await _supabase
+        final orderRowsResp = await _supabase
             .from('orders')
-            .select('status')
+            .select('id, status, seller_accepted, partner_accepted')
             .eq('cart_group_id', _order!.cartGroupId!);
-        final statuses =
-            (statusesResp as List).map((r) => r['status'] as String).toList();
-        if (statuses.contains('awaiting_payment') &&
-            !statuses.contains('awaiting_acceptance')) {
+        final rows = (orderRowsResp as List);
+        final activeRows = rows.where((r) =>
+            !_terminalRejectionStatuses.contains(r['status'] as String)).toList();
+
+        final allActiveReady = activeRows.isNotEmpty && activeRows.every((r) {
+          final s = r['status'] as String;
+          final sa = r['seller_accepted'] == true;
+          final pa = r['partner_accepted'] == true;
+          return s == 'awaiting_payment' || (sa && pa);
+        });
+        if (allActiveReady) {
           canPay = true;
         }
       } else {
         final freshStatus = await _supabase
             .from('orders')
-            .select('status')
+            .select('status, seller_accepted, partner_accepted')
             .eq('id', widget.orderId)
             .maybeSingle();
-        if (freshStatus != null &&
-            freshStatus['status'] == 'awaiting_payment') {
-          canPay = true;
+        if (freshStatus != null) {
+          final s = freshStatus['status'] as String?;
+          final sa = freshStatus['seller_accepted'] == true;
+          final pa = freshStatus['partner_accepted'] == true;
+          if (s == 'awaiting_payment' || (sa && pa)) {
+            canPay = true;
+          }
         }
       }
     } catch (e) {
@@ -2080,6 +2147,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     if (!canPay) {
       abortPayment();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait for the shop and delivery partner to confirm before completing payment.'),
+            backgroundColor: AppColors.warning,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
       return;
     }
 
@@ -2112,12 +2188,32 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         }
       }
 
-      // S1 FIX: Only include orders that are actually awaiting_payment.
+      // S1 FIX: Only include orders that are actually awaiting_payment or accepted and ready.
       List<OrderModel> activeOrders = _groupOrders.isEmpty
           ? [_order!]
-          : _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
+          : _groupOrders.where((o) =>
+              o.status == 'awaiting_payment' ||
+              (!_terminalRejectionStatuses.contains(o.status) &&
+               o.sellerAccepted &&
+               o.partnerAccepted)).toList();
+      if (activeOrders.isEmpty) {
+        await _fetchOrder();
+        activeOrders = _groupOrders.where((o) =>
+            o.status == 'awaiting_payment' ||
+            (!_terminalRejectionStatuses.contains(o.status) &&
+             o.sellerAccepted &&
+             o.partnerAccepted)).toList();
+      }
       if (activeOrders.isEmpty) {
         abortPayment();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No active orders ready for payment. Please try again.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+        }
         return;
       }
 
@@ -2594,8 +2690,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         ),
                         child: Column(
                           children: [
-                            // Countdown ring for awaiting_acceptance or awaiting_payment
-                            if (_aggregateStatus == 'awaiting_acceptance' ||
+                            // Countdown ring for partial rejection, awaiting_acceptance or awaiting_payment
+                            if (_hasPartialRejection ||
+                                _aggregateStatus == 'awaiting_acceptance' ||
                                 _aggregateStatus == 'awaiting_payment')
                               Stack(
                                 alignment: Alignment.center,
@@ -2606,18 +2703,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                     child: TweenAnimationBuilder<double>(
                                       tween: Tween<double>(
                                           begin: 1.0,
-                                          end: (_aggregateStatus ==
-                                                      'awaiting_acceptance'
-                                                  ? _acceptanceSecondsLeft
-                                                  : (_hasPartialRejection
-                                                      ? _decisionSecondsLeft
-                                                          .value
+                                          end: (_hasPartialRejection
+                                                  ? _decisionSecondsLeft.value
+                                                  : (_aggregateStatus ==
+                                                          'awaiting_acceptance'
+                                                      ? _acceptanceSecondsLeft
                                                       : _paymentSecondsLeft)) /
-                                              (_aggregateStatus ==
-                                                      'awaiting_acceptance'
-                                                  ? 180.0
-                                                  : (_hasPartialRejection
-                                                      ? 300.0
+                                              (_hasPartialRejection
+                                                  ? 300.0
+                                                  : (_aggregateStatus ==
+                                                          'awaiting_acceptance'
+                                                      ? 180.0
                                                       : 600.0))),
                                       duration:
                                           const Duration(milliseconds: 500),
@@ -2646,11 +2742,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                           MainAxisAlignment.center,
                                       children: [
                                         Text(
-                                          _aggregateStatus ==
-                                                  'awaiting_acceptance'
-                                              ? '${(_acceptanceSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_acceptanceSecondsLeft % 60).toString().padLeft(2, '0')}'
-                                              : (_hasPartialRejection
-                                                  ? '${(_decisionSecondsLeft.value ~/ 60).toString().padLeft(2, '0')}:${(_decisionSecondsLeft.value % 60).toString().padLeft(2, '0')}'
+                                          _hasPartialRejection
+                                              ? '${(_decisionSecondsLeft.value ~/ 60).toString().padLeft(2, '0')}:${(_decisionSecondsLeft.value % 60).toString().padLeft(2, '0')}'
+                                              : (_aggregateStatus ==
+                                                      'awaiting_acceptance'
+                                                  ? '${(_acceptanceSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_acceptanceSecondsLeft % 60).toString().padLeft(2, '0')}'
                                                   : '${(_paymentSecondsLeft ~/ 60).toString().padLeft(2, '0')}:${(_paymentSecondsLeft % 60).toString().padLeft(2, '0')}'),
                                           style: GoogleFonts.outfit(
                                             color: Colors.white,
@@ -2916,6 +3012,20 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       const SizedBox(height: 16),
                     ],
 
+                    // ── Partial Rejection Action Panel (Prominent Above The Fold) ─
+                    if (_hasPartialRejection && !isCancelled) ...[
+                      _buildPartialRejectionPanel(isDark),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // ── Waiting for Rider Card (After Proceed with Remaining) ─────
+                    if (_isWaitingForRiderAfterProceed &&
+                        !isCancelled &&
+                        _aggregateStatus != 'awaiting_payment') ...[
+                      _buildWaitingForRiderCard(isDark),
+                      const SizedBox(height: 20),
+                    ],
+
                     // ── Primary Action: Complete Payment (when awaiting_payment) ──
                     if (_aggregateStatus == 'awaiting_payment' && !isCancelled) ...[
                       _buildPaymentActionSection(isDark),
@@ -3100,7 +3210,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                   : AppColors.divider,
                             ),
                             _billRow(
-                              'Total Paid',
+                              (_order?.paymentStatus == 'captured' ||
+                                      _groupOrders.any((o) => o.paymentStatus == 'captured') ||
+                                      (!isCancelled &&
+                                          !['awaiting_acceptance', 'awaiting_payment']
+                                              .contains(_aggregateStatus) &&
+                                          _order?.paymentMethod != 'cod'))
+                                  ? 'Total Paid'
+                                  : 'Total Payable',
                               '₹${_computeGroupGrandTotal().toStringAsFixed(0)}',
                               isBold: true,
                               isDark: isDark,
@@ -3139,13 +3256,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           ),
                         ),
                       ),
-
-                    if ((_aggregateStatus == 'awaiting_payment' ||
-                            _aggregateStatus == 'awaiting_acceptance') &&
-                        _hasPartialRejection) ...[
-                      const SizedBox(height: 16),
-                      _buildPartialRejectionPanel(isDark),
-                    ],
 
                     // ── Smart Cancellation Recovery Panel ─────────────────────────
                     if (isCancelled) ...{
@@ -3357,6 +3467,74 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           ),
         ],
       ],
+    );
+  }
+
+  // ── Waiting for Delivery Partner Card ───────────────────────────────────────
+  Widget _buildWaitingForRiderCard(bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFF22C55E).withValues(alpha: 0.35),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22C55E)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Proceeding with Accepted Items',
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Assigning a delivery partner for your order. Payment option will appear immediately once confirmed!',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12.5,
+                    color: isDark ? Colors.white70 : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3689,6 +3867,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         debugPrint('Error acknowledging partial rejection in DB: $e');
                       }
 
+                      if (_order?.cartGroupId != null) {
+                        try {
+                          await _supabase.rpc('reallocate_cancelled_delivery_fees', params: {
+                            'p_cart_group_id': _order!.cartGroupId!,
+                          });
+                        } catch (e) {
+                          debugPrint('Error reallocating delivery fees: $e');
+                        }
+                      }
+
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setBool(
                           'partial_rejection_resolved_$cartGroupId', true);
@@ -3697,18 +3885,26 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           context.read<CartProvider>().clearPendingReplacement();
                         }
                       } catch (_) {}
+
+                      // Authoritative refetch so local state matches backend exactly
+                      await _fetchOrder();
+
                       if (mounted) {
                         setState(() {
                           _partialRejectionResolved = true;
+                          _isProcessingPayment = false;
                         });
                       }
 
-                      if (_aggregateStatus != 'awaiting_payment') {
+                      if (_aggregateStatus != 'awaiting_payment' && !(_allSellersAccepted && _partnerAccepted)) {
                         if (mounted) {
+                          setState(() {
+                            _isWaitingForRiderAfterProceed = true;
+                          });
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                               content: Text(hasPendingShops
-                                  ? 'Pending shops cancelled! Waiting for a rider for the remaining accepted shops...'
-                                  : 'Continuing with accepted shops... Waiting for a rider.')));
+                                  ? 'Pending shops cancelled! Assigning a delivery partner for your order...'
+                                  : 'Continuing with accepted shops! Assigning a delivery partner for your order...')));
                         }
                         return;
                       }
@@ -3727,7 +3923,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
                       // Reset before calling _openRazorpay() because it has an
                       // internal guard: `if (_isProcessingPayment) return;`
-                      if (mounted) setState(() => _isProcessingPayment = false);
+                      if (mounted) {
+                        setState(() {
+                          _isProcessingPayment = false;
+                          _isWaitingForRiderAfterProceed = false;
+                        });
+                      }
                       if (mounted) _openRazorpay();
                     } catch (e) {
                       debugPrint('Error proceeding with remaining: $e');
@@ -3782,6 +3983,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               );
               cartProvider.setPendingOrderIdToCancel(firstRejected.id);
 
+              final activeShops = await _fetchActivePendingShops();
+              cartProvider.setActivePendingShops(activeShops);
+
               // 100x FIX: Bump deadlines immediately so active shops don't expire while user is browsing
               if (_order?.cartGroupId != null) {
                 try {
@@ -3807,12 +4011,24 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   bool _isMissingItemsSheetOpen = false;
   bool _isSearchingAlternatives = false;
 
-  void _showMissingItemsSheet(List<OrderModel> rejectedOrders, bool isDark) {
+  void _showMissingItemsSheet(List<OrderModel> rejectedOrders, bool isDark) async {
     if (_isMissingItemsSheetOpen) return;
     final missingItems = <OrderItem>[];
     for (final o in rejectedOrders) {
       missingItems.addAll(o.items);
     }
+
+    try {
+      final cartProvider = context.read<CartProvider>();
+      cartProvider.setPendingCartGroupId(_order?.cartGroupId);
+      if (rejectedOrders.isNotEmpty) {
+        cartProvider.setPendingOrderIdToCancel(rejectedOrders.first.id);
+      }
+      final activeShops = await _fetchActivePendingShops();
+      cartProvider.setActivePendingShops(activeShops);
+    } catch (_) {}
+
+    if (!mounted) return;
 
     _isMissingItemsSheetOpen = true;
     showModalBottomSheet(
