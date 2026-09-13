@@ -1,10 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../config/routes.dart';
 import '../../widgets/3d/perspective_card.dart';
-import '../../theme/sensory_haptics.dart';
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({super.key});
@@ -267,7 +265,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             badge: 'Shop Now',
                             selected: _selectedRole == 'customer',
                             onTap: () {
-                              HapticFeedback.lightImpact();
                               setState(() => _selectedRole = 'customer');
                             },
                           ),
@@ -282,7 +279,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             badge: 'Sell Now',
                             selected: _selectedRole == 'seller',
                             onTap: () {
-                              HapticFeedback.lightImpact();
                               setState(() => _selectedRole = 'seller');
                             },
                           ),
@@ -297,7 +293,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             badge: 'Earn Now',
                             selected: _selectedRole == 'delivery_partner',
                             onTap: () {
-                              HapticFeedback.lightImpact();
                               setState(
                                   () => _selectedRole = 'delivery_partner');
                             },
@@ -451,10 +446,8 @@ class _AnimatedRoleCard extends StatelessWidget {
         child: Opacity(opacity: anim.value.clamp(0.0, 1.0), child: child),
       ),
       child: PerspectiveCard(
-        onTap: () {
-          SensoryHaptics.medium();
-          onTap();
-        },
+        enableHaptics: false,
+        onTap: onTap,
         borderRadius: 22,
         maxTiltAngle: 0.07,
         pressScale: 0.97,

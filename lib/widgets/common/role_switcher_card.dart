@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
@@ -96,7 +95,6 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
     if (user == null || _switchingTo != null) return;
     if (role == user.activeSessionRole) return; // already on this role
 
-    HapticFeedback.lightImpact();
     setState(() => _switchingTo = role);
 
     // Capture navigator BEFORE the async gap

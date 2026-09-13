@@ -121,6 +121,7 @@ class _ShopCardState extends State<ShopCard> {
     final highlight = _categoryHighlightText();
 
     return PerspectiveCard(
+      enableHaptics: false,
       onTap: onTap,
       borderRadius: PremiumRadius.large,
       maxTiltAngle: 0.05,

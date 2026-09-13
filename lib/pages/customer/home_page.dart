@@ -4426,6 +4426,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               // ── "See More" card (last item) ────────────────────────────────
               if (index == mainCats.length) {
                 return PerspectiveCard(
+                  enableHaptics: false,
                   borderRadius: 22,
                   maxTiltAngle: 0.08,
                   pressScale: 0.95,
@@ -4556,6 +4557,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               final isSelected = _selectedTabIndex == index;
 
               return PerspectiveCard(
+                enableHaptics: false,
                 borderRadius: 22,
                 maxTiltAngle: 0.08,
                 pressScale: 0.95,

@@ -93,6 +93,7 @@ class _ProductCardState extends State<ProductCard>
     final hasBrand = product.brand != null && product.brand!.isNotEmpty;
 
     return PerspectiveCard(
+      enableHaptics: false,
       onTap: isLocked ? null : () => showProductDetailSheet(context, product.id),
       borderRadius: PremiumRadius.large,
       maxTiltAngle: 0.06,

@@ -78,6 +78,7 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
         .toList();
 
     return PerspectiveCard(
+      enableHaptics: false,
       onTap: onTap,
       borderRadius: 24,
       maxTiltAngle: 0.05,

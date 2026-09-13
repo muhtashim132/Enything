@@ -349,6 +349,7 @@ class _AllCategoriesPageState extends State<AllCategoriesPage> {
                           final emoji = cat['emoji'] ?? '🏪';
 
                           return PerspectiveCard(
+                            enableHaptics: false,
                             borderRadius: 22,
                             maxTiltAngle: 0.08,
                             pressScale: 0.96,

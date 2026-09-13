@@ -5,5 +5,11 @@
     "python.terminal.useEnvFile": true,
     "deno.enable": true,
     "deno.enablePaths": ["supabase/functions"],
-    "deno.unstable": true
+    "deno.unstable": true,
+    "python.analysis.extraPaths": [
+        "/Users/muhtaashimnazki/Library/Python/3.9/lib/python/site-packages"
+    ],
+    "python.autoComplete.extraPaths": [
+        "/Users/muhtaashimnazki/Library/Python/3.9/lib/python/site-packages"
+    ]
 }

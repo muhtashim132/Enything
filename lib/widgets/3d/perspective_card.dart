@@ -24,7 +24,7 @@ class PerspectiveCard extends StatefulWidget {
     this.pressScale = 0.975,
     this.borderRadius = 20,
     this.enableSpecular = true,
-    this.enableHaptics = true,
+    this.enableHaptics = false,
     this.specularColor,
     this.customBorderRadius,
   });

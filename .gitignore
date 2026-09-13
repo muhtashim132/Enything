@@ -92,3 +92,8 @@ android/key.properties
 
 # Scratch debugging directory
 /scratch/
+test_mockup.png
+
+# Binary release bundles
+*.aab
+*.apk
