@@ -14,7 +14,6 @@ import '../../providers/platform_config_provider.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
 import '../../widgets/map_pin_picker_page.dart';
-import '../../widgets/seller/seller_deductible_card.dart';
 import 'package:latlong2/latlong.dart' as ll;
 
 class ShopManagementPage extends StatefulWidget {
@@ -31,7 +30,6 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   bool _isSaving = false;
 
   String? _shopId;
-  String? _shopCategory;
   bool _isActive = false;
   String? _currentAddress;
   bool _adminSuspended = false;
@@ -86,15 +84,9 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         orElse: () => shopsList.first,
       );
 
-      final rawCat = resp['category'] ??
-          (resp['categories'] != null && (resp['categories'] as List).isNotEmpty
-              ? resp['categories'][0]
-              : 'Other');
-
       setState(() {
         _shops = shopsList;
         _shopId = resp['id'];
-        _shopCategory = rawCat as String? ?? 'Other';
         _adminSuspended = resp['is_active'] == false;
         _isActive = resp['is_accepting_orders'] ?? false;
         _currentAddress = resp['address'];
@@ -401,16 +393,6 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                                   inactiveThumbColor: AppColors.danger,
                                 ),
                               ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // ── Platform Fees & Deductibles ─────────────────────
-                          _sectionCard(
-                            isDark: isDark,
-                            child: SellerDeductibleCard(
-                              category: _shopCategory ?? 'Other',
-                              isCompact: false,
                             ),
                           ),
                           const SizedBox(height: 16),
