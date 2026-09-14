@@ -15,6 +15,7 @@ import '../../widgets/product_card.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../widgets/customer/floating_cart_bar.dart';
+import '../../config/app_categories.dart';
 
 class CategoryProductsPage extends StatefulWidget {
   final String categoryName;
@@ -567,7 +568,11 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                         final itemWidth = (availableWidth -
                                 (crossAxisSpacing * (crossAxisCount + 1))) /
                             crossAxisCount;
-                        final itemHeight = itemWidth + 120;
+                        final bool isFashion =
+                            AppCategories.isFashionCategory(widget.categoryName);
+                        final double imageRatio = isFashion ? (3.0 / 4.0) : 1.0;
+                        final double imageHeight = itemWidth / imageRatio;
+                        final double itemHeight = imageHeight + 120;
                         final childAspectRatio = itemWidth / itemHeight;
 
                         var filteredProducts = _products;
@@ -608,7 +613,10 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                     final product = displayProducts[index];
                                     final shop = _productShops[product.id];
                                     return ProductCard(
-                                        product: product, shop: shop);
+                                      product: product,
+                                      shop: shop,
+                                      imageAspectRatio: imageRatio,
+                                    );
                                   },
                                 ),
                               ),

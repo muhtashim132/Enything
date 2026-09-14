@@ -436,6 +436,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _isCreatingOrder = true;
     final cart = context.read<CartProvider>();
     final location = context.read<LocationProvider>();
+    final config = context.read<PlatformConfigProvider>();
+
+    if (config.isMaintenanceMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(config.maintenanceMessage),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      _isCreatingOrder = false;
+      _isProcessing.value = false;
+      return;
+    }
 
     if (cart.items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -534,6 +551,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   String _classifyCheckoutError(String errorStr) {
     final e = errorStr.toLowerCase();
+    // Maintenance mode: extract admin's custom message from DB trigger error
+    if (e.contains('maintenance_mode_active')) {
+      final match = RegExp(r'maintenance_mode_active:\s*(.+)', caseSensitive: false).firstMatch(errorStr);
+      if (match != null) {
+        var msg = match.group(1)?.trim() ?? '';
+        final codeIdx = msg.indexOf(RegExp(r',\s*code:\s*', caseSensitive: false));
+        if (codeIdx >= 0) {
+          msg = msg.substring(0, codeIdx).trim();
+        }
+        msg = msg.replaceAll(RegExp(r'[\)\]\"\s]+$'), '').trim();
+        if (msg.isNotEmpty) return msg;
+      }
+      return 'Ordering is temporarily paused. Please try again later.';
+    }
     if (e.contains('socketexception') ||
         e.contains('timeoutexception') ||
         e.contains('clientexception')) {
@@ -1818,16 +1849,80 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                // ── Maintenance Mode Banner (Additive) ───────────────────
+                Builder(
+                  builder: (context) {
+                    final config = context.watch<PlatformConfigProvider>();
+                    if (!config.isMaintenanceMode) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isDark
+                                ? [const Color(0xFF78350F), const Color(0xFF92400E)]
+                                : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.5),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('⚠️', style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Ordering Temporarily Paused',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    config.maintenanceMessage,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11.5,
+                                      color: isDark ? const Color(0xFFFEF3C7) : const Color(0xFF78350F),
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 ValueListenableBuilder<bool>(
                   valueListenable: _isProcessing,
                   builder: (context, isProcessing, _) {
+                    final config = context.watch<PlatformConfigProvider>();
+                    final isMaintenance = config.isMaintenanceMode;
                     return SlideToAction(
-                      label: 'Slide to Place Order • ₹${total.toStringAsFixed(0)}',
+                      label: isMaintenance
+                          ? 'Shopping Temporarily Paused'
+                          : 'Slide to Place Order • ₹${total.toStringAsFixed(0)}',
                       onConfirmed: _placeOrder,
                       isLoading: isProcessing,
-                      enabled: !isProcessing,
+                      enabled: !isProcessing && !isMaintenance,
                       isDark: isDark,
-                      activeTrackColor: AppColors.secondary,
+                      activeTrackColor: isMaintenance
+                          ? Colors.grey
+                          : AppColors.secondary,
                       height: 56,
                       borderRadius: 16,
                     );

@@ -15,6 +15,7 @@ import 'profile_settings_dialogs.dart';
 import 'refer_and_earn_page.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
+import '../../widgets/seller/seller_deductible_card.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
   const ProfileSettingsPage({super.key});
@@ -421,6 +422,14 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
           roleColor: const Color(0xFF9C27B0),
           isDark: isDark,
           onTap: _showShopDetailsDialog,
+        ),
+        _buildSettingTile(
+          icon: Icons.percent_rounded,
+          title: 'Platform Fees & Deductibles',
+          subtitle: 'Commission, gateway, TDS & TCS rates',
+          roleColor: const Color(0xFF9C27B0),
+          isDark: isDark,
+          onTap: _showSellerFeesModal,
         ),
         _buildSettingTile(
           icon: Icons.account_balance_outlined,
@@ -879,6 +888,32 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
       content: Text('$feature settings coming soon!'),
       behavior: SnackBarBehavior.floating,
     ));
+  }
+
+  Future<void> _showSellerFeesModal() async {
+    final auth = context.read<AuthProvider>();
+    String category = 'Other';
+    if (auth.currentUserId != null) {
+      try {
+        final res = await Supabase.instance.client
+            .from('shops')
+            .select('category, categories')
+            .eq('seller_id', auth.currentUserId!)
+            .limit(1)
+            .maybeSingle();
+        if (res != null) {
+          final rawCat = res['category'] ??
+              (res['categories'] != null &&
+                      (res['categories'] as List).isNotEmpty
+                  ? res['categories'][0]
+                  : 'Other');
+          category = rawCat as String? ?? 'Other';
+        }
+      } catch (_) {}
+    }
+    if (mounted) {
+      showSellerDeductiblesModal(context, category: category);
+    }
   }
 
   Future<void> _showShopDetailsDialog() async {

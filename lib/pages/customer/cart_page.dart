@@ -379,7 +379,8 @@ class CartPage extends StatelessWidget {
       paymentMethod: 'upi',
     );
     final total = gstBreakdown.grandTotal;
-    final canCheckout = cart.meetsMinimumOrder && baseCharge >= 0;
+    final config = context.watch<PlatformConfigProvider>();
+    final canCheckout = cart.meetsMinimumOrder && baseCharge >= 0 && !config.isMaintenanceMode;
 
     return SafeArea(
       top: false,
@@ -501,6 +502,59 @@ class CartPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
+            // ── Maintenance Mode Banner (Additive) ───────────────────
+            if (config.isMaintenanceMode) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [const Color(0xFF78350F), const Color(0xFF92400E)]
+                        : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.5),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('⚠️', style: TextStyle(fontSize: 18)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ordering Temporarily Paused',
+                            style: GoogleFonts.outfit(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            config.maintenanceMessage,
+                            style: GoogleFonts.outfit(
+                              fontSize: 11.5,
+                              color: isDark ? const Color(0xFFFEF3C7) : const Color(0xFF78350F),
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
             // Checkout button
             GestureDetector(
               onTap: canCheckout
@@ -562,11 +616,13 @@ class CartPage extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    baseCharge < 0
-                        ? 'Out of range'
-                        : cart.meetsMinimumOrder
-                            ? 'Proceed to Checkout • ₹${total.toStringAsFixed(0)}'
-                            : 'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
+                    config.isMaintenanceMode
+                        ? 'Shopping Temporarily Paused'
+                        : baseCharge < 0
+                            ? 'Out of range'
+                            : cart.meetsMinimumOrder
+                                ? 'Proceed to Checkout • ₹${total.toStringAsFixed(0)}'
+                                : 'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
                     style: GoogleFonts.outfit(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,

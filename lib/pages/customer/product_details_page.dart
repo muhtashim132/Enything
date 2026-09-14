@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -20,6 +19,7 @@ import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
+import '../../widgets/common/premium_product_image.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final String productId;
@@ -228,22 +228,16 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             itemCount: _product!.images.length,
                             onPageChanged: (i) =>
                                 setState(() => _currentImageIndex = i),
-                            itemBuilder: (ctx, i) => CachedNetworkImage(
-                              imageUrl: i == 0
+                            itemBuilder: (ctx, i) {
+                              final imgUrl = i == 0
                                   ? _product!.displayImage
-                                  : _product!.images[i],
-                              fit: BoxFit.cover,
-                              memCacheWidth: 800,
-                              maxWidthDiskCache: 1200,
-                              errorWidget: (c, e, s) => Container(
-                                color: isDark
-                                    ? AppColors.darkSurface
-                                    : AppColors.primary.withValues(alpha: 0.05),
-                                child: const Center(
-                                    child: Icon(Icons.shopping_bag_outlined,
-                                        size: 80, color: AppColors.primary)),
-                              ),
-                            ),
+                                  : _product!.images[i];
+                              return PremiumProductImage(
+                                imageUrl: imgUrl,
+                                isDark: isDark,
+                                foregroundFit: BoxFit.contain,
+                              );
+                            },
                           ),
                           // Premium gradient overlay for readability
                           Positioned.fill(

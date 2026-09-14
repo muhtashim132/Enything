@@ -14,6 +14,8 @@ import '../platform/referral_settings_page.dart';
 import '../platform/tax_settings_page.dart';
 import '../platform/active_sessions_page.dart';
 import '../platform/category_management_page.dart';
+import '../platform/maintenance_settings_page.dart';
+import '../../../providers/platform_config_provider.dart';
 
 class SettingsAdminPage extends StatelessWidget {
   const SettingsAdminPage({super.key});
@@ -70,6 +72,23 @@ class SettingsAdminPage extends StatelessWidget {
           onTap: () =>
               Navigator.push(context, _route(const CommissionFeesPage())),
         ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.1),
+        Builder(
+          builder: (context) {
+            final config = context.watch<PlatformConfigProvider>();
+            return _SettingsTile(
+              icon: Icons.power_settings_new_rounded,
+              iconColor: config.isMaintenanceMode
+                  ? AdminColors.danger
+                  : AdminColors.success,
+              title: 'Store Status & Maintenance',
+              subtitle: config.isMaintenanceMode
+                  ? '🔴 Orders Paused'
+                  : '🟢 Store Online',
+              onTap: () => Navigator.push(
+                  context, _route(const MaintenanceSettingsPage())),
+            );
+          },
+        ).animate().fadeIn(delay: 225.ms).slideX(begin: -0.1),
         _SettingsTile(
           icon: Icons.category_rounded,
           iconColor: const Color(0xFF8B5CF6),

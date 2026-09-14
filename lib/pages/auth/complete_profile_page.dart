@@ -9,6 +9,7 @@ import '../../providers/referral_provider.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../widgets/seller/category_extra_fields.dart';
+import '../../widgets/seller/seller_deductible_card.dart';
 import '../../utils/responsive_layout.dart';
 import '../../widgets/map_pin_picker_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -773,6 +774,13 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+
+          // ── Business Category Deductible Breakdown ───────────────────
+          SellerDeductibleCard(
+            category: _shopCategory,
+            isCompact: true,
           ),
           const SizedBox(height: 16),
 

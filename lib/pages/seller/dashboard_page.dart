@@ -15,6 +15,7 @@ import '../../widgets/common/notification_bell.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../utils/responsive_layout.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/seller/seller_deductible_card.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 class SellerDashboardPage extends StatefulWidget {
@@ -968,6 +969,29 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
                               arguments: {'shopId': _activeShopId},
                             ),
                           ),
+                          Builder(builder: (ctx) {
+                            final configProv = ctx.watch<PlatformConfigProvider>();
+                            final b = SellerDeductibleBreakdown.fromCategory(
+                              _shopCategory ?? 'Other',
+                              configProv,
+                            );
+                            return _actionTile(
+                              icon: Icons.percent_rounded,
+                              gradient: const [
+                                Color(0xFF7950F2),
+                                Color(0xFF5C7CFA),
+                              ],
+                              title: 'Platform Fees & Deductibles',
+                              subtitle:
+                                  '${b.totalDeductiblePercent.toStringAsFixed(2)}% total deductions (${b.netPayoutPercent.toStringAsFixed(2)}% net payout)',
+                              badge: '${b.netPayoutPercent.toStringAsFixed(1)}% Net',
+                              isDark: isDark,
+                              onTap: () => showSellerDeductiblesModal(
+                                context,
+                                category: _shopCategory ?? 'Other',
+                              ),
+                            );
+                          }),
                           _actionTile(
                             icon: Icons.savings_rounded,
                             gradient: const [

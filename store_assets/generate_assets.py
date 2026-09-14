@@ -19,6 +19,7 @@ Supports 2-batch ingestion for Android:
 
 import os
 import sys
+import re
 import argparse
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageColor, ImageOps
@@ -211,10 +212,18 @@ def open_and_orient_image(path):
 
 def fit_screen_to_viewport(screen_img, target_w, target_h):
     """
-    Scales and crops screen image to target dimensions without ANY aspect ratio distortion.
-    Preserves top app bar/status bar alignment and centers horizontally.
+    Scales screen image to target dimensions without ANY aspect ratio distortion.
+    If the image aspect ratio is close to target (within 4%), resizes directly to ensure
+    100% full content visibility with ZERO cropping of bottom buttons/actions or top bars.
     """
     img_w, img_h = screen_img.size
+    img_aspect = img_w / img_h
+    target_aspect = target_w / target_h
+    
+    # If aspect ratios are virtually identical (within 4%), resize directly to preserve 100% of all pixels
+    if abs(img_aspect - target_aspect) / target_aspect < 0.04:
+        return screen_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
     scale = max(target_w / img_w, target_h / img_h)
     new_w = max(1, int(round(img_w * scale)))
     new_h = max(1, int(round(img_h * scale)))
@@ -269,6 +278,8 @@ def load_screen_image(preset, platform="ios"):
         name_stems.extend(["seller 1", "seller 2", "seller1", "merchant"])
     elif num == 8:
         name_stems.extend(["Rider 1", "rider 1", "rider 2", "rider1", "delivery"])
+    elif num == 9:
+        name_stems.extend(["onboarding", "role_select", "role_selection", "roles", "Choose your role", "Choose_your_role"])
 
     extensions = [".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG", ".webp", ".WEBP"]
 
@@ -432,7 +443,7 @@ def render_ios_screenshot(preset, is_ipad=False):
     subtitle_font = get_font("Inter-Medium.ttf", 44 if is_ipad else 36)
     
     # Badge Pill
-    badge_text = preset["badge"]
+    badge_text = re.sub(r'^[^\w]+', '', preset["badge"]).strip()
     badge_bbox = badge_font.getbbox(badge_text)
     badge_w = badge_bbox[2] - badge_bbox[0]
     badge_h = badge_bbox[3] - badge_bbox[1]
@@ -566,24 +577,38 @@ ANDROID_PRESETS = [
         "image_file": "8.png",
         "theme": ("#052e16", "#14532d", "#16a34a", "#22c55e"),
     },
+    {
+        "id": 9,
+        "batch": 2,
+        "badge": "🔄 ONE APP FOR EVERYONE",
+        "title": "Customer, Seller & Rider",
+        "subtitle": "Seamlessly switch roles or sign up with a single phone number",
+        "image_file": "9.png",
+        "theme": ("#060c2c", "#0e1f6e", "#1e3fd8", "#38bdf8"),
+    },
 ]
 
-def build_android_phone_frame(screen_img, target_w=760):
+def build_android_phone_frame(screen_img, max_screen_h=1510):
     """
     Constructs an authentic Modern Android Flagship chassis:
     - Precision Armor Aluminum dark frame with sleek corner radius
     - Android hardware buttons on Right Side (Volume Rocker + Power Button)
     - Centered punch-hole selfie camera with subtle optical reflection
     - Symmetrical slim black bezel
+    - Aspect ratio dynamically matched to the input screenshot to guarantee 100% full content visibility
     """
     border_w = 10
     bezel_w = 8
     total_margin = border_w + bezel_w
     
-    screen_w = target_w - total_margin * 2
-    screen_h = 1460  # Tailored for 1080x1920 canvas proportions
+    img_w, img_h = screen_img.size
+    aspect = img_h / img_w
     
-    frame_w = target_w
+    # Perfectly match the screen's aspect ratio to ensure ZERO trimming of content
+    screen_h = max_screen_h
+    screen_w = int(round(screen_h / aspect))
+    
+    frame_w = screen_w + total_margin * 2
     frame_h = screen_h + total_margin * 2
     corner_r = 48
     screen_r = 34
@@ -641,20 +666,27 @@ def build_android_phone_frame(screen_img, target_w=760):
         fill=(15, 23, 42, 255)
     )
     
-    return mockup, canvas_w, canvas_h
+    return mockup, frame_w, frame_h
 
-def build_android_tablet_frame(screen_img, target_w, target_h):
+def build_android_tablet_frame(screen_img, max_screen_h=1490):
     """
     Constructs an authentic Android Tablet unibody frame (Galaxy Tab / Pixel Tablet):
     - Symmetrical slim metallic bezel
     - Centered camera sensor in the top bezel
+    - Aspect ratio dynamically matched to preserve 100% full, uncropped app UI
     """
     border_w = 12
     bezel_w = 10
     total_margin = border_w + bezel_w
     
-    screen_w = target_w - total_margin * 2
-    screen_h = target_h - total_margin * 2
+    img_w, img_h = screen_img.size
+    aspect = img_h / img_w
+    
+    screen_h = max_screen_h
+    screen_w = int(round(screen_h / aspect))
+    
+    target_w = screen_w + total_margin * 2
+    target_h = screen_h + total_margin * 2
     corner_r = 40
     screen_r = 28
     
@@ -671,14 +703,19 @@ def build_android_tablet_frame(screen_img, target_w, target_h):
     cam_y = border_w // 2 + 2
     draw.ellipse([cam_x - 4, cam_y - 4, cam_x + 4, cam_y + 4], fill=(12, 16, 24, 255), outline=(40, 50, 65, 255), width=1)
     
-    # Screen viewport
+    # Screen viewport with specular glass sheen
     scaled = fit_screen_to_viewport(screen_img, screen_w, screen_h)
+    sheen = Image.new("RGBA", (screen_w, screen_h), (0, 0, 0, 0))
+    sh_draw = ImageDraw.Draw(sheen)
+    sh_draw.polygon([(0, 0), (int(screen_w * 0.65), 0), (0, int(screen_h * 0.45))], fill=(255, 255, 255, 12))
+    scaled.alpha_composite(sheen)
+    
     mask = Image.new("L", (screen_w, screen_h), 0)
     m_draw = ImageDraw.Draw(mask)
     m_draw.rounded_rectangle([0, 0, screen_w, screen_h], radius=screen_r, fill=255)
     mockup.paste(scaled, (total_margin, total_margin), mask)
     
-    return mockup
+    return mockup, target_w, target_h
 
 def render_android_screenshot(preset, device_type="phone"):
     """
@@ -714,7 +751,7 @@ def render_android_screenshot(preset, device_type="phone"):
     subtitle_font = get_font("Inter-Medium.ttf", s_size)
     
     # 1. Badge Pill
-    badge_text = preset["badge"]
+    badge_text = re.sub(r'^[^\w]+', '', preset["badge"]).strip()
     badge_bbox = badge_font.getbbox(badge_text)
     badge_w = badge_bbox[2] - badge_bbox[0]
     badge_h = badge_bbox[3] - badge_bbox[1]
@@ -754,16 +791,11 @@ def render_android_screenshot(preset, device_type="phone"):
     raw_img = load_screen_image(preset, platform="android")
     
     if device_type == "phone":
-        target_w = int(W * 0.72)
-        mockup, dev_w, dev_h = build_android_phone_frame(raw_img, target_w)
+        mockup, dev_w, dev_h = build_android_phone_frame(raw_img, max_screen_h=1510)
     elif device_type == "tablet_7":
-        dev_w = int(W * 0.76)
-        dev_h = int(dev_w * 1.55)
-        mockup = build_android_tablet_frame(raw_img, dev_w, dev_h)
+        mockup, dev_w, dev_h = build_android_tablet_frame(raw_img, max_screen_h=1490)
     else:  # tablet_10
-        dev_w = int(W * 0.78)
-        dev_h = int(dev_w * 1.55)
-        mockup = build_android_tablet_frame(raw_img, dev_w, dev_h)
+        mockup, dev_w, dev_h = build_android_tablet_frame(raw_img, max_screen_h=1980)
         
     dev_x = (W - dev_w) // 2
     dev_y = sub_y + (sub_bbox[3] - sub_bbox[1]) + dev_gap
@@ -771,8 +803,8 @@ def render_android_screenshot(preset, device_type="phone"):
     # Drop Shadow
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     s_draw = ImageDraw.Draw(shadow)
-    s_draw.rounded_rectangle([dev_x + 20, dev_y + 30, dev_x + dev_w - 20, dev_y + dev_h + 25], radius=60, fill=(0, 0, 0, 180))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=36 if device_type == "phone" else 48))
+    s_draw.rounded_rectangle([dev_x + 16, dev_y + 24, dev_x + dev_w - 16, dev_y + dev_h + 20], radius=50, fill=(0, 0, 0, 175))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=34 if device_type == "phone" else 44))
     canvas.alpha_composite(shadow)
     canvas.alpha_composite(mockup, (dev_x, dev_y))
     
@@ -812,23 +844,24 @@ def generate_android_assets(batch_choice=None):
         
     for p in android_presets:
         i = p["id"]
+        total_p = len(android_presets)
         # 1. Phone (1080 x 1920 - portrait 9:16, aspect ratio 1.77:1 <= 2:1)
         phone_path = os.path.join(ANDROID_PHONE_DIR, f"playstore_phone_screenshot_{i}.png")
         img_phone = render_android_screenshot(p, device_type="phone")
         img_phone.save(phone_path, "PNG", optimize=True)
-        print(f"  ✓ [{i}/8] Saved Android Phone: playstore_phone_screenshot_{i}.png (1080x1920 RGB)")
+        print(f"  ✓ [{i}/{total_p}] Saved Android Phone: playstore_phone_screenshot_{i}.png (1080x1920 RGB)")
         
         # 2. 7-inch Tablet (1200 x 1920)
         tab7_path = os.path.join(ANDROID_TAB7_DIR, f"playstore_tablet7_screenshot_{i}.png")
         img_tab7 = render_android_screenshot(p, device_type="tablet_7")
         img_tab7.save(tab7_path, "PNG", optimize=True)
-        print(f"  ✓ [{i}/8] Saved Android 7\" Tablet: playstore_tablet7_screenshot_{i}.png (1200x1920 RGB)")
+        print(f"  ✓ [{i}/{total_p}] Saved Android 7\" Tablet: playstore_tablet7_screenshot_{i}.png (1200x1920 RGB)")
         
         # 3. 10-inch Tablet (1600 x 2560)
         tab10_path = os.path.join(ANDROID_TAB10_DIR, f"playstore_tablet10_screenshot_{i}.png")
         img_tab10 = render_android_screenshot(p, device_type="tablet_10")
         img_tab10.save(tab10_path, "PNG", optimize=True)
-        print(f"  ✓ [{i}/8] Saved Android 10\" Tablet: playstore_tablet10_screenshot_{i}.png (1600x2560 RGB)")
+        print(f"  ✓ [{i}/{total_p}] Saved Android 10\" Tablet: playstore_tablet10_screenshot_{i}.png (1600x2560 RGB)")
         
     print("  🎉 Android Play Store Screenshots complete!")
 

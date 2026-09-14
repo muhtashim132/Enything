@@ -2133,6 +2133,67 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               ),
             ),
 
+            // ── Maintenance Mode Announcement Banner (Additive) ──────────────
+            Builder(
+              builder: (context) {
+                final config = context.watch<PlatformConfigProvider>();
+                if (!config.isMaintenanceMode) return const SliverToBoxAdapter(child: SizedBox.shrink());
+                return SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [const Color(0xFF78350F), const Color(0xFF92400E)]
+                              : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.5),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('⚠️', style: TextStyle(fontSize: 20)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Ordering Temporarily Paused',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  config.maintenanceMessage,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    color: isDark ? const Color(0xFFFEF3C7) : const Color(0xFF78350F),
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+
             // ── Trending Now Auto-Marquee Strip ──────────────────────────────────
             if (_searchQuery.isEmpty &&
                 _selectedTabIndex < 0 &&

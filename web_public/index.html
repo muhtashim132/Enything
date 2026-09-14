@@ -6,14 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>Enything — Everything. Everywhere. Instantly. | Official App</title>
     <meta name="description"
-        content="Download Enything, Kashmir's premier hyper-local delivery app. Order food, bakery, groceries, and daily essentials from local stores with transparent ₹20/km delivery, multi-shop checkout, and live GPS tracking.">
+        content="Download Enything, Jammu &amp; Kashmir's premier hyperlocal delivery app &mdash; currently live in Bandipora. Order restaurant food, bakery, groceries, medicines, clothing, shoes, and daily essentials from local stores with transparent ₹20/km delivery and multi-shop checkout.">
     <meta name="theme-color" content="#02061A">
 
     <!-- Open Graph / Meta -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Enything — Everything. Everywhere. Instantly.">
+    <meta property="og:title" content="Enything — Everything. Everywhere. Instantly. | Official App">
     <meta property="og:description"
-        content="Hyperlocal delivery in Jammu & Kashmir. Order from top local restaurants and shops with transparent ₹20/km delivery and multi-shop cart.">
+        content="Hyperlocal delivery in Jammu &amp; Kashmir &mdash; live in Bandipora. Order food, bakery, groceries, medicines, clothing, shoes &amp; essentials with transparent ₹20/km delivery and multi-shop cart.">
     <meta property="og:image" content="logo.png">
 
     <!-- Fonts & Icons -->
@@ -74,8 +74,7 @@
                 <h1>Everything You Need.<br><span class="gradient-text">Delivered Instantly.</span></h1>
 
                 <p class="hero-subtitle">
-                    Order restaurant food, fresh bakery &amp; daily groceries from multiple Bandipora shops in one
-                    checkout. Transparent &pound;20/km distance delivery, zero surge fees &amp; live GPS rider tracking.
+                    Order restaurant food, fresh bakery, daily groceries, medicines, clothing, shoes &amp; daily essentials from multiple local shops across J&amp;K in one checkout &mdash; currently active in Bandipora. Transparent ₹20/km distance delivery, zero surge fees &amp; live GPS rider tracking.
                 </p>
 
                 <!-- Official Download Buttons (Above the Fold!) -->
@@ -1101,26 +1100,54 @@
         // ======================================================================
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         const isAndroid = /Android/.test(navigator.userAgent);
+        const isMobile = isIOS || isAndroid || window.innerWidth <= 768;
+        const inIframe = window.self !== window.top;
         const stickyPrimaryBtn = document.getElementById('sticky-primary-btn');
         const stickySecondaryBtn = document.getElementById('sticky-secondary-btn');
 
+        const IOS_APP_URL = "https://apps.apple.com/in/app/enything/id6809016496";
+        const ANDROID_APP_URL = "https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything";
+
         if (isAndroid) {
             if (stickyPrimaryBtn && stickySecondaryBtn) {
-                stickyPrimaryBtn.href = "https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything";
+                stickyPrimaryBtn.href = ANDROID_APP_URL;
                 stickyPrimaryBtn.innerHTML = '<i class="fab fa-google-play"></i> Install App';
-                stickySecondaryBtn.href = "https://apps.apple.com/in/app/enything/id6809016496";
+                stickySecondaryBtn.href = IOS_APP_URL;
                 stickySecondaryBtn.innerHTML = '<i class="fab fa-apple"></i>';
                 stickySecondaryBtn.title = "Download on Apple App Store";
             }
         } else {
             // Default to iOS (Apple App Store)
             if (stickyPrimaryBtn && stickySecondaryBtn) {
-                stickyPrimaryBtn.href = "https://apps.apple.com/in/app/enything/id6809016496";
+                stickyPrimaryBtn.href = IOS_APP_URL;
                 stickyPrimaryBtn.innerHTML = '<i class="fab fa-apple"></i> Get App';
-                stickySecondaryBtn.href = "https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything";
+                stickySecondaryBtn.href = ANDROID_APP_URL;
                 stickySecondaryBtn.innerHTML = '<i class="fab fa-google-play"></i>';
                 stickySecondaryBtn.title = "Get it on Google Play";
             }
+        }
+
+        // On mobile devices, remove target="_blank" so Safari & Chrome directly hand off
+        // to the native App Store / Play Store without popup blocker warnings or orphaned blank tabs.
+        // Inside iframes (e.g. mobile simulator preview), keep target="_blank" to escape X-Frame-Options: DENY.
+        document.querySelectorAll('a[href*="apps.apple.com"], a[href*="play.google.com"]').forEach(link => {
+            if (inIframe) {
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+            } else if (isMobile) {
+                link.removeAttribute('target');
+            }
+        });
+
+        // Top Navigation CTA ("Get the App")
+        const navCtaBtn = document.querySelector('.nav-cta');
+        if (navCtaBtn) {
+            navCtaBtn.addEventListener('click', (e) => {
+                if (isMobile && !inIframe) {
+                    e.preventDefault();
+                    window.location.href = isAndroid ? ANDROID_APP_URL : IOS_APP_URL;
+                }
+            });
         }
 
         // Scroll listener: Header blur & Sticky bar slide-in after hero

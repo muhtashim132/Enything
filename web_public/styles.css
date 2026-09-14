@@ -2382,45 +2382,58 @@ footer {
     display: none !important;
   }
 
-  /* Hero Visual & Phone Mockup */
+  /* Hero Visual & 3D Phone Mockup on Mobile with Hovering Widgets */
   .hero-visual {
     width: 100% !important;
     max-width: 100% !important;
-    perspective: none !important;
+    perspective: 1000px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
+    justify-content: center !important;
+    padding: 1.5rem 0 1rem 0 !important;
     box-sizing: border-box !important;
+    position: relative !important;
+    overflow: visible !important;
   }
 
   .phone-mockup-wrapper {
-    transform: none !important;
-    animation: none !important;
-    width: 100% !important;
-    max-width: 285px !important;
+    position: relative !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    max-width: none !important;
+    transform: rotateY(-7deg) rotateX(4deg) !important;
+    transform-style: preserve-3d !important;
+    animation: floatPhoneMobile 6s ease-in-out infinite alternate !important;
     box-sizing: border-box !important;
+    margin: 0 auto !important;
+  }
+
+  @keyframes floatPhoneMobile {
+    0% { transform: translateY(0px) rotateY(-7deg) rotateX(4deg); }
+    100% { transform: translateY(-12px) rotateY(-4deg) rotateX(2deg); }
   }
 
   .phone-mockup {
-    width: min(78vw, 275px) !important;
+    width: min(64vw, 248px) !important;
     aspect-ratio: 1290 / 2796 !important;
     height: auto !important;
     max-width: 100% !important;
-    border-radius: 46px !important;
-    padding: 8px !important;
+    border-radius: 42px !important;
+    padding: 7px !important;
     border: 3px solid #334155 !important;
     box-sizing: border-box !important;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(59, 130, 246, 0.2) !important;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(59, 130, 246, 0.25) !important;
     margin: 0 auto !important;
   }
 
   .phone-bezel {
     width: 100% !important;
     height: 100% !important;
-    border-radius: 38px !important;
+    border-radius: 35px !important;
     background: #000000 !important;
     position: relative !important;
     overflow: hidden !important;
@@ -2439,27 +2452,75 @@ footer {
     height: 100% !important;
     object-fit: cover !important;
     object-position: top center !important;
-    border-radius: 38px !important;
+    border-radius: 35px !important;
   }
 
   .dynamic-island {
-    top: 10px !important;
-    width: 88px !important;
-    height: 24px !important;
+    top: 9px !important;
+    width: 80px !important;
+    height: 22px !important;
   }
 
+  /* 3D Floating Interactive Micro-Widgets on Mobile */
   .floating-badge {
-    display: none !important;
+    display: flex !important;
+    position: absolute !important;
+    background: rgba(10, 17, 34, 0.9) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-radius: 13px !important;
+    padding: 7px 11px !important;
+    gap: 8px !important;
+    align-items: center !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.75), 0 0 15px rgba(59, 130, 246, 0.2) !important;
+    z-index: 35 !important;
+    white-space: nowrap !important;
+    animation: floatWidget 5s ease-in-out infinite alternate !important;
+    pointer-events: auto !important;
+  }
+
+  .floating-badge-1 {
+    top: 10% !important;
+    left: -20px !important;
+    animation-delay: -1s !important;
+  }
+
+  .floating-badge-2 {
+    top: 48% !important;
+    bottom: auto !important;
+    right: -20px !important;
+    animation-delay: -3s !important;
+  }
+
+  .floating-badge-3 {
+    bottom: 9% !important;
+    left: -18px !important;
+    animation-delay: -2s !important;
+  }
+
+  .floating-badge-icon {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 8px !important;
+    font-size: 0.85rem !important;
+    flex-shrink: 0 !important;
+  }
+
+  .floating-badge-text strong {
+    font-size: 0.74rem !important;
+    line-height: 1.2 !important;
+    color: #ffffff !important;
+  }
+
+  .floating-badge-text span {
+    font-size: 0.62rem !important;
+    line-height: 1.2 !important;
+    color: #94a3b8 !important;
   }
 
   .mobile-status-strip {
-    display: flex !important;
-    width: 100% !important;
-    max-width: 350px !important;
-    overflow-x: auto !important;
-    gap: 8px !important;
-    padding: 0 4px 6px 4px !important;
-    box-sizing: border-box !important;
+    display: none !important; /* Replaced by the 3D floating badges on the phone */
   }
 
   .swipe-hint {
@@ -2805,9 +2866,50 @@ footer {
   }
 
   .phone-mockup {
-    width: 245px !important;
+    width: min(62vw, 215px) !important;
     aspect-ratio: 1290 / 2796 !important;
     height: auto !important;
+    border-radius: 36px !important;
+  }
+
+  .phone-bezel,
+  .phone-screen {
+    border-radius: 30px !important;
+  }
+
+  .floating-badge {
+    padding: 5px 9px !important;
+    gap: 6px !important;
+    border-radius: 10px !important;
+  }
+
+  .floating-badge-1 {
+    top: 8% !important;
+    left: -12px !important;
+  }
+
+  .floating-badge-2 {
+    top: 48% !important;
+    right: -12px !important;
+  }
+
+  .floating-badge-3 {
+    bottom: 8% !important;
+    left: -10px !important;
+  }
+
+  .floating-badge-icon {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 0.75rem !important;
+  }
+
+  .floating-badge-text strong {
+    font-size: 0.68rem !important;
+  }
+
+  .floating-badge-text span {
+    font-size: 0.58rem !important;
   }
 
   .metrics-grid {

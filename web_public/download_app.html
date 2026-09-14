@@ -130,6 +130,21 @@
                 document.getElementById('page-desc').textContent = 'To start receiving delivery requests, track earnings, and navigate to customers, please log in through the Enything Mobile App.';
                 document.getElementById('role-icon').innerHTML = '<i class="fas fa-motorcycle"></i>';
             }
+
+            // Platform-aware store link handler
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            const inIframe = window.self !== window.top;
+
+            document.querySelectorAll('a[href*="apps.apple.com"], a[href*="play.google.com"]').forEach(link => {
+                if (inIframe) {
+                    link.target = "_blank";
+                    link.rel = "noopener noreferrer";
+                } else if (isIOS || isAndroid) {
+                    // Remove target="_blank" so mobile browser directly hands off to native App Store / Play Store
+                    link.removeAttribute('target');
+                }
+            });
         });
     </script>
 </body>

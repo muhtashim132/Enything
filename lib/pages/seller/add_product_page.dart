@@ -209,19 +209,26 @@ class _AddProductPageState extends State<AddProductPage> {
     final source = await showImageSourceSheet(context);
     if (source == null) return;
     final picker = ImagePicker();
+    final bool isFashion = AppCategories.isFashionCategory(_productCategory);
+    const double maxW = 1080;
+    final double maxH = isFashion ? 1440 : 1080;
+    final defaultCropRatio = isFashion
+        ? const CropAspectRatio(ratioX: 3, ratioY: 4)
+        : const CropAspectRatio(ratioX: 1, ratioY: 1);
+
     if (source == ImageSource.camera) {
       while (_images.length + _existingImageUrls.length < 3) {
         final XFile? picked = await picker.pickImage(
           source: ImageSource.camera,
           imageQuality: 70,
-          maxWidth: 1080,
-          maxHeight: 1080,
+          maxWidth: maxW,
+          maxHeight: maxH,
         );
         if (picked == null) break;
         if (!mounted) return;
         final cropped = await cropImage(context, picked.path,
             title: 'Crop Product Image',
-            aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1));
+            aspectRatio: defaultCropRatio);
         if (cropped != null) {
           setState(() {
             _images.add(XFile(cropped.path));
@@ -252,15 +259,15 @@ class _AddProductPageState extends State<AddProductPage> {
     } else {
       final List<XFile> picked = await picker.pickMultiImage(
         imageQuality: 70,
-        maxWidth: 1080,
-        maxHeight: 1080,
+        maxWidth: maxW,
+        maxHeight: maxH,
       );
       if (picked.isNotEmpty) {
         for (var p in picked) {
           if (!mounted) return;
           final cropped = await cropImage(context, p.path,
               title: 'Crop Product Image',
-              aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1));
+              aspectRatio: defaultCropRatio);
           if (cropped != null) {
             _images.add(XFile(cropped.path));
           }
@@ -391,14 +398,32 @@ class _AddProductPageState extends State<AddProductPage> {
                             ? 'Add Variant Image (Optional)'
                             : 'Image Selected!'),
                         onPressed: () async {
+                          final bool isFashion =
+                              AppCategories.isFashionCategory(_productCategory);
+                          const double maxW = 1080;
+                          final double maxH = isFashion ? 1440 : 1080;
+                          final defaultCropRatio = isFashion
+                              ? const CropAspectRatio(ratioX: 3, ratioY: 4)
+                              : const CropAspectRatio(ratioX: 1, ratioY: 1);
+
                           final picker = ImagePicker();
                           final xfile = await picker.pickImage(
-                              source: ImageSource.gallery);
+                            source: ImageSource.gallery,
+                            imageQuality: 70,
+                            maxWidth: maxW,
+                            maxHeight: maxH,
+                          );
                           if (xfile != null) {
-                            setDialogState(() {
-                              _variantImageFiles['temp_dialog'] =
-                                  File(xfile.path);
-                            });
+                            if (!ctx.mounted) return;
+                            final cropped = await cropImage(ctx, xfile.path,
+                                title: 'Crop Variant Image',
+                                aspectRatio: defaultCropRatio);
+                            if (cropped != null && ctx.mounted) {
+                              setDialogState(() {
+                                _variantImageFiles['temp_dialog'] =
+                                    File(cropped.path);
+                              });
+                            }
                           }
                         },
                       ),
@@ -554,10 +579,12 @@ class _AddProductPageState extends State<AddProductPage> {
           final file = _variantImageFiles[variantId]!;
           if (!file.existsSync()) continue;
           try {
-            final bytes = await file.readAsBytes();
-            final ext = file.path.split('.').last;
+            final Uint8List bytes =
+                await ImageCompressionService.compressFile(file) ??
+                    await file.readAsBytes();
+            const ext = 'jpg';
             final filename =
-                'variant_${DateTime.now().millisecondsSinceEpoch}.$ext';
+                'variant_${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
             final path = '$_shopId/$filename';
             await _supabase.storage
                 .from(uploadBucket)

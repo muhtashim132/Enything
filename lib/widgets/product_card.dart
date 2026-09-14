@@ -19,8 +19,14 @@ import '../widgets/common/premium_product_image.dart';
 class ProductCard extends StatefulWidget {
   final ProductModel product;
   final ShopModel? shop;
+  final double? imageAspectRatio;
 
-  const ProductCard({super.key, required this.product, this.shop});
+  const ProductCard({
+    super.key,
+    required this.product,
+    this.shop,
+    this.imageAspectRatio,
+  });
 
   @override
   State<ProductCard> createState() => _ProductCardState();
@@ -118,7 +124,7 @@ class _ProductCardState extends State<ProductCard>
           children: [
               // ── Product Image ────────────────────────────────────────────
               AspectRatio(
-                aspectRatio: 1.0,
+                aspectRatio: widget.imageAspectRatio ?? 1.0,
                 child: Stack(
                   children: [
                     // Image container with gradient background

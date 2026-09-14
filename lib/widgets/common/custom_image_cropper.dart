@@ -40,10 +40,12 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
   Uint8List? _imageData;
   bool _isProcessing = false;
   bool _isRotating = false;
+  late double? _currentAspectRatio;
 
   @override
   void initState() {
     super.initState();
+    _currentAspectRatio = widget.aspectRatio;
     _loadImage();
   }
 
@@ -142,7 +144,7 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: Crop(
-                          key: ValueKey(_imageData.hashCode),
+                          key: ValueKey('${_imageData.hashCode}_$_currentAspectRatio'),
                           image: _imageData!,
                           controller: _controller,
                           onCropped: (result) async {
@@ -177,7 +179,7 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
                               }
                             }
                           },
-                          aspectRatio: widget.aspectRatio,
+                          aspectRatio: _currentAspectRatio,
                           baseColor: bgColor,
                           maskColor: Colors.black.withValues(alpha: 0.65),
                           radius: 12,
@@ -211,6 +213,45 @@ class _CustomImageCropperPageState extends State<CustomImageCropperPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Aspect Ratio Selector Chips
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _RatioChip(
+                        label: '1:1 Square',
+                        icon: Icons.crop_square_rounded,
+                        isSelected: _currentAspectRatio != null &&
+                            (_currentAspectRatio! - 1.0).abs() < 0.01,
+                        onTap: () {
+                          if (_isRotating || _isProcessing) return;
+                          setState(() => _currentAspectRatio = 1.0);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _RatioChip(
+                        label: '3:4 Fashion',
+                        icon: Icons.crop_portrait_rounded,
+                        isSelected: _currentAspectRatio != null &&
+                            (_currentAspectRatio! - (3.0 / 4.0)).abs() < 0.01,
+                        onTap: () {
+                          if (_isRotating || _isProcessing) return;
+                          setState(() => _currentAspectRatio = 3.0 / 4.0);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _RatioChip(
+                        label: 'Free',
+                        icon: Icons.crop_free_rounded,
+                        isSelected: _currentAspectRatio == null,
+                        onTap: () {
+                          if (_isRotating || _isProcessing) return;
+                          setState(() => _currentAspectRatio = null);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
                   // Rotation & Reset Tools
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -360,3 +401,64 @@ class _ToolButton extends StatelessWidget {
     );
   }
 }
+
+class _RatioChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _RatioChip({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.primary
+                : Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.primary
+                  : Colors.white.withValues(alpha: 0.15),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? Colors.white : Colors.white70,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? Colors.white : Colors.white70,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

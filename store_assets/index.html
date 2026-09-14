@@ -542,13 +542,13 @@
                     <button class="batch-filter-btn active" id="batchAll" onclick="filterBatch('all')">All
                         Screens</button>
                     <button class="batch-filter-btn" id="batch1" onclick="filterBatch(1)">Batch 1 (1–4)</button>
-                    <button class="batch-filter-btn" id="batch2" onclick="filterBatch(2)">Batch 2 (5–8)</button>
+                    <button class="batch-filter-btn" id="batch2" onclick="filterBatch(2)">Batch 2 (5–9)</button>
                 </div>
             </div>
 
-            <!-- 2. 10 Presets List -->
+            <!-- 2. Presets List -->
             <div>
-                <div class="section-title">✨ 10 Curated Screen Presets (Click to Load)</div>
+                <div class="section-title" id="presetsSectionTitle">✨ Curated Screen Presets (Click to Load)</div>
                 <div class="presets-list" id="presetsList">
                     <!-- Populated dynamically via JS -->
                 </div>
@@ -632,7 +632,7 @@
     <script src="images_data.js"></script>
     <script src="jszip.min.js"></script>
     <script>
-        // ── Presets for Apple App Store (10 screens) & Google Play Store (8 screens) ──
+        // ── Presets for Apple App Store (10 screens) & Google Play Store (9 screens) ──
         const APPLE_PRESETS = [
             {
                 id: 1,
@@ -816,6 +816,16 @@
                 imageFile: "8.png",
                 theme: ["#052e16", "#14532d", "#16a34a", "#22c55e"],
                 name: "8. Delivery Partner Hub"
+            },
+            {
+                id: 9,
+                batch: 2,
+                badge: "🔄 ONE APP FOR EVERYONE",
+                title: "Customer, Seller & Rider",
+                subtitle: "Seamlessly switch roles or sign up with a single phone number",
+                imageFile: "9.png",
+                theme: ["#060c2c", "#0e1f6e", "#1e3fd8", "#38bdf8"],
+                name: "9. Multi-Role Onboarding"
             }
         ];
 
@@ -896,10 +906,10 @@
             document.getElementById('androidDevices').style.display = platform === 'android' ? 'grid' : 'none';
 
             const badge = document.getElementById('screenCountBadge');
-            if (badge) badge.innerText = platform === 'android' ? '8 Screens Loaded' : '10 Screens Loaded';
+            if (badge) badge.innerText = platform === 'android' ? '9 Screens Loaded' : '10 Screens Loaded';
             const sub = document.getElementById('brandSubtitle');
             if (sub) sub.innerText = platform === 'android'
-                ? '8 Curated Google Play Store Presets (Phone, 7" & 10" Tablets)'
+                ? '9 Curated Google Play Store Presets (Phone, 7" & 10" Tablets)'
                 : '10 Professional App Store Presets (iPhone 6.5" & iPad 13")';
 
             rebuildPresetsList();
@@ -1237,13 +1247,22 @@
 
             if (isAndroidPhone) {
                 // ── Android Flagship Phone Frame (1080x1920) ──
-                const targetW = 760;
                 const borderW = 10;
                 const bezelW = 8;
                 const totalMargin = borderW + bezelW;
-                const screenW = targetW - totalMargin * 2;
-                const screenH = 1460;
-                const frameW = targetW;
+                const maxScreenH = 1510;
+                const maxScreenW = 760;
+
+                let screenW = 696;
+                let screenH = 1510;
+                if (activeImage && (activeImage.naturalWidth || activeImage.width)) {
+                    const iw = activeImage.naturalWidth || activeImage.width;
+                    const ih = activeImage.naturalHeight || activeImage.height;
+                    const aspect = ih / iw;
+                    screenH = Math.min(maxScreenH, Math.round(maxScreenW * aspect));
+                    screenW = Math.round(screenH / aspect);
+                }
+                const frameW = screenW + totalMargin * 2;
                 const frameH = screenH + totalMargin * 2;
                 const cornerR = 48;
                 const screenR = 34;
@@ -1323,9 +1342,23 @@
 
             } else if (isAndroidTablet) {
                 // ── Android Tablet Frame (1200x1920 or 1600x2560) ──
-                const devW = Math.round(W * 0.76);
-                const devH = Math.round(devW * 1.55);
                 const borderW = 12;
+                const bezelW = 10;
+                const totalMargin = borderW + bezelW;
+                const maxScreenH = currentDevice === 'android_tab10' ? 1980 : 1490;
+                const maxScreenW = currentDevice === 'android_tab10' ? 1000 : 760;
+
+                let screenW = currentDevice === 'android_tab10' ? 913 : 687;
+                let screenH = maxScreenH;
+                if (activeImage && (activeImage.naturalWidth || activeImage.width)) {
+                    const iw = activeImage.naturalWidth || activeImage.width;
+                    const ih = activeImage.naturalHeight || activeImage.height;
+                    const aspect = ih / iw;
+                    screenH = Math.min(maxScreenH, Math.round(maxScreenW * aspect));
+                    screenW = Math.round(screenH / aspect);
+                }
+                const devW = screenW + totalMargin * 2;
+                const devH = screenH + totalMargin * 2;
                 const frameX = Math.round((W - devW) / 2);
                 const frameY = subY + subFontSize / 2 + devGap;
                 const cornerR = 36;
@@ -1475,6 +1508,12 @@
             const imgW = img.naturalWidth || img.width;
             const imgH = img.naturalHeight || img.height;
             if (!imgW || !imgH) {
+                ctx.drawImage(img, x, y, w, h);
+                return;
+            }
+            const imgAspect = imgW / imgH;
+            const targetAspect = w / h;
+            if (Math.abs(imgAspect - targetAspect) / targetAspect < 0.04) {
                 ctx.drawImage(img, x, y, w, h);
                 return;
             }

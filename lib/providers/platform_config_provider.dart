@@ -45,6 +45,13 @@ class PlatformConfigProvider extends ChangeNotifier {
   // Cache for tax_config table (category -> row data)
   final Map<String, Map<String, dynamic>> _taxConfigCache = {};
 
+  // ── Maintenance Mode (Additive) ─────────────────────────────────────────
+  /// When true, all new customer orders are blocked platform-wide.
+  bool _maintenanceMode = false;
+  /// Custom message shown to customers during maintenance.
+  String _maintenanceMessage =
+      'We are currently updating our platform to serve you better. Ordering will resume shortly.';
+
   // ── Category Management (Additive) ──────────────────────────────────────
   /// Set of category names that the admin has disabled.
   final Set<String> _disabledCategories = {};
@@ -158,6 +165,10 @@ class PlatformConfigProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
+  // ── Maintenance Mode Getters (Additive) ─────────────────────────────────
+  bool get isMaintenanceMode => _maintenanceMode;
+  String get maintenanceMessage => _maintenanceMessage;
+
   // ── Load Settings ────────────────────────────────────────────
   Future<void> load({int maxRetries = 3}) async {
     if (_loading) return; // Prevent concurrent loops
@@ -176,6 +187,20 @@ class PlatformConfigProvider extends ChangeNotifier {
         for (final row in (data as List)) {
           final key = row['key'] as String;
           final valRaw = row['value'];
+
+          // ── Maintenance Mode: handle non-numeric JSONB keys first ────
+          if (key == 'maintenance_mode') {
+            _maintenanceMode = valRaw == true || valRaw.toString() == 'true';
+            continue;
+          }
+          if (key == 'maintenance_message') {
+            final msgStr = _cleanMaintenanceMessage(valRaw);
+            if (msgStr.isNotEmpty && msgStr != 'null') {
+              _maintenanceMessage = msgStr;
+            }
+            continue;
+          }
+
           final val = double.tryParse(valRaw.toString()) ?? 0.0;
 
           switch (key) {
@@ -323,6 +348,13 @@ class PlatformConfigProvider extends ChangeNotifier {
                 } catch (e) {
                   debugPrint(
                       '[CategoryMgmt] realtime disabled_categories parse error: $e');
+                }
+              } else if (key == 'maintenance_mode') {
+                _maintenanceMode = valRaw == true || valRaw.toString() == 'true';
+              } else if (key == 'maintenance_message') {
+                final msgStr = _cleanMaintenanceMessage(valRaw);
+                if (msgStr.isNotEmpty && msgStr != 'null') {
+                  _maintenanceMessage = msgStr;
                 }
               } else {
                 final val = double.tryParse(valRaw.toString()) ?? 0.0;
@@ -626,6 +658,134 @@ class PlatformConfigProvider extends ChangeNotifier {
     }
   }
 
+  // ── Maintenance Mode Methods (Additive) ────────────────────────────────
+  static String _cleanMaintenanceMessage(dynamic valRaw) {
+    if (valRaw == null) return '';
+    var str = valRaw.toString().trim();
+    if (str.length >= 2 && str.startsWith('"') && str.endsWith('"')) {
+      str = str.substring(1, str.length - 1).trim();
+    }
+    return str;
+  }
+
+  static bool _isValidUuid(String? str) {
+    if (str == null || str.isEmpty) return false;
+    return RegExp(
+            r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+        .hasMatch(str);
+  }
+
+  /// Toggle maintenance mode ON/OFF with custom message.
+  /// Does NOT use updateSetting() because maintenance_mode is boolean JSONB,
+  /// not numeric. Follows the same pattern as toggleCategory().
+  Future<bool> setMaintenanceMode({
+    required bool enabled,
+    required String message,
+    required String actorId,
+    required String actorRole,
+  }) async {
+    try {
+      final oldEnabled = _maintenanceMode;
+      final oldMessage = _maintenanceMessage;
+      final cleanMessage = _cleanMaintenanceMessage(message);
+
+      // Optimistic update
+      _maintenanceMode = enabled;
+      _maintenanceMessage = cleanMessage.isNotEmpty ? cleanMessage : message;
+      safeNotifyListeners();
+
+      final cleanActorId = _isValidUuid(actorId)
+          ? actorId
+          : (_isValidUuid(_db.auth.currentUser?.id) ? _db.auth.currentUser!.id : null);
+
+      // Persist both keys atomically
+      await _db.from('platform_config').upsert({
+        'key': 'maintenance_mode',
+        'value': enabled, // JSONB boolean
+        if (cleanActorId != null) 'updated_by': cleanActorId,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'key');
+
+      await _db.from('platform_config').upsert({
+        'key': 'maintenance_message',
+        'value': jsonEncode(_maintenanceMessage), // JSONB string
+        if (cleanActorId != null) 'updated_by': cleanActorId,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'key');
+
+      // Audit log (actor_id requires valid UUID or NULL)
+      try {
+        await _db.from('audit_logs').insert({
+          'actor_id': cleanActorId,
+          'actor_role': actorRole,
+          'action': enabled
+              ? 'enable_maintenance_mode'
+              : 'disable_maintenance_mode',
+          'entity_type': 'platform_config',
+          'entity_id': null,
+          'metadata': {
+            'old_enabled': oldEnabled,
+            'new_enabled': enabled,
+            'old_message': oldMessage,
+            'new_message': _maintenanceMessage,
+          },
+        });
+      } catch (_) {}
+
+      return true;
+    } catch (e) {
+      debugPrint('Failed to set maintenance mode: $e');
+      // Rollback optimistic update
+      await load();
+      return false;
+    }
+  }
+
+  /// Update the maintenance notice message without toggling the mode.
+  Future<bool> updateMaintenanceMessage({
+    required String message,
+    required String actorId,
+    required String actorRole,
+  }) async {
+    try {
+      final oldMessage = _maintenanceMessage;
+      final cleanMessage = _cleanMaintenanceMessage(message);
+      _maintenanceMessage = cleanMessage.isNotEmpty ? cleanMessage : message;
+      safeNotifyListeners();
+
+      final cleanActorId = _isValidUuid(actorId)
+          ? actorId
+          : (_isValidUuid(_db.auth.currentUser?.id) ? _db.auth.currentUser!.id : null);
+
+      await _db.from('platform_config').upsert({
+        'key': 'maintenance_message',
+        'value': jsonEncode(_maintenanceMessage),
+        if (cleanActorId != null) 'updated_by': cleanActorId,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'key');
+
+      try {
+        await _db.from('audit_logs').insert({
+          'actor_id': cleanActorId,
+          'actor_role': actorRole,
+          'action': 'update_maintenance_message',
+          'entity_type': 'platform_config',
+          'entity_id': null,
+          'metadata': {
+            'old_message': oldMessage,
+            'new_message': _maintenanceMessage,
+          },
+        });
+      } catch (_) {}
+
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update maintenance message: $e');
+      await load();
+      return false;
+    }
+  }
+
   Future<void> _sendConfigChangeNotification(
       String key, String oldVal, String newVal) async {
     String? audience;
@@ -766,6 +926,13 @@ class PlatformConfigProvider extends ChangeNotifier {
         }
       } catch (e) {
         debugPrint('[CategoryMgmt] applyConfigRow error: $e');
+      }
+    } else if (key == 'maintenance_mode') {
+      _maintenanceMode = value == true || value.toString() == 'true';
+    } else if (key == 'maintenance_message') {
+      final msgStr = _cleanMaintenanceMessage(value);
+      if (msgStr.isNotEmpty && msgStr != 'null') {
+        _maintenanceMessage = msgStr;
       }
     } else {
       final val = double.tryParse(value.toString()) ?? 0.0;
@@ -924,6 +1091,13 @@ class PlatformConfigProvider extends ChangeNotifier {
         break;
       case 'platform_fee_gst_rate':
         _platformFeeGstRate = 0.18;
+        break;
+      case 'maintenance_mode':
+        _maintenanceMode = false;
+        break;
+      case 'maintenance_message':
+        _maintenanceMessage =
+            'We are currently updating our platform. Ordering will resume shortly.';
         break;
     }
   }

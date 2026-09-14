@@ -75,6 +75,20 @@ class AppCategories {
     'Organic': CategoryGroup.perishable,
   };
 
+  /// Returns whether a category is considered Fashion/Apparel (e.g. Clothing, Footwear).
+  /// These categories naturally benefit from a 3:4 portrait aspect ratio.
+  static bool isFashionCategory(String? categoryName) {
+    if (categoryName == null) return false;
+    final cat = categoryName.trim().toLowerCase();
+    return cat == 'clothing' || cat == 'footwear';
+  }
+
+  /// Returns the target aspect ratio for product images in this category.
+  /// 3:4 (0.75) for Fashion/Apparel, 1:1 (1.0) for everything else.
+  static double getProductAspectRatio(String? categoryName) {
+    return isFashionCategory(categoryName) ? (3.0 / 4.0) : 1.0;
+  }
+
   /// Returns the group for [categoryName]. Defaults to [CategoryGroup.retail].
   static CategoryGroup groupFor(String categoryName) =>
       _groupMap[categoryName] ?? CategoryGroup.retail;
