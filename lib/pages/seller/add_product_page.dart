@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -57,6 +58,10 @@ class _AddProductPageState extends State<AddProductPage> {
   List<ProductVariant> _variants = [];
   final Map<String, File> _variantImageFiles = {};
 
+  // ── Professional UX State ─────────────────────────────────────────────────
+  bool _isDirty = false;
+  final Set<String> _removedVariantImageUrls = {};
+
   // ── GST Recommendation Engine ────────────────────────────────────────────
   GstRecommendation? _gstRecommendation;
   double? _gstRateOverride;
@@ -84,6 +89,13 @@ class _AddProductPageState extends State<AddProductPage> {
     _fetchShopId();
     // Debounced listener: re-run GST recommendation when product name changes
     _nameController.addListener(_scheduleGstUpdate);
+    _nameController.addListener(_markDirty);
+    _priceController.addListener(_markDirty);
+    _originalPriceController.addListener(_markDirty);
+    _descriptionController.addListener(_markDirty);
+    _menuCategoryController.addListener(_markDirty);
+    _weightController.addListener(_markDirty);
+    _inventoryController.addListener(_markDirty);
     if (widget.existingProduct != null) {
       final p = widget.existingProduct!;
       _nameController.text = p.name;
@@ -204,6 +216,29 @@ class _AddProductPageState extends State<AddProductPage> {
     }
   }
 
+  void _markDirty() {
+    if (!_isDirty && mounted) setState(() => _isDirty = true);
+  }
+
+  /// Returns true if all current variant names are purely dimensional
+  /// (sizes, weights, portions) where separate images are unnecessary.
+  bool _areVariantsDimensional() {
+    if (_variants.isEmpty) return false;
+    final dimensionalPattern = RegExp(
+      r'^(XS|S|M|L|XL|XXL|XXXL|'
+      r'UK\s*\d+|US\s*\d+|EU\s*\d+|'
+      r'\d+\s*(g|kg|ml|L|oz|lb|tabs?|strips?|pieces?|pcs?)|'
+      r'Half|Full|Regular|Medium|Large|Small|'
+      r'Single|Double|Triple|'
+      r'Pack of \d+|'
+      r'\d+GB|\d+TB|\d+\s*inch|'
+      r'1 Strip.*|1 Tube|1 Dozen|Half Dozen|'
+      r'\d+\s*Pound[s]?)$',
+      caseSensitive: false,
+    );
+    return _variants.every((v) => dimensionalPattern.hasMatch(v.name.trim()));
+  }
+
   Future<void> _pickImage() async {
     if (_images.length + _existingImageUrls.length >= 3) return;
     final source = await showImageSourceSheet(context);
@@ -233,6 +268,7 @@ class _AddProductPageState extends State<AddProductPage> {
           setState(() {
             _images.add(XFile(cropped.path));
             if (_images.length > 3) _images = _images.sublist(0, 3);
+            _isDirty = true;
           });
         }
 
@@ -273,7 +309,7 @@ class _AddProductPageState extends State<AddProductPage> {
           }
           if (_images.length + _existingImageUrls.length >= 3) break;
         }
-        setState(() {});
+        setState(() => _isDirty = true);
       }
     }
   }
@@ -317,14 +353,191 @@ class _AddProductPageState extends State<AddProductPage> {
   void _removeImage(int index) {
     setState(() {
       _images.removeAt(index);
+      _isDirty = true;
     });
   }
 
   void _removeExistingImage(int index) {
-    setState(() => _existingImageUrls.removeAt(index));
+    setState(() {
+      _existingImageUrls.removeAt(index);
+      _isDirty = true;
+    });
+  }
+
+  // ── Variant Image Picker (with Camera + Gallery parity) ──────────────────
+  Future<File?> _pickVariantImage(BuildContext dialogContext) async {
+    final source = await showImageSourceSheet(dialogContext);
+    if (source == null) return null;
+    final bool isFashion =
+        AppCategories.isFashionCategory(_productCategory);
+    const double maxW = 1080;
+    final double maxH = isFashion ? 1440 : 1080;
+    final defaultCropRatio = isFashion
+        ? const CropAspectRatio(ratioX: 3, ratioY: 4)
+        : const CropAspectRatio(ratioX: 1, ratioY: 1);
+
+    final picker = ImagePicker();
+    final xfile = await picker.pickImage(
+      source: source,
+      imageQuality: 70,
+      maxWidth: maxW,
+      maxHeight: maxH,
+    );
+    if (xfile != null) {
+      if (!dialogContext.mounted) return null;
+      final cropped = await cropImage(dialogContext, xfile.path,
+          title: 'Crop Variant Image',
+          aspectRatio: defaultCropRatio);
+      if (cropped != null) {
+        return File(cropped.path);
+      }
+    }
+    return null;
+  }
+
+  /// Builds the variant image section widget for add/edit dialogs.
+  /// [existingImageUrl] is the network URL of an already-uploaded variant image.
+  Widget _buildVariantImageSection(
+    BuildContext dialogContext,
+    void Function(void Function()) setDialogState, {
+    String? existingImageUrl,
+    bool isDimensional = false,
+  }) {
+    final hasLocalFile = _variantImageFiles['temp_dialog'] != null;
+    final hasExistingUrl = existingImageUrl != null &&
+        existingImageUrl.isNotEmpty &&
+        !_removedVariantImageUrls.contains(existingImageUrl);
+    final hasImage = hasLocalFile || hasExistingUrl;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Smart guidance based on variant type
+        if (isDimensional) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withValues(alpha: 0.15)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.lightbulb_outline, size: 14, color: Colors.blue),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Tip: Size/quantity variants look the same — '
+                    'your product gallery photos will be shown.',
+                    style: TextStyle(fontSize: 11, color: Colors.blue),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (!hasImage)
+          ElevatedButton.icon(
+            icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+            label: Text(isDimensional
+                ? 'Add Variant Image (Usually Not Needed)'
+                : 'Add Variant Image (Optional)'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDimensional
+                  ? AppColors.surfaceColor
+                  : AppColors.primary.withValues(alpha: 0.1),
+              foregroundColor: isDimensional
+                  ? AppColors.textSecondary
+                  : AppColors.primary,
+              elevation: 0,
+            ),
+            onPressed: () async {
+              final file = await _pickVariantImage(dialogContext);
+              if (file != null && dialogContext.mounted) {
+                setDialogState(() {
+                  _variantImageFiles['temp_dialog'] = file;
+                });
+              }
+            },
+          )
+        else
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: hasLocalFile
+                    ? Image.file(
+                        _variantImageFiles['temp_dialog']!,
+                        height: 72,
+                        width: 72,
+                        fit: BoxFit.cover,
+                      )
+                    : Image.network(
+                        existingImageUrl!,
+                        height: 72,
+                        width: 72,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 72,
+                          width: 72,
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          child: const Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.swap_horiz, size: 16),
+                    label: const Text('Change', style: TextStyle(fontSize: 13)),
+                    onPressed: () async {
+                      final file = await _pickVariantImage(dialogContext);
+                      if (file != null && dialogContext.mounted) {
+                        setDialogState(() {
+                          _variantImageFiles['temp_dialog'] = file;
+                        });
+                      }
+                    },
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.delete_outline, size: 16,
+                        color: AppColors.danger),
+                    label: const Text('Remove',
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.danger)),
+                    onPressed: () {
+                      setDialogState(() {
+                        _variantImageFiles.remove('temp_dialog');
+                        if (existingImageUrl != null &&
+                            existingImageUrl.isNotEmpty) {
+                          _removedVariantImageUrls.add(existingImageUrl);
+                        }
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+      ],
+    );
   }
 
   Future<void> _showAddVariantDialog() async {
+    // P2: Max variant limit
+    if (_variants.length >= 20) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Maximum 20 variants allowed per product.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
+
     final nameCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     final originalPriceCtrl = TextEditingController();
@@ -390,56 +603,10 @@ class _AddProductPageState extends State<AddProductPage> {
               const SizedBox(height: 16),
               StatefulBuilder(
                 builder: (context, setDialogState) {
-                  return Column(
-                    children: [
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.image),
-                        label: Text(_variantImageFiles['temp_dialog'] == null
-                            ? 'Add Variant Image (Optional)'
-                            : 'Image Selected!'),
-                        onPressed: () async {
-                          final bool isFashion =
-                              AppCategories.isFashionCategory(_productCategory);
-                          const double maxW = 1080;
-                          final double maxH = isFashion ? 1440 : 1080;
-                          final defaultCropRatio = isFashion
-                              ? const CropAspectRatio(ratioX: 3, ratioY: 4)
-                              : const CropAspectRatio(ratioX: 1, ratioY: 1);
-
-                          final picker = ImagePicker();
-                          final xfile = await picker.pickImage(
-                            source: ImageSource.gallery,
-                            imageQuality: 70,
-                            maxWidth: maxW,
-                            maxHeight: maxH,
-                          );
-                          if (xfile != null) {
-                            if (!ctx.mounted) return;
-                            final cropped = await cropImage(ctx, xfile.path,
-                                title: 'Crop Variant Image',
-                                aspectRatio: defaultCropRatio);
-                            if (cropped != null && ctx.mounted) {
-                              setDialogState(() {
-                                _variantImageFiles['temp_dialog'] =
-                                    File(cropped.path);
-                              });
-                            }
-                          }
-                        },
-                      ),
-                      if (_variantImageFiles['temp_dialog'] != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                                _variantImageFiles['temp_dialog']!,
-                                height: 80,
-                                width: 80,
-                                fit: BoxFit.cover),
-                          ),
-                        ),
-                    ],
+                  return _buildVariantImageSection(
+                    ctx,
+                    setDialogState,
+                    isDimensional: _areVariantsDimensional(),
                   );
                 },
               ),
@@ -492,6 +659,7 @@ class _AddProductPageState extends State<AddProductPage> {
                     _variantImageFiles[vId] =
                         _variantImageFiles['temp_dialog']!;
                   }
+                  _isDirty = true;
                 });
                 _variantImageFiles.remove('temp_dialog');
                 Navigator.pop(ctx);
@@ -504,8 +672,155 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
+  // ── C3: Variant Edit Dialog ─────────────────────────────────────────────
+  Future<void> _showEditVariantDialog(int index) async {
+    final variant = _variants[index];
+    final nameCtrl = TextEditingController(text: variant.name);
+    final priceCtrl = TextEditingController(text: variant.price.toString());
+    final originalPriceCtrl = TextEditingController(
+        text: variant.originalPrice?.toString() ?? '');
+
+    // Set up temp image: if a local file was already picked, use it;
+    // otherwise the dialog will show the existing network URL.
+    if (_variantImageFiles.containsKey(variant.id)) {
+      _variantImageFiles['temp_dialog'] = _variantImageFiles[variant.id]!;
+    } else {
+      _variantImageFiles.remove('temp_dialog');
+    }
+
+    // Determine existing image URL (if not removed)
+    final existingUrl = (variant.imageUrl != null &&
+            variant.imageUrl!.isNotEmpty &&
+            !_removedVariantImageUrls.contains(variant.imageUrl))
+        ? variant.imageUrl
+        : null;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Variation'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Name (e.g., Large, Full)'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration:
+                    const InputDecoration(labelText: 'Selling Price (₹)'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: originalPriceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Original Price (MRP) (₹)',
+                  hintText: 'Optional',
+                ),
+              ),
+              const SizedBox(height: 16),
+              StatefulBuilder(
+                builder: (context, setDialogState) {
+                  return _buildVariantImageSection(
+                    ctx,
+                    setDialogState,
+                    existingImageUrl: existingUrl,
+                    isDimensional: _areVariantsDimensional(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () {
+                _variantImageFiles.remove('temp_dialog');
+                Navigator.pop(ctx);
+              },
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final n = nameCtrl.text.trim();
+              final p = double.tryParse(priceCtrl.text.trim());
+              final op = double.tryParse(originalPriceCtrl.text.trim());
+              if (n.isNotEmpty && p != null) {
+                if (op != null && op <= p) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content:
+                            Text('MRP must be greater than Selling Price')),
+                  );
+                  return;
+                }
+
+                // Check for duplicate names (excluding current variant)
+                final isDuplicate = _variants.asMap().entries.any((e) =>
+                    e.key != index &&
+                    e.value.name.trim().toLowerCase() == n.toLowerCase());
+                if (isDuplicate) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('A variant with this name already exists!'),
+                      backgroundColor: AppColors.danger,
+                    ),
+                  );
+                  return;
+                }
+
+                setState(() {
+                  // Determine new image URL
+                  String? newImageUrl = variant.imageUrl;
+                  if (_variantImageFiles['temp_dialog'] != null) {
+                    _variantImageFiles[variant.id] =
+                        _variantImageFiles['temp_dialog']!;
+                  } else if (_removedVariantImageUrls
+                      .contains(variant.imageUrl)) {
+                    newImageUrl = null;
+                    _variantImageFiles.remove(variant.id);
+                  }
+
+                  _variants[index] = variant.copyWith(
+                    name: n,
+                    price: p,
+                    originalPrice: op,
+                    imageUrl: _removedVariantImageUrls
+                            .contains(variant.imageUrl)
+                        ? null
+                        : newImageUrl,
+                  );
+                  _isDirty = true;
+                });
+                _variantImageFiles.remove('temp_dialog');
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // C1: Require at least 1 product image
+    if (_images.isEmpty && _existingImageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one product image.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
 
     if (AppCategories.requiresVariant(_productCategory) && _variants.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -572,9 +887,13 @@ class _AddProductPageState extends State<AddProductPage> {
             .add(_supabase.storage.from(uploadBucket).getPublicUrl(path));
       }
 
-      // Upload variant images
+      // Upload variant images & handle removed variant images (I6)
       for (var i = 0; i < _variants.length; i++) {
         final variantId = _variants[i].id;
+        // Handle explicitly removed variant images
+        if (_removedVariantImageUrls.contains(_variants[i].imageUrl)) {
+          _variants[i] = _variants[i].copyWith(imageUrl: null);
+        }
         if (_variantImageFiles.containsKey(variantId)) {
           final file = _variantImageFiles[variantId]!;
           if (!file.existsSync()) continue;
@@ -605,7 +924,10 @@ class _AddProductPageState extends State<AddProductPage> {
         'name': _nameController.text.trim(),
         'price': finalPrice,
         'original_price': finalOriginalPrice,
-        'description': _descriptionController.text.trim(),
+        // P3: Save null instead of empty string for description
+        'description': _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
         'category': _productCategory,
         'menu_category': _menuCategoryController.text.trim().isEmpty
             ? null
@@ -665,6 +987,17 @@ class _AddProductPageState extends State<AddProductPage> {
       }
 
       if (!mounted) return;
+      // I4: Success feedback before popping
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(widget.existingProduct != null
+              ? 'Product updated successfully!'
+              : 'Product added successfully!'),
+          backgroundColor: const Color(0xFF00C853),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      _isDirty = false; // Prevent PopScope guard on successful save
       navigator.pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -712,6 +1045,13 @@ class _AddProductPageState extends State<AddProductPage> {
   void dispose() {
     _gstDebounce?.cancel();
     _nameController.removeListener(_scheduleGstUpdate);
+    _nameController.removeListener(_markDirty);
+    _priceController.removeListener(_markDirty);
+    _originalPriceController.removeListener(_markDirty);
+    _descriptionController.removeListener(_markDirty);
+    _menuCategoryController.removeListener(_markDirty);
+    _weightController.removeListener(_markDirty);
+    _inventoryController.removeListener(_markDirty);
     _nameController.dispose();
     _priceController.dispose();
     _originalPriceController.dispose();
@@ -1003,56 +1343,144 @@ class _AddProductPageState extends State<AddProductPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-          title: Text(
-              widget.existingProduct != null ? 'Edit Product' : 'Add Product')),
-      body: MaxWidthContainer(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Image Picker
-                if (_images.isEmpty && _existingImageUrls.isEmpty)
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: Container(
-                      width: double.infinity,
-                      height: 180,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.3),
-                            width: 2,
-                            style: BorderStyle.solid),
-                      ),
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+    final int totalImageCount = _images.length + _existingImageUrls.length;
+
+    return PopScope(
+      canPop: !_isDirty || _isSaving,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final shouldLeave = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Discard Changes?'),
+            content: const Text(
+                'You have unsaved changes. Are you sure you want to go back?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Keep Editing')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Discard',
+                      style: TextStyle(color: AppColors.danger))),
+            ],
+          ),
+        );
+        if (shouldLeave == true && context.mounted) Navigator.pop(context);
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+            title: Text(
+                widget.existingProduct != null ? 'Edit Product' : 'Add Product')),
+        body: MaxWidthContainer(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Image Section Header ─────────────────────────────────────
+                  if (totalImageCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
                         children: [
-                          Icon(
-                            Icons.add_photo_alternate_outlined,
-                            size: 48,
-                            color: AppColors.primary,
-                          ),
-                          SizedBox(height: 8),
+                          const Icon(Icons.photo_library_outlined,
+                              size: 18, color: AppColors.textSecondary),
+                          const SizedBox(width: 6),
                           Text(
-                            'Tap to add up to 3 images\nRecommended size: 1:1 (Square)',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'Poppins',
+                            _variants.isNotEmpty
+                                ? 'Product Gallery'
+                                : 'Product Photos',
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: AppColors.textPrimary),
+                          ),
+                          const Spacer(),
+                          // I1: Image count indicator
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: totalImageCount >= 3
+                                  ? const Color(0xFF00C853)
+                                      .withValues(alpha: 0.1)
+                                  : AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$totalImageCount of 3',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: totalImageCount >= 3
+                                    ? const Color(0xFF00C853)
+                                    : AppColors.primary,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  )
+                  // Context-aware helper when variants exist
+                  if (totalImageCount > 0 && _variants.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        'Default photos shown for all variants. Add variant-specific '
+                        'images only for visually different variants (e.g., colors).',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ),
+                  // Image Picker
+                  if (_images.isEmpty && _existingImageUrls.isEmpty)
+                    GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        width: double.infinity,
+                        height: 180,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              width: 2,
+                              style: BorderStyle.solid),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.add_photo_alternate_outlined,
+                              size: 48,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _variants.isNotEmpty
+                                  ? 'Tap to add your product gallery\n'
+                                    'These photos are shown for all variants'
+                                  : 'Tap to add up to 3 product photos\n'
+                                    'Recommended: 1:1 (Square)',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Poppins',
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                 else
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1175,7 +1603,7 @@ class _AddProductPageState extends State<AddProductPage> {
                         keyboardType: TextInputType.number,
                         validator: AppValidators.price,
                         decoration: const InputDecoration(
-                          labelText: 'Price (₹)',
+                          labelText: 'Price (₹) *',
                           hintText: '199',
                           prefixIcon: Icon(Icons.currency_rupee),
                         ),
@@ -1190,7 +1618,10 @@ class _AddProductPageState extends State<AddProductPage> {
                             style: TextStyle(fontSize: 12)),
                         value: _hasDiscount,
                         activeThumbColor: AppColors.primary,
-                        onChanged: (v) => setState(() => _hasDiscount = v),
+                        onChanged: (v) => setState(() {
+                          _hasDiscount = v;
+                          _isDirty = true;
+                        }),
                       ),
                       if (_hasDiscount) ...[
                         const SizedBox(height: 8),
@@ -1218,6 +1649,37 @@ class _AddProductPageState extends State<AddProductPage> {
                         ),
                         const SizedBox(height: 16),
                       ],
+                    ] else if (_variants.isNotEmpty) ...[
+                      // I2: Price-from-variants indicator
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: Colors.blue.withValues(alpha: 0.18)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded,
+                                size: 14, color: Colors.blue),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Price auto-set from lowest variant: '
+                                '₹${_variants.map((v) => v.price).reduce(min).toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                     ],
                     const SizedBox(height: 16),
                     TextFormField(
@@ -1271,21 +1733,59 @@ class _AddProductPageState extends State<AddProductPage> {
                       ..._variants.asMap().entries.map((entry) {
                         final idx = entry.key;
                         final v = entry.value;
+                        final bool hasLocalImg =
+                            _variantImageFiles.containsKey(v.id);
+                        final bool hasNetworkImg = v.imageUrl != null &&
+                            v.imageUrl!.isNotEmpty &&
+                            !_removedVariantImageUrls.contains(v.imageUrl);
+                        final bool hasAnyImg = hasLocalImg || hasNetworkImg;
+
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Row(
-                            children: [
-                              Text(v.name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600)),
-                              if (v.imageUrl != null ||
-                                  _variantImageFiles.containsKey(v.id)) ...[
-                                const SizedBox(width: 8),
-                                const Icon(Icons.image,
-                                    size: 16, color: AppColors.primary),
-                              ],
-                            ],
-                          ),
+                          // I5: Variant image thumbnail
+                          leading: hasAnyImg
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: hasLocalImg
+                                      ? Image.file(
+                                          _variantImageFiles[v.id]!,
+                                          width: 40,
+                                          height: 40,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Image.network(
+                                          v.imageUrl!,
+                                          width: 40,
+                                          height: 40,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                            width: 40,
+                                            height: 40,
+                                            color: AppColors.primary
+                                                .withValues(alpha: 0.08),
+                                            child: const Icon(
+                                                Icons.broken_image_outlined,
+                                                size: 16),
+                                          ),
+                                        ),
+                                )
+                              : Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                      Icons.image_outlined,
+                                      size: 18,
+                                      color: AppColors.textSecondary),
+                                ),
+                          title: Text(v.name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600)),
                           subtitle: Row(
                             children: [
                               Text('₹${v.price}'),
@@ -1303,6 +1803,8 @@ class _AddProductPageState extends State<AddProductPage> {
                               ],
                             ],
                           ),
+                          // C3: Tap to edit
+                          onTap: () => _showEditVariantDialog(idx),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline,
                                 color: AppColors.danger),
@@ -1310,6 +1812,7 @@ class _AddProductPageState extends State<AddProductPage> {
                               final variantId = _variants[idx].id;
                               _variants.removeAt(idx);
                               _variantImageFiles.remove(variantId);
+                              _isDirty = true;
                             }),
                           ),
                         );
@@ -1374,6 +1877,7 @@ class _AddProductPageState extends State<AddProductPage> {
                               if (!_gstUserOverridden) {
                                 _gstRateOverride = null;
                               }
+                              _isDirty = true;
                             });
                             // Re-run GST recommendation for the new category
                             _triggerGstRecommendation();
@@ -1505,7 +2009,10 @@ class _AddProductPageState extends State<AddProductPage> {
                         DropdownMenuItem<bool?>(
                             value: null, child: Text('None (N/A)')),
                       ],
-                      onChanged: (v) => setState(() => _isVeg = v),
+                      onChanged: (v) => setState(() {
+                        _isVeg = v;
+                        _isDirty = true;
+                      }),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
@@ -1519,7 +2026,10 @@ class _AddProductPageState extends State<AddProductPage> {
                       ),
                       value: _isAvailable,
                       activeThumbColor: AppColors.primary,
-                      onChanged: (v) => setState(() => _isAvailable = v),
+                      onChanged: (v) => setState(() {
+                        _isAvailable = v;
+                        _isDirty = true;
+                      }),
                     ),
                   ],
                 ),
@@ -1613,6 +2123,7 @@ class _AddProductPageState extends State<AddProductPage> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

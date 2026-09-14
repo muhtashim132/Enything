@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -186,25 +187,80 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
     }
   }
 
+  void _handleBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.roleSelect,
+        (_) => false,
+      );
+    }
+  }
+
+  void _showPhoneNotEditableFeedback() {
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.lock_outline_rounded,
+                color: Color(0xFF51CF66), size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Phone number is verified via OTP and linked to your account. To use a different number, return to role selection.',
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1E2336),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: const Color(0xFF51CF66).withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF02061A),
-      appBar: AppBar(
-        title: Text('KYC Verification',
-            style: GoogleFonts.outfit(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-                color: Colors.white)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF02061A),
+        appBar: AppBar(
+          title: Text('KYC Verification',
+              style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  color: Colors.white)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: Colors.white, size: 20),
+            onPressed: _handleBack,
+          ),
         ),
-      ),
       body: Stack(
         children: [
           SingleChildScrollView(
@@ -257,29 +313,86 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
                 const SizedBox(height: 32),
                 _buildSectionTitle('Contact Details'),
                 const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.03),
-                    borderRadius: BorderRadius.circular(16),
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.05)),
-                  ),
-                  child: Text(
-                    _db.auth.currentUser?.phone ?? 'Phone number not available',
-                    style: GoogleFonts.outfit(
-                        color: Colors.white54,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500),
+                InkWell(
+                  onTap: _showPhoneNotEditableFeedback,
+                  borderRadius: BorderRadius.circular(16),
+                  splashColor: const Color(0xFF51CF66).withValues(alpha: 0.1),
+                  highlightColor:
+                      const Color(0xFF51CF66).withValues(alpha: 0.05),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.phone_android_rounded,
+                            color: Colors.white54, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _db.auth.currentUser?.phone ??
+                                'Phone number not available',
+                            style: GoogleFonts.outfit(
+                                color: Colors.white70,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF51CF66)
+                                .withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF51CF66)
+                                  .withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.lock_rounded,
+                                  color: Color(0xFF51CF66), size: 12),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Verified',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF51CF66),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                    'This phone number is linked to your delivery partner profile.',
-                    style: GoogleFonts.outfit(
-                        color: Colors.white30, fontSize: 11)),
+                Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: Colors.white30, size: 12),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Verified via OTP & locked to account. Tap for details.',
+                        style: GoogleFonts.outfit(
+                            color: Colors.white30, fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 32),
                 const SizedBox(height: 32),
                 _buildSectionTitle('Identity Details'),
@@ -401,8 +514,9 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSectionTitle(String title) {
     return Padding(

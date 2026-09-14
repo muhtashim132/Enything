@@ -83,9 +83,16 @@ class _SellerPendingVerificationPageState
     final primaryColor =
         isRejected ? Colors.redAccent : const Color(0xFFF4C542);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF02061A),
-      body: Stack(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pushNamedAndRemoveUntil(
+            context, AppRoutes.roleSelect, (_) => false);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF02061A),
+        body: Stack(
         children: [
           // Background Glows
           Positioned(
@@ -194,8 +201,9 @@ class _SellerPendingVerificationPageState
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildGlow(Color color, double size) {
     return Container(

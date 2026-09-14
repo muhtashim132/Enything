@@ -179,9 +179,14 @@ class _SourceOption extends StatelessWidget {
   }
 }
 
-/// Helper function to launch the image cropper with standard UI styling.
-Future<CroppedFile?> cropImage(BuildContext context, String path,
-    {CropAspectRatio? aspectRatio, String title = 'Crop Image'}) async {
+/// Helper function to launch the image cropper and alignment studio with standard UI styling.
+Future<CroppedFile?> cropImage(
+  BuildContext context,
+  String path, {
+  CropAspectRatio? aspectRatio,
+  String title = 'Crop Image',
+  bool initialAlignMode = false,
+}) async {
   double? ratio;
   if (aspectRatio != null) {
     ratio = aspectRatio.ratioX / aspectRatio.ratioY;
@@ -193,6 +198,7 @@ Future<CroppedFile?> cropImage(BuildContext context, String path,
         imagePath: path,
         aspectRatio: ratio,
         title: title,
+        initialAlignMode: initialAlignMode,
       ),
     ),
   );

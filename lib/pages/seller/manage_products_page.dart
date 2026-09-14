@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../utils/responsive_layout.dart';
 import '../../config/routes.dart';
 import '../../utils/haptic_utils.dart';
+import '../../services/product_storage_service.dart';
 
 class ManageProductsPage extends StatefulWidget {
   final String? initialShopId;
@@ -180,14 +181,99 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
   }
 
   Future<void> _deleteProduct(ProductModel product) async {
+    // 1. Guard against deleting products in active unfulfilled orders
+    try {
+      final activeResp = await _supabase
+          .from('orders')
+          .select('id, status, order_items!inner(product_id)')
+          .eq('order_items.product_id', product.id)
+          .inFilter('status', [
+            'awaiting_acceptance',
+            'pending',
+            'awaiting_payment',
+            'confirmed',
+            'preparing',
+            'ready_for_pickup',
+            'out_for_delivery',
+          ])
+          .limit(1);
+
+      if (!mounted) return;
+
+      if ((activeResp as List).isNotEmpty) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
+                const SizedBox(width: 8),
+                Text('Active Order in Progress',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 18)),
+              ],
+            ),
+            content: Text(
+              '"${product.name}" cannot be deleted right now because it is included in an active order currently in progress.\n\nTo prevent new orders while fulfilling active orders, you can mark this item as Out of Stock (Unavailable).',
+              style: GoogleFonts.outfit(fontSize: 14),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('OK', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
+              ),
+              if (product.isAvailable)
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _toggleAvailability(product);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text('Mark Out of Stock',
+                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+                ),
+            ],
+          ),
+        );
+        return;
+      }
+    } catch (e) {
+      debugPrint('Active order check note: $e');
+    }
+
+    if (!mounted) return;
+
+    // 2. Check for order history (order_items)
+    bool hasOrderHistory = false;
+    try {
+      final pastOrders = await _supabase
+          .from('order_items')
+          .select('id')
+          .eq('product_id', product.id)
+          .limit(1);
+      hasOrderHistory = (pastOrders as List).isNotEmpty;
+    } catch (e) {
+      debugPrint('Order history check note: $e');
+    }
+
+    if (!mounted) return;
+
+    // 3. Informative, context-aware confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text('Delete Product?',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        title: Text(
+          hasOrderHistory ? 'Delete Product?' : 'Permanently Delete Product?',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+        ),
         content: Text(
-          'Are you sure you want to delete "${product.name}"?\nThis item will be removed from your store catalog.',
+          hasOrderHistory
+              ? 'Are you sure you want to delete "${product.name}"?\n\nThis product has previous customer orders. It will be removed from your catalog and store, while historical receipts and order records are safely preserved.'
+              : 'Are you sure you want to delete "${product.name}"?\n\nThis item has never been ordered. It will be removed from your store catalog, and its uploaded pictures will be permanently removed from cloud storage to free up space.',
           style: GoogleFonts.outfit(fontSize: 14),
         ),
         actions: [
@@ -207,20 +293,70 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
+      // Show loading indicator dialog during deletion
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => Center(
+          child: Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(color: AppColors.primary),
+                  const SizedBox(height: 16),
+                  Text('Deleting product...',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
       try {
-        // Enforce soft delete: update is_deleted = true
+        int deletedImagesCount = 0;
+        if (!hasOrderHistory) {
+          // Delete storage files from Supabase Storage bucket 'products'
+          deletedImagesCount = await ProductStorageService.deleteProductImages(
+            product,
+            client: _supabase,
+          );
+        }
+
+        // Soft delete the product in DB (and clear images array if storage purged)
+        final updatePayload = <String, dynamic>{
+          'is_deleted': true,
+          'is_available': false,
+          if (!hasOrderHistory) 'images': <String>[],
+        };
+
         await _supabase
             .from('products')
-            .update({'is_deleted': true})
+            .update(updatePayload)
             .eq('id', product.id)
             .eq('shop_id', product.shopId);
 
-        _showSnack('Product deleted.', isError: false);
-        _loadShopsAndProducts();
+        if (mounted) {
+          // Dismiss loading dialog
+          Navigator.of(context, rootNavigator: true).pop();
+
+          final msg = !hasOrderHistory && deletedImagesCount > 0
+              ? 'Product and $deletedImagesCount photo(s) deleted.'
+              : 'Product deleted.';
+          _showSnack(msg, isError: false);
+          _loadShopsAndProducts();
+        }
       } catch (e) {
         debugPrint('Delete error: $e');
-        _showSnack('Failed to delete product: $e', isError: true);
+        if (mounted) {
+          // Dismiss loading dialog if open
+          Navigator.of(context, rootNavigator: true).pop();
+          _showSnack('Failed to delete product: $e', isError: true);
+        }
       }
     }
   }

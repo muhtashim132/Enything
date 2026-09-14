@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
 import '../../widgets/3d/perspective_card.dart';
 
@@ -73,10 +75,16 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    return Scaffold(
-      body: AnimatedBuilder(
-        animation: _bgCtrl,
-        builder: (_, __) => Container(
+    final auth = context.watch<AuthProvider>();
+    final currentUserId = auth.currentUserId;
+    final currentUserPhone = auth.user?.phone ?? auth.pendingPhone;
+
+    return PopScope(
+      canPop: Navigator.canPop(context),
+      child: Scaffold(
+        body: AnimatedBuilder(
+          animation: _bgCtrl,
+          builder: (_, __) => Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -244,6 +252,69 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                                       height: 1.5,
                                     ),
                                   ),
+                                  if (currentUserId != null) ...[
+                                    const SizedBox(height: 14),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.05),
+                                        borderRadius:
+                                            BorderRadius.circular(30),
+                                        border: Border.all(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.12)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                              Icons.account_circle_outlined,
+                                              color: Colors.white70,
+                                              size: 16),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            currentUserPhone != null &&
+                                                    currentUserPhone.isNotEmpty
+                                                ? currentUserPhone
+                                                : 'Active Session',
+                                            style: GoogleFonts.outfit(
+                                              color: Colors.white70,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Container(
+                                            width: 1,
+                                            height: 12,
+                                            color: Colors.white24,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          GestureDetector(
+                                            onTap: () async {
+                                              await context
+                                                  .read<AuthProvider>()
+                                                  .signOut();
+                                              if (mounted) setState(() {});
+                                            },
+                                            child: Text(
+                                              'Sign Out / Switch Number',
+                                              style: GoogleFonts.outfit(
+                                                color:
+                                                    const Color(0xFFF4C542),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                decoration: TextDecoration
+                                                    .underline,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -388,8 +459,9 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   String _roleName(String role) {
     switch (role) {

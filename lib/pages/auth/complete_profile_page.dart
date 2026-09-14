@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -400,57 +401,108 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     ));
   }
 
+  void _handleBack() {
+    if (_step == 1 && !_argsRead) {
+      _animCtrl.forward(from: 0);
+      setState(() => _step = 0);
+      return;
+    }
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.roleSelect,
+        (_) => false,
+      );
+    }
+  }
+
+  void _showPhoneNotEditableFeedback() {
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.lock_outline_rounded,
+                color: Color(0xFFF4C542), size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Phone number cannot be edited here as it was verified via OTP. To use a different number, return to login.',
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1E2336),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: const Color(0xFFF4C542).withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_showWelcome) return _buildWelcomeSplash();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF02061A),
-      appBar: _step == 1
-          ? AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              leading: IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      shape: BoxShape.circle),
-                  child: const Icon(Icons.arrow_back_ios_new,
-                      color: Colors.white, size: 16),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF02061A),
+        appBar: _step == 1
+            ? AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        shape: BoxShape.circle),
+                    child: const Icon(Icons.arrow_back_ios_new,
+                        color: Colors.white, size: 16),
+                  ),
+                  onPressed: _handleBack,
                 ),
-                onPressed: () {
-                  // If role came from RoleSelectionPage, go back to phone auth
-                  // rather than showing the internal role-picker (which is skipped)
-                  if (_argsRead &&
-                      ModalRoute.of(context)?.settings.arguments != null) {
-                    Navigator.pop(context);
-                  } else {
-                    _animCtrl.forward(from: 0);
-                    setState(() => _step = 0);
-                  }
-                },
+              )
+            : null,
+        body: FadeTransition(
+          opacity: _fadeAnim,
+          child: Stack(
+            children: [
+              Positioned(
+                  top: -60,
+                  left: -80,
+                  child: _blob(280, const Color(0xFF1A35C8), 0.16)),
+              Positioned(
+                  bottom: -80,
+                  right: -60,
+                  child: _blob(300, const Color(0xFF5E20D4), 0.14)),
+              SafeArea(
+                child: MaxWidthContainer(
+                  child: _step == 0 ? _buildRoleSelect() : _buildDetailsForm(),
+                ),
               ),
-            )
-          : null,
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: Stack(
-          children: [
-            Positioned(
-                top: -60,
-                left: -80,
-                child: _blob(280, const Color(0xFF1A35C8), 0.16)),
-            Positioned(
-                bottom: -80,
-                right: -60,
-                child: _blob(300, const Color(0xFF5E20D4), 0.14)),
-            SafeArea(
-              child: MaxWidthContainer(
-                child: _step == 0 ? _buildRoleSelect() : _buildDetailsForm(),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -906,26 +958,79 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.6)),
         const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-          ),
-          child: Text(
-            displayPhone,
-            style: GoogleFonts.outfit(
-                color: Colors.white54,
-                fontSize: 15,
-                fontWeight: FontWeight.w500),
+        InkWell(
+          onTap: _showPhoneNotEditableFeedback,
+          borderRadius: BorderRadius.circular(16),
+          splashColor: const Color(0xFFF4C542).withValues(alpha: 0.1),
+          highlightColor: const Color(0xFFF4C542).withValues(alpha: 0.05),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.phone_android_rounded,
+                    color: Colors.white54, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    displayPhone,
+                    style: GoogleFonts.outfit(
+                        color: Colors.white70,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4C542).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: const Color(0xFFF4C542).withValues(alpha: 0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.lock_rounded,
+                          color: Color(0xFFF4C542), size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Verified',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFFF4C542),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 6),
-        Text(
-            'This number was used for verification and will be used for contact.',
-            style: GoogleFonts.outfit(color: Colors.white30, fontSize: 11)),
+        Row(
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                color: Colors.white30, size: 12),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Verified via OTP & locked to account. Tap for details.',
+                style: GoogleFonts.outfit(color: Colors.white30, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

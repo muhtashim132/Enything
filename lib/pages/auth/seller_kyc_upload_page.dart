@@ -335,32 +335,40 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
     }
   }
 
+  void _handleBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+          context, AppRoutes.roleSelect, (_) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF02061A),
-      appBar: AppBar(
-        title: Text('KYC Verification',
-            style: GoogleFonts.outfit(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Colors.white)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.white, size: 20),
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            } else {
-              Navigator.pushNamedAndRemoveUntil(
-                  context, AppRoutes.roleSelect, (_) => false);
-            }
-          },
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF02061A),
+        appBar: AppBar(
+          title: Text('KYC Verification',
+              style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.white)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: Colors.white, size: 20),
+            onPressed: _handleBack,
+          ),
         ),
-      ),
       body: Stack(
         children: [
           SingleChildScrollView(
@@ -509,8 +517,9 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildGstSection() {
     if (_isFoodCategory) {

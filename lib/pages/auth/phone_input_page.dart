@@ -267,25 +267,40 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
     );
   }
 
+  void _handleBack() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+          context, AppRoutes.roleSelect, (_) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF02061A),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                shape: BoxShape.circle),
-            child: const Icon(Icons.arrow_back_ios_new,
-                color: Colors.white, size: 16),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF02061A),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  shape: BoxShape.circle),
+              child: const Icon(Icons.arrow_back_ios_new,
+                  color: Colors.white, size: 16),
+            ),
+            onPressed: _handleBack,
           ),
-          onPressed: () => Navigator.pop(context),
         ),
-      ),
       body: FadeTransition(
         opacity: _fadeAnim,
         child: Stack(
@@ -643,7 +658,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
 
                       // Want to switch role?
                       GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                        onTap: _handleBack,
                         child: Container(
                           width: double.infinity,
                           alignment: Alignment.center,
@@ -667,8 +682,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _blob(double size, Color color, double opacity) => Opacity(
         opacity: opacity,
