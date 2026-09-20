@@ -145,7 +145,7 @@ class WeightEngine {
   }
 
   static final RegExp _titleWeightRegex = RegExp(
-    r'(\d+(?:\.\d+)?)\s*(kg|g|gm|grams|l|ltr|liters|ml)\b',
+    r'(\d+(?:\.\d+)?)\s*(kg|g|gm|grams|l|ltr|liters|litres|litre|ml)\b',
     caseSensitive: false,
   );
 
@@ -157,7 +157,7 @@ class WeightEngine {
       if (val != null && val > 0) {
         if (unit == 'kg') return val;
         if (unit == 'g' || unit == 'gm' || unit == 'grams') return val / 1000.0;
-        if (unit == 'l' || unit == 'ltr' || unit == 'liters') return val * 1.02;
+        if (unit == 'l' || unit == 'ltr' || unit == 'liters' || unit == 'litres' || unit == 'litre') return val * 1.02;
         if (unit == 'ml') return (val / 1000.0) * 1.02;
       }
     }
@@ -478,6 +478,13 @@ class WeightEngine {
   // Tier 4: Variant Size & Portion Scaling Factor
   // ---------------------------------------------------------------------------
 
+  // Word-boundary regex for single-letter apparel sizes.
+  // Prevents false positives on common words (e.g. "MUSHROOM" matching 'S',
+  // "SLIM" matching 'S'+'L'+'M', "SALT" matching 'S'+'L').
+  static final RegExp _sizeS = RegExp(r'\bS\b');
+  static final RegExp _sizeM = RegExp(r'\bM\b');
+  static final RegExp _sizeL = RegExp(r'\bL\b');
+
   static double _variantScalingFactor(String variantName) {
     final v = variantName.toUpperCase().trim();
 
@@ -499,7 +506,8 @@ class WeightEngine {
       return variantWeight / 0.50;
     }
 
-    // Apparel Sizes
+    // Apparel Sizes — ordered from most-specific to least-specific to
+    // prevent shorter patterns (XL) from shadowing longer ones (XXL/3XL).
     if (v.contains('XXS') ||
         v.contains('XS') ||
         v.contains('26') ||
@@ -516,9 +524,11 @@ class WeightEngine {
       return 1.18;
     }
     if (v.contains('XL') || v.contains('36')) return 1.08;
-    if (v.contains('S') || v.contains('30')) return 0.94;
-    if (v.contains('M') ||
-        v.contains('L') ||
+    // A1 FIX: Use word-boundary regex for single-letter sizes to avoid
+    // false matches on words like MUSHROOM, SLIM, SALT, PREMIUM, etc.
+    if (_sizeS.hasMatch(v) || v.contains('30')) return 0.94;
+    if (_sizeM.hasMatch(v) ||
+        _sizeL.hasMatch(v) ||
         v.contains('32') ||
         v.contains('34')) {
       return 1.00;

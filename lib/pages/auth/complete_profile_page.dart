@@ -213,7 +213,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
 
     if (locProv.currentLocation == null) {
       // Graceful fallback: attempt to automatically fetch location
-      final success = await locProv.requestLocation();
+      final success = await locProv.requestLocation(isUserAction: true);
       if (!success && !mounted) return;
     }
 

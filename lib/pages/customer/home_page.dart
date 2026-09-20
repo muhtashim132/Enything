@@ -3925,7 +3925,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               const SizedBox(height: 28),
               ElevatedButton.icon(
                 onPressed: () =>
-                    context.read<LocationProvider>().requestLocation(),
+                    context.read<LocationProvider>().requestLocation(isUserAction: true),
                 icon: const Icon(Icons.my_location),
                 label: const Text('Enable Location'),
               ),

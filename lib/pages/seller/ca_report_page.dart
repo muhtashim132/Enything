@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../utils/responsive_layout.dart';
 
 // ============================================================================
@@ -476,7 +477,10 @@ Gross Sales Basis   : ₹${_f(_totalBaseSales)}
                         _row(
                             'Net Taxable Supply Basis (non-food)',
                             _totalBaseSales -
-                                (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales)),
+                                // A3 FIX: Dynamically read food GST rate instead of hardcoded 0.05
+                                ((PlatformConfigProvider.instance?.getGstRate('Restaurant') ?? 0.05) > 0
+                                    ? (_s9_5Gst / (PlatformConfigProvider.instance?.getGstRate('Restaurant') ?? 0.05)).clamp(0.0, _totalBaseSales)
+                                    : 0.0)),
                         _divider(),
                         _infoRow(
                           'CGST §52 & Notification 15/2024-CT: TCS = 0.5% (0.25% CGST + 0.25% SGST) on taxable non-food supplies.\n'
@@ -487,7 +491,7 @@ Gross Sales Basis   : ₹${_f(_totalBaseSales)}
                       copyText: '''GST TCS Statement (§52) — $_monthLabel
 Legal basis: CGST Act §52 & Notification 15/2024-CT (taxable non-food supplies only)
 GST TCS Deducted (0.5%)   : ₹${_f(_tcsDeducted)}
-Taxable Supply Basis      : ₹${_f(_totalBaseSales - (_s9_5Gst / 0.05).clamp(0.0, _totalBaseSales))}
+Taxable Supply Basis      : ₹${_f(_totalBaseSales - ((PlatformConfigProvider.instance?.getGstRate('Restaurant') ?? 0.05) > 0 ? (_s9_5Gst / (PlatformConfigProvider.instance?.getGstRate('Restaurant') ?? 0.05)).clamp(0.0, _totalBaseSales) : 0.0))}
 → §9(5) food orders and 0% GST categories are excluded from TCS.
 → Enything files GSTR-8 by 10th. Claim ₹${_f(_tcsDeducted)} in your GSTR-2B.''',
                     ),

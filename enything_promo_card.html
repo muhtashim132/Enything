@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enything - Download Card</title>
+    <!-- Using Google Fonts matching modern app themes (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Extracted strictly from app_colors.dart */
+            --primary: #1E3FD8;
+            --primary-dark: #0F1E80;
+            --primary-light: #3D6BFF;
+            --secondary: #FF6B35;
+            --secondary-light: #FF8C42;
+            --accent: #FFCF40;
+            --background: #F5F6FF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --success: #00C853;
+            
+            /* Gradients */
+            --hero-gradient: linear-gradient(180deg, #070F50 0%, #1E3FD8 60%, #2F58FF 100%);
+            --cta-gradient: linear-gradient(90deg, #FF6B35 0%, #FF8C42 100%);
+            
+            /* Glassmorphism */
+            --glass-light: rgba(255, 255, 255, 0.15);
+            --glass-border: rgba(255, 255, 255, 0.25);
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #e4e6f8; /* Surface overlay light */
+            font-family: 'Inter', sans-serif;
+            perspective: 1500px;
+        }
+
+        /* 2:3 Aspect Ratio Card */
+        .card-container {
+            width: 400px;
+            height: 600px;
+            position: relative;
+            cursor: pointer;
+            /* 3D Transform setup */
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 25px 50px -12px rgba(15, 30, 128, 0.25);
+            border-radius: 24px;
+        }
+
+        /* Hover to flip */
+        .card-container:hover {
+            transform: rotateY(180deg) translateY(-10px);
+            box-shadow: 0 35px 60px -15px rgba(15, 30, 128, 0.35);
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 24px;
+            overflow: hidden;
+        }
+
+        /* ================= SIDE A: FRONT ================= */
+        .card-front {
+            background: var(--hero-gradient);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 40px;
+            box-sizing: border-box;
+            color: white;
+            text-align: center;
+        }
+
+        .glass-panel {
+            background: var(--glass-light);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 16px;
+            padding: 30px 20px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 20px;
+        }
+
+        .logo-text {
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: -1.5px;
+            margin: 0;
+            background: linear-gradient(to bottom, #ffffff, #e0e0e0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tagline {
+            font-size: 1.1rem;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.85);
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+
+        .cta-pill {
+            background: var(--cta-gradient);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 100px;
+            font-weight: 800;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 10px 20px rgba(255, 107, 53, 0.4);
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 10px 20px rgba(255, 107, 53, 0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 15px 30px rgba(255, 107, 53, 0.6); }
+            100% { transform: scale(1); box-shadow: 0 10px 20px rgba(255, 107, 53, 0.4); }
+        }
+
+        .hint-text {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* ================= SIDE B: BACK ================= */
+        .card-back {
+            background-color: var(--background);
+            transform: rotateY(180deg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .back-header {
+            text-align: center;
+            width: 100%;
+        }
+
+        .back-title {
+            color: var(--primary-dark);
+            font-size: 2rem;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+
+        .back-subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-top: 5px;
+            font-weight: 500;
+        }
+
+        /* The QR Code Section */
+        .qr-wrapper {
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(15, 30, 128, 0.08);
+            border: 2px solid var(--primary-light);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .qr-code {
+            width: 180px;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .benefits-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .benefit-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .benefit-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            background: rgba(0, 200, 83, 0.1); /* Success green bg */
+            color: var(--success);
+            border-radius: 50%;
+            font-size: 12px;
+        }
+        
+        .benefit-icon.accent {
+            background: rgba(255, 207, 64, 0.2);
+            color: #D4A017;
+        }
+
+        .benefit-icon.primary {
+            background: rgba(30, 63, 216, 0.1);
+            color: var(--primary);
+        }
+
+        .back-footer {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        /* Floating decoration shapes for front */
+        .shape-1 {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+            top: -50px;
+            left: -50px;
+        }
+        
+        .shape-2 {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,107,53,0.15) 0%, rgba(255,107,53,0) 70%);
+            bottom: -100px;
+            right: -100px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card-container">
+        <!-- FRONT OF CARD -->
+        <div class="card-face card-front">
+            <div class="shape-1"></div>
+            <div class="shape-2"></div>
+            
+            <div class="glass-panel" style="margin-top: 60px;">
+                <h1 class="logo-text">Enything</h1>
+                <p class="tagline">Food, Groceries, Pharmacy & More.<br>Everything you need, delivered.</p>
+            </div>
+
+            <div style="display: flex; flex-direction: column; align-items: center;">
+                <div class="cta-pill">Scan to Download</div>
+                <div class="hint-text">Hover or flip to scan</div>
+            </div>
+        </div>
+
+        <!-- BACK OF CARD -->
+        <div class="card-face card-back">
+            <div class="back-header">
+                <h2 class="back-title">Get the App.</h2>
+                <p class="back-subtitle">Scan using your phone's camera</p>
+            </div>
+
+            <div class="qr-wrapper">
+                <!-- Replace src with your actual QR code image path -->
+                <!-- Example: src="your-qr-code.png" -->
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://enything.app/download&margin=0" alt="Download QR Code" class="qr-code" id="userQrCode">
+            </div>
+
+            <ul class="benefits-list">
+                <li class="benefit-item">
+                    <div class="benefit-icon">✓</div>
+                    Lightning Fast Delivery
+                </li>
+                <li class="benefit-item">
+                    <div class="benefit-icon accent">★</div>
+                    Exclusive Local Offers
+                </li>
+                <li class="benefit-item">
+                    <div class="benefit-icon primary">🛡️</div>
+                    Trusted & Secure Payments
+                </li>
+            </ul>
+
+            <div class="back-footer">
+                Available on iOS & Android
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

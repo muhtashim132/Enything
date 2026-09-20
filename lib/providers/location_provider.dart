@@ -1,9 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:convert';
 import '../models/saved_address_model.dart';
 import '../utils/permission_utils.dart';
 
@@ -126,7 +128,24 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     safeNotifyListeners();
   }
 
-  Future<bool> requestLocation() async {
+  /// Request location permission and fetch the current GPS position.
+  ///
+  /// [isUserAction] distinguishes automatic startup calls from explicit user
+  /// interactions (e.g. tapping "Enable Location" or "Use Current Location").
+  ///
+  /// When `false` (startup / resume):
+  ///   • Location Services off → silently returns `false`, no redirect.
+  ///   • Permission denied → prompts once on first launch via native dialog,
+  ///     then silently returns `false` on subsequent launches.
+  ///   • Permission permanently denied → silently returns `false`.
+  ///
+  /// When `true` (user tapped a location button):
+  ///   • Location Services off → shows a confirmation dialog offering to
+  ///     open device Settings. Only opens Settings if the user confirms.
+  ///   • Permission denied → triggers the native permission prompt.
+  ///   • Permission permanently denied → shows a confirmation dialog
+  ///     offering to open App Settings. Only opens if the user confirms.
+  Future<bool> requestLocation({bool isUserAction = false}) async {
     _isLoading = true;
     safeNotifyListeners();
 
@@ -135,16 +154,47 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (!serviceEnabled) {
         _isLoading = false;
         safeNotifyListeners();
-        await Geolocator.openLocationSettings();
+        if (isUserAction) {
+          // User explicitly asked — offer to open Settings with confirmation
+          final shouldOpen = await PermissionUtils.showOpenSettingsDialog(
+            title: 'Location Services Off',
+            message: Platform.isIOS
+                ? 'Location Services are turned off. To enable them, go to '
+                    'Settings > Privacy & Security > Location Services and '
+                    'toggle it on.'
+                : 'Location Services are turned off. Please enable them in '
+                    'your device settings so we can find nearby shops for you.',
+          );
+          if (shouldOpen) {
+            await Geolocator.openLocationSettings();
+          }
+        }
+        // Startup (isUserAction == false): silently return, no redirect
         return false;
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
+        if (!isUserAction) {
+          // Automatic startup: only trigger the native prompt on the very
+          // first app launch. After that, let the user explicitly tap
+          // "Enable Location" — never nag on every open.
+          final prefs = await SharedPreferences.getInstance();
+          final hasPromptedOnce =
+              prefs.getBool('has_prompted_location') ?? false;
+          if (hasPromptedOnce) {
+            _isLoading = false;
+            safeNotifyListeners();
+            return false;
+          }
+          await prefs.setBool('has_prompted_location', true);
+        }
         permission =
             await PermissionUtils.requestLocationPermissionWithDisclosure(
           customReason:
-              'Enything uses your location to discover nearby products, calculate accurate delivery times, and guide delivery partners to your exact address.',
+              'Enything uses your location to discover nearby products, '
+              'calculate accurate delivery times, and guide delivery '
+              'partners to your exact address.',
         );
       }
 
@@ -152,7 +202,22 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
         _isLoading = false;
         _permissionGranted = false;
         safeNotifyListeners();
-        await Geolocator.openAppSettings();
+        if (isUserAction) {
+          // User explicitly asked — offer to open App Settings
+          final shouldOpen = await PermissionUtils.showOpenSettingsDialog(
+            title: 'Location Permission Required',
+            message: Platform.isIOS
+                ? 'Location access is turned off for Enything. To enable it, '
+                    'go to Settings > Enything > Location and select '
+                    '"While Using the App".'
+                : 'Location permission is permanently denied. Please enable '
+                    'it in App Settings > Permissions > Location.',
+          );
+          if (shouldOpen) {
+            await Geolocator.openAppSettings();
+          }
+        }
+        // Startup (isUserAction == false): silently return, no redirect
         return false;
       }
 

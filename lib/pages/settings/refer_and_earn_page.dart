@@ -355,7 +355,7 @@ class _ReferAndEarnPageState extends State<ReferAndEarnPage> {
           icon: Icons.card_giftcard_rounded,
           title: 'You Both Earn',
           description:
-              'When they complete their first order, you get a bonus directly in your wallet!',
+              'When they complete their first order, you both get a discount coupon via notification!',
           isLast: true,
         ),
       ],

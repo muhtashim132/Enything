@@ -43,7 +43,8 @@ class SellerOrderMapPage extends StatefulWidget {
   State<SellerOrderMapPage> createState() => _SellerOrderMapPageState();
 }
 
-class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
+class _SellerOrderMapPageState extends State<SellerOrderMapPage>
+    with WidgetsBindingObserver {
   final MapController _mapCtrl = MapController();
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -62,10 +63,12 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
   final ValueNotifier<int> _timeTicker = ValueNotifier(0);
   Timer? _tickerTimer;
   RealtimeChannel? _channel;
+  bool _isIntentionalDisconnect = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentOrder = widget.order;
 
     if (widget.order.riderLat != null &&
@@ -86,19 +89,37 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tickerTimer?.cancel();
     _timeTicker.dispose();
     _riderLatLngNotifier.dispose();
     _riderUpdatedAtNotifier.dispose();
     if (_channel != null) {
+      _isIntentionalDisconnect = true;
       _supabase.removeChannel(_channel!);
     }
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _subscribeToRider();
+      }
+    }
+  }
+
   // ── Supabase Realtime ────────────────────────────────────────────────────
 
   void _subscribeToRider() {
+    if (_channel != null) {
+      _isIntentionalDisconnect = true;
+      _supabase.removeChannel(_channel!);
+      _channel = null;
+    }
+    _isIntentionalDisconnect = false;
+
     _channel = _supabase
         .channel('seller-map-${widget.order.id}')
         .onPostgresChanges(
@@ -147,7 +168,16 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage> {
             }
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+      if ((status == RealtimeSubscribeStatus.closed ||
+              status == RealtimeSubscribeStatus.channelError) &&
+          !_isIntentionalDisconnect) {
+        debugPrint('Seller map: Realtime channel disconnected. Reconnecting in 4s...');
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted) _subscribeToRider();
+        });
+      }
+    });
   }
 
   // ── Route Fetching ───────────────────────────────────────────────────────

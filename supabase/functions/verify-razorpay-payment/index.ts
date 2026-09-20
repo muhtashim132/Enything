@@ -169,11 +169,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Amount validation with safe margin
-    if (paymentData.amount < expectedPaise - 100) {
-      console.warn(`Payment amount mismatch. Gateway Paid: ${paymentData.amount} paise, Expected: ${expectedPaise} paise.`);
+    // A4 FIX: Exact-or-greater amount validation (removed ₹1 underpayment tolerance).
+    // Upper bound prevents replay attacks using a larger payment from another order.
+    if (paymentData.amount < expectedPaise) {
+      console.warn(`Payment underpaid. Gateway: ${paymentData.amount} paise, Expected: ${expectedPaise} paise.`);
       return new Response(
-        JSON.stringify({ verified: false, error: "Payment amount does not match the required order total." }),
+        JSON.stringify({ verified: false, error: "Payment amount is less than the required order total." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (paymentData.amount > expectedPaise + 5000) {
+      console.warn(`Payment overpaid suspiciously. Gateway: ${paymentData.amount} paise, Expected: ${expectedPaise} paise.`);
+      return new Response(
+        JSON.stringify({ verified: false, error: "Payment amount exceeds the expected order total by too much." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

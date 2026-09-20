@@ -53,6 +53,10 @@ class Auth {
                 } else if (authData.session) {
                     this.showDebugError("Fallback signIn SUCCESS!");
                     session = authData.session;
+                    // B6 FIX: Clear plaintext credentials immediately after successful re-auth
+                    // to minimize exposure window in Safari Private Browsing mode.
+                    sessionStorage.removeItem('enything_fallback_email');
+                    sessionStorage.removeItem('enything_fallback_password');
                 }
             } else {
                 this.showDebugError("No fallback credentials found in sessionStorage.");

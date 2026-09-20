@@ -385,7 +385,7 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
         final navContext = widget.rootContext;
         setState(() => _isLocating = true);
         locProv.clearSelectedAddress();
-        await locProv.requestLocation();
+        await locProv.requestLocation(isUserAction: true);
         if (mounted) {
           setState(() => _isLocating = false);
           Navigator.pop(context);

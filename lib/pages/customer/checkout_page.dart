@@ -761,8 +761,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       if (isReplacementOrder) {
         // Replacement order fees:
-        // • effectiveBase = 0.0 — delivery charge stays the SAME because it's
-        //   still one rider delivering to one address. We don't double-charge.
+        // • effectiveBase = 0.0 — delivery base fee was already paid in the
+        //   original order. We only charge the multi-shop surcharge for the
+        //   new shop leg. No double-charging the customer.
         effectiveBase = 0.0;
 
         // Small cart fee (aggregate check)
