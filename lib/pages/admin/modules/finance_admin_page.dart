@@ -2011,21 +2011,15 @@ class _WithdrawalActionSheetState extends State<_WithdrawalActionSheet> {
 
       // Securely fetch exact calculated balances via DB RPCs to prevent OOM
       if (role == 'seller') {
-        final shopRes = await _db
-            .from('shops')
-            .select('id')
-            .eq('seller_id', userId)
-            .maybeSingle();
-        if (shopRes != null) {
-          final balanceRes = await _db.rpc('get_seller_balance', params: {
-            'p_shop_id': shopRes['id'],
-          });
-          if (balanceRes != null) {
-            _totalEarned = (balanceRes['total_earned'] as num).toDouble();
-            _totalWithdrawn = (balanceRes['total_paid'] as num).toDouble();
-            _availableBalance =
-                (balanceRes['available_balance'] as num).toDouble();
-          }
+        // BUG 2 FIX: Pass seller's user_id (not shop UUID) to get_seller_balance(p_seller_id)
+        final balanceRes = await _db.rpc('get_seller_balance', params: {
+          'p_seller_id': userId,
+        });
+        if (balanceRes != null) {
+          _totalEarned = (balanceRes['total_earned'] as num).toDouble();
+          _totalWithdrawn = (balanceRes['total_paid'] as num).toDouble();
+          _availableBalance =
+              (balanceRes['available_balance'] as num).toDouble();
         }
       } else if (role == 'delivery_partner') {
         final balanceRes = await _db.rpc('get_rider_balance', params: {

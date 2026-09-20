@@ -91,6 +91,32 @@ class CouponProvider extends ChangeNotifier {
         return false;
       }
 
+      // BUG 3 FIX: Check per-user usage limit for immediate UX feedback
+      final perUserLimit = res['per_user_limit'] as int?;
+      if (perUserLimit != null) {
+        final userId = _supabase.auth.currentUser?.id;
+        if (userId != null) {
+          try {
+            final userUsageRes = await _supabase
+                .from('orders')
+                .select('id')
+                .eq('coupon_id', res['id'])
+                .eq('customer_id', userId)
+                .not('status', 'in', '(cancelled,payment_failed,timeout)');
+            final userUsageCount = (userUsageRes as List).length;
+            if (userUsageCount >= perUserLimit) {
+              _errorMessage =
+                  'You have already used this coupon the maximum number of times';
+              _isValidating = false;
+              safeNotifyListeners();
+              return false;
+            }
+          } catch (_) {
+            // Silently proceed — server-side place_orders will enforce anyway
+          }
+        }
+      }
+
       // Calculate discount
       final discountType = res['discount_type'] as String? ?? 'flat';
       final discountValue = (res['discount_value'] as num?)?.toDouble() ?? 0.0;

@@ -113,9 +113,9 @@ class _CaReportPageState extends State<CaReportPage> {
           .select('id, total_amount, non_food_gst_amount, s9_5_gst_amount')
           .eq('shop_id', shopId)
           .eq('status', 'delivered')
-          .gte('created_at', start.toIso8601String())
-          .lt('created_at', end.toIso8601String())
-          .order('created_at', ascending: false)
+          .gte('updated_at', start.toIso8601String())
+          .lt('updated_at', end.toIso8601String())
+          .order('updated_at', ascending: false)
           .limit(100);
 
       setState(() {
