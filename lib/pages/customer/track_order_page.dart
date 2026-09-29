@@ -269,6 +269,32 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   List<OrderModel> _groupOrders = [];
   bool _fetchError = false;
+  bool _isStackedDelivery = false;
+
+  Future<void> _checkStackedDelivery(String riderId, String myGroupId) async {
+    try {
+      final res = await _supabase
+          .from('orders')
+          .select('id, cart_group_id')
+          .eq('delivery_partner_id', riderId)
+          .inFilter('status', [
+            'confirmed',
+            'preparing',
+            'ready_for_pickup',
+            'picked_up',
+            'out_for_delivery'
+          ]);
+      final distinctGroups = (res as List)
+          .map((r) => (r['cart_group_id'] as String?) ?? (r['id'] as String))
+          .toSet();
+      final hasOtherOrders = distinctGroups.any((gid) => gid != myGroupId);
+      if (mounted && hasOtherOrders != _isStackedDelivery) {
+        setState(() {
+          _isStackedDelivery = hasOtherOrders;
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> _fetchOrder() async {
     try {
@@ -310,7 +336,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           for (final o in group) {
             if (o.deliveryPartnerId != null &&
                 o.riderLat != null &&
-                o.riderLng != null) {
+                o.riderLng != null &&
+                o.riderLat != 0.0 &&
+                o.riderLng != 0.0) {
               newLocs[o.deliveryPartnerId!] = LatLng(o.riderLat!, o.riderLng!);
             }
           }
@@ -318,6 +346,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         });
 
         _subscribeToOrder();
+
+        String? activeRiderId = order.deliveryPartnerId;
+        if (activeRiderId == null || activeRiderId.isEmpty) {
+          for (final o in group) {
+            if (o.deliveryPartnerId != null && o.deliveryPartnerId!.isNotEmpty) {
+              activeRiderId = o.deliveryPartnerId;
+              break;
+            }
+          }
+        }
+        if (activeRiderId != null && activeRiderId.isNotEmpty) {
+          _checkStackedDelivery(activeRiderId, order.cartGroupId ?? order.id);
+        }
 
         // Fix 3: Read the resolved flag from SharedPrefs so the panel stays hidden
         // even when this TrackOrderPage is recreated (e.g. banner tap after replacement).
@@ -461,7 +502,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               // Update rider locations independently of setState, with Idempotency check
               if (updatedOrder.deliveryPartnerId != null &&
                   updatedOrder.riderLat != null &&
-                  updatedOrder.riderLng != null) {
+                  updatedOrder.riderLng != null &&
+                  updatedOrder.riderLat != 0.0 &&
+                  updatedOrder.riderLng != 0.0) {
                 final oldLoc = _riderLocationsNotifier
                     .value[updatedOrder.deliveryPartnerId!];
                 final newLoc =
@@ -486,6 +529,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       Map<String, LatLng>.from(_riderLocationsNotifier.value);
                   currentLocs.remove(oldOrder.deliveryPartnerId);
                   _riderLocationsNotifier.value = currentLocs;
+                }
+              }
+
+              if (updatedOrder.deliveryPartnerId != null &&
+                  updatedOrder.deliveryPartnerId!.isNotEmpty) {
+                _checkStackedDelivery(updatedOrder.deliveryPartnerId!,
+                    updatedOrder.cartGroupId ?? updatedOrder.id);
+              } else {
+                if (mounted && _isStackedDelivery) {
+                  setState(() => _isStackedDelivery = false);
                 }
               }
 
@@ -2832,8 +2885,42 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                             if (!isCancelled &&
                                 !isDelivered &&
                                 !['awaiting_acceptance', 'awaiting_payment']
-                                    .contains(_aggregateStatus))
+                                    .contains(_aggregateStatus)) ...[
                               _buildEtaStrip(),
+                              // 100x FIX (Rule 7): Stacked Delivery Reassurance
+                              if (_isStackedDelivery) ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.20),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.35)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.info_outline,
+                                          color: Colors.white, size: 16),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          'Rider is completing an earlier delivery on schedule. Your order is safe and on track! 🛵',
+                                          style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ],
                         ),
                       ),
@@ -3214,8 +3301,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                       _groupOrders.any((o) => o.paymentStatus == 'captured') ||
                                       (!isCancelled &&
                                           !['awaiting_acceptance', 'awaiting_payment']
-                                              .contains(_aggregateStatus) &&
-                                          _order?.paymentMethod != 'cod'))
+                                              .contains(_aggregateStatus)))
                                   ? 'Total Paid'
                                   : 'Total Payable',
                               '₹${_computeGroupGrandTotal().toStringAsFixed(0)}',

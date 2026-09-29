@@ -126,6 +126,43 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ── 100x Security: Admin Auth Check ────────────────────────────────────
+    // Without this guard, any authenticated user could push notifications
+    // to ALL users by calling this Edge Function directly.
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (authHeader) {
+      const userClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: { user }, error: authErr } = await userClient.auth.getUser();
+      if (authErr || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const adminClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      );
+      const { data: adminData } = await adminClient
+        .from('admin_users')
+        .select('id, is_active')
+        .eq('id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!adminData) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden: Admin access required for broadcasts.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
+
     // STRESS-TEST FIX: Type Coercion to prevent TypeError on .substring
     title = String(title ?? '').substring(0, 100);
     body = String(body ?? '').substring(0, 512);
@@ -250,10 +287,13 @@ Deno.serve(async (req: Request) => {
       }
 
       // Deduplicate tokens so each physical device receives exactly 1 push notification
+      // 100x FIX: Also deduplicate by user_id across pages to prevent a user with
+      // tokens in multiple roles from receiving duplicate broadcast pushes.
       const uniqueTokensMap = new Map<string, any>();
       for (const r of rows) {
-        if (r.token && !uniqueTokensMap.has(r.token)) {
+        if (r.token && !uniqueTokensMap.has(r.token) && (!r.user_id || !seenUserIds.has(r.user_id))) {
           uniqueTokensMap.set(r.token, r);
+          if (r.user_id) seenUserIds.add(r.user_id);
         }
       }
       const uniqueRows = Array.from(uniqueTokensMap.values());

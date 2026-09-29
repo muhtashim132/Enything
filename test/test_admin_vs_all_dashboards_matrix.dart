@@ -1,7 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:enythingmobilenew/models/order_model.dart';
-import 'package:enythingmobilenew/models/order_group.dart';
-import 'package:enythingmobilenew/models/product_model.dart';
 import 'package:enythingmobilenew/providers/platform_config_provider.dart';
 
 void main() {

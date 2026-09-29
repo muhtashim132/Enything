@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
 import '../../../theme/admin_theme.dart';
+import '../../../providers/rbac_provider.dart';
+import '../rbac/forbidden_page.dart';
 
 class AnalyticsAdminPage extends StatefulWidget {
   const AnalyticsAdminPage({super.key});
@@ -83,6 +86,13 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
 
   @override
   Widget build(BuildContext context) {
+    final rbac = context.watch<RbacProvider>();
+    if (!rbac.isSuperAdmin && !rbac.can('analytics.view')) {
+      return const ForbiddenPage(
+        requiredPermission: 'analytics.view',
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: () async {
         setState(() => _loading = true);

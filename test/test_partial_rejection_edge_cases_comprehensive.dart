@@ -126,7 +126,7 @@ void main() {
       expect(shop2Rebalanced.grandTotalCollected, equals(175.0));
       expect(shop1Rebalanced.grandTotalCollected, equals(0.0));
 
-      expect(395.0 - shop2Rebalanced.grandTotalCollected!, equals(220.0));
+      expect(395.0 - shop2Rebalanced.grandTotalCollected, equals(220.0));
     });
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ void main() {
       expect(shop1.platformFee, equals(5.0));
       expect(shop1.multiShopSurcharge, equals(0.0));
 
-      final refund = (shop1.grandTotalCollected! + shop2.grandTotalCollected!) - 225.0;
+      final refund = (shop1.grandTotalCollected + shop2.grandTotalCollected) - 225.0;
       expect(refund, equals(170.0));
     });
 
@@ -203,22 +203,22 @@ void main() {
       );
 
       expect(shop3Rebalanced.grandTotalCollected, equals(125.0));
-      expect(365.0 - shop3Rebalanced.grandTotalCollected!, equals(240.0));
+      expect(365.0 - shop3Rebalanced.grandTotalCollected, equals(240.0));
     });
 
     // ─────────────────────────────────────────────────────────────────────────
     // Test 4: 3-Shop Order -> Sequential Rejection (Shop 1 then Shop 2)
     // ─────────────────────────────────────────────────────────────────────────
     test('Test 4: Sequential Rejections: Shop 1 rejects -> Shop 2 promoted -> Shop 2 rejects -> Shop 3 promoted', () {
-      final step1Shop2Delivery = 20.0;
-      final step1Shop2Platform = 5.0;
+      const step1Shop2Delivery = 20.0;
+      const step1Shop2Platform = 5.0;
 
       expect(step1Shop2Delivery, equals(20.0));
       expect(step1Shop2Platform, equals(5.0));
 
-      final step2Shop3Delivery = 20.0;
-      final step2Shop3Platform = 5.0;
-      final step2Shop3Surcharge = 0.0;
+      const step2Shop3Delivery = 20.0;
+      const step2Shop3Platform = 5.0;
+      const step2Shop3Surcharge = 0.0;
 
       expect(step2Shop3Delivery, equals(20.0));
       expect(step2Shop3Platform, equals(5.0));
@@ -237,8 +237,8 @@ void main() {
       final activeOrders = orders.where((o) => !terminalRejectionStatuses.contains(o.status)).toList();
       expect(activeOrders.isEmpty, isTrue);
 
-      final double totalOriginalPaid = 125.0 + 120.0;
-      final double activeGrandTotal = 0.0;
+      const double totalOriginalPaid = 125.0 + 120.0;
+      const double activeGrandTotal = 0.0;
       final double totalRefund = totalOriginalPaid - activeGrandTotal;
 
       expect(totalRefund, equals(245.0));
@@ -249,10 +249,10 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     test('Test 6: Replacement Order with Surviving Active Shop -> Surcharge added, Base Fee retained', () {
       final activeShopIds = {'shop-2'};
-      final isReplacementOrder = true;
+      const isReplacementOrder = true;
       final legSurcharges = [20.0];
 
-      final shopIndex = 0;
+      const shopIndex = 0;
       final isExtraLeg = isReplacementOrder && activeShopIds.isNotEmpty;
       final double currentLegSurcharge = (shopIndex < legSurcharges.length) ? legSurcharges[shopIndex] : 0.0;
       final double shopSurcharge = (shopIndex == 0 && !isExtraLeg) ? 0.0 : currentLegSurcharge;
@@ -269,7 +269,7 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     test('Test 7: Adding 2 Replacement Shops -> Sequential leg surcharges correctly attributed', () {
       final activeShopIds = {'shop-2'};
-      final isReplacementOrder = true;
+      const isReplacementOrder = true;
       final legSurcharges = [20.0, 40.0];
 
       final isExtraLeg = isReplacementOrder && activeShopIds.isNotEmpty;
@@ -335,13 +335,13 @@ void main() {
     // Test 9: Coupon Boundary Recalculation
     // ─────────────────────────────────────────────────────────────────────────
     test('Test 9: Coupon boundary: Subtotal drops below min_order_amount -> coupon revoked', () {
-      final couponMinOrder = 500.0;
-      final couponDiscount = 50.0;
+      const couponMinOrder = 500.0;
+      const couponDiscount = 50.0;
 
-      final initialSubtotal = 600.0;
+      const initialSubtotal = 600.0;
       expect(initialSubtotal >= couponMinOrder, isTrue);
 
-      final activeSubtotal = 300.0;
+      const activeSubtotal = 300.0;
       final effectiveCoupon = (activeSubtotal >= couponMinOrder) ? couponDiscount : 0.0;
       expect(effectiveCoupon, equals(0.0));
 
@@ -388,14 +388,14 @@ void main() {
     // Test 11: Seller Payout & Gateway Deduction Financial Integrity
     // ─────────────────────────────────────────────────────────────────────────
     test('Test 11: Gateway deduction formula & seller payout zeroing on cancellation', () {
-      final grandTotal = 250.0;
+      const grandTotal = 250.0;
       final gatewayDeduction = grandTotal * 0.02 * 1.18;
       expect(gatewayDeduction, closeTo(5.90, 0.01));
 
-      final cancelledGrandTotal = 0.0;
+      const cancelledGrandTotal = 0.0;
       final cancelledGatewayDeduction = cancelledGrandTotal * 0.02 * 1.18;
-      final cancelledSellerPayout = 0.0;
-      final cancelledCommission = 0.0;
+      const cancelledSellerPayout = 0.0;
+      const cancelledCommission = 0.0;
 
       expect(cancelledGatewayDeduction, equals(0.0));
       expect(cancelledSellerPayout, equals(0.0));

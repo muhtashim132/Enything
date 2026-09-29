@@ -317,35 +317,48 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
 
+        final bool isPaid = order.paymentStatus == 'captured';
         if (riderAlreadyAccepted) {
-          // ── Both now accepted → push customer to pay NOW ──────────────
-          _showSnack(
-              '✅ Both you & rider accepted. Waiting for customer to pay.',
-              isError: false);
-
-          if (allGroupAccepted) {
+          if (isPaid) {
+            _showSnack(
+                '✅ Both you & rider accepted. Order is already paid & packing!',
+                isError: false);
             notifProv.sendBackgroundPush(
               targetUserId: order.customerId,
-              title: '✅ Shop & Rider Ready! Pay Now 💳',
-              body:
-                  'Both the shop(s) and rider accepted your order. Complete payment within 10 minutes.',
-              data: {'order_id': order.id, 'action': 'pay', 'role': 'customer'},
-            ).then((err) {
-              if (err != null && mounted) _showSnack(err, isError: true);
-            });
-          } else {
-            notifProv.sendBackgroundPush(
-              targetUserId: order.customerId,
-              title: '🏪 Shop Accepted!',
-              body:
-                  'A shop accepted your order. Still waiting for other shops to confirm.',
+              title: '🏪 Shop Confirmed & Packing!',
+              body: 'The shop accepted your order and is packing the items.',
               data: {'order_id': order.id, 'role': 'customer'},
-            ).then((err) {
-              if (err != null && mounted) _showSnack(err, isError: true);
-            });
+            );
+          } else {
+            // ── Both now accepted → push customer to pay NOW ──────────────
+            _showSnack(
+                '✅ Both you & rider accepted. Waiting for customer to pay.',
+                isError: false);
+
+            if (allGroupAccepted) {
+              notifProv.sendBackgroundPush(
+                targetUserId: order.customerId,
+                title: '✅ Shop & Rider Ready! Pay Now 💳',
+                body:
+                    'Both the shop(s) and rider accepted your order. Complete payment within 10 minutes.',
+                data: {'order_id': order.id, 'action': 'pay', 'role': 'customer'},
+              ).then((err) {
+                if (err != null && mounted) _showSnack(err, isError: true);
+              });
+            } else {
+              notifProv.sendBackgroundPush(
+                targetUserId: order.customerId,
+                title: '🏪 Shop Accepted!',
+                body:
+                    'A shop accepted your order. Still waiting for other shops to confirm.',
+                data: {'order_id': order.id, 'role': 'customer'},
+              ).then((err) {
+                if (err != null && mounted) _showSnack(err, isError: true);
+              });
+            }
           }
 
-          // Notify rider: seller is in, customer is paying
+          // Notify rider:
           String? riderIdToNotify = order.deliveryPartnerId;
           if (riderIdToNotify == null) {
             try {
@@ -358,13 +371,23 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             } catch (_) {}
           }
           if (riderIdToNotify != null) {
-            notifProv.sendBackgroundPush(
-              targetUserId: riderIdToNotify,
-              title: '⌛ Waiting for Customer Payment',
-              body:
-                  'The shop accepted. Both of you are confirmed — customer is completing payment now.',
-              data: {'order_id': order.id, 'role': 'rider'},
-            );
+            if (isPaid) {
+              notifProv.sendBackgroundPush(
+                targetUserId: riderIdToNotify,
+                title: '🏪 Shop Confirmed & Packing!',
+                body:
+                    'The shop accepted and is packing the items.',
+                data: {'order_id': order.id, 'role': 'rider'},
+              );
+            } else {
+              notifProv.sendBackgroundPush(
+                targetUserId: riderIdToNotify,
+                title: '⌛ Waiting for Customer Payment',
+                body:
+                    'The shop accepted. Both of you are confirmed — customer is completing payment now.',
+                data: {'order_id': order.id, 'role': 'rider'},
+              );
+            }
           }
         } else {
           // ── Seller accepted first → broadcast riders + notify customer ─
@@ -406,6 +429,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         _showSnack('The customer just cancelled this order.', isError: true);
       } else if (e.toString().contains('SHOP_SUSPENDED')) {
         _showSnack('Your shop has been suspended by administration.', isError: true);
+      } else if (e.toString().contains('Invalid state transition') ||
+          e.toString().contains('no longer available')) {
+        _showSnack('Order is no longer available to accept.', isError: true);
       } else {
         _showSnack('Failed to accept: $e', isError: true);
       }
@@ -635,12 +661,40 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
       final partnerIdToNotify = latestPartnerId ?? order.deliveryPartnerId;
       if (mounted && partnerIdToNotify != null) {
-        context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: partnerIdToNotify,
-          title: '❌ Order Cancelled by Shop',
-          body: 'The shop declined the order. You are free for new deliveries.',
-          data: {'order_id': order.id, 'role': 'rider'},
-        );
+        bool hasOtherActiveOrders = false;
+        if (order.cartGroupId != null && order.cartGroupId!.isNotEmpty) {
+          try {
+            final activeSiblings = await _supabase
+                .from('orders')
+                .select('id')
+                .eq('cart_group_id', order.cartGroupId!)
+                .neq('id', order.id)
+                .inFilter('status', [
+                  'awaiting_acceptance',
+                  'pending',
+                  'confirmed',
+                  'preparing',
+                  'ready_for_pickup',
+                  'picked_up'
+                ]);
+            if ((activeSiblings as List).isNotEmpty) {
+              hasOtherActiveOrders = true;
+            }
+          } catch (_) {}
+        }
+
+        if (mounted) {
+          context.read<NotificationProvider>().sendBackgroundPush(
+            targetUserId: partnerIdToNotify,
+            title: hasOtherActiveOrders
+                ? '⚠️ Store Declined Items'
+                : '❌ Order Cancelled by Shop',
+            body: hasOtherActiveOrders
+                ? 'A store declined their part of the order. You are still delivering the remaining store(s).'
+                : 'The shop declined the order. You are free for new deliveries.',
+            data: {'order_id': order.id, 'role': 'rider'},
+          );
+        }
       }
 
       _loadOrders();
@@ -846,9 +900,35 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       _loadOrders();
       _showSnack('Status → ${status.replaceAll('_', ' ')}', isError: false);
     } on PostgrestException catch (pe) {
-      _showSnack(pe.message, isError: true);
+      final msg = pe.message.toLowerCase();
+      if (msg.contains('cancel') ||
+          msg.contains('invalid state') ||
+          msg.contains('invalid transition')) {
+        _showSnack('⚠️ Customer cancelled this order. Do not pack.', isError: true);
+      } else {
+        try {
+          final check = await _supabase
+              .from('orders')
+              .select('status')
+              .eq('id', order.id)
+              .maybeSingle();
+          if (check != null && check['status'] == 'cancelled') {
+            _showSnack('⚠️ Customer cancelled this order. Do not pack.', isError: true);
+            _loadOrders();
+            return;
+          }
+        } catch (_) {}
+        _showSnack(pe.message, isError: true);
+      }
+      _loadOrders();
     } catch (e) {
-      _showSnack('Update error: $e', isError: true);
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('cancel') || errStr.contains('invalid state')) {
+        _showSnack('⚠️ Customer cancelled this order. Do not pack.', isError: true);
+      } else {
+        _showSnack('Update error: $e', isError: true);
+      }
+      _loadOrders();
       debugPrint('Update error: $e');
     }
   }
@@ -940,7 +1020,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             'seller_rejected',
             'partner_rejected',
             'verification_failed',
-            'pending_verification'
+            'pending_verification',
+            'shop_dispute_cancel',
+            'timeout',
+            'failed',
+            'returned',
+            'refunded',
+            'no_rider',
+            'payment_failed',
           ].contains(o.status) ||
           ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
               o.isExpired))
@@ -1192,10 +1279,38 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Order #${order.id.substring(0, 8).toUpperCase()}',
-                          style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w700, fontSize: 14),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Order #${order.id.substring(0, 8).toUpperCase()}',
+                              style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                            if (order.cartGroupId != null &&
+                                order.cartGroupId!.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                      color:
+                                          Colors.purple.withValues(alpha: 0.3)),
+                                ),
+                                child: Text(
+                                  '🛒 Multi-Shop Order',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.purple.shade700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -1276,6 +1391,64 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             : _statusBadge(order, statusColor),
                       ],
                     ),
+
+                    // ── Rider Arrival Badge (100x Rider Arrival Display Guard) ──────
+                    if (order.arrivedAtShopTime != null &&
+                        ['confirmed', 'preparing', 'ready_for_pickup']
+                            .contains(order.status)) ...[
+                      const SizedBox(height: 8),
+                      Builder(builder: (context) {
+                        final minsAgo = DateTime.now()
+                            .difference(order.arrivedAtShopTime!)
+                            .inMinutes;
+                        final isLate = minsAgo >= 10;
+                        final isWarning = minsAgo >= 5;
+                        final badgeColor = isLate
+                            ? AppColors.danger
+                            : (isWarning
+                                ? Colors.amber.shade800
+                                : const Color(0xFF2B8A3E));
+                        final badgeBg = isLate
+                            ? AppColors.danger.withValues(alpha: 0.12)
+                            : (isWarning
+                                ? Colors.amber.withValues(alpha: 0.15)
+                                : const Color(0xFF2B8A3E)
+                                    .withValues(alpha: 0.12));
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: badgeBg,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: badgeColor.withValues(alpha: 0.4),
+                                width: 1.2),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isLate
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.location_on,
+                                size: 16,
+                                color: badgeColor,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '📍 Rider Arrived (${minsAgo <= 0 ? "just now" : "$minsAgo min ago"})${isLate ? " · Hand over items immediately!" : (isWarning ? " · Rider waiting at shop" : " · Waiting for pickup")}',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: badgeColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
 
                     if (order.status == 'awaiting_acceptance' &&
                         order.acceptanceDeadline != null) ...[
@@ -1931,6 +2104,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       case 'seller_rejected':
       case 'partner_rejected':
       case 'cancelled':
+      case 'shop_dispute_cancel':
+      case 'timeout':
+      case 'failed':
+      case 'returned':
+      case 'refunded':
+      case 'no_rider':
+      case 'payment_failed':
         return AppColors.danger;
       default:
         if (order.sellerAccepted || order.partnerAccepted) {

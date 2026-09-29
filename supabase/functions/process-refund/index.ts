@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
       const collectedAmount = freshOrder?.grand_total_collected != null 
         ? Number(freshOrder.grand_total_collected) 
         : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0);
-      const amountInPaise = Math.round(collectedAmount * 100);
+      let amountInPaise = Math.round(collectedAmount * 100);
 
       if (amountInPaise <= 0) {
         console.log(`Order ${record.id} has 0 collected amount. Marking refund as processed internally.`);
@@ -112,6 +112,39 @@ Deno.serve(async (req) => {
         }).eq("id", record.id);
 
         return new Response("Refund processed internally (zero amount).", { status: 200 });
+      }
+
+      // ── 100x Multi-Shop Double Refund Guard ───────────────────────────────
+      // Multi-shop cart groups share a single Razorpay payment_id. If 2+ orders
+      // in the same cart cancel near-simultaneously, each could issue a full
+      // refund totaling 2x+ the payment. Query Razorpay for already-refunded
+      // amount and cap this refund to prevent overshoot.
+      try {
+        const paymentCheckRes = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+          headers: { "Authorization": `Basic ${razorpayAuth}` },
+        });
+        if (paymentCheckRes.ok) {
+          const paymentData = await paymentCheckRes.json();
+          const totalPaidPaise = Number(paymentData.amount) || 0;
+          const alreadyRefundedPaise = Number(paymentData.amount_refunded) || 0;
+          const maxRefundablePaise = totalPaidPaise - alreadyRefundedPaise;
+
+          if (maxRefundablePaise <= 0) {
+            console.log(`Payment ${paymentId} already fully refunded (${alreadyRefundedPaise} paise). Marking order ${record.id} as refunded internally.`);
+            await supabaseAdmin.from("orders").update({
+              refund_status: "processed",
+              refund_id: `already_refunded_via_sibling`
+            }).eq("id", record.id);
+            return new Response("Refund skipped: Payment already fully refunded.", { status: 200 });
+          }
+
+          if (amountInPaise > maxRefundablePaise) {
+            console.warn(`Capping refund for order ${record.id}: requested ${amountInPaise} paise but only ${maxRefundablePaise} paise available (already refunded ${alreadyRefundedPaise}).`);
+            amountInPaise = maxRefundablePaise;
+          }
+        }
+      } catch (capErr) {
+        console.warn(`Could not query Razorpay payment status for double-refund guard: ${capErr}. Proceeding with original amount.`);
       }
 
       const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/refund`, {

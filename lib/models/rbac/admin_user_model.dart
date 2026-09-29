@@ -52,6 +52,16 @@ class AdminUserModel {
     return fullName.isEmpty ? '?' : fullName[0].toUpperCase();
   }
 
+  String get displaySubtitle {
+    if (email.contains('@auth.enything.app') && phone != null && phone!.isNotEmpty) {
+      return phone!;
+    }
+    if (phone != null && phone!.isNotEmpty && !email.contains('@auth.enything.app')) {
+      return '$email • $phone';
+    }
+    return email;
+  }
+
   bool hasPermission(String code) =>
       effectivePermissions.any((p) => p.code == code) ||
       adminLevel == 'superadmin';

@@ -240,12 +240,25 @@ class GeoUtils {
   /// Used for multi-stop delivery journeys (Rider -> Shop 1 -> Shop 2 -> Customer).
   static Future<List<LatLng>> fetchMultiStopRoute(
       List<LatLng> waypoints) async {
-    if (waypoints.length < 2) return waypoints;
+    // 100x FIX: Sanitize waypoints by stripping consecutive duplicate/near-identical coords (< 5m)
+    final sanitizedWaypoints = <LatLng>[];
+    for (final p in waypoints) {
+      if (sanitizedWaypoints.isEmpty ||
+          Geolocator.distanceBetween(
+                  sanitizedWaypoints.last.latitude,
+                  sanitizedWaypoints.last.longitude,
+                  p.latitude,
+                  p.longitude) >
+              5.0) {
+        sanitizedWaypoints.add(p);
+      }
+    }
+    if (sanitizedWaypoints.length < 2) return sanitizedWaypoints;
 
     // Try multi-point OSRM first for unified geometry
     try {
       final coordString =
-          waypoints.map((p) => '${p.longitude},${p.latitude}').join(';');
+          sanitizedWaypoints.map((p) => '${p.longitude},${p.latitude}').join(';');
       final osrmUrl = Uri.parse(
         'https://router.project-osrm.org/route/v1/driving/$coordString?overview=full&geometries=geojson',
       );
@@ -269,8 +282,8 @@ class GeoUtils {
 
     // Segment by segment fallback
     final fullPolyline = <LatLng>[];
-    for (int i = 0; i < waypoints.length - 1; i++) {
-      final seg = await fetchRoadRoute(waypoints[i], waypoints[i + 1]);
+    for (int i = 0; i < sanitizedWaypoints.length - 1; i++) {
+      final seg = await fetchRoadRoute(sanitizedWaypoints[i], sanitizedWaypoints[i + 1]);
       if (fullPolyline.isNotEmpty && seg.isNotEmpty) {
         fullPolyline.addAll(seg.skip(1));
       } else {

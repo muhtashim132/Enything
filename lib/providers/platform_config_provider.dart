@@ -21,12 +21,13 @@ class PlatformConfigProvider extends ChangeNotifier {
     instance = this;
   }
 
-  // ── Defaults (matches hardcoded constants initially) ────────
+  // ── Defaults (MUST match live `platform_config` DB values) ──────────
+  // These are used if load() hasn't completed yet (cold start race).
   double _commissionPercent = 5.0;
-  double _platformFee = 20.0;
+  double _platformFee = 15.0;
   double _deliveryBaseFee = 20.0;
-  double _smallCartFee = 15.0;
-  double _smallCartThreshold = 99.0;
+  double _smallCartFee = 25.0;
+  double _smallCartThreshold = 199.0;
   double _heavyOrderFee = 25.0;
   double _multiShopSurcharge = 20.0;
   double _riderCommissionPercent = 80.0;
@@ -34,7 +35,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   double _heavyOrderThresholdKg = 10.0;
   double _maxDeliveryRadiusKm = 15.0;
   double _deliveryRatePerKm = 20.0;
-  double _referralBonusAmount = 50.0;
+  double _referralBonusAmount = 25.0;
   double _deliveryGstRate = 0.18;
   double _platformFeeGstRate = 0.18;
   double _waitPenaltyPerMin = 2.0;

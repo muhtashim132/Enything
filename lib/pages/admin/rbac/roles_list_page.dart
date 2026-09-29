@@ -35,9 +35,23 @@ class _RolesListPageState extends State<RolesListPage> {
 
   Future<void> _loadRoles() async {
     setState(() => _loading = true);
-    await context.read<RbacProvider>().reloadRoles();
-    _applySearch();
-    if (mounted) setState(() => _loading = false);
+    try {
+      await context.read<RbacProvider>().reloadRoles();
+      if (mounted) _applySearch();
+    } catch (e) {
+      debugPrint('[RolesListPage] Error loading roles: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFFF5722),
+            content: Text('Failed to load roles: $e',
+                style: GoogleFonts.outfit(color: Colors.white)),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   void _onSearch() => setState(_applySearch);

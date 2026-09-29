@@ -15,6 +15,7 @@ import '../platform/tax_settings_page.dart';
 import '../platform/active_sessions_page.dart';
 import '../platform/category_management_page.dart';
 import '../platform/maintenance_settings_page.dart';
+import '../platform/admin_product_management_page.dart';
 import '../../../providers/platform_config_provider.dart';
 
 class SettingsAdminPage extends StatelessWidget {
@@ -23,6 +24,40 @@ class SettingsAdminPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rbac = context.watch<RbacProvider>();
+
+    // ── Platform Config Permissions ──────────────────────────
+    final canCommission = rbac.isSuperAdmin ||
+        rbac.can('settings.edit') ||
+        rbac.can('finance.view');
+    final canMaintenance =
+        rbac.isSuperAdmin || rbac.can('system.maintenance');
+    final canCategories = rbac.isSuperAdmin ||
+        rbac.can('settings.edit') ||
+        rbac.can('products.manage');
+    final canProducts = rbac.isSuperAdmin ||
+        rbac.can('products.manage') ||
+        rbac.can('products.view');
+    final canCoupons = rbac.isSuperAdmin ||
+        rbac.can('marketing.view') ||
+        rbac.can('marketing.send_push');
+    final canReferrals = rbac.isSuperAdmin ||
+        rbac.can('marketing.view') ||
+        rbac.can('settings.view');
+
+    final hasAnyPlatformConfig = canCommission ||
+        canMaintenance ||
+        canCategories ||
+        canProducts ||
+        canCoupons ||
+        canReferrals;
+
+    // ── Payment & Tax Permissions ─────────────────────────────
+    final canPaymentGateways =
+        rbac.isSuperAdmin || rbac.can('finance.view');
+    final canTaxSettings = rbac.isSuperAdmin ||
+        rbac.can('finance.view') ||
+        rbac.can('settings.edit');
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
@@ -63,83 +98,106 @@ class SettingsAdminPage extends StatelessWidget {
         ],
 
         // ── Platform Config ──────────────────────────────────────
-        const _SectionLabel('Platform Configuration'),
-        _SettingsTile(
-          icon: Icons.percent_rounded,
-          iconColor: AdminColors.success,
-          title: 'Commission & Fees',
-          subtitle: 'Platform %, delivery fee, surge pricing',
-          onTap: () =>
-              Navigator.push(context, _route(const CommissionFeesPage())),
-        ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.1),
-        Builder(
-          builder: (context) {
-            final config = context.watch<PlatformConfigProvider>();
-            return _SettingsTile(
-              icon: Icons.power_settings_new_rounded,
-              iconColor: config.isMaintenanceMode
-                  ? AdminColors.danger
-                  : AdminColors.success,
-              title: 'Store Status & Maintenance',
-              subtitle: config.isMaintenanceMode
-                  ? '🔴 Orders Paused'
-                  : '🟢 Store Online',
+        if (hasAnyPlatformConfig) ...[
+          const _SectionLabel('Platform Configuration'),
+          if (canCommission)
+            _SettingsTile(
+              icon: Icons.percent_rounded,
+              iconColor: AdminColors.success,
+              title: 'Commission & Fees',
+              subtitle: 'Platform %, delivery fee, surge pricing',
+              onTap: () =>
+                  Navigator.push(context, _route(const CommissionFeesPage())),
+            ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.1),
+          if (canMaintenance)
+            Builder(
+              builder: (context) {
+                final config = context.watch<PlatformConfigProvider>();
+                return _SettingsTile(
+                  icon: Icons.power_settings_new_rounded,
+                  iconColor: config.isMaintenanceMode
+                      ? AdminColors.danger
+                      : AdminColors.success,
+                  title: 'Store Status & Maintenance',
+                  subtitle: config.isMaintenanceMode
+                      ? '🔴 Orders Paused'
+                      : '🟢 Store Online',
+                  onTap: () => Navigator.push(
+                      context, _route(const MaintenanceSettingsPage())),
+                );
+              },
+            ).animate().fadeIn(delay: 225.ms).slideX(begin: -0.1),
+          if (canCategories)
+            _SettingsTile(
+              icon: Icons.category_rounded,
+              iconColor: const Color(0xFF8B5CF6),
+              title: 'Category Management',
+              subtitle: 'Enable/disable categories, create new ones',
               onTap: () => Navigator.push(
-                  context, _route(const MaintenanceSettingsPage())),
-            );
-          },
-        ).animate().fadeIn(delay: 225.ms).slideX(begin: -0.1),
-        _SettingsTile(
-          icon: Icons.category_rounded,
-          iconColor: const Color(0xFF8B5CF6),
-          title: 'Category Management',
-          subtitle: 'Enable/disable categories, create new ones',
-          onTap: () =>
-              Navigator.push(context, _route(const CategoryManagementPage())),
-        ).animate().fadeIn(delay: 225.ms).slideX(begin: -0.1),
-        _SettingsTile(
-          icon: Icons.local_offer_rounded,
-          iconColor: AdminColors.warning,
-          title: 'Coupon Management',
-          subtitle: 'Create and manage discount codes',
-          onTap: () =>
-              Navigator.push(context, _route(const CouponManagementPage())),
-        ).animate().fadeIn(delay: 250.ms).slideX(begin: -0.1),
-        _SettingsTile(
-          icon: Icons.people_alt_rounded,
-          iconColor: const Color(0xFFEC4899),
-          title: 'Referral Rewards',
-          subtitle: 'Referral bonus configuration',
-          onTap: () =>
-              Navigator.push(context, _route(const ReferralSettingsPage())),
-        ).animate().fadeIn(delay: 300.ms).slideX(begin: -0.1),
+                  context, _route(const CategoryManagementPage())),
+            ).animate().fadeIn(delay: 225.ms).slideX(begin: -0.1),
+          if (canProducts)
+            _SettingsTile(
+              icon: Icons.inventory_2_rounded,
+              iconColor: AdminColors.primary,
+              title: 'Product Management',
+              subtitle: 'Upload, edit & toggle products for any shop',
+              onTap: () => Navigator.push(
+                  context, _route(const AdminProductManagementPage())),
+            ).animate().fadeIn(delay: 235.ms).slideX(begin: -0.1),
+          if (canCoupons)
+            _SettingsTile(
+              icon: Icons.local_offer_rounded,
+              iconColor: AdminColors.warning,
+              title: 'Coupon Management',
+              subtitle: 'Create and manage discount codes',
+              onTap: () =>
+                  Navigator.push(context, _route(const CouponManagementPage())),
+            ).animate().fadeIn(delay: 250.ms).slideX(begin: -0.1),
+          if (canReferrals)
+            _SettingsTile(
+              icon: Icons.people_alt_rounded,
+              iconColor: const Color(0xFFEC4899),
+              title: 'Referral Rewards',
+              subtitle: 'Referral bonus configuration',
+              onTap: () =>
+                  Navigator.push(context, _route(const ReferralSettingsPage())),
+            ).animate().fadeIn(delay: 300.ms).slideX(begin: -0.1),
+        ],
 
         // ── Notifications ────────────────────────────────────────
-        const _SectionLabel('Push Notifications'),
-        _SettingsTile(
-          icon: Icons.campaign_rounded,
-          iconColor: AdminColors.info,
-          title: 'Send Notification',
-          subtitle: 'Broadcast to all users, sellers, or riders',
-          onTap: () => _NotificationSheet.show(context),
-        ).animate().fadeIn(delay: 350.ms).slideX(begin: -0.1),
+        if (rbac.isSuperAdmin || rbac.can('marketing.send_push')) ...[
+          const _SectionLabel('Push Notifications'),
+          _SettingsTile(
+            icon: Icons.campaign_rounded,
+            iconColor: AdminColors.info,
+            title: 'Send Notification',
+            subtitle: 'Broadcast to all users, sellers, or riders',
+            onTap: () => _NotificationSheet.show(context),
+          ).animate().fadeIn(delay: 350.ms).slideX(begin: -0.1),
+        ],
 
         // ── Payment & Tax ────────────────────────────────────────
-        const _SectionLabel('Payment & Tax'),
-        _SettingsTile(
-          icon: Icons.payment_rounded,
-          iconColor: AdminColors.success,
-          title: 'Payment Gateways',
-          subtitle: 'Razorpay, UPI configuration',
-          onTap: () => _showComingSoon(context, 'Payment Gateways'),
-        ).animate().fadeIn(delay: 400.ms).slideX(begin: -0.1),
-        _SettingsTile(
-          icon: Icons.receipt_long_rounded,
-          iconColor: AdminColors.warning,
-          title: 'Tax Settings',
-          subtitle: 'GST rates and tax configuration',
-          onTap: () => Navigator.push(context, _route(const TaxSettingsPage())),
-        ).animate().fadeIn(delay: 450.ms).slideX(begin: -0.1),
+        if (canPaymentGateways || canTaxSettings) ...[
+          const _SectionLabel('Payment & Tax'),
+          if (canPaymentGateways)
+            _SettingsTile(
+              icon: Icons.payment_rounded,
+              iconColor: AdminColors.success,
+              title: 'Payment Gateways',
+              subtitle: 'Razorpay, UPI configuration',
+              onTap: () => _showComingSoon(context, 'Payment Gateways'),
+            ).animate().fadeIn(delay: 400.ms).slideX(begin: -0.1),
+          if (canTaxSettings)
+            _SettingsTile(
+              icon: Icons.receipt_long_rounded,
+              iconColor: AdminColors.warning,
+              title: 'Tax Settings',
+              subtitle: 'GST rates and tax configuration',
+              onTap: () =>
+                  Navigator.push(context, _route(const TaxSettingsPage())),
+            ).animate().fadeIn(delay: 450.ms).slideX(begin: -0.1),
+        ],
 
         // ── Danger Zone ──────────────────────────────────────────
         if (rbac.isSuperAdmin) ...[

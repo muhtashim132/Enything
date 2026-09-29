@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/referral_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../models/user_model.dart';
@@ -14,6 +15,7 @@ import '../../widgets/common/premium_animations.dart';
 import 'profile_settings_dialogs.dart';
 import 'refer_and_earn_page.dart';
 import '../../config/routes.dart';
+import '../../config/app_version.dart';
 import '../../utils/responsive_layout.dart';
 import '../../widgets/seller/seller_deductible_card.dart';
 
@@ -35,6 +37,10 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<AuthProvider>().retryProfileFetch();
+        final currentUserId = context.read<AuthProvider>().currentUserId;
+        if (currentUserId != null) {
+          context.read<ReferralProvider>().loadReferralStats(currentUserId, silent: true);
+        }
       }
     });
   }
@@ -42,6 +48,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final refProv = context.watch<ReferralProvider>();
     final user = auth.user;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -129,7 +136,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                         _buildSettingTile(
                           icon: Icons.card_giftcard_rounded,
                           title: 'Refer & Earn',
-                          subtitle: 'Invite friends, earn rewards',
+                          subtitle: refProv.totalBonusEarned > 0
+                              ? '₹${refProv.totalBonusEarned.toStringAsFixed(0)} earned • Invite friends'
+                              : 'Invite friends, earn rewards',
                           roleColor: const Color(0xFFF4A800),
                           isDark: isDark,
                           onTap: () => Navigator.push(
@@ -197,7 +206,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                         const SizedBox(height: 20),
                         Center(
                           child: Text(
-                            'Enything v1.0.0',
+                            '${AppVersion.appName} ${AppVersion.displayString}',
                             style: GoogleFonts.outfit(
                                 color: AppColors.textLight, fontSize: 12),
                           ),

@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
         fund_account: {
           ...fundAccount,
           contact: {
-            name:         "Zappy Partner",
+            name:         "Enything Partner",
             type:         withdrawal.user_role === "seller" ? "vendor" : "employee",
             reference_id: withdrawal.user_id,
           },
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
         notes: {
           withdrawal_id: withdrawal_id,
           user_id:       withdrawal.user_id,
-          platform:      "zappy_mobile",
+          platform:      "enything_mobile",
         },
       }),
     });

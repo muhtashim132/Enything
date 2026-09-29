@@ -138,6 +138,12 @@ class Permissions {
   static const String rolesDelete = 'roles.delete';
   static const String rolesAssign = 'roles.assign';
 
+  // Products
+  static const String productsView = 'products.view';
+  static const String productsManage = 'products.manage';
+  static const String productsCreate = 'products.create';
+  static const String productsDelete = 'products.delete';
+
   // Audit
   static const String auditView = 'audit.view';
 
@@ -149,6 +155,12 @@ class Permissions {
   /// All grouped by module for UI rendering
   static const Map<String, List<String>> grouped = {
     'Dashboard': [dashboardView],
+    'Products': [
+      productsView,
+      productsManage,
+      productsCreate,
+      productsDelete,
+    ],
     'Orders': [
       ordersView,
       ordersAssign,
@@ -186,6 +198,8 @@ class Permissions {
     switch (module.toLowerCase()) {
       case 'dashboard':
         return Icons.dashboard_rounded;
+      case 'products':
+        return Icons.inventory_2_rounded;
       case 'orders':
         return Icons.receipt_long_rounded;
       case 'customers':

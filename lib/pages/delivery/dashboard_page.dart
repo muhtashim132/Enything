@@ -201,7 +201,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     newStatus == 'confirmed') {
                   _debouncedLoadOrders();
                 } else if (newStatus == 'cancelled' ||
-                    newStatus == 'delivered') {
+                    newStatus == 'delivered' ||
+                    newStatus == 'seller_rejected' ||
+                    newStatus == 'partner_rejected' ||
+                    newStatus == 'shop_dispute_cancel') {
                   _debouncedLoadOrders();
                 }
 
@@ -214,6 +217,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 } else if (newStatus == 'ready_for_pickup') {
                   _showSnack('📦 An order is ready for pickup!',
                       isError: false);
+                } else if (newStatus == 'seller_rejected' ||
+                    newStatus == 'shop_dispute_cancel') {
+                  _showSnack(
+                      '⚠️ A shop order was cancelled or disputed. Updating your route.',
+                      isError: true);
+                } else if (newStatus == 'cancelled') {
+                  _showSnack('❌ An order was cancelled by customer.',
+                      isError: true);
                 }
               }
               _loadOrders();
@@ -574,10 +585,20 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .from('orders')
           .select('*, order_items(*)')
           .eq('delivery_partner_id', auth.currentUserId ?? '')
+          // 100x FIX (Edge Case 4): Exclude ALL terminal statuses to prevent
+          // zombie groups from appearing in active deliveries.
           .neq('status', 'delivered')
           .neq('status', 'cancelled')
           .neq('status', 'seller_rejected')
-          .neq('status', 'partner_rejected');
+          .neq('status', 'partner_rejected')
+          .neq('status', 'shop_dispute_cancel')
+          .neq('status', 'timeout')
+          .neq('status', 'failed')
+          .neq('status', 'returned')
+          .neq('status', 'refunded')
+          .neq('status', 'verification_failed')
+          .neq('status', 'no_rider')
+          .neq('status', 'payment_failed');
       // awaiting_acceptance is INCLUDED: rider accepted first, waiting for seller
 
       if (!mounted) return;
@@ -701,7 +722,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 .toList();
             return model;
           }).toList();
-          _myGroups = _groupOrders(myRawOrders);
+          _myGroups = _groupOrders(myRawOrders)
+              // 100x FIX (Edge Case 4): Filter out zombie groups where all
+              // sub-orders are terminal (e.g. all shop_dispute_cancel).
+              .where((g) => g.activeOrders.isNotEmpty)
+              .toList();
 
           _todayEarnings = tempTodayEarnings;
           _totalKmsDriven = tempTotalKmsDriven;
@@ -747,9 +772,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     int failedCount = 0;
 
     if (group.orders.isNotEmpty) {
-      // 100x FIX: Atomic backend RPC updates the entire cart group.
-      // Calling this on the first valid order accepts all orders in the group.
-      final success = await _acceptOrder(group.orders.first,
+      // 100x FIX (Edge Case 1): Never assume group.orders.first is active.
+      // If Shop 1 is seller_rejected/cancelled, selecting it would fast-fail.
+      // Instead, find the first order still in an acceptable state.
+      final targetOrder = group.activeOrders.isNotEmpty
+          ? group.activeOrders.firstWhere(
+              (o) => o.status == 'awaiting_acceptance' || o.status == 'pending',
+              orElse: () => group.activeOrders.first,
+            )
+          : group.orders.first;
+      final success = await _acceptOrder(targetOrder,
           skipReload: true, notifyCustomer: false);
       if (!success) {
         failedCount = group.orders.length;
@@ -789,44 +821,73 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
         if (!mounted) return;
         final notifProv = context.read<NotificationProvider>();
-        final firstOrder = group.orders.first;
+        final targetOrder = group.activeOrders.isNotEmpty
+            ? group.activeOrders.first
+            : group.orders.first;
 
         if (isAlreadyPaid) {
           notifProv.sendBackgroundPush(
-            targetUserId: firstOrder.customerId,
+            targetUserId: targetOrder.customerId,
             title: 'New Rider Assigned! 🛵',
             body: 'A new rider has accepted your order and is on their way!',
             data: {
               'route': '/track_order',
-              'order_id': firstOrder.id,
+              'order_id': targetOrder.id,
               'role': 'customer',
             },
           );
         } else if (allShopsAccepted) {
           notifProv.sendBackgroundPush(
-            targetUserId: firstOrder.customerId,
+            targetUserId: targetOrder.customerId,
             title: 'Ready for Payment! 💳',
             body:
                 'Both the shop(s) and rider accepted your order. Open the app and complete payment within 10 minutes.',
             data: {
               'route': '/track_order',
-              'order_id': firstOrder.id,
+              'order_id': targetOrder.id,
               'role': 'customer',
               'action': 'pay',
             },
           );
         } else {
           notifProv.sendBackgroundPush(
-            targetUserId: firstOrder.customerId,
+            targetUserId: targetOrder.customerId,
             title: '🛵 Rider is Ready!',
             body:
                 'A rider accepted your order and is on standby. Waiting for the shop(s) to also confirm.',
             data: {
               'route': '/track_order',
-              'order_id': firstOrder.id,
+              'order_id': targetOrder.id,
               'role': 'customer',
             },
           );
+        }
+
+        // Notify sellers across all distinct shops in this group
+        final distinctShopIds = group.orders
+            .map((o) => o.shopId)
+            .where((id) => id != null)
+            .cast<String>()
+            .toSet();
+        for (final sId in distinctShopIds) {
+          _supabase
+              .from('shops')
+              .select('seller_id')
+              .eq('id', sId)
+              .maybeSingle()
+              .then((shopData) {
+            if (shopData != null && shopData['seller_id'] != null) {
+              notifProv.sendBackgroundPush(
+                targetUserId: shopData['seller_id'],
+                title: '🛵 Rider Assigned!',
+                body: 'A rider has accepted the delivery and is on standby.',
+                data: {
+                  'role': 'seller',
+                  'group_id': group.groupId,
+                },
+              );
+            }
+          });
         }
       } catch (e) {
         debugPrint('Error fetching group status after rider accept: $e');
@@ -873,12 +934,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       }
 
       // Fetch latest state to ensure order is still available (fast-fail)
+      // 100x FIX (Edge Case 5): Also select payment_status to detect
+      // reassigned orders where customer already paid.
       final latest = await _supabase
           .from('orders')
-          .select('status')
+          .select('status, payment_status')
           .eq('id', order.id)
           .maybeSingle();
       final currentStatus = latest?['status'] as String?;
+      final currentPaymentStatus = latest?['payment_status'] as String?;
 
       if (currentStatus != 'awaiting_acceptance' &&
           currentStatus != 'pending') {
@@ -915,16 +979,32 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
 
+        // 100x FIX (Edge Case 5): Detect if customer already paid.
+        // On reassigned orders, payment_status is 'captured' but pre-acceptance
+        // status was reset to 'awaiting_acceptance'. Suppress payment push.
+        final isPaid = currentPaymentStatus == 'captured' ||
+            currentStatus == 'confirmed' ||
+            currentStatus == 'preparing';
+
         if (bothAccepted) {
-          if (currentStatus == 'confirmed' || currentStatus == 'preparing') {
+          if (isPaid) {
             _showSnack('✅ Order accepted! The customer has already paid.');
           } else {
             _showSnack('✅ Order accepted! Waiting for customer to pay.');
           }
-          // Push customer to complete payment NOW (only if not paid)
-          if (notifyCustomer &&
-              currentStatus != 'confirmed' &&
-              currentStatus != 'preparing') {
+          // Push customer (suppress payment push if already paid)
+          if (notifyCustomer && isPaid) {
+            notifProv.sendBackgroundPush(
+              targetUserId: order.customerId,
+              title: 'New Rider Assigned! 🛵',
+              body: 'A new rider has accepted your order and is on their way!',
+              data: {
+                'route': '/track_order',
+                'order_id': order.id,
+                'role': 'customer',
+              },
+            );
+          } else if (notifyCustomer && !isPaid) {
             notifProv.sendBackgroundPush(
               targetUserId: order.customerId,
               title: 'Ready for Payment! 💳',
@@ -937,20 +1017,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 'action': 'pay',
               },
             );
-          } else if (notifyCustomer &&
-              (currentStatus == 'confirmed' || currentStatus == 'preparing')) {
-            notifProv.sendBackgroundPush(
-              targetUserId: order.customerId,
-              title: 'New Rider Assigned! 🛵',
-              body: 'A new rider has picked up your order and is on their way!',
-              data: {
-                'route': '/track_order',
-                'order_id': order.id,
-                'role': 'customer',
-              },
-            );
           }
-          // Notify seller: waiting for customer payment
+          // Notify seller: waiting for customer payment or rider assigned
           if (order.shopId != null) {
             _supabase
                 .from('shops')
@@ -959,16 +1027,29 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 .maybeSingle()
                 .then((shopData) {
               if (shopData != null && shopData['seller_id'] != null) {
-                notifProv.sendBackgroundPush(
-                  targetUserId: shopData['seller_id'],
-                  title: '⌛ Waiting for Customer Payment',
-                  body:
-                      'Both you and the rider accepted. Customer is completing payment now.',
-                  data: {
-                    'order_id': order.id,
-                    'role': 'seller',
-                  },
-                );
+                if (isPaid) {
+                  notifProv.sendBackgroundPush(
+                    targetUserId: shopData['seller_id'],
+                    title: '🛵 Rider Assigned!',
+                    body:
+                        'A new rider has accepted the order and is on their way to pick up.',
+                    data: {
+                      'order_id': order.id,
+                      'role': 'seller',
+                    },
+                  );
+                } else {
+                  notifProv.sendBackgroundPush(
+                    targetUserId: shopData['seller_id'],
+                    title: '⌛ Waiting for Customer Payment',
+                    body:
+                        'Both you and the rider accepted. Customer is completing payment now.',
+                    data: {
+                      'order_id': order.id,
+                      'role': 'seller',
+                    },
+                  );
+                }
               }
             });
           }
@@ -1023,6 +1104,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               isError: true);
         } else if (pe.message.contains('ORDER_CANCELLED')) {
           _showSnack('⚠️ The customer just cancelled this order.',
+              isError: true);
+        } else if (pe.message.contains('ORDER_ACCEPTED_BY_OTHER_RIDER')) {
+          _showSnack('⚠️ Another rider just accepted this order.',
+              isError: true);
+        } else if (pe.message.contains('Invalid state transition')) {
+          _showSnack('⚠️ This order is no longer available to accept.',
               isError: true);
         } else if (pe.message.contains('MAX_ORDERS_REACHED')) {
           showDialog(
@@ -1089,6 +1176,21 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           'p_rider_lat': _riderLat,
           'p_rider_lng': _riderLng,
         });
+        if (mounted) {
+          _showSnack('📍 GPS verified: At Shop', isError: false);
+          if (order.shopId != null) {
+            final now = DateTime.now();
+            setState(() {
+              for (final g in _myGroups) {
+                for (final o in g.orders) {
+                  if (o.shopId == order.shopId && o.arrivedAtShopTime == null) {
+                    o.arrivedAtShopTime = now;
+                  }
+                }
+              }
+            });
+          }
+        }
       } else if (status == 'reassign' || status == 'reassign_disputed') {
         // Penalty is now strictly calculated on the secure backend. No client payload required.
         await _supabase.rpc('reject_order_rider', params: {
@@ -1112,25 +1214,61 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             data: {'order_id': order.id, 'role': 'customer'},
           );
 
-          // Push seller
-          if (order.shopId != null) {
-            _supabase
-                .from('shops')
-                .select('seller_id')
-                .eq('id', order.shopId!)
-                .maybeSingle()
-                .then((shopData) {
-              if (shopData != null && shopData['seller_id'] != null) {
-                notifProv.sendBackgroundPush(
-                  targetUserId: shopData['seller_id'] as String,
-                  title: '🛵 Rider Dropped the Order',
-                  body: status == 'reassign_disputed'
-                      ? 'Rider reported a dispute and dropped the order. Looking for a new rider.'
-                      : 'The rider dropped the order. Looking for a new rider.',
-                  data: {'order_id': order.id, 'role': 'seller'},
-                );
+          // Push seller(s) - 100x Multi-Shop Sibling Drop Dispatch
+          // When dropping an order, notify ALL distinct shops involved in the cart group.
+          final Set<String> targetShopIds = {};
+          if (order.shopId != null && order.shopId!.isNotEmpty) {
+            targetShopIds.add(order.shopId!);
+          }
+          for (final g in _myGroups) {
+            if (g.orders.any((o) => o.id == order.id)) {
+              for (final sub in g.orders) {
+                if (sub.shopId != null && sub.shopId!.isNotEmpty) {
+                  targetShopIds.add(sub.shopId!);
+                }
               }
-            });
+              break;
+            }
+          }
+          if (order.cartGroupId != null && order.cartGroupId!.isNotEmpty) {
+            try {
+              final siblingOrders = await _supabase
+                  .from('orders')
+                  .select('shop_id')
+                  .eq('cart_group_id', order.cartGroupId!);
+              for (final row in (siblingOrders as List)) {
+                final sid = row['shop_id'] as String?;
+                if (sid != null && sid.isNotEmpty) {
+                  targetShopIds.add(sid);
+                }
+              }
+            } catch (_) {}
+          }
+
+          if (targetShopIds.isNotEmpty) {
+            try {
+              final shopsData = await _supabase
+                  .from('shops')
+                  .select('seller_id')
+                  .inFilter('id', targetShopIds.toList());
+              final Set<String> notifiedSellers = {};
+              for (final s in (shopsData as List)) {
+                final sellerId = s['seller_id'] as String?;
+                if (sellerId != null &&
+                    sellerId.isNotEmpty &&
+                    !notifiedSellers.contains(sellerId)) {
+                  notifiedSellers.add(sellerId);
+                  notifProv.sendBackgroundPush(
+                    targetUserId: sellerId,
+                    title: '🛵 Rider Dropped the Order',
+                    body: status == 'reassign_disputed'
+                        ? 'Rider reported a dispute and dropped the order. Looking for a new rider.'
+                        : 'The rider dropped the order. Looking for a new rider.',
+                    data: {'order_id': order.id, 'role': 'seller'},
+                  );
+                }
+              }
+            } catch (_) {}
           }
         }
       } else if (status == 'shop_dispute_cancel') {
@@ -1232,10 +1370,29 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         if (mounted && notifyCustomer) {
           final notifProv = context.read<NotificationProvider>();
           if (status == 'picked_up') {
+            final group = _myGroups.firstWhere(
+              (g) => g.orders.any((o) => o.id == order.id),
+              orElse: () => OrderGroup(order.cartGroupId ?? order.id, [order]),
+            );
+            final remainingUnpicked = group.activeOrders
+                .where((o) =>
+                    o.id != order.id &&
+                    o.status != 'picked_up' &&
+                    o.status != 'out_for_delivery' &&
+                    o.status != 'delivered')
+                .length;
+
+            final shopInfo = _shopInfoCache[order.shopId];
+            final shopName = shopInfo?.name ?? 'Shop';
+
             notifProv.sendBackgroundPush(
               targetUserId: order.customerId,
-              title: '🛵 Rider Picked Up',
-              body: 'Your order is on its way!',
+              title: remainingUnpicked > 0
+                  ? '🛍️ Items Picked Up'
+                  : '🛵 Rider Picked Up',
+              body: remainingUnpicked > 0
+                  ? 'Rider collected items from $shopName. Heading to the next stop!'
+                  : 'Your order is on its way!',
               data: {'order_id': order.id, 'role': 'customer'},
             );
           } else if (status == 'out_for_delivery') {
@@ -1313,14 +1470,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   void _showGroupDeliveryRatingFlow(OrderGroup group) {
-    if (!mounted || group.orders.isEmpty || _isSheetOpen) return;
+    final shopsToRate =
+        group.activeOrders.isNotEmpty ? group.activeOrders : group.orders;
+    if (!mounted || shopsToRate.isEmpty || _isSheetOpen) return;
     _isSheetOpen = true;
 
     int currentShopIndex = 0;
 
     void rateNextShop() {
-      if (currentShopIndex < group.orders.length) {
-        final orderToRate = group.orders[currentShopIndex];
+      if (currentShopIndex < shopsToRate.length) {
+        final orderToRate = shopsToRate[currentShopIndex];
         currentShopIndex++;
 
         if (mounted) {
@@ -1331,7 +1490,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
             builder: (_) => RatingBottomSheet(
-              title: group.orders.length > 1
+              title: shopsToRate.length > 1
                   ? 'Rate Shop $currentShopIndex 🏪'
                   : 'Rate the Shop 🏪',
               subtitle: 'How was your wait time and experience at the shop?',
@@ -1537,8 +1696,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           riderLat: _riderLat,
           riderLng: _riderLng,
           shops: shops,
-          isViewOnly: isViewOnly,
+          isViewOnly: isViewOnly || (_myGroups.length >= 3),
           onAccept: () {
+            if (_myGroups.length >= 3) return;
             Navigator.pop(context);
             _acceptOrderGroup(group);
           },
@@ -2028,7 +2188,105 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             '🚗 My Active Deliveries',
                             '${_myGroups.length}',
                             const Color(0xFF4C6EF5),
-                            isDark),
+                            isDark,
+                            trailing: _myGroups.length > 1
+                                ? TextButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) {
+                                            final allShops = _myGroups.expand((g) {
+                                              final targetOrders = g.activeOrders.isNotEmpty ? g.activeOrders : g.orders;
+                                              return targetOrders.map((o) {
+                                                final info = _shopInfoCache[o.shopId];
+                                                return (
+                                                  lat: info?.lat ?? o.shopLat ?? 0.0,
+                                                  lng: info?.lng ?? o.shopLng ?? 0.0,
+                                                  name: info?.name ?? 'Shop',
+                                                );
+                                              });
+                                            }).where((s) => s.lat != 0.0 && s.lng != 0.0).toList();
+
+                                            return OrderRouteMapPage(
+                                              group: _myGroups.first,
+                                              groups: _myGroups,
+                                              riderLat: _riderLat,
+                                              riderLng: _riderLng,
+                                              shops: allShops,
+                                              isViewOnly: true,
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.map_outlined,
+                                        size: 16, color: Color(0xFF4C6EF5)),
+                                    label: Text(
+                                      'Master Route',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF4C6EF5),
+                                      ),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 4),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  )
+                                : null),
+                        if (_myGroups.length > 1) ...[
+                          const SizedBox(height: 10),
+                          Builder(builder: (context) {
+                            final totalCod = _myGroups.fold(
+                                0.0, (sum, g) => sum + g.codAmountToCollect);
+                            final totalEarn = _myGroups.fold(
+                                0.0, (sum, g) => sum + g.totalEarnings);
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: (isDark ? Colors.white : Colors.black)
+                                    .withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: (isDark ? Colors.white : Colors.black)
+                                      .withValues(alpha: 0.08),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(children: [
+                                    const Icon(Icons.two_wheeler_rounded,
+                                        size: 15,
+                                        color: Color(0xFF4C6EF5)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '${_myGroups.length} Active Orders',
+                                      style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12),
+                                    ),
+                                  ]),
+                                  Text(
+                                    'Earnings: ₹${totalEarn.toStringAsFixed(0)}${totalCod > 0 ? ' · Collect: ₹${totalCod.toStringAsFixed(0)}' : ' · Prepaid'}',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      color: totalCod > 0
+                                          ? const Color(0xFFF59F00)
+                                          : AppColors.success,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
                         const SizedBox(height: 14),
                       ],
                     ]),
@@ -2598,26 +2856,39 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: ElevatedButton(
-                          onPressed: (_isLoading || isExpired || _adminSuspended)
-                              ? null
-                              : () => _acceptOrderGroup(group),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                isExpired ? Colors.grey : AppColors.success,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14)),
-                            elevation: isExpired ? 0 : 4,
-                            shadowColor: isExpired
-                                ? Colors.transparent
-                                : AppColors.success.withValues(alpha: 0.4),
-                          ),
-                          child: Text(isExpired ? 'Expired' : 'Accept',
-                              style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.w800, fontSize: 14)),
-                        ),
+                        child: Builder(builder: (context) {
+                          // 100x FIX (Domain 2): Hoarding Limit UI Lockout (Max 3 Cart Groups)
+                          final isAtCapacity = _myGroups.length >= 3;
+                          return ElevatedButton(
+                            onPressed: (_isLoading ||
+                                    isExpired ||
+                                    _adminSuspended ||
+                                    isAtCapacity)
+                                ? null
+                                : () => _acceptOrderGroup(group),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: (isExpired || isAtCapacity)
+                                  ? Colors.grey
+                                  : AppColors.success,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              elevation: (isExpired || isAtCapacity) ? 0 : 4,
+                              shadowColor: (isExpired || isAtCapacity)
+                                  ? Colors.transparent
+                                  : AppColors.success.withValues(alpha: 0.4),
+                            ),
+                            child: Text(
+                                isExpired
+                                    ? 'Expired'
+                                    : isAtCapacity
+                                        ? 'Max 3 Orders'
+                                        : 'Accept',
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w800, fontSize: 14)),
+                          );
+                        }),
                       ),
                     ]),
                   ]),
@@ -2765,6 +3036,50 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     ),
                   ),
                 ],
+
+                // ── 100x FIX (Domain 1): Payment Collection & Financial Status Banner ──
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.verified_rounded,
+                        size: 16,
+                        color: AppColors.success,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'PREPAID · ₹0 TO COLLECT',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                            letterSpacing: 0.3,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Bill: ₹${group.totalGrand.toStringAsFixed(0)} · Earn: ₹${group.totalEarnings.toStringAsFixed(0)}',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -2816,10 +3131,20 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        for (int i = 0; i < group.orders.length; i++) {
+                        // 100x FIX (Edge Case 2): Only transition orders that are
+                        // actually in 'picked_up' status. Cancelled/disputed sub-orders
+                        // would cause update_order_status RPC to throw an exception.
+                        final pickedUpOrders = group.activeOrders
+                            .where((o) => o.status == 'picked_up')
+                            .toList();
+                        final Set<String> notifiedCustomerIds = {};
+                        for (int i = 0; i < pickedUpOrders.length; i++) {
+                          final o = pickedUpOrders[i];
+                          final shouldNotify = !notifiedCustomerIds.contains(o.customerId);
+                          if (shouldNotify) notifiedCustomerIds.add(o.customerId);
                           await _updateStatus(
-                              group.orders[i], 'out_for_delivery',
-                              skipReload: true, notifyCustomer: i == 0);
+                              o, 'out_for_delivery',
+                              skipReload: true, notifyCustomer: shouldNotify);
                         }
                         _loadOrders();
                       },
@@ -2847,13 +3172,20 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           }
                         }
 
+                        final deliverableOrders = group.activeOrders
+                            .where((o) => o.status != 'delivered')
+                            .toList();
                         bool allSuccess = true;
-                        for (int i = 0; i < group.orders.length; i++) {
+                        final Set<String> notifiedCustomerIds = {};
+                        for (int i = 0; i < deliverableOrders.length; i++) {
+                          final o = deliverableOrders[i];
+                          final shouldNotify = !notifiedCustomerIds.contains(o.customerId);
+                          if (shouldNotify) notifiedCustomerIds.add(o.customerId);
                           final success = await _updateStatus(
-                              group.orders[i], 'delivered',
+                              o, 'delivered',
                               skipReload: true,
                               skipRating: true,
-                              notifyCustomer: i == 0);
+                              notifyCustomer: shouldNotify);
                           if (!success) {
                             allSuccess = false;
                             break;
@@ -3038,12 +3370,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 onPressed: nextStatus == null
                     ? null
                     : () {
-                        if (nextStatus == 'arrived') {
-                          _showSnack('📍 GPS verified: At Shop');
-                          _updateStatus(order, nextStatus!);
-                        } else {
-                          _updateStatus(order, nextStatus!);
-                        }
+                        _updateStatus(order, nextStatus!);
                       },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
@@ -3175,7 +3502,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         ]),
       );
 
-  Widget _sectionHeader(String title, String count, Color color, bool isDark) =>
+  Widget _sectionHeader(String title, String count, Color color, bool isDark,
+          {Widget? trailing}) =>
       Row(children: [
         Flexible(
           child: Text(title,
@@ -3196,6 +3524,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   fontSize: 12,
                   fontWeight: FontWeight.w800)),
         ),
+        if (trailing != null) ...[
+          const Spacer(),
+          trailing,
+        ],
       ]);
 
   Widget _glassAvatar(String initials, Color color) => Container(

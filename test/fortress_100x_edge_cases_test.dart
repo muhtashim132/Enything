@@ -196,10 +196,10 @@ void main() {
 
       // Two shops surcharge: ceil(distance) * ratePerKm
       final dist = DeliveryCalculator.haversineKm(shop1.location, shop2.location);
-      final expectedSurcharge = dist.ceil() * 10.0;
+      final expectedSurcharge = dist.ceil() * PaymentConfig.deliveryRatePerKm;
       final actualSurcharge = DeliveryCalculator.calculateMultiShopSurcharge([shop1, shop2]);
       expect(actualSurcharge, expectedSurcharge);
-      expect(actualSurcharge, greaterThanOrEqualTo(10.0));
+      expect(actualSurcharge, greaterThanOrEqualTo(PaymentConfig.deliveryRatePerKm));
     });
 
     test('Weight Aggregation and Maximum Weight Limit Protection', () {
@@ -267,9 +267,9 @@ void main() {
       expect(cart.subtotal < PaymentConfig.smallCartThreshold, isTrue);
       expect(cart.smallCartFee, PaymentConfig.smallCartFee);
 
-      // Add more items to cross small cart threshold (₹99)
-      cart.updateQuantity('prod-tea', 3); // 3 * 40 = 120.0
-      expect(cart.subtotal, 120.0);
+      // Add more items to cross small cart threshold (₹199)
+      cart.updateQuantity('prod-tea', 5); // 5 * 40 = 200.0
+      expect(cart.subtotal, 200.0);
       expect(cart.smallCartFee, 0.0);
     });
   });

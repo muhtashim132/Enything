@@ -8,25 +8,64 @@ class RolesRepository {
 
   // ── Fetch all roles with their permissions ──────────────────
   Future<List<RoleModel>> fetchRoles() async {
-    final data = await _db
-        .from('roles')
-        .select('*, role_permissions(permissions(*))')
-        .order('is_system', ascending: false)
-        .order('name');
-    return (data as List)
-        .map((r) => RoleModel.fromMap(r as Map<String, dynamic>))
-        .toList();
+    try {
+      final data = await _db
+          .from('roles')
+          .select('*, role_permissions(permissions(*))')
+          .order('is_system', ascending: false)
+          .order('name');
+      return (data as List)
+          .map((r) => RoleModel.fromMap(r as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      // Fallback: two-step query if PostgREST embedding relationship has ambiguity
+      final rolesData = await _db
+          .from('roles')
+          .select('*')
+          .order('is_system', ascending: false)
+          .order('name');
+      final rpData =
+          await _db.from('role_permissions').select('role_id, permissions(*)');
+
+      final Map<String, List<Map<String, dynamic>>> permsByRole = {};
+      for (final rp in (rpData as List)) {
+        final rId = rp['role_id'] as String?;
+        final perm = rp['permissions'];
+        if (rId != null && perm != null) {
+          permsByRole.putIfAbsent(rId, () => []).add({'permissions': perm});
+        }
+      }
+
+      return (rolesData as List).map((r) {
+        final map = Map<String, dynamic>.from(r as Map<String, dynamic>);
+        map['role_permissions'] = permsByRole[map['id']] ?? [];
+        return RoleModel.fromMap(map);
+      }).toList();
+    }
   }
 
   // ── Fetch a single role ─────────────────────────────────────
   Future<RoleModel?> fetchRoleById(String roleId) async {
-    final data = await _db
-        .from('roles')
-        .select('*, role_permissions(permissions(*))')
-        .eq('id', roleId)
-        .maybeSingle();
-    if (data == null) return null;
-    return RoleModel.fromMap(data);
+    try {
+      final data = await _db
+          .from('roles')
+          .select('*, role_permissions(permissions(*))')
+          .eq('id', roleId)
+          .maybeSingle();
+      if (data == null) return null;
+      return RoleModel.fromMap(data);
+    } catch (_) {
+      final roleData =
+          await _db.from('roles').select('*').eq('id', roleId).maybeSingle();
+      if (roleData == null) return null;
+      final rpData = await _db
+          .from('role_permissions')
+          .select('permissions(*)')
+          .eq('role_id', roleId);
+      final map = Map<String, dynamic>.from(roleData);
+      map['role_permissions'] = rpData;
+      return RoleModel.fromMap(map);
+    }
   }
 
   // ── Create a custom role ────────────────────────────────────

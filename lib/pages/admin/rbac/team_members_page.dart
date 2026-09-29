@@ -64,7 +64,7 @@ class _TeamMembersPageState extends State<TeamMembersPage>
                 fontSize: 17,
                 fontWeight: FontWeight.w800)),
         actions: [
-          if (rbac.isSuperAdmin)
+          if (rbac.isSuperAdmin || rbac.can('roles.assign'))
             Padding(
               padding: const EdgeInsets.only(right: 12),
               child: ElevatedButton.icon(
@@ -203,31 +203,56 @@ class _TeamMembersPageState extends State<TeamMembersPage>
                                     ),
                                   ),
                                   _statusBadge(inv.status.name),
-                                  if (inv.status.name == 'pending' &&
-                                      rbac.isSuperAdmin) ...[
+                                  if (rbac.isSuperAdmin) ...[
+                                    if (inv.status.name == 'pending') ...[
+                                      IconButton(
+                                        icon: const Icon(Icons.copy_rounded,
+                                            color: Colors.white70, size: 18),
+                                        tooltip: 'Copy Invite Password',
+                                        onPressed: () {
+                                          Clipboard.setData(
+                                              ClipboardData(text: inv.token));
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                                content:
+                                                    Text('Invite code copied!')),
+                                          );
+                                        },
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4),
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.cancel_outlined,
+                                            color: Colors.orangeAccent, size: 18),
+                                        tooltip: 'Revoke Invitation',
+                                        onPressed: () =>
+                                            team.revokeInvitation(inv.id),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4),
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                    ],
                                     IconButton(
-                                      icon: const Icon(Icons.copy_rounded,
-                                          color: Colors.white70, size: 18),
-                                      onPressed: () {
-                                        Clipboard.setData(
-                                            ClipboardData(text: inv.token));
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                              content:
-                                                  Text('Invite code copied!')),
+                                      icon: const Icon(Icons.delete_outline_rounded,
+                                          color: Colors.white38, size: 18),
+                                      tooltip: 'Delete Invitation Record',
+                                      onPressed: () async {
+                                        final ok = await ConfirmActionDialog.show(
+                                          context,
+                                          title: 'Delete Invitation',
+                                          message:
+                                              'Permanently delete the invitation record for ${inv.email}?',
+                                          confirmLabel: 'Delete',
+                                          confirmColor: const Color(0xFFFF5252),
                                         );
+                                        if (ok) {
+                                          await team.deleteInvitation(inv.id);
+                                        }
                                       },
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 8),
-                                      constraints: const BoxConstraints(),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.cancel_outlined,
-                                          color: Colors.white24, size: 18),
-                                      onPressed: () =>
-                                          team.revokeInvitation(inv.id),
-                                      padding: EdgeInsets.zero,
+                                          horizontal: 4),
                                       constraints: const BoxConstraints(),
                                     ),
                                   ],
@@ -471,7 +496,7 @@ class _MemberCard extends StatelessWidget {
                       color: const Color(0xDEFFFFFF),
                       fontSize: 13,
                       fontWeight: FontWeight.w700)),
-              Text(member.email,
+              Text(member.displaySubtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style:
@@ -527,6 +552,29 @@ class _MemberCard extends StatelessWidget {
                       userId: member.id,
                       actorId: actorId,
                       actorRole: actorRole);
+                } else if (v == 'remove') {
+                  final ok = await ConfirmActionDialog.show(
+                    context,
+                    title: 'Remove from Team',
+                    message:
+                        'Are you sure you want to permanently remove ${member.fullName} from the team? They will immediately lose all admin privileges.',
+                    confirmLabel: 'Remove Permanently',
+                    confirmColor: const Color(0xFFFF5252),
+                  );
+                  if (ok) {
+                    final err = await team.removeMember(
+                        userId: member.id,
+                        actorId: actorId,
+                        actorRole: actorRole);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(err ?? '${member.fullName} was removed from the team.'),
+                          backgroundColor: err != null ? const Color(0xFFE03131) : const Color(0xFF2F9E44),
+                        ),
+                      );
+                    }
+                  }
                 }
               },
               itemBuilder: (_) => [
@@ -542,12 +590,17 @@ class _MemberCard extends StatelessWidget {
                   PopupMenuItem(
                       value: 'suspend',
                       child: _item(Icons.block_rounded, 'Suspend',
-                          const Color(0xFFFF5722)))
+                          const Color(0xFFFF9800)))
                 else
                   PopupMenuItem(
                       value: 'reactivate',
                       child: _item(Icons.check_circle_outline_rounded,
                           'Reactivate', const Color(0xFF4CAF50))),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                    value: 'remove',
+                    child: _item(Icons.delete_forever_rounded, 'Remove from Team',
+                        const Color(0xFFFF5252))),
               ],
             ),
         ]),

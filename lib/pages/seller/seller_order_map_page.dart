@@ -140,32 +140,51 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
               _currentOrder = updated;
             });
 
+            final partnerId = r['delivery_partner_id'] as String?;
             final lat = (r['rider_lat'] as num?)?.toDouble();
             final lng = (r['rider_lng'] as num?)?.toDouble();
 
-            if (lat != null && lng != null && lat != 0.0) {
-              final newPos = LatLng(lat, lng);
-              final prevPos = _riderLatLngNotifier.value;
-
-              if (prevPos == null ||
-                  prevPos.latitude != newPos.latitude ||
-                  prevPos.longitude != newPos.longitude) {
-                _riderLatLngNotifier.value = newPos;
-
-                // Dynamically refresh pickup route if rider moved > 50 meters
-                if (prevPos == null ||
-                    const Distance().as(
-                            LengthUnit.Meter, prevPos, newPos) >
-                        50) {
-                  _refreshPickupRoute(newPos);
-                }
+            // 100x FIX (Rule 3): Dropped/Reassigned Rider Map Reset
+            // If rider drops or partnerId is null or coordinates are null/0, immediately
+            // clear the rider marker and pickup route so old GPS isn't frozen.
+            if (partnerId == null ||
+                partnerId.isEmpty ||
+                lat == null ||
+                lng == null ||
+                lat == 0.0 ||
+                lng == 0.0) {
+              _riderLatLngNotifier.value = null;
+              _riderUpdatedAtNotifier.value = null;
+              if (_pickupRoute.isNotEmpty || _pickupKm != null) {
+                setState(() {
+                  _pickupRoute = [];
+                  _pickupKm = null;
+                });
               }
-
-              _riderUpdatedAtNotifier.value =
-                  r['rider_location_updated_at'] != null
-                      ? DateTime.tryParse(r['rider_location_updated_at'])
-                      : DateTime.now();
+              return;
             }
+
+            final newPos = LatLng(lat, lng);
+            final prevPos = _riderLatLngNotifier.value;
+
+            if (prevPos == null ||
+                prevPos.latitude != newPos.latitude ||
+                prevPos.longitude != newPos.longitude) {
+              _riderLatLngNotifier.value = newPos;
+
+              // Dynamically refresh pickup route if rider moved > 50 meters
+              if (prevPos == null ||
+                  const Distance().as(
+                          LengthUnit.Meter, prevPos, newPos) >
+                      50) {
+                _refreshPickupRoute(newPos);
+              }
+            }
+
+            _riderUpdatedAtNotifier.value =
+                r['rider_location_updated_at'] != null
+                    ? DateTime.tryParse(r['rider_location_updated_at'])
+                    : DateTime.now();
           },
         )
         .subscribe((status, [error]) {
@@ -677,6 +696,48 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // 100x FIX (Rule 3): Dropped/Reassigned Rider Map Reset
+                        ValueListenableBuilder<LatLng?>(
+                          valueListenable: _riderLatLngNotifier,
+                          builder: (context, riderPos, _) {
+                            if (_currentOrder.deliveryPartnerId == null ||
+                                riderPos == null) {
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color:
+                                          Colors.amber.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.amber),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Searching for new rider... 🛵',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.amber.shade800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
                         // Route legend + last-updated ticker
                         Row(
                           children: [

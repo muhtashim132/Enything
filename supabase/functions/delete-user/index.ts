@@ -95,6 +95,33 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ── 100x Safety: Active Order Check ─────────────────────────────────────
+    // Prevent account deletion while orders are in-flight to avoid orphaned
+    // orders where riders/sellers see orders with no customer to contact.
+    const terminalStatuses = [
+      'delivered', 'cancelled', 'seller_rejected', 'partner_rejected',
+      'shop_dispute_cancel', 'timeout', 'failed', 'returned', 'refunded',
+      'verification_failed', 'no_rider', 'payment_failed',
+    ];
+
+    const { data: activeOrders, error: activeOrdersErr } = await supabaseAdmin
+      .from('orders')
+      .select('id, status')
+      .or(`customer_id.eq.${target_user_id},delivery_partner_id.eq.${target_user_id}`)
+      .not('status', 'in', `(${terminalStatuses.join(',')})`)
+      .limit(1);
+
+    if (!activeOrdersErr && activeOrders && activeOrders.length > 0) {
+      return new Response(JSON.stringify({ 
+        error: 'Cannot delete account while you have active orders. Please wait for all orders to complete or cancel them first.',
+        active_order_id: activeOrders[0].id,
+        active_order_status: activeOrders[0].status,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Delete the user from auth.users
     const { data, error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(target_user_id);
 
@@ -108,11 +135,22 @@ Deno.serve(async (req: Request) => {
     }
 
     // Manually delete related records sequentially to avoid foreign key deadlocks/conflicts
+    // 100x FIX: Resolve phone for otp_tokens cleanup before building cleanup array
+    let userPhone: string | null = null;
+    try {
+      const profileResp = await supabaseAdmin.from('profiles').select('phone').eq('id', target_user_id).maybeSingle();
+      userPhone = profileResp?.data?.phone || null;
+    } catch (_) {}
+
     const cleanupQueries = [
       { table: 'ratings', query: supabaseAdmin.from('ratings').delete().or(`rater_id.eq.${target_user_id},ratee_id.eq.${target_user_id},customer_id.eq.${target_user_id},delivery_partner_id.eq.${target_user_id}`) },
       { table: 'device_tokens', query: supabaseAdmin.from('device_tokens').delete().eq('user_id', target_user_id) },
       { table: 'saved_addresses', query: supabaseAdmin.from('saved_addresses').delete().eq('user_id', target_user_id) },
       { table: 'customer_favorites', query: supabaseAdmin.from('customer_favorites').delete().eq('customer_id', target_user_id) },
+      // 100x FIX: Clean up notifications and OTP tokens to prevent storage bloat
+      // and phone number reuse conflicts for deleted accounts.
+      { table: 'notifications', query: supabaseAdmin.from('notifications').delete().eq('user_id', target_user_id) },
+      ...(userPhone ? [{ table: 'otp_tokens', query: supabaseAdmin.from('otp_tokens').delete().eq('phone', userPhone) }] : []),
       { table: 'shops', query: supabaseAdmin.from('shops').delete().eq('seller_id', target_user_id) },
       { table: 'delivery_partners', query: supabaseAdmin.from('delivery_partners').delete().eq('id', target_user_id) },
       { table: 'admin_users', query: supabaseAdmin.from('admin_users').delete().eq('id', target_user_id) },

@@ -216,7 +216,7 @@ void main() {
       const custLat = 34.1200, custLng = 74.8400;
 
       // Distance between Shop 1 and Shop 2: ~2.75 km -> Ceil(2.75) = 3 km -> Surcharge = 3 * ₹20 = ₹60
-      final distCalc = const Distance();
+      const distCalc = Distance();
       final interDistKm = distCalc.as(LengthUnit.Kilometer, const LatLng(shop1Lat, shop1Lng), const LatLng(shop2Lat, shop2Lng));
       final legSurchargeNet = math.max(1, interDistKm.ceil()) * 20.0; // ₹60
       expect(legSurchargeNet, equals(60.0));
@@ -545,21 +545,21 @@ void main() {
 
       const userId = 'cust-123';
       const orderId = 'order-456';
-      final t0 = 100000;
+      const t0 = 100000;
 
       // Old flawed key: user_id + order_id (ignoring title)
-      final flawedKey1 = '${userId}_$orderId';
+      const flawedKey1 = '${userId}_$orderId';
       expect(isDuplicatePush(flawedKey1, t0), isFalse); // First push ("Shop Accepted") sent
 
       final t1 = t0 + 4000; // 4 seconds later
-      final flawedKey2 = '${userId}_$orderId'; // Second push ("Pay Now 💳")
+      const flawedKey2 = '${userId}_$orderId'; // Second push ("Pay Now 💳")
       // WITH FLAWED KEY: It gets incorrectly DROPPED!
       expect(isDuplicatePush(flawedKey2, t1), isTrue); // BUG CONFIRMED: Pay Now push dropped!
 
       // Reset cache and test NEW 100x fortified key: user_id + order_id + title
       recentPushes.clear();
-      final goodKey1 = '${userId}_${orderId}_Shop Accepted!';
-      final goodKey2 = '${userId}_${orderId}_✅ Shop & Rider Ready! Pay Now 💳';
+      const goodKey1 = '${userId}_${orderId}_Shop Accepted!';
+      const goodKey2 = '${userId}_${orderId}_✅ Shop & Rider Ready! Pay Now 💳';
 
       expect(isDuplicatePush(goodKey1, t0), isFalse); // "Shop Accepted" delivered!
       expect(isDuplicatePush(goodKey2, t1), isFalse); // "Pay Now" ALSO delivered!
@@ -594,7 +594,7 @@ void main() {
           const foodGst = 15.0;
           const delivery = 23.60;
           const platform = 20.0;
-          final grand = itemBase + foodGst + delivery + platform;
+          const grand = itemBase + foodGst + delivery + platform;
           final gw = grand * TaxConfig.effectiveGatewayDeductionPercent;
           const riderCut = 16.0;
           final sellerGw = (itemBase * 0.95) * TaxConfig.effectiveGatewayDeductionPercent;

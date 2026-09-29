@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/coupon_provider.dart';
+import '../providers/referral_provider.dart';
 import '../theme/app_colors.dart';
 
 class CouponInputWidget extends StatefulWidget {
@@ -30,6 +32,15 @@ class _CouponInputWidgetState extends State<CouponInputWidget>
       parent: _successCtrl,
       curve: Curves.easeOutBack,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final auth = context.read<AuthProvider>();
+        final userId = auth.user?.id ?? auth.currentUserId;
+        if (userId != null) {
+          context.read<ReferralProvider>().loadReferralStats(userId, silent: true);
+        }
+      }
+    });
   }
 
   @override
@@ -87,6 +98,11 @@ class _CouponInputWidgetState extends State<CouponInputWidget>
   }
 
   Widget _buildInputState(CouponProvider couponProv, bool isDark) {
+    final refProv = context.watch<ReferralProvider>();
+    final activeRewards = refProv.earnedCoupons
+        .where((c) => !c.isUsed && !c.isExpired)
+        .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -212,7 +228,172 @@ class _CouponInputWidgetState extends State<CouponInputWidget>
             ],
           ),
         ],
+
+        // ── Active Referral Reward Coupons (1-Tap Selection) ──────────────
+        if (activeRewards.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                    : [const Color(0xFFFFFBEB), const Color(0xFFFEF3C7)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.card_giftcard_rounded,
+                        size: 16, color: Color(0xFFD97706)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Your Referral Rewards (${activeRewards.length} available)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? const Color(0xFFFCD34D)
+                              : const Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...activeRewards.map(
+                    (c) => _buildRewardCouponTile(c, couponProv, isDark)),
+                const SizedBox(height: 4),
+                Text(
+                  '• Strictly 1 referral coupon allowed per order\n• Remaining coupons remain active for future orders',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    color: isDark
+                        ? Colors.white54
+                        : const Color(0xFF78350F).withValues(alpha: 0.7),
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
+    );
+  }
+
+  Widget _buildRewardCouponTile(
+    ReferralRewardCoupon coupon,
+    CouponProvider couponProv,
+    bool isDark,
+  ) {
+    final bool meetsMinOrder = widget.cartTotal >= coupon.minOrderAmount;
+    final bool isApplying =
+        couponProv.isValidating && _controller.text == coupon.code;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: meetsMinOrder
+              ? const Color(0xFF10B981).withValues(alpha: 0.35)
+              : Colors.grey.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: (meetsMinOrder ? const Color(0xFF10B981) : Colors.grey)
+                  .withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '₹${coupon.discountValue.toStringAsFixed(0)} OFF',
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: meetsMinOrder ? const Color(0xFF10B981) : Colors.grey,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  coupon.code,
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  meetsMinOrder
+                      ? 'Min order ₹${coupon.minOrderAmount.toStringAsFixed(0)} met • 1 per order'
+                      : 'Add ₹${(coupon.minOrderAmount - widget.cartTotal).toStringAsFixed(0)} more to unlock',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    color: meetsMinOrder
+                        ? (isDark ? Colors.white60 : AppColors.textSecondary)
+                        : const Color(0xFFD97706),
+                    fontWeight:
+                        meetsMinOrder ? FontWeight.normal : FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: (!meetsMinOrder || couponProv.isValidating)
+                ? null
+                : () async {
+                    _controller.text = coupon.code;
+                    await _apply(couponProv);
+                  },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: meetsMinOrder
+                    ? const Color(0xFF10B981)
+                    : Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: isApplying
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      'Apply',
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

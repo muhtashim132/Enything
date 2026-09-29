@@ -114,6 +114,10 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
 
   @override
   Widget build(BuildContext context) {
+    final rbac = context.watch<RbacProvider>();
+    final isSuperAdmin = rbac.isSuperAdmin;
+    final canViewFinance = isSuperAdmin || rbac.can('finance.view');
+
     final fmt = NumberFormat.compact(locale: 'en_IN');
     final rupee =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -139,8 +143,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
             children: [
               AdminKpiCard(
                 title: 'Total Revenue',
-                value: rupee.format(_totalRevenue),
-                subtitle: 'All time',
+                value: canViewFinance ? rupee.format(_totalRevenue) : '₹ ••••',
+                subtitle: canViewFinance ? 'All time' : 'Restricted',
                 icon: Icons.currency_rupee_rounded,
                 gradient: AdminGradients.primary,
                 loading: _loading,
@@ -200,8 +204,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                   .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Withdrawals',
-                value: _pendingWithdrawals.toString(),
-                subtitle: 'Pending approval',
+                value: canViewFinance ? _pendingWithdrawals.toString() : '••••',
+                subtitle: canViewFinance ? 'Pending approval' : 'Restricted',
                 icon: Icons.account_balance_wallet_rounded,
                 gradient: AdminGradients.danger,
                 loading: _loading,
@@ -213,8 +217,8 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                   .scale(begin: const Offset(0.95, 0.95)),
               AdminKpiCard(
                 title: 'Commission',
-                value: rupee.format(_commission),
-                subtitle: 'Earned (est.)',
+                value: canViewFinance ? rupee.format(_commission) : '₹ ••••',
+                subtitle: canViewFinance ? 'Earned (est.)' : 'Restricted',
                 icon: Icons.bar_chart_rounded,
                 gradient: AdminGradients.primary,
                 loading: _loading,
@@ -228,40 +232,42 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
           ),
 
           // ── Revenue Chart ──────────────────────────────────────
-          const AdminSectionHeader(title: '7-Day Revenue'),
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 24, 24, 16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AdminColors.cardBorder, width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: AdminColors.primary.withValues(alpha: 0.15),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+          if (canViewFinance) ...[
+            const AdminSectionHeader(title: '7-Day Revenue'),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 24, 24, 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ],
-            ),
-            child: _loading
-                ? const SizedBox(
-                    height: 180,
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: AdminColors.primary, strokeWidth: 2)))
-                : SizedBox(
-                    height: 180,
-                    child: _revenueSpots.isEmpty
-                        ? Center(
-                            child: Text('No data yet',
-                                style: AdminStyles.caption()))
-                        : LineChart(_buildChart()),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: AdminColors.cardBorder, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: AdminColors.primary.withValues(alpha: 0.15),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
                   ),
-          ).animate().fadeIn(delay: 350.ms),
+                ],
+              ),
+              child: _loading
+                  ? const SizedBox(
+                      height: 180,
+                      child: Center(
+                          child: CircularProgressIndicator(
+                              color: AdminColors.primary, strokeWidth: 2)))
+                  : SizedBox(
+                      height: 180,
+                      child: _revenueSpots.isEmpty
+                          ? Center(
+                              child: Text('No data yet',
+                                  style: AdminStyles.caption()))
+                          : LineChart(_buildChart()),
+                    ),
+            ).animate().fadeIn(delay: 350.ms),
+          ],
 
           // ── Live Activity Feed ─────────────────────────────────
           const AdminSectionHeader(title: 'Recent Orders'),
@@ -320,7 +326,7 @@ class _OverviewAdminPageState extends State<OverviewAdminPage> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('₹${amount.toStringAsFixed(0)}',
+                      Text(canViewFinance ? '₹${amount.toStringAsFixed(0)}' : '₹ ••••',
                           style: AdminStyles.body(
                               size: 13, color: AdminColors.success)),
                       const SizedBox(height: 4),

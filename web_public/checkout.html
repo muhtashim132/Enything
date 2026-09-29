@@ -344,7 +344,7 @@
 
                 // Initialize Razorpay
                 const options = {
-                    "key": CONFIG.RAZORPAY_TEST_KEY,
+                    "key": CONFIG.RAZORPAY_KEY || CONFIG.RAZORPAY_TEST_KEY,
                     "amount": Math.round(total * 100), // amount in paise
                     "currency": "INR",
                     "name": "Enything Technologies",

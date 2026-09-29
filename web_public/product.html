@@ -276,6 +276,7 @@
                     .from('products')
                     .select('id, name, description, price, original_price, is_available, is_veg, images, shop_id, category, gst_rate_override, variants')
                     .eq('id', productId)
+                    .eq('is_deleted', false)
                     .single();
 
                 if (error || !product) {

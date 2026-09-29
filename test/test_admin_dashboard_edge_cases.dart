@@ -312,6 +312,29 @@ Future<void> main() async {
     'updated_at': DateTime.now().toIso8601String(),
   }, onConflict: 'key');
 
+  await client.from('platform_config').upsert({
+    'key': 'platform_fee',
+    'value': 15.0,
+    'updated_by': adminId,
+    'updated_at': DateTime.now().toIso8601String(),
+  }, onConflict: 'key');
+
+  await client.from('platform_config').upsert({
+    'key': 'delivery_rate_per_km',
+    'value': 20.0,
+    'updated_by': adminId,
+    'updated_at': DateTime.now().toIso8601String(),
+  }, onConflict: 'key');
+
+  await client.from('platform_config').upsert({
+    'key': 'referral_bonus_amount',
+    'value': 25.0,
+    'updated_by': adminId,
+    'updated_at': DateTime.now().toIso8601String(),
+  }, onConflict: 'key');
+
+  await client.from('platform_config').delete().eq('key', 'commission_percent_Electronics');
+
   print('✅ [MODULE 5 PASSED] Statutory GST rates, slab threshold, and product overrides verified!');
 
   print('\n================================================================');

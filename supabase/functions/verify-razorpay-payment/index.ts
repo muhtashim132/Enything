@@ -112,6 +112,36 @@ Deno.serve(async (req) => {
 
       if (error) throw new Error("Database error: " + JSON.stringify(error));
       if (!orders || orders.length === 0) {
+        // ── 100x ADDITIVE FIX: Webhook-Before-App Race Condition ──────────────
+        // If the Razorpay webhook (`razorpay-webhook`) fired faster than the
+        // app's success callback, the orders are already 'confirmed' with
+        // payment_status='captured'. This is a SUCCESS, not an error.
+        // Return verified: true so the customer doesn't see a panic error.
+        const { data: confirmedOrders } = await supabaseAdmin
+          .from('orders')
+          .select('id, status, payment_status, customer_id')
+          .eq('cart_group_id', cart_group_id)
+          .in('status', ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery', 'delivered']);
+
+        if (confirmedOrders && confirmedOrders.length > 0) {
+          // Verify the caller owns these orders
+          if (confirmedOrders.some(o => o.customer_id !== user.id)) {
+            return new Response(
+              JSON.stringify({ verified: false, error: "Unauthorized order access." }),
+              { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          const alreadyCaptured = confirmedOrders.some(o => o.payment_status === 'captured');
+          if (alreadyCaptured) {
+            console.log(`Payment ${razorpay_payment_id} already confirmed via webhook for cart_group ${cart_group_id}. Returning success.`);
+            return new Response(
+              JSON.stringify({ verified: true, payment_id: razorpay_payment_id, already_confirmed: true }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+
         throw new Error("No awaiting_payment orders found for cart_group_id: " + cart_group_id);
       }
 
@@ -126,7 +156,7 @@ Deno.serve(async (req) => {
     } else {
       const { data: order, error } = await supabaseAdmin
         .from('orders')
-        .select('id, grand_total_collected, status, customer_id')
+        .select('id, grand_total_collected, status, payment_status, customer_id')
         .eq('id', order_id)
         .maybeSingle();
 
@@ -135,6 +165,14 @@ Deno.serve(async (req) => {
         return new Response(
           JSON.stringify({ verified: false, error: "Unauthorized order access." }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (order.payment_status === 'captured') {
+        console.log(`Payment ${razorpay_payment_id} already confirmed via webhook for order ${order_id}. Returning success.`);
+        return new Response(
+          JSON.stringify({ verified: true, payment_id: razorpay_payment_id, already_confirmed: true }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 

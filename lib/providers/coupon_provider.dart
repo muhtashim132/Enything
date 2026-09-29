@@ -102,7 +102,7 @@ class CouponProvider extends ChangeNotifier {
                 .select('id')
                 .eq('coupon_id', res['id'])
                 .eq('customer_id', userId)
-                .not('status', 'in', '(cancelled,payment_failed,timeout)');
+                .not('status', 'in', '(cancelled,payment_failed,timeout,seller_rejected,partner_rejected,shop_dispute_cancel,no_rider,verification_failed,failed)');
             final userUsageCount = (userUsageRes as List).length;
             if (userUsageCount >= perUserLimit) {
               _errorMessage =

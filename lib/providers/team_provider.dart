@@ -58,6 +58,7 @@ class TeamProvider extends ChangeNotifier {
       _filtered = _members.where((m) {
         return m.fullName.toLowerCase().contains(_search) ||
             m.email.toLowerCase().contains(_search) ||
+            (m.phone?.toLowerCase().contains(_search) ?? false) ||
             (m.role?.name.toLowerCase().contains(_search) ?? false);
       }).toList();
     }
@@ -79,6 +80,31 @@ class TeamProvider extends ChangeNotifier {
       );
       _invitations.insert(0, inv);
       safeNotifyListeners();
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // ── Add Member by Phone (100% Phone Auth Support) ─────────────
+  Future<String?> addMemberByPhone({
+    required String phone,
+    required String fullName,
+    required String roleId,
+    required String adminPassword,
+    required String actorId,
+    required String actorRole,
+  }) async {
+    try {
+      await _repo.addTeamMemberByPhone(
+        phone: phone,
+        fullName: fullName,
+        roleId: roleId,
+        adminPassword: adminPassword,
+        actorId: actorId,
+        actorRole: actorRole,
+      );
+      await loadTeam();
       return null;
     } catch (e) {
       return e.toString();
@@ -166,9 +192,37 @@ class TeamProvider extends ChangeNotifier {
     }
   }
 
+  // ── Remove Member Permanently ──────────────────────────────
+  Future<String?> removeMember({
+    required String userId,
+    required String actorId,
+    required String actorRole,
+  }) async {
+    try {
+      await _repo.removeMember(
+        userId: userId,
+        actorId: actorId,
+        actorRole: actorRole,
+      );
+      _members.removeWhere((m) => m.id == userId);
+      _filtered.removeWhere((m) => m.id == userId);
+      safeNotifyListeners();
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
   // ── Revoke invitation ────────────────────────────────────────
   Future<void> revokeInvitation(String id) async {
     await _repo.revokeInvitation(id);
+    _invitations.removeWhere((i) => i.id == id);
+    safeNotifyListeners();
+  }
+
+  // ── Delete invitation permanently ───────────────────────────
+  Future<void> deleteInvitation(String id) async {
+    await _repo.deleteInvitation(id);
     _invitations.removeWhere((i) => i.id == id);
     safeNotifyListeners();
   }

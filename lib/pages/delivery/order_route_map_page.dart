@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -24,8 +25,49 @@ const _kShopPickedUpMarker = Color(0xFF3498DB);
 const _kShopCancelledMarker = Color(0xFF95A5A6);
 const _kCustomerMarker = Color(0xFF00B4D8); // cyan
 
+/// 100x Architecture: Aggregated Physical Shop Stop.
+/// Clusters multiple sub-orders (even from different customers) at the same physical store.
+class UnifiedShopStop {
+  final double lat;
+  final double lng;
+  final String name;
+  final String? phone;
+  final List<OrderModel> orders;
+
+  UnifiedShopStop({
+    required this.lat,
+    required this.lng,
+    required this.name,
+    this.phone,
+    required this.orders,
+  });
+
+  String get aggregateStatus {
+    final active = orders.where((o) =>
+        o.status != 'rejected' &&
+        o.status != 'cancelled' &&
+        o.status != 'seller_rejected' &&
+        o.status != 'partner_rejected' &&
+        o.status != 'shop_dispute_cancel').toList();
+    if (active.isEmpty) return 'cancelled';
+    if (active.every((o) =>
+        o.status == 'picked_up' ||
+        o.status == 'out_for_delivery' ||
+        o.status == 'delivered')) {
+      return 'picked_up';
+    }
+    if (active.any((o) => o.status == 'ready_for_pickup')) return 'ready_for_pickup';
+    if (active.any((o) => o.status == 'preparing')) return 'preparing';
+    return active.first.status;
+  }
+
+  bool get isPickedUp => aggregateStatus == 'picked_up';
+  bool get isCancelled => aggregateStatus == 'cancelled';
+}
+
 class OrderRouteMapPage extends StatefulWidget {
   final OrderGroup group;
+  final List<OrderGroup>? groups;
   final double? riderLat;
   final double? riderLng;
   final List<({double lat, double lng, String name})> shops;
@@ -35,12 +77,15 @@ class OrderRouteMapPage extends StatefulWidget {
   const OrderRouteMapPage({
     super.key,
     required this.group,
+    this.groups,
     required this.riderLat,
     required this.riderLng,
-    required this.shops,
-    required this.onAccept,
+    this.shops = const [],
+    this.onAccept = _noop,
     this.isViewOnly = false,
   });
+
+  static void _noop() {}
 
   @override
   State<OrderRouteMapPage> createState() => _OrderRouteMapPageState();
@@ -59,7 +104,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   // ValueNotifier prevents parent widget and map re-renders on GPS stream ticks
   final ValueNotifier<LatLng?> _riderPositionNotifier = ValueNotifier(null);
   StreamSubscription<Position>? _positionStreamSub;
-  RealtimeChannel? _orderChannel;
+  // 100x FIX (Edge Case 6): Support multiple realtime channels for multi-customer routes
+  final List<RealtimeChannel> _orderChannels = [];
   LatLng? _lastRouteFetchPos;
 
   int _selectedStopIndex = 0;
@@ -67,7 +113,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   @override
   void initState() {
     super.initState();
-    _orders = List<OrderModel>.from(widget.group.orders);
+    _orders = widget.groups != null && widget.groups!.isNotEmpty
+        ? widget.groups!.expand((g) => g.orders).toList()
+        : List<OrderModel>.from(widget.group.orders);
 
     if (widget.riderLat != null &&
         widget.riderLng != null &&
@@ -109,8 +157,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   @override
   void dispose() {
     _positionStreamSub?.cancel();
-    if (_orderChannel != null) {
-      _supabase.removeChannel(_orderChannel!);
+    // 100x FIX (Edge Case 6): Clean up ALL realtime channels
+    for (final ch in _orderChannels) {
+      _supabase.removeChannel(ch);
     }
     _riderPositionNotifier.dispose();
     super.dispose();
@@ -118,97 +167,204 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
   // ── Supabase Realtime Subscription ─────────────────────────────────────────
   void _subscribeToOrderChanges() {
-    final cartGroupId = widget.group.primaryOrder.cartGroupId;
-    final primaryId = widget.group.primaryOrder.id;
+    // 100x FIX (Edge Case 6): Subscribe to ALL distinct cart groups in
+    // multi-customer master route mode, not just the primary group.
+    final groupsToSubscribe = (widget.groups != null && widget.groups!.isNotEmpty)
+        ? widget.groups!
+        : [widget.group];
 
-    final channelName = cartGroupId != null
-        ? 'rider-route-map-group-$cartGroupId'
-        : 'rider-route-map-$primaryId';
+    final subscribedGroupIds = <String>{};
 
-    _orderChannel = _supabase
-        .channel(channelName)
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'orders',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: cartGroupId != null ? 'cart_group_id' : 'id',
-            value: cartGroupId ?? primaryId,
-          ),
-          callback: (payload) {
-            if (!mounted || payload.newRecord.isEmpty) return;
-            final updatedOrder = OrderModel.fromMap(payload.newRecord);
+    for (final group in groupsToSubscribe) {
+      final cartGroupId = group.primaryOrder.cartGroupId;
+      final primaryId = group.primaryOrder.id;
+      final subscriptionKey = cartGroupId ?? primaryId;
 
-            final idx = _orders.indexWhere((o) => o.id == updatedOrder.id);
-            if (idx != -1) {
-              updatedOrder.items = _orders[idx].items;
-              setState(() {
-                _orders[idx] = updatedOrder;
-              });
-            } else {
-              setState(() {
-                _orders.add(updatedOrder);
-              });
-            }
+      // Deduplicate: don't subscribe to the same cart_group_id twice
+      if (subscribedGroupIds.contains(subscriptionKey)) continue;
+      subscribedGroupIds.add(subscriptionKey);
 
-            final activeOrders = _orders
-                .where((o) =>
-                    o.status != 'rejected' &&
-                    o.status != 'cancelled' &&
-                    o.status != 'seller_rejected')
-                .toList();
+      final channelName = cartGroupId != null
+          ? 'rider-route-map-group-$cartGroupId'
+          : 'rider-route-map-$primaryId';
 
-            // If entire order was cancelled/rejected by all shops
-            if (activeOrders.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Order was cancelled or rejected by all shops.'),
-                  backgroundColor: AppColors.danger,
-                ),
-              );
-              if (mounted && Navigator.canPop(context)) {
-                Navigator.pop(context);
+      final channel = _supabase
+          .channel(channelName)
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'orders',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: cartGroupId != null ? 'cart_group_id' : 'id',
+              value: cartGroupId ?? primaryId,
+            ),
+            callback: (payload) {
+              if (!mounted || payload.newRecord.isEmpty) return;
+              final updatedOrder = OrderModel.fromMap(payload.newRecord);
+
+              final idx = _orders.indexWhere((o) => o.id == updatedOrder.id);
+              if (idx != -1) {
+                updatedOrder.items = _orders[idx].items;
+                setState(() {
+                  _orders[idx] = updatedOrder;
+                });
+              } else {
+                setState(() {
+                  _orders.add(updatedOrder);
+                });
               }
-              return;
-            }
 
-            // Recalculate routes on status change
-            _fetchRoutes(silent: true);
-          },
-        )
-        .subscribe();
+              final activeOrders = _orders
+                  .where((o) =>
+                      o.status != 'rejected' &&
+                      o.status != 'cancelled' &&
+                      o.status != 'seller_rejected' &&
+                      o.status != 'partner_rejected' &&
+                      o.status != 'shop_dispute_cancel')
+                  .toList();
+
+              // If a stop was cancelled/disputed
+              if (updatedOrder.status == 'seller_rejected' ||
+                  updatedOrder.status == 'shop_dispute_cancel' ||
+                  updatedOrder.status == 'cancelled') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('⚠️ A stop was cancelled or disputed. Recalculating route...'),
+                    backgroundColor: Colors.orange.shade800,
+                  ),
+                );
+              }
+
+              // If entire order was cancelled/rejected by all shops
+              if (activeOrders.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Order was cancelled or rejected by all shops.'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+                if (mounted && Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+                return;
+              }
+
+              // Recalculate routes on status change
+              _fetchRoutes(silent: true);
+
+              // 100x FIX (Edge Case 3): Clamp selected stop index to prevent RangeError crash
+              final totalStops =
+                  _effectiveShopStops.length + _activeCustomerGroups.length;
+              if (_selectedStopIndex >= totalStops) {
+                setState(() {
+                  _selectedStopIndex = math.max(0, totalStops - 1);
+                });
+              }
+            },
+          )
+          .subscribe();
+
+      _orderChannels.add(channel);
+    }
   }
 
-  List<({double lat, double lng, String name, String status, String? phone})>
-      get _effectiveShopStops {
+  /// 100x FIX: Active customer groups excluding completely cancelled/rejected groups.
+  List<OrderGroup> get _activeCustomerGroups {
+    final allGroups = (widget.groups != null && widget.groups!.isNotEmpty)
+        ? widget.groups!
+        : [widget.group];
+
+    return allGroups.where((g) {
+      if (g.deliveryLat == null || g.deliveryLat == 0.0) return false;
+      return !_isGroupCancelled(g);
+    }).toList();
+  }
+
+  /// 100x FIX: True only if all sub-orders of this group are terminal cancelled/rejected.
+  bool _isGroupCancelled(OrderGroup g) {
+    final groupOrders = _orders.where((o) =>
+        (o.cartGroupId != null && o.cartGroupId == g.groupId) ||
+        (o.cartGroupId == null && o.id == g.primaryOrder.id)).toList();
+    if (groupOrders.isEmpty) return true;
+    return groupOrders.every((o) =>
+        o.status == 'rejected' ||
+        o.status == 'cancelled' ||
+        o.status == 'seller_rejected' ||
+        o.status == 'partner_rejected' ||
+        o.status == 'shop_dispute_cancel');
+  }
+
+  /// 100x FIX: Group is delivered ONLY if active orders are non-empty and all are 'delivered'.
+  bool _isGroupDelivered(OrderGroup g) {
+    final groupOrders = _orders.where((o) =>
+        (o.cartGroupId != null && o.cartGroupId == g.groupId) ||
+        (o.cartGroupId == null && o.id == g.primaryOrder.id)).toList();
+    if (groupOrders.isEmpty) return false;
+    final active = groupOrders.where((o) =>
+        o.status != 'rejected' &&
+        o.status != 'cancelled' &&
+        o.status != 'seller_rejected' &&
+        o.status != 'partner_rejected' &&
+        o.status != 'shop_dispute_cancel').toList();
+    if (active.isEmpty) return false; // If all were cancelled, it's NOT delivered!
+    return active.every((o) => o.status == 'delivered');
+  }
+
+  /// 100x FIX (Edge Case 1): Unified Physical Shop Stops.
+  /// Deduplicates co-located shops across multiple customer cart groups.
+  List<UnifiedShopStop> get _effectiveShopStops {
     final activeOrders = _orders
         .where((o) =>
             o.status != 'rejected' &&
             o.status != 'cancelled' &&
-            o.status != 'seller_rejected')
+            o.status != 'seller_rejected' &&
+            o.status != 'partner_rejected' &&
+            o.status != 'shop_dispute_cancel')
         .toList();
 
     final targetOrders = activeOrders.isNotEmpty ? activeOrders : _orders;
+    final stops = <UnifiedShopStop>[];
 
-    return targetOrders.map((o) {
+    for (final o in targetOrders) {
+      final sLat = o.shopLat ?? 0.0;
+      final sLng = o.shopLng ?? 0.0;
+      if (sLat == 0.0 && sLng == 0.0) continue;
+
+      // Check if this shop already exists by shopId or within 25m geographic radius
+      final existingIndex = stops.indexWhere((s) {
+        if (o.shopId != null && s.orders.any((ord) => ord.shopId == o.shopId)) {
+          return true;
+        }
+        return Geolocator.distanceBetween(s.lat, s.lng, sLat, sLng) < 25.0;
+      });
+
       final matchingShop = widget.shops.firstWhere(
-        (s) => s.lat == o.shopLat && s.lng == o.shopLng,
+        (s) =>
+            (sLat != 0.0 &&
+                sLng != 0.0 &&
+                (s.lat - sLat).abs() < 0.0001 &&
+                (s.lng - sLng).abs() < 0.0001),
         orElse: () => (
-          lat: o.shopLat ?? 0.0,
-          lng: o.shopLng ?? 0.0,
+          lat: sLat,
+          lng: sLng,
           name: o.items.isNotEmpty ? o.items.first.productName : 'Shop',
         ),
       );
 
-      return (
-        lat: matchingShop.lat,
-        lng: matchingShop.lng,
-        name: matchingShop.name,
-        status: o.status,
-        phone: o.shopPhone,
-      );
-    }).where((s) => s.lat != 0.0 && s.lng != 0.0).toList();
+      if (existingIndex != -1) {
+        stops[existingIndex].orders.add(o);
+      } else {
+        stops.add(UnifiedShopStop(
+          lat: matchingShop.lat != 0.0 ? matchingShop.lat : sLat,
+          lng: matchingShop.lng != 0.0 ? matchingShop.lng : sLng,
+          name: matchingShop.name,
+          phone: o.shopPhone,
+          orders: [o],
+        ));
+      }
+    }
+    return stops;
   }
 
   Future<void> _fetchRoutes({bool silent = false}) async {
@@ -221,35 +377,68 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     double totalKm = 0;
 
     final shops = _effectiveShopStops;
+    // 100x FIX: Use aggregate status whitelist for unpicked shops
     final unpickedShops = shops
-        .where((s) => s.status != 'picked_up' && s.status != 'out_for_delivery')
+        .where((s) =>
+            s.aggregateStatus == 'confirmed' ||
+            s.aggregateStatus == 'preparing' ||
+            s.aggregateStatus == 'ready_for_pickup')
         .toList();
 
     List<LatLng> shopPts = [];
     if (unpickedShops.isNotEmpty) {
-      final unvisited = unpickedShops.map((s) => LatLng(s.lat, s.lng)).toList();
+      final unvisited = List<UnifiedShopStop>.from(unpickedShops);
       final riderPos = _riderPositionNotifier.value;
       LatLng currentPos =
-          riderPos ?? (unvisited.isNotEmpty ? unvisited.first : const LatLng(0, 0));
+          riderPos ?? LatLng(unvisited.first.lat, unvisited.first.lng);
 
       while (unvisited.isNotEmpty) {
         unvisited.sort((a, b) {
           final distA = Geolocator.distanceBetween(
-              currentPos.latitude, currentPos.longitude, a.latitude, a.longitude);
+              currentPos.latitude, currentPos.longitude, a.lat, a.lng);
           final distB = Geolocator.distanceBetween(
-              currentPos.latitude, currentPos.longitude, b.latitude, b.longitude);
+              currentPos.latitude, currentPos.longitude, b.lat, b.lng);
           return distA.compareTo(distB);
         });
         final nearest = unvisited.removeAt(0);
-        shopPts.add(nearest);
-        currentPos = nearest;
+        shopPts.add(LatLng(nearest.lat, nearest.lng));
+        currentPos = LatLng(nearest.lat, nearest.lng);
       }
     }
 
-    final customerPt =
-        (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
-            ? LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!)
-            : null;
+    // 100x FIX (Edge Case 2): Greedy nearest-neighbor customer drop-off TSP sequence
+    final undeliveredGroups =
+        _activeCustomerGroups.where((g) => !_isGroupDelivered(g)).toList();
+    List<LatLng> customerPts = [];
+    if (undeliveredGroups.isNotEmpty) {
+      final unvisitedGroups = List<OrderGroup>.from(undeliveredGroups);
+      final riderPos = _riderPositionNotifier.value;
+      LatLng dropRef = shopPts.isNotEmpty
+          ? shopPts.last
+          : (riderPos ??
+              LatLng(undeliveredGroups.first.deliveryLat!,
+                  undeliveredGroups.first.deliveryLng!));
+
+      while (unvisitedGroups.isNotEmpty) {
+        unvisitedGroups.sort((a, b) {
+          final distA = Geolocator.distanceBetween(
+              dropRef.latitude,
+              dropRef.longitude,
+              a.deliveryLat!,
+              a.deliveryLng!);
+          final distB = Geolocator.distanceBetween(
+              dropRef.latitude,
+              dropRef.longitude,
+              b.deliveryLat!,
+              b.deliveryLng!);
+          return distA.compareTo(distB);
+        });
+        final nearest = unvisitedGroups.removeAt(0);
+        customerPts.add(LatLng(nearest.deliveryLat!, nearest.deliveryLng!));
+        dropRef = LatLng(nearest.deliveryLat!, nearest.deliveryLng!);
+      }
+    }
+
     final riderPos = _riderPositionNotifier.value;
     final riderPt =
         (riderPos != null && riderPos.latitude != 0.0) ? riderPos : null;
@@ -262,19 +451,17 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     }
 
     // 2. Delivery Route:
-    // If there are unpicked shops: Shop 1 -> Shop 2 -> Customer
-    // If ALL shops are picked up: Rider -> Customer directly!
+    // If there are unpicked shops: Shop 1 -> Shop 2 -> Customer(s)
+    // If ALL shops are picked up: Rider -> Customer(s) directly!
     if (shopPts.isNotEmpty) {
-      final allWaypoints = [...shopPts];
-      if (customerPt != null) {
-        allWaypoints.add(customerPt);
-      }
+      final allWaypoints = [...shopPts, ...customerPts];
       final r = await GeoUtils.fetchMultiStopRoute(allWaypoints);
       deliveryRoute.addAll(r);
       totalKm += GeoUtils.calculateRouteDistanceKm(r);
-    } else if (riderPt != null && customerPt != null) {
-      // All items picked up! Direct route from Rider to Customer
-      final r = await GeoUtils.fetchRoadRoute(riderPt, customerPt);
+    } else if (riderPt != null && customerPts.isNotEmpty) {
+      final r = customerPts.length > 1
+          ? await GeoUtils.fetchMultiStopRoute([riderPt, ...customerPts])
+          : await GeoUtils.fetchRoadRoute(riderPt, customerPts.first);
       deliveryRoute.addAll(r);
       totalKm += GeoUtils.calculateRouteDistanceKm(r);
     }
@@ -295,12 +482,17 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   void _fitMapBounds() {
     final riderPos = _riderPositionNotifier.value;
     final activeShops = _effectiveShopStops;
+    final activeGroups = _activeCustomerGroups;
+
+    final customerPts = activeGroups
+        .where((g) => g.deliveryLat != null && g.deliveryLat != 0.0)
+        .map((g) => LatLng(g.deliveryLat!, g.deliveryLng!))
+        .toList();
 
     final allPoints = [
       if (riderPos != null && riderPos.latitude != 0.0) riderPos,
       ...activeShops.map((s) => LatLng(s.lat, s.lng)),
-      if (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
-        LatLng(widget.group.deliveryLat!, widget.group.deliveryLng!),
+      ...customerPts,
     ];
     if (allPoints.isEmpty) return;
 
@@ -321,7 +513,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     final riderPos = _riderPositionNotifier.value;
     final shops = _effectiveShopStops;
     final unpickedShops = shops
-        .where((s) => s.status != 'picked_up' && s.status != 'out_for_delivery')
+        .where((s) =>
+            s.aggregateStatus == 'confirmed' ||
+            s.aggregateStatus == 'preparing' ||
+            s.aggregateStatus == 'ready_for_pickup')
         .toList();
 
     final origin = (riderPos != null && riderPos.latitude != 0.0)
@@ -330,12 +525,35 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
             ? '${shops.first.lat},${shops.first.lng}'
             : '';
 
-    final destination =
-        (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
-            ? '${widget.group.deliveryLat},${widget.group.deliveryLng}'
-            : shops.isNotEmpty
-                ? '${shops.last.lat},${shops.last.lng}'
-                : '';
+    // 100x FIX: Greedy TSP customer drop-offs for external map
+    final undeliveredGroups =
+        _activeCustomerGroups.where((g) => !_isGroupDelivered(g)).toList();
+    final orderedCustomerPts = <String>[];
+    if (undeliveredGroups.isNotEmpty) {
+      final unvisited = List<OrderGroup>.from(undeliveredGroups);
+      LatLng ref = unpickedShops.isNotEmpty
+          ? LatLng(unpickedShops.last.lat, unpickedShops.last.lng)
+          : (riderPos ??
+              LatLng(unvisited.first.deliveryLat!,
+                  unvisited.first.deliveryLng!));
+
+      while (unvisited.isNotEmpty) {
+        unvisited.sort((a, b) {
+          final distA = Geolocator.distanceBetween(
+              ref.latitude, ref.longitude, a.deliveryLat!, a.deliveryLng!);
+          final distB = Geolocator.distanceBetween(
+              ref.latitude, ref.longitude, b.deliveryLat!, b.deliveryLng!);
+          return distA.compareTo(distB);
+        });
+        final nearest = unvisited.removeAt(0);
+        orderedCustomerPts.add('${nearest.deliveryLat},${nearest.deliveryLng}');
+        ref = LatLng(nearest.deliveryLat!, nearest.deliveryLng!);
+      }
+    }
+
+    final destination = orderedCustomerPts.isNotEmpty
+        ? orderedCustomerPts.last
+        : (shops.isNotEmpty ? '${shops.last.lat},${shops.last.lng}' : '');
 
     if (origin.isEmpty || destination.isEmpty) {
       if (mounted) {
@@ -345,11 +563,19 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
       return;
     }
 
-    final waypoints =
-        unpickedShops.map((s) => '${s.lat},${s.lng}').toList();
+    // Build waypoints: deduplicated unpicked shops + intermediate customer drop-offs
+    final waypoints = <String>[
+      ...unpickedShops.map((s) => '${s.lat},${s.lng}'),
+      if (orderedCustomerPts.length > 1)
+        ...orderedCustomerPts.sublist(0, orderedCustomerPts.length - 1),
+    ];
 
+    // 100x FIX (Edge Case 6): Cap waypoints to max 8 immediate stops to prevent Google Maps URL overflow
+    final safeWaypoints = waypoints.take(8).toList();
+    final waypointsParam =
+        safeWaypoints.isNotEmpty ? '&waypoints=${safeWaypoints.join('|')}' : '';
     final uri = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&waypoints=${waypoints.join('|')}');
+        'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination$waypointsParam');
 
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
@@ -419,6 +645,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final shops = _effectiveShopStops;
+    final activeGroups = _activeCustomerGroups;
     final isMulti = shops.length > 1;
     final primaryOrder = widget.group.primaryOrder;
 
@@ -439,36 +666,43 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     }
 
     final markers = <Marker>[
-      // Shop markers
+      // Shop markers (100x FIX: 1 pin per physical shop stop)
       for (int i = 0; i < shops.length; i++) ...[
         Marker(
           point: applyJitter(shops[i].lat, shops[i].lng),
           width: 80,
           height: 70,
           child: _mapMarker(
-            shops[i].status == 'picked_up'
+            shops[i].isPickedUp
                 ? _kShopPickedUpMarker
-                : (shops[i].status == 'rejected' ||
-                        shops[i].status == 'cancelled')
+                : shops[i].isCancelled
                     ? _kShopCancelledMarker
                     : _kShopMarker,
-            shops[i].status == 'picked_up'
+            shops[i].isPickedUp
                 ? Icons.check_circle_rounded
                 : Icons.storefront_rounded,
             isMulti ? '${i + 1}. ${shops[i].name}' : shops[i].name,
           ),
         ),
       ],
-      // Customer delivery marker
-      if (widget.group.deliveryLat != null && widget.group.deliveryLat != 0.0)
-        Marker(
-          point:
-              applyJitter(widget.group.deliveryLat!, widget.group.deliveryLng!),
-          width: 80,
-          height: 70,
-          child: _mapMarker(
-              _kCustomerMarker, Icons.location_on_rounded, 'Customer'),
-        ),
+      // Customer delivery markers (100x FIX: Clean labeling per active group)
+      for (int i = 0; i < activeGroups.length; i++)
+        if (activeGroups[i].deliveryLat != null &&
+            activeGroups[i].deliveryLat != 0.0)
+          Marker(
+            point: applyJitter(activeGroups[i].deliveryLat!,
+                activeGroups[i].deliveryLng!),
+            width: 90,
+            height: 70,
+            child: _mapMarker(
+                _isGroupDelivered(activeGroups[i])
+                    ? Colors.grey
+                    : _kCustomerMarker,
+                Icons.location_on_rounded,
+                _isGroupDelivered(activeGroups[i])
+                    ? 'Delivered'
+                    : (activeGroups.length > 1 ? 'Drop ${i + 1}' : 'Customer')),
+          ),
     ];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -595,9 +829,11 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              isMulti
-                                  ? 'Multi-Shop Route (${shops.length} Shops)'
-                                  : 'Order #${primaryOrder.id.substring(0, 8).toUpperCase()}',
+                              activeGroups.length > 1
+                                  ? 'Master Route (${activeGroups.length} Customers · ${shops.length} Stops)'
+                                  : (isMulti
+                                      ? 'Multi-Shop Route (${shops.length} Shops)'
+                                      : 'Order #${primaryOrder.id.substring(0, math.min(8, primaryOrder.id.length)).toUpperCase()}'),
                               style: GoogleFonts.outfit(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 14,
@@ -866,7 +1102,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w600)),
                                         Text(
-                                          '₹${widget.group.totalEarnings.toStringAsFixed(0)}',
+                                          '₹${(widget.groups != null && widget.groups!.isNotEmpty ? widget.groups!.fold(0.0, (sum, g) => sum + g.totalEarnings) : widget.group.totalEarnings).toStringAsFixed(0)}',
                                           style: GoogleFonts.outfit(
                                               color: AppColors.success,
                                               fontSize: 14,
@@ -883,259 +1119,356 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                         const SizedBox(height: 14),
 
                         // Stop Selector Tabs (Pickup Stores vs Dropoff)
-                        Row(
-                          children: [
-                            for (int i = 0; i < shops.length; i++) ...[
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _selectedStopIndex = i),
-                                  child: Container(
-                                    padding:
-                                        const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: _selectedStopIndex == i
-                                          ? _kPickupColor.withValues(alpha: 0.15)
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: _selectedStopIndex == i
-                                            ? _kPickupColor
-                                            : Colors.grey
-                                                .withValues(alpha: 0.3),
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        isMulti ? 'Shop ${i + 1}' : 'Shop Info',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: _selectedStopIndex == i
-                                              ? _kPickupColor
-                                              : (isDark
-                                                  ? Colors.white70
-                                                  : Colors.black87),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(
-                                    () => _selectedStopIndex = shops.length),
-                                child: Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: _selectedStopIndex == shops.length
-                                        ? _kCustomerMarker
-                                            .withValues(alpha: 0.15)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: _selectedStopIndex == shops.length
-                                          ? _kCustomerMarker
-                                          : Colors.grey.withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      'Customer',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: _selectedStopIndex == shops.length
-                                            ? _kCustomerMarker
-                                            : (isDark
-                                                ? Colors.white70
-                                                : Colors.black87),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
+                        // Stop Selector Tabs (Pickup Stores vs Dropoff)
+                        Builder(
+                          builder: (context) {
+                            final totalStops = shops.length + activeGroups.length;
+                            final int selectedIndex = _selectedStopIndex
+                                .clamp(0, math.max<int>(0, totalStops - 1))
+                                .toInt();
 
-                        // Active Stop Details Card
-                        if (_selectedStopIndex < shops.length) ...[
-                          // Shop Details Card
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF141424)
-                                  : const Color(0xFFF7F9FC),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white12
-                                    : Colors.grey.shade200,
-                              ),
-                            ),
-                            child: Row(
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: (shops[_selectedStopIndex].status ==
-                                            'picked_up'
-                                        ? _kShopPickedUpMarker
-                                        : _kShopMarker)
-                                        .withValues(alpha: 0.15),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                      shops[_selectedStopIndex].status ==
-                                              'picked_up'
-                                          ? Icons.check_circle_rounded
-                                          : Icons.storefront_rounded,
-                                      color: shops[_selectedStopIndex].status ==
-                                              'picked_up'
-                                          ? _kShopPickedUpMarker
-                                          : _kShopMarker,
-                                      size: 20),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        shops[_selectedStopIndex].name,
-                                        style: GoogleFonts.outfit(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        shops[_selectedStopIndex].status ==
-                                                'picked_up'
-                                            ? 'Items picked up ✓'
-                                            : 'Pick up items here',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 11,
-                                          color: shops[_selectedStopIndex]
-                                                      .status ==
-                                                  'picked_up'
-                                              ? AppColors.success
-                                              : (isDark
-                                                  ? Colors.white54
-                                                  : Colors.grey.shade600),
-                                          fontWeight: shops[_selectedStopIndex]
-                                                      .status ==
-                                                  'picked_up'
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (shops[_selectedStopIndex].phone != null)
-                                  IconButton(
-                                    onPressed: () => _call(
-                                        shops[_selectedStopIndex].phone),
-                                    icon: const Icon(Icons.phone_rounded,
-                                        color: AppColors.primary, size: 20),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: AppColors.primary
-                                          .withValues(alpha: 0.1),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ] else ...[
-                          // Customer Details Card
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF141424)
-                                  : const Color(0xFFF7F9FC),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white12
-                                    : Colors.grey.shade200,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: _kCustomerMarker
-                                        .withValues(alpha: 0.15),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.home_rounded,
-                                      color: _kCustomerMarker, size: 20),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        widget.group.customerAddress,
-                                        style: GoogleFonts.outfit(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (primaryOrder.deliveryNotes != null &&
-                                          primaryOrder
-                                              .deliveryNotes!.isNotEmpty)
-                                        Text(
-                                          'Note: ${primaryOrder.deliveryNotes}',
-                                          style: GoogleFonts.outfit(
-                                            fontSize: 11,
-                                            color: AppColors.warning,
-                                            fontWeight: FontWeight.w600,
+                                      for (int i = 0; i < shops.length; i++) ...[
+                                        GestureDetector(
+                                          onTap: () => setState(
+                                              () => _selectedStopIndex = i),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14, vertical: 8),
+                                            margin:
+                                                const EdgeInsets.only(right: 8),
+                                            decoration: BoxDecoration(
+                                              color: selectedIndex == i
+                                                  ? _kPickupColor
+                                                      .withValues(alpha: 0.15)
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: selectedIndex == i
+                                                    ? _kPickupColor
+                                                    : Colors.grey
+                                                        .withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                shops.length > 1
+                                                    ? 'Shop ${i + 1}'
+                                                    : 'Shop Info',
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: selectedIndex == i
+                                                      ? _kPickupColor
+                                                      : (isDark
+                                                          ? Colors.white70
+                                                          : Colors.black87),
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
+                                      ],
+                                      for (int j = 0;
+                                          j < activeGroups.length;
+                                          j++) ...[
+                                        GestureDetector(
+                                          onTap: () => setState(() =>
+                                              _selectedStopIndex =
+                                                  shops.length + j),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14, vertical: 8),
+                                            margin:
+                                                const EdgeInsets.only(right: 8),
+                                            decoration: BoxDecoration(
+                                              color: selectedIndex ==
+                                                      (shops.length + j)
+                                                  ? _kCustomerMarker
+                                                      .withValues(alpha: 0.15)
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: selectedIndex ==
+                                                        (shops.length + j)
+                                                    ? _kCustomerMarker
+                                                    : Colors.grey
+                                                        .withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                activeGroups.length > 1
+                                                    ? 'Drop ${j + 1}'
+                                                    : 'Customer',
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: selectedIndex ==
+                                                          (shops.length + j)
+                                                      ? _kCustomerMarker
+                                                      : (isDark
+                                                          ? Colors.white70
+                                                          : Colors.black87),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
-                                if (widget.group.customerPhone != null)
-                                  IconButton(
-                                    onPressed: () =>
-                                        _call(widget.group.customerPhone),
-                                    icon: const Icon(Icons.phone_rounded,
-                                        color: AppColors.primary, size: 20),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: AppColors.primary
-                                          .withValues(alpha: 0.1),
+                                const SizedBox(height: 10),
+
+                                // Active Stop Details Card
+                                if (selectedIndex < shops.length) ...[
+                                  // Shop Details Card
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? const Color(0xFF141424)
+                                          : const Color(0xFFF7F9FC),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? Colors.white12
+                                            : Colors.grey.shade200,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 38,
+                                          height: 38,
+                                          decoration: BoxDecoration(
+                                            color: (shops[selectedIndex].isPickedUp
+                                                    ? _kShopPickedUpMarker
+                                                    : _kShopMarker)
+                                                .withValues(alpha: 0.15),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                              shops[selectedIndex].isPickedUp
+                                                  ? Icons.check_circle_rounded
+                                                  : Icons.storefront_rounded,
+                                              color: shops[selectedIndex].isPickedUp
+                                                  ? _kShopPickedUpMarker
+                                                  : _kShopMarker,
+                                              size: 20),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                shops[selectedIndex].name,
+                                                style: GoogleFonts.outfit(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 13,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              Text(
+                                                shops[selectedIndex].isPickedUp
+                                                    ? 'Items picked up ✓'
+                                                    : (shops[selectedIndex].orders.length > 1
+                                                        ? 'Pick up for ${shops[selectedIndex].orders.length} customers'
+                                                        : 'Pick up items here'),
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 11,
+                                                  color: shops[selectedIndex].isPickedUp
+                                                      ? AppColors.success
+                                                      : (isDark
+                                                          ? Colors.white54
+                                                          : Colors.grey.shade600),
+                                                  fontWeight:
+                                                      shops[selectedIndex].isPickedUp
+                                                          ? FontWeight.w600
+                                                          : FontWeight.normal,
+                                                ),
+                                              ),
+                                              if (shops[selectedIndex].orders.isNotEmpty)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(top: 2),
+                                                  child: Text(
+                                                    shops[selectedIndex]
+                                                        .orders
+                                                        .expand((o) => o.items)
+                                                        .map((it) =>
+                                                            '${it.quantity}x ${it.productName}')
+                                                        .join(', '),
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 10,
+                                                      color: isDark
+                                                          ? Colors.white60
+                                                          : Colors.black54,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (shops[selectedIndex].phone != null)
+                                          IconButton(
+                                            onPressed: () => _call(
+                                                shops[selectedIndex].phone),
+                                            icon: const Icon(
+                                                Icons.phone_rounded,
+                                                color: AppColors.primary,
+                                                size: 20),
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: AppColors.primary
+                                                  .withValues(alpha: 0.1),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
+                                ] else ...[
+                                  // Customer Details Card (100x FIX: Dynamic customer selection)
+                                  () {
+                                    final custIdx =
+                                        selectedIndex - shops.length;
+                                    final group = (custIdx >= 0 &&
+                                            custIdx < activeGroups.length)
+                                        ? activeGroups[custIdx]
+                                        : widget.group;
+                                    final groupOrder = group.primaryOrder;
+
+                                    return Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? const Color(0xFF141424)
+                                            : const Color(0xFFF7F9FC),
+                                        borderRadius:
+                                            BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: isDark
+                                              ? Colors.white12
+                                              : Colors.grey.shade200,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 38,
+                                            height: 38,
+                                            decoration: BoxDecoration(
+                                              color: _kCustomerMarker
+                                                  .withValues(alpha: 0.15),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                                Icons.home_rounded,
+                                                color: _kCustomerMarker,
+                                                size: 20),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  group.customerAddress,
+                                                  style: GoogleFonts.outfit(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 13,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : Colors.black87,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                if (groupOrder.deliveryNotes !=
+                                                        null &&
+                                                    groupOrder.deliveryNotes!
+                                                        .isNotEmpty)
+                                                  Text(
+                                                    'Note: ${groupOrder.deliveryNotes}',
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 11,
+                                                      color: AppColors.warning,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                Text(
+                                                  '${group.activeOrders.length} store${group.activeOrders.length > 1 ? 's' : ''} · ${group.activeOrders.fold<int>(0, (sum, o) => sum + o.items.fold<int>(0, (s, i) => s + i.quantity))} items',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 10,
+                                                    color: isDark
+                                                        ? Colors.white54
+                                                        : Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.success.withValues(alpha: 0.15),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '💳 Prepaid (₹0)',
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: AppColors.success,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (group.customerPhone != null)
+                                            IconButton(
+                                              onPressed: () =>
+                                                  _call(group.customerPhone),
+                                              icon: const Icon(
+                                                  Icons.phone_rounded,
+                                                  color: AppColors.primary,
+                                                  size: 20),
+                                              style: IconButton.styleFrom(
+                                                backgroundColor: AppColors
+                                                    .primary
+                                                    .withValues(alpha: 0.1),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  }(),
+                                ],
                               ],
-                            ),
-                          ),
-                        ],
+                            );
+                          },
+                        ),
                         const SizedBox(height: 14),
 
                         // Navigation Button

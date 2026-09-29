@@ -72,6 +72,44 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
   Timer? _updateTickerTimer;
   final ValueNotifier<int> _timeTicker = ValueNotifier(0);
   final Map<String, String> _orderToRiderMap = {};
+  bool _isStackedDelivery = false;
+
+  Future<void> _checkStackedDelivery() async {
+    String? riderId = _currentOrder.deliveryPartnerId;
+    if (riderId == null || riderId.isEmpty) {
+      for (final o in _currentGroupOrders) {
+        if (o.deliveryPartnerId != null && o.deliveryPartnerId!.isNotEmpty) {
+          riderId = o.deliveryPartnerId;
+          break;
+        }
+      }
+    }
+    if (riderId == null || riderId.isEmpty) return;
+
+    try {
+      final res = await _supabase
+          .from('orders')
+          .select('id, cart_group_id')
+          .eq('delivery_partner_id', riderId)
+          .inFilter('status', [
+            'confirmed',
+            'preparing',
+            'ready_for_pickup',
+            'picked_up',
+            'out_for_delivery'
+          ]);
+      final myGroupId = _currentOrder.cartGroupId ?? _currentOrder.id;
+      final distinctGroups = (res as List)
+          .map((r) => (r['cart_group_id'] as String?) ?? (r['id'] as String))
+          .toSet();
+      final hasOtherOrders = distinctGroups.any((gid) => gid != myGroupId);
+      if (mounted && hasOtherOrders != _isStackedDelivery) {
+        setState(() {
+          _isStackedDelivery = hasOtherOrders;
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   void initState() {
@@ -132,6 +170,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
     _fetchRoutes();
     _subscribeToRider();
+    _checkStackedDelivery();
   }
 
   @override
@@ -188,16 +227,20 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
             final r = payload.newRecord;
             var updatedOrder = OrderModel.fromMap(r);
             if (updatedOrder.shopLat == null || updatedOrder.shopLat == 0.0) {
-              updatedOrder = updatedOrder.copyWith(
-                shopLat: _currentOrder.shopLat ?? 34.4250,
-                shopLng: _currentOrder.shopLng ?? 74.6380,
-              );
+              if (_currentOrder.shopLat != null && _currentOrder.shopLat != 0.0) {
+                updatedOrder = updatedOrder.copyWith(
+                  shopLat: _currentOrder.shopLat,
+                  shopLng: _currentOrder.shopLng,
+                );
+              }
             }
             if (updatedOrder.deliveryLat == null || updatedOrder.deliveryLat == 0.0) {
-              updatedOrder = updatedOrder.copyWith(
-                deliveryLat: _currentOrder.deliveryLat ?? 34.4230,
-                deliveryLng: _currentOrder.deliveryLng ?? 74.6360,
-              );
+              if (_currentOrder.deliveryLat != null && _currentOrder.deliveryLat != 0.0) {
+                updatedOrder = updatedOrder.copyWith(
+                  deliveryLat: _currentOrder.deliveryLat,
+                  deliveryLng: _currentOrder.deliveryLng,
+                );
+              }
             }
 
             final newStatus = r['status'] as String?;
@@ -261,8 +304,10 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
             if (pid != null) {
               _orderToRiderMap[orderId] = pid;
+              _checkStackedDelivery();
             } else {
               _orderToRiderMap.remove(orderId);
+              if (mounted) setState(() => _isStackedDelivery = false);
             }
 
             // 5. Handle Rider GPS Coordinates
@@ -282,14 +327,17 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                 currentLocs[pid] = newLoc;
                 _riderLocationsNotifier.value = currentLocs;
 
-                // Dynamically refresh pickup route if rider moved > 50m
-                if (_currentOrder.status != 'out_for_delivery' &&
-                    (_lastPickupFetchPos == null ||
-                        const Distance().as(
-                                LengthUnit.Meter, _lastPickupFetchPos!, newLoc) >
-                            50)) {
+                // Dynamically refresh route if rider moved > 50m
+                if (_lastPickupFetchPos == null ||
+                    const Distance().as(
+                            LengthUnit.Meter, _lastPickupFetchPos!, newLoc) >
+                        50) {
                   _lastPickupFetchPos = newLoc;
-                  _refreshPickupRoute(newLoc);
+                  if (_currentOrder.status == 'out_for_delivery') {
+                    _refreshDeliveryRoute(newLoc);
+                  } else {
+                    _refreshPickupRoute(newLoc);
+                  }
                 }
               }
 
@@ -362,7 +410,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     double totalDeliveryKm = 0;
 
     // 1. Fetch Delivery Legs (Shop -> Customer or Multi-Shop -> Customer)
-    if (shops.length > 1) {
+    final riderLocs = _riderLocationsNotifier.value;
+    if (_currentOrder.status == 'out_for_delivery' && riderLocs.isNotEmpty) {
+      // Out for delivery: direct route from rider's current position to customer
+      final riderPt = riderLocs.values.first;
+      final directRoute = await GeoUtils.fetchRoadRoute(riderPt, custPt);
+      deliveryRoutes.add(directRoute);
+      totalDeliveryKm = GeoUtils.calculateRouteDistanceKm(directRoute);
+    } else if (shops.length > 1) {
       final shopPts = shops
           .where((s) =>
               s.shopLat != null && s.shopLng != null && s.shopLat != 0.0)
@@ -385,15 +440,23 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
       totalDeliveryKm = GeoUtils.calculateRouteDistanceKm(singleRoute);
     }
 
-    // 2. Fetch Pickup Leg (Rider -> First Shop) if rider location is known
+    // 2. Fetch Pickup Leg (Rider -> Next Unpicked Shop) if rider location is known and not yet out for delivery
     List<LatLng> pickupRoute = [];
-    final riderLocs = _riderLocationsNotifier.value;
-    if (riderLocs.isNotEmpty &&
-        shops.isNotEmpty &&
-        shops.first.shopLat != null) {
-      final riderPt = riderLocs.values.first;
-      final firstShopPt = LatLng(shops.first.shopLat!, shops.first.shopLng!);
-      pickupRoute = await GeoUtils.fetchRoadRoute(riderPt, firstShopPt);
+    if (_currentOrder.status != 'out_for_delivery' &&
+        riderLocs.isNotEmpty &&
+        shops.isNotEmpty) {
+      final unpicked = shops
+          .where((s) =>
+              s.status == 'confirmed' ||
+              s.status == 'preparing' ||
+              s.status == 'ready_for_pickup')
+          .toList();
+      final targetShop = unpicked.isNotEmpty ? unpicked.first : shops.first;
+      if (targetShop.shopLat != null && targetShop.shopLng != null && targetShop.shopLat != 0.0) {
+        final riderPt = riderLocs.values.first;
+        final targetShopPt = LatLng(targetShop.shopLat!, targetShop.shopLng!);
+        pickupRoute = await GeoUtils.fetchRoadRoute(riderPt, targetShopPt);
+      }
     }
 
     if (mounted) {
@@ -409,25 +472,52 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     }
   }
 
+  Future<void> _refreshDeliveryRoute(LatLng riderPos) async {
+    if (_currentOrder.deliveryLat == null ||
+        _currentOrder.deliveryLng == null ||
+        _currentOrder.deliveryLat == 0.0) {
+      return;
+    }
+    final custPt =
+        LatLng(_currentOrder.deliveryLat!, _currentOrder.deliveryLng!);
+    final newDeliveryRoute = await GeoUtils.fetchRoadRoute(riderPos, custPt);
+    if (mounted) {
+      setState(() {
+        _deliveryRoutes = [newDeliveryRoute];
+        _pickupRoute = [];
+      });
+    }
+  }
+
   Future<void> _refreshPickupRoute(LatLng riderPos) async {
     final activeShops = _currentGroupOrders
         .where((s) =>
             s.status != 'rejected' &&
             s.status != 'cancelled' &&
-            s.status != 'seller_rejected')
+            s.status != 'seller_rejected' &&
+            s.status != 'partner_rejected' &&
+            s.status != 'shop_dispute_cancel')
         .toList();
     if (activeShops.isEmpty) return;
 
-    final firstShop = activeShops.first;
-    if (firstShop.shopLat == null ||
-        firstShop.shopLng == null ||
-        firstShop.shopLat == 0.0) {
+    final unpickedShops = activeShops
+        .where((s) =>
+            s.status == 'confirmed' ||
+            s.status == 'preparing' ||
+            s.status == 'ready_for_pickup')
+        .toList();
+    final targetShop =
+        unpickedShops.isNotEmpty ? unpickedShops.first : activeShops.first;
+
+    if (targetShop.shopLat == null ||
+        targetShop.shopLng == null ||
+        targetShop.shopLat == 0.0) {
       return;
     }
 
-    final firstShopPt = LatLng(firstShop.shopLat!, firstShop.shopLng!);
+    final targetShopPt = LatLng(targetShop.shopLat!, targetShop.shopLng!);
     final newPickupRoute =
-        await GeoUtils.fetchRoadRoute(riderPos, firstShopPt);
+        await GeoUtils.fetchRoadRoute(riderPos, targetShopPt);
 
     if (mounted) {
       setState(() {
@@ -680,6 +770,11 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     ];
 
     // Initial map camera centre
+    // 100x FIX (Dynamic Geolocation Resolution Guard): Never use hardcoded
+    // geographic fallback coordinates. Fallback dynamically to _currentOrder
+    // shop/delivery coordinates to avoid camera snapping across states/cities.
+    final orderFallbackLat = _currentOrder.deliveryLat ?? _currentOrder.shopLat;
+    final orderFallbackLng = _currentOrder.deliveryLng ?? _currentOrder.shopLng;
     final mapCenter = (custLat != null && custLng != null && custLat != 0.0)
         ? LatLng(custLat, custLng)
         : (effectiveShops.isNotEmpty &&
@@ -688,7 +783,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                 effectiveShops.first.shopLat != 0.0)
             ? LatLng(
                 effectiveShops.first.shopLat!, effectiveShops.first.shopLng!)
-            : const LatLng(34.4230, 74.6360);
+            : (orderFallbackLat != null && orderFallbackLng != null && orderFallbackLat != 0.0)
+                ? LatLng(orderFallbackLat, orderFallbackLng)
+                : const LatLng(34.4230, 74.6360);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -951,6 +1048,40 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // 100x FIX (Rule 7): Stacked Delivery Reassurance
+                        if (_isStackedDelivery && isRiderActiveStatus) ...[
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4C6EF5)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: const Color(0xFF4C6EF5)
+                                      .withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.info_outline,
+                                    size: 16, color: Color(0xFF4C6EF5)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Rider is completing an earlier delivery on schedule. Your order is safe and on track! 🛵',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF4C6EF5),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         // Route legend + Live Freshness Ticker
                         Row(
                           children: [

@@ -20,6 +20,7 @@ import 'modules/finance_admin_page.dart';
 import 'modules/settings_admin_page.dart';
 import 'modules/analytics_admin_page.dart';
 import 'modules/complaints_admin_page.dart';
+import 'platform/admin_product_management_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -216,6 +217,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           visible: rbac.isSuperAdmin || rbac.can('orders.view'),
         ),
         _NavDef(
+          icon: Icons.inventory_2_outlined,
+          activeIcon: Icons.inventory_2_rounded,
+          label: 'Products',
+          visible: rbac.isSuperAdmin ||
+              rbac.can('products.manage') ||
+              rbac.can('products.view') ||
+              rbac.can('products.create'),
+        ),
+        _NavDef(
           icon: Icons.verified_user_outlined,
           activeIcon: Icons.verified_user_rounded,
           label: 'KYC',
@@ -359,6 +369,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   Widget _buildScreen(String label, String adminName, RbacProvider rbac) {
     return switch (label) {
       'Home' => OverviewAdminPage(adminName: adminName),
+      'Products' => const AdminProductManagementPage(),
       'Orders' => const OrdersAdminPage(),
       'Users' => ChangeNotifierProvider.value(
           value: rbac, child: const UsersAdminPage()),

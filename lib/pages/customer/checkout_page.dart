@@ -74,6 +74,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      PlatformConfigProvider.instance?.load();
       _validateStockPreCheckout();
       _fetchActiveGroupState();
     });
@@ -595,6 +596,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
+
+    // 100x PRELAUNCH FIX: Empty cart guard
+    if (cart.items.isEmpty || cart.shops.isEmpty) {
+      throw Exception('Your cart is empty. Please add items before ordering.');
+    }
+
+    // 100x PRELAUNCH FIX: Delivery coordinates guard
+    if (location.currentLocation == null ||
+        location.currentLocation?.latitude == null ||
+        location.currentLocation?.longitude == null ||
+        location.currentAddress.trim().isEmpty) {
+      throw Exception('Please set your delivery address before placing an order.');
+    }
+
     // Capture coupon ID & discount before any await to avoid BuildContext-across-async-gaps warning
     final couponProv = context.read<CouponProvider>();
 
@@ -624,6 +639,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     List<String> uploadedPaths = [];
 
     try {
+      // 100x Dynamic Config Freshness Guard: Ensure dynamic platform config is loaded
+      if (PlatformConfigProvider.instance != null) {
+        await PlatformConfigProvider.instance!.load();
+      }
+
       // 0. Self-Dealing Guard (Anti-Sybil / Fraud Prevention)
       for (final shop in cart.shops) {
         if (shop.sellerId == auth.currentUserId) {
@@ -1096,6 +1116,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
         } catch (e) {
           debugPrint('Non-critical pre-checkout timer restart: $e');
         }
+      }
+
+      // 100x PRELAUNCH FIX: Zero-amount checkout guard
+      final totalPayable = allOrders.fold<double>(
+        0.0,
+        (sum, o) => sum + ((o['grand_total_collected'] as num?)?.toDouble() ?? 0.0),
+      );
+      if (totalPayable < PaymentConfig.minimumOrderValue) {
+        throw Exception(
+          'Order total after discount is ₹${totalPayable.toStringAsFixed(2)}. Minimum payable amount is ₹${PaymentConfig.minimumOrderValue.toStringAsFixed(0)}.',
+        );
       }
 
       // Execute atomic transaction RPC

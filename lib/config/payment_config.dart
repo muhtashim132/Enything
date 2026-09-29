@@ -4,10 +4,10 @@
 //
 // ── HOW FEES WORK (for your reference) ──────────────────────────────────────
 //
-//  [platformFee] = ₹20 flat per order, shown as "Handling Fee" to customer.
+//  [platformFee] = ₹15 flat per order, shown as "Handling Fee" to customer.
 //   → This covers Enything's app operations PLUS absorbs the Razorpay gateway fee.
 //   → This allows sellers to receive exactly 95% of their item price with no hidden cuts.
-//   → This is GST-INCLUSIVE at 18%. The GST inside = ₹20 - ₹20/1.18 = ₹3.05
+//   → This is GST-INCLUSIVE at 18%. The GST inside = ₹15 - ₹15/1.18 = ₹2.29
 //
 //  Enything's commission on item sales is pure 5%.
 //  It is exactly [TaxConfig.enythingTargetMarginPercent] (5%).
@@ -20,7 +20,9 @@ class PaymentConfig {
 
   /// Handling / platform fee per order. Shown as "Handling Fee" in bill.
   /// 18% GST is embedded in this amount (extracted for accounting).
-  static const double platformFee = 20.0;
+  /// MUST match live `platform_config.platform_fee` DB value to prevent
+  /// checkout spoofing exceptions during config load race.
+  static const double platformFee = 15.0;
 
   /// Flat delivery fee per cart/order (covers 1, 2, or 3 shops in cart).
   static const double deliveryFee = 20.0;
@@ -37,10 +39,12 @@ class PaymentConfig {
   static const double minimumOrderValue = 1.0;
 
   /// Orders below this threshold attract a small-cart fee.
-  static const double smallCartThreshold = 99.0;
+  /// MUST match live `platform_config.small_cart_threshold` DB value.
+  static const double smallCartThreshold = 199.0;
 
   /// Small-cart surcharge (GST NOT applicable — it's a deterrent fee).
-  static const double smallCartFee = 15.0;
+  /// MUST match live `platform_config.small_cart_fee` DB value.
+  static const double smallCartFee = 25.0;
 
   // ── Weight & Item Limits ──────────────────────────────────────────────────
 

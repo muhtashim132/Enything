@@ -395,6 +395,11 @@ class OrderModel {
     String? couponId,
     double? couponDiscount,
     String? paymentStatus,
+    // C2 FIX: These time fields were hardcoded to original — any copyWith update was silently dropped
+    DateTime? arrivedAtShopTime,
+    DateTime? orderReadyTime,
+    DateTime? acceptanceDeadline,
+    DateTime? paymentDeadline,
   }) {
     return OrderModel(
       id: id,
@@ -421,12 +426,12 @@ class OrderModel {
       cancelledReason: cancelledReason ?? this.cancelledReason,
       rejectionMessage: rejectionMessage ?? this.rejectionMessage,
       cartGroupId: cartGroupId,
-      acceptanceDeadline: acceptanceDeadline,
-      paymentDeadline: paymentDeadline,
+      acceptanceDeadline: acceptanceDeadline ?? this.acceptanceDeadline,
+      paymentDeadline: paymentDeadline ?? this.paymentDeadline,
       sellerAccepted: sellerAccepted ?? this.sellerAccepted,
       partnerAccepted: partnerAccepted ?? this.partnerAccepted,
-      arrivedAtShopTime: arrivedAtShopTime,
-      orderReadyTime: orderReadyTime,
+      arrivedAtShopTime: arrivedAtShopTime ?? this.arrivedAtShopTime,
+      orderReadyTime: orderReadyTime ?? this.orderReadyTime,
       waitTimePenalty: waitTimePenalty ?? this.waitTimePenalty,
       waitTimeDisputed: waitTimeDisputed ?? this.waitTimeDisputed,
       hasCustomerRated: hasCustomerRated ?? this.hasCustomerRated,
@@ -510,6 +515,8 @@ class OrderModel {
         return 'Shop Declined';
       case 'partner_rejected':
         return 'Rider Declined';
+      case 'payment_failed':
+        return 'Payment Failed';
       // Legacy statuses (backward compat)
       case 'seller_accepted':
         return 'Shop Accepted';

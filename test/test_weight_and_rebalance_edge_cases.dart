@@ -119,10 +119,10 @@ void main() {
   // Scenario: Cart with 2 active shops left (Subtotal: ₹6,166, Weight: 0.52kg)
   // Active Shop 1: ₹167 item, 0.02kg
   // Active Shop 2: ₹5999 item, 0.50kg
-  final activeWeight = 0.02 + 0.50; // 0.52 kg
+  const activeWeight = 0.02 + 0.50; // 0.52 kg
   final isHeavy = activeWeight > heavyThreshold;
   final heavyFee = isHeavy ? heavyFeePerKg * (activeWeight - heavyThreshold).ceil() : 0.0;
-  final isSmall = (167.0 + 5999.0) < 99.0;
+  const isSmall = (167.0 + 5999.0) < 99.0;
   final smallFee = isSmall ? 15.0 : 0.0;
   const baseDelivery = 20.0;
   const legSurcharge = 20.0;
@@ -132,13 +132,13 @@ void main() {
 
   // Shop 1 allocations:
   final shop1Del = (baseDelivery + smallFee + heavyFee) * (1.0 + deliveryGstRate); // 20 * 1.18 = 23.60
-  final shop1Plat = platformFee; // 15.0
-  final shop1ItemGst = 167.0 * 0.05; // 8.35
+  const shop1Plat = platformFee; // 15.0
+  const shop1ItemGst = 167.0 * 0.05; // 8.35
   final shop1Grand = 167.0 + shop1ItemGst + shop1Plat + shop1Del; // 167 + 8.35 + 15 + 23.60 = 213.95
 
   // Shop 2 allocations:
-  final shop2Del = legSurcharge * (1.0 + deliveryGstRate); // 20 * 1.18 = 23.60
-  final shop2ItemGst = 5999.0 * 0.18; // 1079.82
+  const shop2Del = legSurcharge * (1.0 + deliveryGstRate); // 20 * 1.18 = 23.60
+  const shop2ItemGst = 5999.0 * 0.18; // 1079.82
   final shop2Grand = 5999.0 + shop2ItemGst + shop2Del; // 5999 + 1079.82 + 23.60 = 7102.42
 
   final groupTotal = shop1Grand + shop2Grand;

@@ -258,14 +258,67 @@ class _CustomersTabState extends State<_CustomersTab> {
 
   Future<void> _fetch() async {
     try {
-      // All users in the database are customers (even if their primary role is seller or rider).
-      // Fetch all profiles so that sellers/riders also appear in the Customers list.
-      final res = await _db
-          .from('profiles')
-          .select()
-          .order('created_at', ascending: false)
-          .limit(100);
-      _users = List<Map<String, dynamic>>.from(res);
+      List<Map<String, dynamic>> customerList = [];
+      bool rpcSuccess = false;
+
+      // 1. Try dedicated high-performance RPC (strictly pure customers)
+      try {
+        final rpcRes = await _db.rpc('admin_get_all_customers');
+        if (rpcRes != null && rpcRes is List) {
+          customerList = List<Map<String, dynamic>>.from(rpcRes);
+          rpcSuccess = true;
+        }
+      } catch (rpcError) {
+        debugPrint('admin_get_all_customers RPC notice (falling back): $rpcError');
+      }
+
+      // 2. Resilient fallback: direct profiles query with strict role exclusion
+      if (!rpcSuccess) {
+        final res = await _db
+            .from('profiles')
+            .select()
+            .or('role.eq.customer,role.is.null')
+            .order('created_at', ascending: false)
+            .limit(200);
+
+        final rawProfiles = List<Map<String, dynamic>>.from(res);
+
+        // Fetch registered shop owners, riders, and admins to prevent multi-role crossover
+        final nonCustomerIds = <String>{};
+        try {
+          final shopsRes = await _db.from('shops').select('seller_id');
+          for (final s in (shopsRes as List)) {
+            final sid = s['seller_id']?.toString();
+            if (sid != null && sid.isNotEmpty) nonCustomerIds.add(sid);
+          }
+        } catch (_) {}
+
+        try {
+          final ridersRes = await _db.from('delivery_partners').select('id');
+          for (final r in (ridersRes as List)) {
+            final rid = r['id']?.toString();
+            if (rid != null && rid.isNotEmpty) nonCustomerIds.add(rid);
+          }
+        } catch (_) {}
+
+        try {
+          final adminsRes = await _db.from('admin_users').select('id');
+          for (final a in (adminsRes as List)) {
+            final aid = a['id']?.toString();
+            if (aid != null && aid.isNotEmpty) nonCustomerIds.add(aid);
+          }
+        } catch (_) {}
+
+        customerList = rawProfiles.where((p) {
+          final role = (p['role'] ?? 'customer').toString().toLowerCase();
+          if (role != 'customer') return false;
+          final id = p['id']?.toString() ?? '';
+          if (nonCustomerIds.contains(id)) return false;
+          return true;
+        }).toList();
+      }
+
+      _users = customerList;
       _filtered = _users;
     } catch (e) {
       debugPrint('Error fetching customers: $e');
@@ -279,14 +332,25 @@ class _CustomersTabState extends State<_CustomersTab> {
   }
 
   void _filter() {
-    final q = _searchCtrl.text.toLowerCase();
+    final q = _searchCtrl.text.toLowerCase().trim();
     setState(() {
       _filtered = _users.where((u) {
         final name = (u['full_name'] ?? '').toString().toLowerCase();
         final phone = (u['phone'] ?? '').toString().toLowerCase();
-        return name.contains(q) || phone.contains(q);
+        final email = (u['email'] ?? '').toString().toLowerCase();
+        return name.contains(q) || phone.contains(q) || email.contains(q);
       }).toList();
     });
+  }
+
+  Future<void> _toggle(String id, bool cur) async {
+    try {
+      await _db.rpc('admin_toggle_active',
+          params: {'p_target_id': id, 'p_type': 'customer', 'p_is_active': !cur});
+      _fetch();
+    } catch (e) {
+      debugPrint('Error toggling customer active status: $e');
+    }
   }
 
   Future<void> _promoteToAdmin(Map<String, dynamic> user) async {
@@ -396,6 +460,11 @@ class _CustomersTabState extends State<_CustomersTab> {
   @override
   Widget build(BuildContext context) {
     final rbac = context.watch<RbacProvider>();
+    final isSuperAdmin = rbac.isSuperAdmin;
+    final canSuspend = isSuperAdmin ||
+        rbac.can('customers.block') ||
+        rbac.can('customers.suspend');
+
     return Column(
       children: [
         _SearchBar(_searchCtrl, 'Search customers...'),
@@ -421,40 +490,59 @@ class _CustomersTabState extends State<_CustomersTab> {
                                   DateTime.parse(u['created_at'].toString())
                                       .toIST())
                               : '';
+                          final isActive = u['is_active'] != false;
+                          final totalOrders =
+                              (u['total_orders'] as num?)?.toInt() ?? 0;
+
                           return _UserCard(
                             name: u['full_name'] ?? 'Unknown',
-                            sub: u['phone'] ?? u['email'] ?? '',
-                            badge: (u['role'] ?? 'customer').toString(),
-                            badgeColor: AdminColors.info,
+                            sub: u['phone'] != null &&
+                                    u['phone'].toString().isNotEmpty
+                                ? u['phone'].toString()
+                                : (u['email'] ?? ''),
+                            badge: isActive ? 'Customer' : 'Suspended',
+                            badgeColor:
+                                isActive ? AdminColors.info : AdminColors.danger,
+                            extraBadge: totalOrders > 0
+                                ? '$totalOrders ${totalOrders == 1 ? 'Order' : 'Orders'}'
+                                : null,
+                            extraBadgeColor: AdminColors.primary,
                             joined: joined,
                             avatarUrl: u['avatar_url'],
-                            action: rbac.isSuperAdmin
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(
-                                            Icons.admin_panel_settings_rounded,
-                                            color: AdminColors.primary,
-                                            size: 20),
-                                        tooltip: 'Promote to Admin',
-                                        onPressed: () => _promoteToAdmin(u),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(
-                                            Icons.delete_outline_rounded,
-                                            color: AdminColors.danger,
-                                            size: 20),
-                                        tooltip: 'Delete User',
-                                        onPressed: () => _deleteUser(
-                                            context,
-                                            u['id'].toString(),
-                                            u['full_name'] ?? 'Unknown',
-                                            _fetch),
-                                      ),
-                                    ],
-                                  )
-                                : null,
+                            action: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (canSuspend)
+                                  Switch(
+                                    value: isActive,
+                                    activeThumbColor: AdminColors.success,
+                                    onChanged: (_) =>
+                                        _toggle(u['id'].toString(), isActive),
+                                  ),
+                                if (isSuperAdmin) ...[
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.admin_panel_settings_rounded,
+                                        color: AdminColors.primary,
+                                        size: 20),
+                                    tooltip: 'Promote to Admin',
+                                    onPressed: () => _promoteToAdmin(u),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: AdminColors.danger,
+                                        size: 20),
+                                    tooltip: 'Delete User',
+                                    onPressed: () => _deleteUser(
+                                        context,
+                                        u['id'].toString(),
+                                        u['full_name'] ?? 'Unknown',
+                                        _fetch),
+                                  ),
+                                ],
+                              ],
+                            ),
                           )
                               .animate()
                               .fadeIn(delay: Duration(milliseconds: i * 40))
@@ -550,6 +638,7 @@ class _SellersTabState extends State<_SellersTab> {
     final isSuperAdmin = rbac.isSuperAdmin;
     final canApprove = isSuperAdmin || rbac.can('sellers.approve');
     final canSuspend = isSuperAdmin || rbac.can('sellers.suspend');
+    final canViewFinance = isSuperAdmin || rbac.can('finance.view');
 
     return Column(
       children: [
@@ -606,20 +695,21 @@ class _SellersTabState extends State<_SellersTab> {
                             action: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                IconButton(
-                                  icon: const Icon(
-                                      Icons.receipt_long_rounded,
-                                      size: 20),
-                                  color: AdminColors.primary,
-                                  tooltip: 'CA Report',
-                                  onPressed: () {
-                                    Navigator.pushNamed(
-                                      context,
-                                      AppRoutes.caReport,
-                                      arguments: {'shopId': s['id'].toString()},
-                                    );
-                                  },
-                                ),
+                                if (canViewFinance)
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.receipt_long_rounded,
+                                        size: 20),
+                                    color: AdminColors.primary,
+                                    tooltip: 'CA Report',
+                                    onPressed: () {
+                                      Navigator.pushNamed(
+                                        context,
+                                        AppRoutes.caReport,
+                                        arguments: {'shopId': s['id'].toString()},
+                                      );
+                                    },
+                                  ),
                                 if (canApprove)
                                   IconButton(
                                     icon: const Icon(

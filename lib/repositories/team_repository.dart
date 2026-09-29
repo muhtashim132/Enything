@@ -8,40 +8,80 @@ class TeamRepository {
 
   // ── Fetch all team members ──────────────────────────────────
   Future<List<AdminUserModel>> fetchTeamMembers() async {
-    final data = await _db
-        .from('admin_users')
-        .select('*, roles(*)')
-        .order('created_at', ascending: false);
-    return (data as List)
-        .map((u) => AdminUserModel.fromMap(u as Map<String, dynamic>))
-        .toList();
+    try {
+      final data = await _db
+          .from('admin_users')
+          .select('*, roles(*)')
+          .order('created_at', ascending: false);
+      return (data as List)
+          .map((u) => AdminUserModel.fromMap(u as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      // Fallback: two-step query
+      final usersData = await _db
+          .from('admin_users')
+          .select('*')
+          .order('created_at', ascending: false);
+      final rolesData = await _db.from('roles').select('*');
+      final Map<String, Map<String, dynamic>> rolesById = {
+        for (final r in (rolesData as List))
+          (r['id'] as String): r as Map<String, dynamic>,
+      };
+
+      return (usersData as List).map((u) {
+        final map = Map<String, dynamic>.from(u as Map<String, dynamic>);
+        final rId = map['role_id'] as String?;
+        if (rId != null && rolesById.containsKey(rId)) {
+          map['roles'] = rolesById[rId];
+        }
+        return AdminUserModel.fromMap(map);
+      }).toList();
+    }
   }
 
   // ── Fetch single team member with permissions ───────────────
   Future<AdminUserModel?> fetchMemberById(String userId) async {
-    final data = await _db
-        .from('admin_users')
-        .select('*, roles(*)')
-        .eq('id', userId)
-        .maybeSingle();
+    Map<String, dynamic>? data;
+    try {
+      data = await _db
+          .from('admin_users')
+          .select('*, roles(*)')
+          .eq('id', userId)
+          .maybeSingle();
+    } catch (_) {
+      final u = await _db
+          .from('admin_users')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+      if (u != null) {
+        data = Map<String, dynamic>.from(u);
+        final rId = data['role_id'] as String?;
+        if (rId != null) {
+          final r = await _db.from('roles').select('*').eq('id', rId).maybeSingle();
+          if (r != null) data['roles'] = r;
+        }
+      }
+    }
     if (data == null) return null;
 
     final member = AdminUserModel.fromMap(data);
 
     // Load effective permissions
-    final perms =
-        await _db.rpc('get_user_permissions', params: {'p_user_id': userId});
-    final permCodes = (perms as List).map((r) => r['code'] as String).toList();
+    try {
+      final perms =
+          await _db.rpc('get_user_permissions', params: {'p_user_id': userId});
+      final permCodes = (perms as List).map((r) => r['code'] as String).toList();
 
-    // Fetch full permission objects for those codes
-    if (permCodes.isNotEmpty) {
-      final permData =
-          await _db.from('permissions').select().inFilter('code', permCodes);
-      final permList = (permData as List)
-          .map((p) => PermissionModel.fromMap(p as Map<String, dynamic>))
-          .toList();
-      return member.copyWith(effectivePermissions: permList);
-    }
+      if (permCodes.isNotEmpty) {
+        final permData =
+            await _db.from('permissions').select().inFilter('code', permCodes);
+        final permList = (permData as List)
+            .map((p) => PermissionModel.fromMap(p as Map<String, dynamic>))
+            .toList();
+        return member.copyWith(effectivePermissions: permList);
+      }
+    } catch (_) {}
     return member;
   }
 
@@ -53,9 +93,10 @@ class TeamRepository {
     required String actorRole,
   }) async {
     try {
-      await _db
-          .from('admin_users')
-          .update({'role_id': roleId}).eq('id', userId);
+      await _db.rpc('admin_assign_member_role', params: {
+        'p_user_id': userId,
+        'p_role_id': roleId,
+      });
     } on PostgrestException catch (e) {
       if (e.code == '23503') {
         throw Exception('The specified role does not exist or is invalid.');
@@ -72,6 +113,28 @@ class TeamRepository {
     );
   }
 
+  // ── Remove team member permanently ──────────────────────────
+  Future<void> removeMember({
+    required String userId,
+    required String actorId,
+    required String actorRole,
+  }) async {
+    if (userId == actorId) {
+      throw Exception('Cannot remove your own account from the team.');
+    }
+    await _db.rpc('admin_remove_team_member', params: {
+      'p_user_id': userId,
+    });
+    await _logAudit(
+      actorId: actorId,
+      actorRole: actorRole,
+      action: 'team_member_removed',
+      entityType: 'admin_user',
+      entityId: userId,
+      metadata: {'user_id': userId},
+    );
+  }
+
   // ── Suspend team member ─────────────────────────────────────
   Future<void> suspendMember({
     required String userId,
@@ -79,8 +142,12 @@ class TeamRepository {
     required String actorRole,
     String? reason,
   }) async {
+    if (userId == actorId) {
+      throw Exception('Cannot suspend your own account.');
+    }
     await _db.from('admin_users').update({
       'is_suspended': true,
+      'is_active': false,
       'suspended_at': DateTime.now().toIso8601String(),
       'suspended_by': actorId,
     }).eq('id', userId);
@@ -191,6 +258,41 @@ class TeamRepository {
     await _db
         .from('admin_invitations')
         .update({'status': 'revoked'}).eq('id', invitationId);
+  }
+
+  // ── Delete invitation permanently ───────────────────────────
+  Future<void> deleteInvitation(String invitationId) async {
+    await _db
+        .from('admin_invitations')
+        .delete()
+        .eq('id', invitationId);
+  }
+
+  // ── Add team member by phone ─────────────────────────────────
+  Future<Map<String, dynamic>> addTeamMemberByPhone({
+    required String phone,
+    required String fullName,
+    required String roleId,
+    required String adminPassword,
+    required String actorId,
+    required String actorRole,
+  }) async {
+    final result = await _db.rpc('admin_add_team_member_by_phone', params: {
+      'p_phone': phone,
+      'p_full_name': fullName,
+      'p_role_id': roleId,
+      'p_admin_password': adminPassword,
+    });
+
+    await _logAudit(
+      actorId: actorId,
+      actorRole: actorRole,
+      action: 'team_member_added_by_phone',
+      entityType: 'admin_user',
+      metadata: {'phone': phone, 'role_id': roleId, 'full_name': fullName},
+    );
+
+    return Map<String, dynamic>.from(result as Map);
   }
 
   Future<void> _logAudit({
