@@ -36,3 +36,12 @@
 # UCrop
 -keep class com.yalantis.ucrop.** { *; }
 -dontwarn com.yalantis.ucrop.**
+
+# Flutter Engine & AndroidX Insets (R8 Full Mode safety)
+-keep class io.flutter.embedding.** { *; }
+-keep class androidx.activity.** { *; }
+-keep class androidx.core.view.** { *; }
+
+# Google Play Core (deferred components referenced by Flutter embedding)
+-dontwarn com.google.android.play.core.**
+
