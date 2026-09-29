@@ -97,3 +97,9 @@ test_mockup.png
 # Binary release bundles
 *.aab
 *.apk
+
+# Xcode user state
+*.xcuserstate
+*.xcuserdatad
+
+/test_cleanup_leftovers.dart
