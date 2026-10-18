@@ -17,7 +17,6 @@
 -dontwarn com.google.android.gms.auth.api.credentials.**
 
 # Firebase Messaging
--keepattributes *Annotation*
 -dontwarn com.google.firebase.**
 -keep class com.google.firebase.** { *; }
 

@@ -18,6 +18,7 @@ import '../../utils/responsive_layout.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
 import '../../services/gst_recommendation_engine.dart';
+import '../../utils/haptic_utils.dart';
 
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
@@ -62,6 +63,10 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _isDirty = false;
   final Set<String> _removedVariantImageUrls = {};
 
+  // ── Shop-Scoped Menu Categories ──────────────────────────────────────────
+  List<String> _existingMenuCategories = [];
+  bool _loadingMenuCategories = false;
+
   // ── GST Recommendation Engine ────────────────────────────────────────────
   GstRecommendation? _gstRecommendation;
   double? _gstRateOverride;
@@ -84,6 +89,9 @@ class _AddProductPageState extends State<AddProductPage> {
   void initState() {
     super.initState();
     _shopId = widget.existingProduct?.shopId ?? widget.initialShopId;
+    if (_shopId != null && _shopId!.isNotEmpty) {
+      _fetchExistingMenuCategories();
+    }
     // Pre-load DB keyword rules so first recommendation is instant
     GstRecommendationEngine.instance.ensureLoaded();
     _fetchShopId();
@@ -211,9 +219,484 @@ class _AddProductPageState extends State<AddProductPage> {
               : _allowedCategories.first;
         }
       });
+      _fetchExistingMenuCategories();
     } catch (e) {
       debugPrint('Shop fetch error: $e');
     }
+  }
+
+  /// 100x Shop-Scoped Menu Category Fetcher
+  /// Fetches all distinct, non-deleted menu_category values for this particular shop.
+  /// Even if only a single product has a distinct menu_category, it is captured and made available.
+  Future<void> _fetchExistingMenuCategories() async {
+    final targetShopId =
+        _shopId ?? widget.existingProduct?.shopId ?? widget.initialShopId;
+    if (targetShopId == null || targetShopId.isEmpty) return;
+
+    if (mounted) setState(() => _loadingMenuCategories = true);
+
+    try {
+      // RULE: Products table queries MUST ALWAYS include .eq('is_deleted', false)
+      final resp = await _supabase
+          .from('products')
+          .select('menu_category')
+          .eq('shop_id', targetShopId)
+          .eq('is_deleted', false)
+          .not('menu_category', 'is', null);
+
+      final Set<String> seen = {};
+      final List<String> categories = [];
+
+      for (final item in resp as List) {
+        final raw = item['menu_category']?.toString() ?? '';
+        final trimmed = raw.trim();
+        if (trimmed.isNotEmpty && seen.add(trimmed.toLowerCase())) {
+          categories.add(trimmed);
+        }
+      }
+
+      // Also ensure existing product's current category is included if editing
+      if (widget.existingProduct?.menuCategory != null) {
+        final current = widget.existingProduct!.menuCategory!.trim();
+        if (current.isNotEmpty && seen.add(current.toLowerCase())) {
+          categories.add(current);
+        }
+      }
+
+      // Case-insensitive alphabetical sort
+      categories.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+      if (mounted) {
+        setState(() {
+          _existingMenuCategories = categories;
+          _loadingMenuCategories = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching existing menu categories: $e');
+      if (mounted) {
+        setState(() => _loadingMenuCategories = false);
+      }
+    }
+  }
+
+  void _showMenuCategoryPickerSheet() {
+    if (_existingMenuCategories.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String filterQuery = '';
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final filtered = _existingMenuCategories.where((c) {
+              return c.toLowerCase().contains(filterQuery.toLowerCase());
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.65,
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Menu / Section Categories',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${_existingMenuCategories.length} total',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search categories...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        suffixIcon: filterQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  setSheetState(() => filterQuery = '');
+                                },
+                              )
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setSheetState(() => filterQuery = val);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.category_outlined,
+                                    size: 40, color: Colors.grey[400]),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No category matching "$filterQuery"',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const Divider(
+                              height: 1,
+                              indent: 20,
+                              endIndent: 20,
+                            ),
+                            itemBuilder: (ctx, idx) {
+                              final cat = filtered[idx];
+                              final isSelected = _menuCategoryController.text
+                                      .trim()
+                                      .toLowerCase() ==
+                                  cat.toLowerCase();
+                              return ListTile(
+                                leading: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: (isSelected
+                                            ? AppColors.primary
+                                            : Colors.grey[200])!
+                                        .withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.restaurant_menu_rounded,
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : Colors.grey[700],
+                                    size: 18,
+                                  ),
+                                ),
+                                title: Text(
+                                  cat,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : AppColors.textPrimary,
+                                  ),
+                                ),
+                                trailing: isSelected
+                                    ? const Icon(
+                                        Icons.check_circle_rounded,
+                                        color: AppColors.primary,
+                                        size: 22,
+                                      )
+                                    : null,
+                                onTap: () {
+                                  Navigator.pop(ctx);
+                                  HapticUtils.selection();
+                                  setState(() {
+                                    _menuCategoryController.text = cat;
+                                    _markDirty();
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMenuCategorySelector() {
+    final currentText = _menuCategoryController.text.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _menuCategoryController,
+                decoration: InputDecoration(
+                  labelText: 'Menu/Section Category (Optional)',
+                  hintText: 'e.g. Main Course, Beverages, Shirts',
+                  prefixIcon: const Icon(Icons.category_outlined),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_loadingMenuCategories)
+                        const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        )
+                      else ...[
+                        if (currentText.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            tooltip: 'Clear category',
+                            onPressed: () {
+                              _menuCategoryController.clear();
+                              _markDirty();
+                              setState(() {});
+                            },
+                          ),
+                        if (_existingMenuCategories.isNotEmpty)
+                          PopupMenuButton<String>(
+                            icon: const Icon(
+                              Icons.arrow_drop_down_circle_outlined,
+                              color: AppColors.primary,
+                              size: 22,
+                            ),
+                            tooltip: 'Select Existing Category',
+                            onSelected: (val) {
+                              HapticUtils.selection();
+                              _menuCategoryController.text = val;
+                              _markDirty();
+                              setState(() {});
+                            },
+                            itemBuilder: (ctx) {
+                              return _existingMenuCategories.map((cat) {
+                                final isSel = currentText.toLowerCase() ==
+                                    cat.toLowerCase();
+                                return PopupMenuItem<String>(
+                                  value: cat,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.restaurant_menu_rounded,
+                                        size: 16,
+                                        color: isSel
+                                            ? AppColors.primary
+                                            : Colors.grey[600],
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          cat,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: isSel
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                            color: isSel
+                                                ? AppColors.primary
+                                                : AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isSel)
+                                        const Icon(
+                                          Icons.check_rounded,
+                                          color: AppColors.primary,
+                                          size: 18,
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              }).toList();
+                            },
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+                onChanged: (_) {
+                  _markDirty();
+                  setState(() {});
+                },
+              ),
+            ),
+          ],
+        ),
+
+        // Quick-Pick Chips or Empty Hint
+        if (_existingMenuCategories.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Existing in this shop:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${_existingMenuCategories.length}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_existingMenuCategories.length > 5)
+                GestureDetector(
+                  onTap: _showMenuCategoryPickerSheet,
+                  child: const Text(
+                    'View all',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _existingMenuCategories.map((cat) {
+                final isSelected =
+                    currentText.toLowerCase() == cat.toLowerCase();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ActionChip(
+                    avatar: Icon(
+                      isSelected
+                          ? Icons.check_circle_rounded
+                          : Icons.label_outline_rounded,
+                      size: 14,
+                      color: isSelected ? Colors.white : AppColors.primary,
+                    ),
+                    label: Text(
+                      cat,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        color:
+                            isSelected ? Colors.white : AppColors.textPrimary,
+                      ),
+                    ),
+                    backgroundColor: isSelected
+                        ? AppColors.primary
+                        : AppColors.cardBg,
+                    side: BorderSide(
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.border,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    onPressed: () {
+                      HapticUtils.selection();
+                      setState(() {
+                        if (isSelected) {
+                          _menuCategoryController.clear();
+                        } else {
+                          _menuCategoryController.text = cat;
+                        }
+                        _markDirty();
+                      });
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ] else if (!_loadingMenuCategories) ...[
+          const SizedBox(height: 6),
+          const Text(
+            '💡 Type a category name to create your shop\'s first menu section (e.g., Starters, Main Course, Drinks).',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   void _markDirty() {
@@ -1928,14 +2411,7 @@ class _AddProductPageState extends State<AddProductPage> {
                     ],
 
                     const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _menuCategoryController,
-                      decoration: const InputDecoration(
-                        labelText: 'Menu/Section Category (Optional)',
-                        hintText: 'e.g. Main Course, Beverages, Shirts',
-                        prefixIcon: Icon(Icons.category_outlined),
-                      ),
-                    ),
+                    _buildMenuCategorySelector(),
                   ],
                 ),
                 const SizedBox(height: 16),

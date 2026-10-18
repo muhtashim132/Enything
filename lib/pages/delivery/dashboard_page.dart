@@ -85,6 +85,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   DateTime? _lastBackPressTime;
   final ScrollController _scrollController = ScrollController();
   Set<String> _knownAvailableGroupIds = {};
+  DateTime? _lastEmptyOrdersLogTime;
 
   // FCM foreground message subscription — triggers _loadOrders() on push
   StreamSubscription? _fcmForegroundSub;
@@ -437,7 +438,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     ];
 
     final activeOrders = _myGroups
-        .expand((g) => g.orders)
+        .expand((g) => g.activeOrders)
         .where((o) => activeStatuses.contains(o.status))
         .toList();
 
@@ -513,9 +514,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     // C2: Debounce guard — prevent concurrent load calls but queue the event
     if (_isOrdersLoadInProgress) {
       _needsReload = true;
-      // Phase 8: Prevent pull-to-refresh instant snap
-      while (_isOrdersLoadInProgress) {
+      // Phase 8: Prevent pull-to-refresh instant snap (with 5-second timeout to prevent infinite hangs)
+      int waitTicks = 0;
+      while (_isOrdersLoadInProgress && waitTicks < 50) {
         await Future.delayed(const Duration(milliseconds: 100));
+        waitTicks++;
+      }
+      if (_isOrdersLoadInProgress) {
+        _isOrdersLoadInProgress = false; // Force reset stalled lock
       }
       return;
     }
@@ -635,11 +641,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .where((o) => DateTime.now().difference(o.createdAt).inHours < 24)
           .toList();
 
-      if (filtered.isEmpty) {
-        _supabase.from('app_logs').insert({
-          'message':
-              'Rider load: allAvailable is empty. Query returned ${available.length} rows.'
-        }).catchError((_) => null);
+      if (filtered.isEmpty && _isOnline) {
+        final now = DateTime.now();
+        if (_lastEmptyOrdersLogTime == null ||
+            now.difference(_lastEmptyOrdersLogTime!).inMinutes >= 5) {
+          _lastEmptyOrdersLogTime = now;
+          _supabase.from('app_logs').insert({
+            'message':
+                'Rider load: allAvailable is empty. Query returned ${available.length} rows.'
+          }).catchError((_) => null);
+        }
       }
 
       double tempTodayEarnings = 0.0;
@@ -932,6 +943,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           }
         } catch (_) {}
       }
+      if (!mounted) return false;
 
       // Fetch latest state to ensure order is still available (fast-fail)
       // 100x FIX (Edge Case 5): Also select payment_status to detect
@@ -941,6 +953,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           .select('status, payment_status')
           .eq('id', order.id)
           .maybeSingle();
+      if (!mounted) return false;
       final currentStatus = latest?['status'] as String?;
       final currentPaymentStatus = latest?['payment_status'] as String?;
 
@@ -1526,8 +1539,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         subtitle: 'How was the pickup/drop experience?',
         onSubmit: (rating, review) async {
           await _submitDeliveryRating(
-            orderId: group.orders.first.id,
-            rateeId: group.orders.first.customerId,
+            orderId: group.primaryOrder.id,
+            rateeId: group.primaryOrder.customerId,
             rateeRole: 'customer',
             rating: rating,
             review: review,

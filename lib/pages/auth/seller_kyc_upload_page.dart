@@ -31,6 +31,7 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
   final _bankAccountCtrl = TextEditingController();
   final _ifscCtrl = TextEditingController();
 
+  String? _shopId;
   String? _shopCategory;
   String? _shopName;
   bool _argsRead = false;
@@ -58,29 +59,50 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final catArg = args?['category'] as String?;
-    final shopId = args?['shop_id'] as String?;
+    _shopId = args?['shop_id'] as String?;
 
-    if (catArg != null && catArg.isNotEmpty) {
-      if (mounted) setState(() => _shopCategory = catArg);
-      return;
-    }
+    final userId = context.read<AuthProvider>().currentUserId;
 
-    if (shopId != null && shopId.isNotEmpty) {
+    // Self-healing fallback: If shop_id is not in route arguments, query DB by seller_id!
+    if ((_shopId == null || _shopId!.isEmpty) && userId != null) {
+      try {
+        final res = await _db
+            .from('shops')
+            .select('id, category, name')
+            .eq('seller_id', userId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (res != null && mounted) {
+          setState(() {
+            _shopId = res['id'] as String?;
+            _shopCategory ??= res['category'] as String?;
+            _shopName ??= res['name'] as String?;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading seller shop: $e');
+      }
+    } else if (_shopId != null && _shopId!.isNotEmpty) {
       try {
         final res = await _db
             .from('shops')
             .select('category, name')
-            .eq('id', shopId)
+            .eq('id', _shopId!)
             .maybeSingle();
         if (res != null && mounted) {
           setState(() {
-            _shopCategory = res['category'] as String?;
-            _shopName = res['name'] as String?;
+            _shopCategory ??= res['category'] as String?;
+            _shopName ??= res['name'] as String?;
           });
         }
       } catch (e) {
         debugPrint('Error loading shop category: $e');
       }
+    }
+
+    if (catArg != null && catArg.isNotEmpty && mounted) {
+      setState(() => _shopCategory = catArg);
     }
   }
 
@@ -255,9 +277,28 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
       // Cache route args before async gaps to avoid BuildContext-across-await lint
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      final shopId = args?['shop_id'] as String?;
-      if (shopId == null) {
-        throw Exception('Shop ID not provided. Please restart the app.');
+      String? shopId = _shopId ?? (args?['shop_id'] as String?);
+
+      // Autonomous DB recovery fallback if shop_id is missing from memory/arguments
+      if (shopId == null || shopId.isEmpty) {
+        final shopRes = await _db
+            .from('shops')
+            .select('id, category, name')
+            .eq('seller_id', userId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (shopRes != null) {
+          shopId = shopRes['id'] as String?;
+          _shopId = shopId;
+          _shopCategory ??= shopRes['category'] as String?;
+          _shopName ??= shopRes['name'] as String?;
+        }
+      }
+
+      if (shopId == null || shopId.isEmpty) {
+        throw Exception(
+            'No registered shop found for this seller account. Please register your shop first.');
       }
 
       // Upload Images

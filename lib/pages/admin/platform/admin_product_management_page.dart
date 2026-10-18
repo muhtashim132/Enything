@@ -12,6 +12,7 @@ import '../../seller/add_product_page.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/rbac_provider.dart';
 import '../rbac/forbidden_page.dart';
+import '../../../repositories/audit_repository.dart';
 
 /// Lightweight representation of a shop for admin catalog management.
 class AdminShopItem {
@@ -36,6 +37,30 @@ class AdminShopItem {
     this.sellerPhone,
     this.bannerUrl,
   });
+
+  AdminShopItem copyWith({
+    String? id,
+    String? name,
+    String? category,
+    String? address,
+    bool? isActive,
+    String? sellerId,
+    String? sellerName,
+    String? sellerPhone,
+    String? bannerUrl,
+  }) {
+    return AdminShopItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      address: address ?? this.address,
+      isActive: isActive ?? this.isActive,
+      sellerId: sellerId ?? this.sellerId,
+      sellerName: sellerName ?? this.sellerName,
+      sellerPhone: sellerPhone ?? this.sellerPhone,
+      bannerUrl: bannerUrl ?? this.bannerUrl,
+    );
+  }
 
   factory AdminShopItem.fromMap(Map<String, dynamic> map) {
     final profile = map['profiles'];
@@ -302,6 +327,23 @@ class _AdminProductManagementPageState
           .eq('id', product.id)
           .eq('shop_id', product.shopId);
 
+      // Fire-and-forget audit log
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId != null) {
+        AuditRepository().log(
+          actorId: currentUserId,
+          actorRole: rbac.isSuperAdmin ? 'super_admin' : 'admin',
+          action: newState ? 'product.enabled' : 'product.hidden',
+          entityType: 'product',
+          entityId: product.id,
+          metadata: {
+            'product_name': product.name,
+            'shop_id': product.shopId,
+            'is_available': newState,
+          },
+        );
+      }
+
       _showSnack(
         newState
             ? '✅ "${product.name}" is now Available'
@@ -319,6 +361,321 @@ class _AdminProductManagementPageState
           }
         });
         _showSnack('Failed to update availability: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _toggleShopActive(AdminShopItem shop) async {
+    final rbac = context.read<RbacProvider>();
+    if (!rbac.isSuperAdmin &&
+        !rbac.can('sellers.suspend') &&
+        !rbac.can('shops.manage') &&
+        !rbac.can('products.manage')) {
+      _showSnack('Permission denied: You cannot modify shop status.',
+          isError: true);
+      return;
+    }
+
+    final originalStatus = shop.isActive;
+    final newStatus = !originalStatus;
+
+    // Edge Case: When deactivating an active shop, inspect if in-flight active orders exist
+    if (originalStatus == true) {
+      int activeOrdersCount = 0;
+      try {
+        final activeResp = await _supabase
+            .from('orders')
+            .select('id')
+            .eq('shop_id', shop.id)
+            .inFilter('status', [
+              'confirmed',
+              'preparing',
+              'ready_for_pickup',
+              'out_for_delivery',
+            ]);
+        activeOrdersCount = (activeResp as List).length;
+      } catch (e) {
+        debugPrint('Active orders check note: $e');
+      }
+
+      if (!mounted) return;
+
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AdminColors.surface,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Row(
+            children: [
+              const Icon(Icons.pause_circle_outline_rounded,
+                  color: AdminColors.warning, size: 24),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Pause Restaurant?',
+                    style: AdminStyles.title(size: 16)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to deactivate "${shop.name}"?',
+                style: AdminStyles.body(size: 14, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AdminColors.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: AdminColors.warning.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (activeOrdersCount > 0) ...[
+                      Text(
+                        '⚡ $activeOrdersCount active order(s) currently in progress.',
+                        style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AdminColors.warning),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    Text(
+                      '• Immediately hidden from customer home feeds, search, and nearby shops.\n'
+                      '• Checkout will be blocked for this store.\n'
+                      '• Existing orders in progress can complete delivery safely without interruption.',
+                      style: AdminStyles.caption(
+                          size: 11, color: AdminColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Cancel',
+                  style: AdminStyles.body(color: AdminColors.textMuted)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: AdminColors.danger,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text('Deactivate Restaurant',
+                  style: AdminStyles.body(size: 13, color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+    } else {
+      HapticUtils.selection();
+    }
+
+    if (!mounted) return;
+    HapticUtils.selection();
+
+    // 1. Optimistic Local State Update
+    setState(() {
+      final sIdx = _shops.indexWhere((s) => s.id == shop.id);
+      if (sIdx != -1) {
+        _shops[sIdx] = shop.copyWith(isActive: newStatus);
+      }
+      if (_selectedShop?.id == shop.id) {
+        _selectedShop = _selectedShop!.copyWith(isActive: newStatus);
+      }
+    });
+
+    try {
+      // 2. Invoke RPC admin_toggle_active with fallback to direct table update
+      bool rpcSuccess = false;
+      try {
+        await _supabase.rpc('admin_toggle_active', params: {
+          'p_target_id': shop.id,
+          'p_type': 'shop',
+          'p_is_active': newStatus,
+        });
+        rpcSuccess = true;
+      } catch (rpcErr) {
+        debugPrint('admin_toggle_active RPC fallback to direct update: $rpcErr');
+      }
+
+      if (!rpcSuccess) {
+        await _supabase
+            .from('shops')
+            .update({'is_active': newStatus})
+            .eq('id', shop.id);
+      }
+
+      // 3. Fire-and-forget Audit Log
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId != null) {
+        AuditRepository().log(
+          actorId: currentUserId,
+          actorRole: rbac.isSuperAdmin ? 'super_admin' : 'admin',
+          action: newStatus ? 'shop.activated' : 'shop.deactivated',
+          entityType: 'shop',
+          entityId: shop.id,
+          metadata: {
+            'shop_name': shop.name,
+            'previous_status': originalStatus,
+            'new_status': newStatus,
+          },
+        );
+      }
+
+      _showSnack(
+        newStatus
+            ? '🟢 "${shop.name}" is now Active & Open for Orders'
+            : '⏸️ "${shop.name}" is now Deactivated / Paused',
+        isError: false,
+      );
+    } catch (e) {
+      debugPrint('Error toggling shop status: $e');
+      // Rollback local state on error
+      if (mounted) {
+        setState(() {
+          final sIdx = _shops.indexWhere((s) => s.id == shop.id);
+          if (sIdx != -1) {
+            _shops[sIdx] = shop.copyWith(isActive: originalStatus);
+          }
+          if (_selectedShop?.id == shop.id) {
+            _selectedShop = _selectedShop!.copyWith(isActive: originalStatus);
+          }
+        });
+        _showSnack('Failed to update shop status: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _batchToggleProducts(bool isAvailable) async {
+    if (_selectedShop == null) return;
+    final rbac = context.read<RbacProvider>();
+    if (!rbac.isSuperAdmin && !rbac.can('products.manage')) {
+      _showSnack('Permission denied: You cannot batch modify products.',
+          isError: true);
+      return;
+    }
+
+    final shop = _selectedShop!;
+    final actionLabel =
+        isAvailable ? 'Enable All Products' : 'Hide All Products';
+    final actionDesc = isAvailable
+        ? 'Make all ${_products.length} products in "${shop.name}" Available for purchase?'
+        : 'Hide all ${_products.length} products in "${shop.name}" (mark as Out of Stock)?';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AdminColors.surface,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(actionLabel, style: AdminStyles.title(size: 16)),
+        content: Text(
+          actionDesc,
+          style: AdminStyles.body(size: 13, color: AdminColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child:
+                Text('Cancel', style: AdminStyles.body(color: AdminColors.textMuted)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor:
+                  isAvailable ? AdminColors.success : AdminColors.warning,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(actionLabel,
+                style: AdminStyles.body(size: 13, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+    HapticUtils.medium();
+
+    // Cache previous products state for rollback
+    final previousProducts = List<ProductModel>.from(_products);
+
+    // Optimistic local state update
+    setState(() {
+      _products =
+          _products.map((p) => p.copyWith(isAvailable: isAvailable)).toList();
+    });
+
+    try {
+      int updatedCount = 0;
+      try {
+        final res = await _supabase.rpc('admin_batch_toggle_products', params: {
+          'p_shop_id': shop.id,
+          'p_is_available': isAvailable,
+        });
+        if (res is int) {
+          updatedCount = res;
+        } else if (res is num) {
+          updatedCount = res.toInt();
+        }
+      } catch (rpcErr) {
+        debugPrint('admin_batch_toggle_products RPC fallback: $rpcErr');
+        // Fallback direct table update complying strictly with soft-delete rule
+        await _supabase
+            .from('products')
+            .update({
+              'is_available': isAvailable,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('shop_id', shop.id)
+            .eq('is_deleted', false);
+        updatedCount = _products.length;
+      }
+
+      // Fire-and-forget Audit Log
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId != null) {
+        AuditRepository().log(
+          actorId: currentUserId,
+          actorRole: rbac.isSuperAdmin ? 'super_admin' : 'admin',
+          action: isAvailable ? 'products.batch_enable' : 'products.batch_hide',
+          entityType: 'shop',
+          entityId: shop.id,
+          metadata: {
+            'shop_name': shop.name,
+            'is_available': isAvailable,
+            'count': updatedCount,
+          },
+        );
+      }
+
+      _showSnack(
+        isAvailable
+            ? '✅ Enabled $updatedCount product(s) as Available'
+            : '👁️ Hidden $updatedCount product(s) (Out of Stock)',
+        isError: false,
+      );
+    } catch (e) {
+      debugPrint('Batch toggle error: $e');
+      if (mounted) {
+        setState(() {
+          _products = previousProducts;
+        });
+        _showSnack('Failed to batch update products: $e', isError: true);
       }
     }
   }
@@ -1052,39 +1409,11 @@ class _AdminProductManagementPageState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              shop.name,
-                              style: AdminStyles.title(size: 14),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: (shop.isActive
-                                      ? AdminColors.success
-                                      : AdminColors.warning)
-                                  .withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              shop.isActive ? 'Active' : 'Inactive',
-                              style: GoogleFonts.poppins(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: shop.isActive
-                                    ? AdminColors.success
-                                    : AdminColors.warning,
-                              ),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        shop.name,
+                        style: AdminStyles.title(size: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -1134,29 +1463,73 @@ class _AdminProductManagementPageState
 
                 const SizedBox(width: 10),
 
-                // Products Count Pill & Arrow
+                // Active Status Switch & Products Count Pill
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AdminColors.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '$productCount item${productCount == 1 ? '' : 's'}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AdminColors.primary,
+                    // Interactive Switch for Shop Active Status
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (shop.isActive
+                                    ? AdminColors.success
+                                    : AdminColors.warning)
+                                .withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            shop.isActive ? 'Active' : 'Paused',
+                            style: GoogleFonts.poppins(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: shop.isActive
+                                  ? AdminColors.success
+                                  : AdminColors.warning,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 2),
+                        Transform.scale(
+                          scale: 0.72,
+                          child: Switch(
+                            value: shop.isActive,
+                            activeThumbColor: AdminColors.success,
+                            inactiveThumbColor: Colors.white60,
+                            inactiveTrackColor: Colors.white24,
+                            onChanged: (_) => _toggleShopActive(shop),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 6),
-                    const Icon(Icons.arrow_forward_ios_rounded,
-                        color: Colors.white38, size: 12),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AdminColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '$productCount item${productCount == 1 ? '' : 's'}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AdminColors.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_forward_ios_rounded,
+                            color: Colors.white38, size: 10),
+                      ],
+                    ),
                   ],
                 ),
               ],
@@ -1184,56 +1557,185 @@ class _AdminProductManagementPageState
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
         children: [
-          // Shop Header Card with Switch Button
+          // Shop Header Card with Master Toggle and Batch Actions
           AdminCard(
             padding: const EdgeInsets.all(14),
             bgColor: AdminColors.surface,
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: AdminColors.primary.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.storefront_rounded,
-                      color: AdminColors.primary, size: 24),
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: AdminColors.primary.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.storefront_rounded,
+                          color: AdminColors.primary, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(shop.name, style: AdminStyles.title(size: 14)),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Category: ${shop.category}${shop.sellerName != null ? " • Owner: ${shop.sellerName}" : ""}',
+                            style: AdminStyles.caption(
+                                size: 11, color: AdminColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: AdminColors.primary,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                      ),
+                      icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                      label: Text('Change',
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
+                      onPressed: () {
+                        HapticUtils.selection();
+                        setState(() {
+                          _selectedShop = null;
+                          _products = [];
+                        });
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+
+                const SizedBox(height: 12),
+                const Divider(color: AdminColors.cardBorder, height: 1),
+                const SizedBox(height: 12),
+
+                // Master Restaurant/Shop Active Status Switch
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: (shop.isActive
+                            ? AdminColors.success
+                            : AdminColors.warning)
+                        .withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: (shop.isActive
+                              ? AdminColors.success
+                              : AdminColors.warning)
+                          .withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
                     children: [
-                      Text(shop.name, style: AdminStyles.title(size: 14)),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Category: ${shop.category}${shop.sellerName != null ? " • Owner: ${shop.sellerName}" : ""}',
-                        style: AdminStyles.caption(
-                            size: 11, color: AdminColors.textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Icon(
+                        shop.isActive
+                            ? Icons.check_circle_rounded
+                            : Icons.pause_circle_filled_rounded,
+                        size: 18,
+                        color: shop.isActive
+                            ? AdminColors.success
+                            : AdminColors.warning,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              shop.isActive
+                                  ? 'Restaurant Active & Taking Orders'
+                                  : 'Restaurant Paused by Administration',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: shop.isActive
+                                    ? AdminColors.success
+                                    : AdminColors.warning,
+                              ),
+                            ),
+                            Text(
+                              shop.isActive
+                                  ? 'Visible to all customers on home feed & search'
+                                  : 'Hidden from feeds; in-flight orders finish safely',
+                              style: AdminStyles.caption(
+                                  size: 10, color: AdminColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Transform.scale(
+                        scale: 0.82,
+                        child: Switch(
+                          value: shop.isActive,
+                          activeThumbColor: AdminColors.success,
+                          inactiveThumbColor: Colors.white60,
+                          inactiveTrackColor: Colors.white24,
+                          onChanged: (_) => _toggleShopActive(shop),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: AdminColors.primary,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                  ),
-                  icon: const Icon(Icons.swap_horiz_rounded, size: 16),
-                  label: Text('Change',
-                      style: GoogleFonts.poppins(
-                          fontSize: 12, fontWeight: FontWeight.w600)),
-                  onPressed: () {
-                    HapticUtils.selection();
-                    setState(() {
-                      _selectedShop = null;
-                      _products = [];
-                    });
-                  },
+
+                const SizedBox(height: 10),
+
+                // Quick Batch Actions for Products
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AdminColors.warning,
+                          side: BorderSide(
+                              color: AdminColors.warning.withValues(alpha: 0.4)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon:
+                            const Icon(Icons.visibility_off_outlined, size: 14),
+                        label: Text(
+                          'Hide All Items',
+                          style: GoogleFonts.poppins(
+                              fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () => _batchToggleProducts(false),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AdminColors.success,
+                          side: BorderSide(
+                              color: AdminColors.success.withValues(alpha: 0.4)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.check_circle_outline_rounded,
+                            size: 14),
+                        label: Text(
+                          'Enable All Items',
+                          style: GoogleFonts.poppins(
+                              fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () => _batchToggleProducts(true),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

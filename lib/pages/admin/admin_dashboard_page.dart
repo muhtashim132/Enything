@@ -20,6 +20,7 @@ import 'modules/finance_admin_page.dart';
 import 'modules/settings_admin_page.dart';
 import 'modules/analytics_admin_page.dart';
 import 'modules/complaints_admin_page.dart';
+import 'modules/dispatch_admin_page.dart';
 import 'platform/admin_product_management_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
@@ -34,6 +35,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   bool _isSheetOpen = false;
   final Set<int> _visitedIndices = {0};
   int _openTicketsCount = 0;
+  int _pendingDispatchCount = 0;
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
   DateTime? _lastBackPressTime;
@@ -55,7 +57,21 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       }
       final userId = auth.currentUserId;
       if (userId != null) {
-        context.read<RbacProvider>().loadCurrentAdmin(userId);
+        context.read<RbacProvider>().loadCurrentAdmin(userId).then((_) {
+          if (!mounted) return;
+          final rbac = context.read<RbacProvider>();
+          if (rbac.currentAdmin?.role?.slug == 'dispatcher') {
+            final navItems = _buildNavItems(rbac);
+            final dispatchIdx =
+                navItems.indexWhere((n) => n.label == 'Dispatch');
+            if (dispatchIdx != -1) {
+              setState(() {
+                _currentIndex = dispatchIdx;
+                _visitedIndices.add(dispatchIdx);
+              });
+            }
+          }
+        });
         context.read<NotificationProvider>().listenAsAdmin(userId);
         context.read<NotificationProvider>().registerFcmToken(userId, 'admin');
       }
@@ -89,9 +105,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         count += (d as List).length;
       } catch (_) {}
 
+      int dispatchCount = 0;
+      try {
+        final unaccepted = await supabase
+            .from('orders')
+            .select('id')
+            .inFilter('status', ['awaiting_acceptance', 'pending'])
+            .limit(50);
+        dispatchCount = (unaccepted as List).length;
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _openTicketsCount = count;
+          _pendingDispatchCount = dispatchCount;
         });
       }
     } catch (_) {}
@@ -199,6 +226,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           activeIcon: Icons.dashboard_rounded,
           label: 'Home',
           visible: true,
+        ),
+        _NavDef(
+          icon: Icons.radar_outlined,
+          activeIcon: Icons.radar_rounded,
+          label: 'Dispatch',
+          visible: rbac.isSuperAdmin || rbac.can('dispatch.view'),
+          badgeCount: _pendingDispatchCount,
         ),
         _NavDef(
           icon: Icons.people_outline_rounded,
@@ -369,6 +403,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   Widget _buildScreen(String label, String adminName, RbacProvider rbac) {
     return switch (label) {
       'Home' => OverviewAdminPage(adminName: adminName),
+      'Dispatch' => const DispatchAdminPage(),
       'Products' => const AdminProductManagementPage(),
       'Orders' => const OrdersAdminPage(),
       'Users' => ChangeNotifierProvider.value(

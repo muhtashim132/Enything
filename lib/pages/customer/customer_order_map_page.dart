@@ -116,37 +116,41 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    const defaultShopLat = 34.4250;
-    const defaultShopLng = 74.6380;
-    const defaultCustLat = 34.4230;
-    const defaultCustLng = 74.6360;
-
-    _currentOrder = widget.order.copyWith(
-      shopLat: (widget.order.shopLat != null && widget.order.shopLat != 0.0)
-          ? widget.order.shopLat
-          : defaultShopLat,
-      shopLng: (widget.order.shopLng != null && widget.order.shopLng != 0.0)
-          ? widget.order.shopLng
-          : defaultShopLng,
-      deliveryLat: (widget.order.deliveryLat != null && widget.order.deliveryLat != 0.0)
-          ? widget.order.deliveryLat
-          : defaultCustLat,
-      deliveryLng: (widget.order.deliveryLng != null && widget.order.deliveryLng != 0.0)
-          ? widget.order.deliveryLng
-          : defaultCustLng,
-    );
-
+    // Dynamic Geolocation Resolution Guard: Resolve customer delivery coordinates
+    // from order or group orders without injecting hardcoded fallback coordinates.
     final rawGroup = (widget.groupOrders != null &&
             widget.groupOrders!.isNotEmpty)
         ? List<OrderModel>.from(widget.groupOrders!)
-        : [_currentOrder];
+        : [widget.order];
 
-    _currentGroupOrders = rawGroup.map((o) => o.copyWith(
-      shopLat: (o.shopLat != null && o.shopLat != 0.0) ? o.shopLat : defaultShopLat,
-      shopLng: (o.shopLng != null && o.shopLng != 0.0) ? o.shopLng : defaultShopLng,
-      deliveryLat: (o.deliveryLat != null && o.deliveryLat != 0.0) ? o.deliveryLat : defaultCustLat,
-      deliveryLng: (o.deliveryLng != null && o.deliveryLng != 0.0) ? o.deliveryLng : defaultCustLng,
-    )).toList();
+    double? resolvedCustLat = (widget.order.deliveryLat != null && widget.order.deliveryLat != 0.0)
+        ? widget.order.deliveryLat
+        : null;
+    double? resolvedCustLng = (widget.order.deliveryLng != null && widget.order.deliveryLng != 0.0)
+        ? widget.order.deliveryLng
+        : null;
+
+    if (resolvedCustLat == null || resolvedCustLng == null) {
+      for (final o in rawGroup) {
+        if (o.deliveryLat != null && o.deliveryLat != 0.0 && o.deliveryLng != null && o.deliveryLng != 0.0) {
+          resolvedCustLat = o.deliveryLat;
+          resolvedCustLng = o.deliveryLng;
+          break;
+        }
+      }
+    }
+
+    _currentOrder = widget.order.copyWith(
+      deliveryLat: resolvedCustLat,
+      deliveryLng: resolvedCustLng,
+    );
+
+    _currentGroupOrders = rawGroup.map((o) {
+      return o.copyWith(
+        deliveryLat: (o.deliveryLat != null && o.deliveryLat != 0.0) ? o.deliveryLat : resolvedCustLat,
+        deliveryLng: (o.deliveryLng != null && o.deliveryLng != 0.0) ? o.deliveryLng : resolvedCustLng,
+      );
+    }).toList();
 
     _updateTickerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) _timeTicker.value++;
@@ -389,12 +393,29 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
       setState(() => _loadingRoutes = true);
     }
 
-    final custLat = (_currentOrder.deliveryLat != null && _currentOrder.deliveryLat != 0.0)
-        ? _currentOrder.deliveryLat!
-        : 34.4230;
-    final custLng = (_currentOrder.deliveryLng != null && _currentOrder.deliveryLng != 0.0)
-        ? _currentOrder.deliveryLng!
-        : 74.6360;
+    double? custLat = (_currentOrder.deliveryLat != null && _currentOrder.deliveryLat != 0.0)
+        ? _currentOrder.deliveryLat
+        : null;
+    double? custLng = (_currentOrder.deliveryLng != null && _currentOrder.deliveryLng != 0.0)
+        ? _currentOrder.deliveryLng
+        : null;
+
+    if (custLat == null || custLng == null) {
+      for (final o in _currentGroupOrders) {
+        if (o.deliveryLat != null && o.deliveryLat != 0.0 && o.deliveryLng != null && o.deliveryLng != 0.0) {
+          custLat = o.deliveryLat;
+          custLng = o.deliveryLng;
+          break;
+        }
+      }
+    }
+
+    if (custLat == null || custLng == null) {
+      // Dynamic Geolocation Resolution Guard: If delivery coordinates are not available,
+      // never compute routes to hardcoded coordinates.
+      if (mounted) setState(() => _loadingRoutes = false);
+      return;
+    }
     final custPt = LatLng(custLat, custLng);
 
     final activeShops = _currentGroupOrders
@@ -785,7 +806,9 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                 effectiveShops.first.shopLat!, effectiveShops.first.shopLng!)
             : (orderFallbackLat != null && orderFallbackLng != null && orderFallbackLat != 0.0)
                 ? LatLng(orderFallbackLat, orderFallbackLng)
-                : const LatLng(34.4230, 74.6360);
+                : (_riderLocationsNotifier.value.isNotEmpty)
+                    ? _riderLocationsNotifier.value.values.first
+                    : const LatLng(20.5937, 78.9629);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,

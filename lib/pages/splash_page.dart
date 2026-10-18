@@ -142,7 +142,22 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
           Navigator.pushReplacementNamed(
               context, AppRoutes.sellerPendingVerification);
         } else {
-          Navigator.pushReplacementNamed(context, AppRoutes.sellerKycUpload);
+          final shopRes = await Supabase.instance.client
+              .from('shops')
+              .select('id, category')
+              .eq('seller_id', auth.currentUserId ?? '')
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(
+            context,
+            AppRoutes.sellerKycUpload,
+            arguments: {
+              if (shopRes != null) 'shop_id': shopRes['id'],
+              if (shopRes != null) 'category': shopRes['category'],
+            },
+          );
         }
         // Process any terminated-app notification for seller
         _processPendingNotification();

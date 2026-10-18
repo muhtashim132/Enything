@@ -144,7 +144,9 @@ class ProductModel {
       isVeg: map['is_veg'],
       menuCategory: map['menu_category'],
       prepTimeMinutes: map['prep_time_minutes'],
-      specialTags: List<String>.from(map['special_tags'] ?? []),
+      specialTags: map['special_tags'] is List
+          ? (map['special_tags'] as List).map((e) => e.toString()).toList()
+          : [],
       isAvailable: map['is_available'] ?? true,
       rating: (map['rating'] ?? 0.0).toDouble(),
       totalReviews: map['total_reviews'] ?? 0,
@@ -161,6 +163,7 @@ class ProductModel {
   }
 
   Map<String, dynamic> toMap() => {
+        if (id.isNotEmpty) 'id': id,
         'shop_id': shopId,
         'name': name,
         'category': category,

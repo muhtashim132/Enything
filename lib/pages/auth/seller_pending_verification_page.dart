@@ -180,8 +180,27 @@ class _SellerPendingVerificationPageState
                       _buildButton(
                         label: 'Re-upload Documents',
                         color: primaryColor,
-                        onTap: () => Navigator.pushReplacementNamed(
-                            context, AppRoutes.sellerKycUpload),
+                        onTap: () async {
+                          final userId =
+                              context.read<AuthProvider>().currentUserId;
+                          final shopRes = await Supabase.instance.client
+                              .from('shops')
+                              .select('id, category')
+                              .eq('seller_id', userId ?? '')
+                              .order('created_at', ascending: false)
+                              .limit(1)
+                              .maybeSingle();
+                          if (!context.mounted) return;
+                          Navigator.pushReplacementNamed(
+                            context,
+                            AppRoutes.sellerKycUpload,
+                            arguments: {
+                              if (shopRes != null) 'shop_id': shopRes['id'],
+                              if (shopRes != null)
+                                'category': shopRes['category'],
+                            },
+                          );
+                        },
                         icon: Icons.upload_file_rounded,
                         textColor: Colors.black,
                       )

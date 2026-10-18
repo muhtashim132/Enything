@@ -300,6 +300,9 @@ class GeoUtils {
     _routeCache[key] = route;
   }
 
+  /// Clears the in-memory route cache (e.g. on logout, role switch, or zone change)
+  static void clearCache() => _routeCache.clear();
+
   static double _toRad(double deg) => deg * math.pi / 180.0;
   static double _toDeg(double rad) => rad * 180.0 / math.pi;
 }

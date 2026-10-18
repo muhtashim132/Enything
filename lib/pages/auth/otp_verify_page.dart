@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pinput/pinput.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
@@ -173,10 +174,10 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
     });
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
-    _navigateToDashboard(role);
+    await _navigateToDashboard(role);
   }
 
-  void _navigateToDashboard(String role) {
+  Future<void> _navigateToDashboard(String role) async {
     // Admin must pass 2nd-factor password gate first
     if (role == 'admin') {
       Navigator.pushNamedAndRemoveUntil(
@@ -195,8 +196,23 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.sellerPendingVerification, (_) => false);
       } else {
+        final shopRes = await Supabase.instance.client
+            .from('shops')
+            .select('id, category')
+            .eq('seller_id', auth.currentUserId ?? '')
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (!mounted) return;
         Navigator.pushNamedAndRemoveUntil(
-            context, AppRoutes.sellerKycUpload, (_) => false);
+          context,
+          AppRoutes.sellerKycUpload,
+          (_) => false,
+          arguments: {
+            if (shopRes != null) 'shop_id': shopRes['id'],
+            if (shopRes != null) 'category': shopRes['category'],
+          },
+        );
       }
     } else if (role == 'delivery_partner') {
       if (status == 'verified' || status == 'approved') {

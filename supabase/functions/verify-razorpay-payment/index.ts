@@ -216,10 +216,11 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (paymentData.amount > expectedPaise + 5000) {
-      console.warn(`Payment overpaid suspiciously. Gateway: ${paymentData.amount} paise, Expected: ${expectedPaise} paise.`);
+    const maxAllowedOverpaymentPaise = Math.max(100, Math.round(expectedPaise * 0.02));
+    if (paymentData.amount > expectedPaise + maxAllowedOverpaymentPaise) {
+      console.warn(`Payment overpaid suspiciously. Gateway: ${paymentData.amount} paise, Expected: ${expectedPaise} paise (max allowed: ${expectedPaise + maxAllowedOverpaymentPaise}).`);
       return new Response(
-        JSON.stringify({ verified: false, error: "Payment amount exceeds the expected order total by too much." }),
+        JSON.stringify({ verified: false, error: "Payment amount exceeds the expected order total." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

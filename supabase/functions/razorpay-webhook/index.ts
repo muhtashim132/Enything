@@ -140,7 +140,7 @@ Deno.serve(async (req: Request) => {
 
         if (rpcError) {
           console.error(`Error confirming order via client_confirm_payment:`, rpcError);
-          // Fallback direct update
+          // Fallback direct update (strictly guarded to awaiting_payment to preserve state machine)
           const updatePayload = {
             status: "confirmed",
             payment_status: "captured",
@@ -152,12 +152,14 @@ Deno.serve(async (req: Request) => {
             await supabaseAdmin
               .from("orders")
               .update(updatePayload)
-              .eq("cart_group_id", pendingOrder.cart_group_id);
+              .eq("cart_group_id", pendingOrder.cart_group_id)
+              .in("status", ["awaiting_payment"]);
           } else {
             await supabaseAdmin
               .from("orders")
               .update(updatePayload)
-              .eq("id", pendingOrder.id);
+              .eq("id", pendingOrder.id)
+              .in("status", ["awaiting_payment"]);
           }
         }
 

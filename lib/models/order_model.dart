@@ -400,6 +400,8 @@ class OrderModel {
     DateTime? orderReadyTime,
     DateTime? acceptanceDeadline,
     DateTime? paymentDeadline,
+    bool clearDeliveryPartner = false,
+    bool clearRiderLocation = false,
   }) {
     return OrderModel(
       id: id,
@@ -413,7 +415,9 @@ class OrderModel {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       items: items,
-      deliveryPartnerId: deliveryPartnerId ?? this.deliveryPartnerId,
+      deliveryPartnerId: clearDeliveryPartner
+          ? null
+          : (deliveryPartnerId ?? this.deliveryPartnerId),
       shopId: shopId ?? this.shopId,
       address: address ?? this.address,
       addressLabel: addressLabel ?? this.addressLabel,
@@ -439,10 +443,11 @@ class OrderModel {
       hasDeliveryRated: hasDeliveryRated ?? this.hasDeliveryRated,
       deliveryLat: deliveryLat ?? this.deliveryLat,
       deliveryLng: deliveryLng ?? this.deliveryLng,
-      riderLat: riderLat ?? this.riderLat,
-      riderLng: riderLng ?? this.riderLng,
-      riderLocationUpdatedAt:
-          riderLocationUpdatedAt ?? this.riderLocationUpdatedAt,
+      riderLat: clearRiderLocation ? null : (riderLat ?? this.riderLat),
+      riderLng: clearRiderLocation ? null : (riderLng ?? this.riderLng),
+      riderLocationUpdatedAt: clearRiderLocation
+          ? null
+          : (riderLocationUpdatedAt ?? this.riderLocationUpdatedAt),
       shopLat: shopLat ?? this.shopLat,
       shopLng: shopLng ?? this.shopLng,
       // Preserve frozen financial fields unchanged

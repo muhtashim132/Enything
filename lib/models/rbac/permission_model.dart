@@ -144,6 +144,13 @@ class Permissions {
   static const String productsCreate = 'products.create';
   static const String productsDelete = 'products.delete';
 
+  // Dispatch
+  static const String dispatchView = 'dispatch.view';
+  static const String dispatchProxyRiderAccept = 'dispatch.proxy_rider_accept';
+  static const String dispatchProxySellerAccept = 'dispatch.proxy_seller_accept';
+  static const String dispatchToggleBuzz = 'dispatch.toggle_buzz';
+  static const String dispatchOverrideLimits = 'dispatch.override_limits';
+
   // Audit
   static const String auditView = 'audit.view';
 
@@ -155,6 +162,13 @@ class Permissions {
   /// All grouped by module for UI rendering
   static const Map<String, List<String>> grouped = {
     'Dashboard': [dashboardView],
+    'Dispatch': [
+      dispatchView,
+      dispatchProxyRiderAccept,
+      dispatchProxySellerAccept,
+      dispatchToggleBuzz,
+      dispatchOverrideLimits,
+    ],
     'Products': [
       productsView,
       productsManage,
@@ -198,6 +212,8 @@ class Permissions {
     switch (module.toLowerCase()) {
       case 'dashboard':
         return Icons.dashboard_rounded;
+      case 'dispatch':
+        return Icons.radar_rounded;
       case 'products':
         return Icons.inventory_2_rounded;
       case 'orders':
