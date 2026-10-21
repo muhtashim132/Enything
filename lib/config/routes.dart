@@ -51,6 +51,14 @@ import '../pages/legal/contact_us_page.dart';
 import '../pages/customer/all_listings_page.dart';
 import '../pages/customer/category_products_page.dart';
 import '../pages/customer/all_categories_page.dart';
+import '../pages/customer/bulk/bulk_order_discovery_page.dart';
+import '../pages/customer/bulk/bulk_order_menu_page.dart';
+import '../pages/customer/bulk/bulk_order_event_page.dart';
+import '../pages/customer/bulk/bulk_order_checkout_page.dart';
+import '../pages/customer/bulk/bulk_order_tracking_page.dart';
+import '../pages/customer/bulk/manual_quote_request_page.dart';
+import '../pages/customer/bulk/quote_response_page.dart';
+import '../pages/admin/modules/quote_review_admin_page.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -103,6 +111,14 @@ class AppRoutes {
   static const String allListings = '/customer/all-listings';
   static const String categoryProducts = '/customer/category-products';
   static const String allCategories = '/customer/all-categories';
+  static const String bulkOrderDiscovery = '/customer/bulk/discovery';
+  static const String bulkOrderMenu = '/customer/bulk/menu';
+  static const String bulkOrderEvent = '/customer/bulk/event';
+  static const String bulkOrderCheckout = '/customer/bulk/checkout';
+  static const String bulkOrderTracking = '/customer/bulk/tracking';
+  static const String manualQuoteRequest = '/customer/bulk/quote-request';
+  static const String quoteResponse = '/customer/bulk/quote-response';
+  static const String adminQuoteReview = '/admin/quote-review';
 
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     switch (routeSettings.name) {
@@ -148,6 +164,36 @@ class AppRoutes {
         return _build(const CartPage(), routeSettings);
       case checkout:
         return _build(const CheckoutPage(), routeSettings);
+      case bulkOrderDiscovery:
+        return _build(const BulkOrderDiscoveryPage(), routeSettings);
+      case bulkOrderMenu:
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+          BulkOrderMenuPage(shop: a?['shop'] as ShopModel?),
+          routeSettings,
+        );
+      case bulkOrderEvent:
+        return _build(const BulkOrderEventPage(), routeSettings);
+      case bulkOrderCheckout:
+        return _build(const BulkOrderCheckoutPage(), routeSettings);
+      case bulkOrderTracking:
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+          BulkOrderTrackingPage(
+            initialOrderId: (a?['orderId'] ?? a?['order_id']) as String?,
+          ),
+          routeSettings,
+        );
+      case manualQuoteRequest:
+        return _build(const ManualQuoteRequestPage(), routeSettings);
+      case quoteResponse:
+        final a = routeSettings.arguments as Map<String, dynamic>?;
+        return _build(
+          QuoteResponsePage(quoteId: a?['quote_id'] as String? ?? a?['quoteId'] as String? ?? ''),
+          routeSettings,
+        );
+      case adminQuoteReview:
+        return _build(const QuoteReviewAdminPage(), routeSettings);
       case trackOrder:
         final a = routeSettings.arguments as Map<String, dynamic>?;
         return _build(

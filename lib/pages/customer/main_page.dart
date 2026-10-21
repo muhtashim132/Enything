@@ -17,6 +17,7 @@ import 'favorites_page.dart';
 import 'order_history_page.dart';
 import '../settings/profile_settings_page.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/quote_request_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -71,6 +72,14 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         } else if (result.error != null) {
           _showErrorSnackbar(result.error!);
         }
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final qp = context.read<QuoteRequestProvider>();
+        qp.loadCustomerQuotes();
+        qp.subscribeToCustomerQuotes();
       }
     });
   }
@@ -405,6 +414,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   @override
   Widget build(BuildContext context) {
     final cartProvider = context.watch<CartProvider>();
+    final quoteProv = context.watch<QuoteRequestProvider>();
 
     return PopScope(
       canPop: false,
@@ -530,7 +540,120 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         bottomNavigationBar: MaxWidthContainer(
           maxWidth: 600,
           alignment: Alignment.bottomCenter,
-          child: _buildFloatingBottomNav(context, cartProvider),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildFloatingCateringBanner(context, quoteProv),
+              _buildFloatingBottomNav(context, cartProvider),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFloatingCateringBanner(
+      BuildContext context, QuoteRequestProvider quoteProv) {
+    if (_navIndex == 0) return const SizedBox.shrink();
+    final activeOrder = quoteProv.activeCateringOrder;
+    if (activeOrder == null) return const SizedBox.shrink();
+
+    final orderId = activeOrder['id']?.toString() ?? '';
+    final status = activeOrder['status']?.toString() ?? 'bulk_pending';
+    final deliveryOtp = activeOrder['delivery_otp']?.toString() ?? '';
+
+    final Color statusColor;
+    final String emoji;
+    final String label;
+
+    switch (status) {
+      case 'bulk_confirmed':
+      case 'bulk_preparing':
+        statusColor = const Color(0xFF3B82F6);
+        emoji = '👨‍🍳';
+        label = 'Kitchen Cooking Feast';
+        break;
+      case 'bulk_ready':
+        statusColor = const Color(0xFF8B5CF6);
+        emoji = '🍱';
+        label = 'Feast Prepared & Packed';
+        break;
+      case 'bulk_dispatched':
+        statusColor = const Color(0xFF10B981);
+        emoji = '🚗';
+        label = 'Out for Delivery${deliveryOtp.isNotEmpty ? ' (OTP: $deliveryOtp)' : ''}';
+        break;
+      case 'bulk_pending':
+      default:
+        statusColor = const Color(0xFFF59E0B);
+        emoji = '🎉';
+        label = 'Feast Booked · Scheduling Kitchen';
+        break;
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      child: GestureDetector(
+        onTap: () {
+          Navigator.pushNamed(
+            context,
+            AppRoutes.bulkOrderTracking,
+            arguments: {'order_id': orderId},
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E2138) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: statusColor.withValues(alpha: 0.8),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: statusColor.withValues(alpha: 0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Track →',
+                  style: GoogleFonts.outfit(
+                    color: statusColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -652,8 +775,17 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                           ),
                         ),
 
-                        _buildNavItem(2, Icons.receipt_long_rounded,
-                            Icons.receipt_long_outlined, 'Orders'),
+                        Builder(
+                          builder: (context) {
+                            final quoteProv = context.watch<QuoteRequestProvider>();
+                            final pendingQuotesCount = quoteProv.customerQuotes
+                                .where((q) => q.quoteStatus == 'quoted')
+                                .length;
+                            return _buildNavItem(2, Icons.receipt_long_rounded,
+                                Icons.receipt_long_outlined, 'Orders',
+                                badgeCount: pendingQuotesCount);
+                          },
+                        ),
                         _buildNavItem(3, Icons.person_rounded,
                             Icons.person_outline_rounded, 'Profile'),
                       ],
@@ -728,7 +860,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
 
   Widget _buildNavItem(
       int index, IconData activeIcon, IconData inactiveIcon, String label,
-      {bool? overrideSelected}) {
+      {bool? overrideSelected, int badgeCount = 0}) {
     final isSelected = overrideSelected ?? _navIndex == index;
     return GestureDetector(
       onTap: () {
@@ -753,11 +885,36 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedScale(
-              scale: isSelected ? 1.0 : 0.95,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(isSelected ? activeIcon : inactiveIcon,
-                  color: isSelected ? Colors.white : Colors.white54, size: 22),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedScale(
+                  scale: isSelected ? 1.0 : 0.95,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(isSelected ? activeIcon : inactiveIcon,
+                      color: isSelected ? Colors.white : Colors.white54, size: 22),
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -4,
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.8),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 2),
             Text(label,

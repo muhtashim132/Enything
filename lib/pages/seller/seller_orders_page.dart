@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../models/order_model.dart';
+import '../../models/bulk_order_model.dart';
+import './bulk/seller_bulk_modification_sheet.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/rating_bottom_sheet.dart';
 
@@ -35,6 +37,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   late TabController _tabController;
   // shopId → shop name for map page label
   final Map<String, String> _shopNames = {};
+  // Bulk order metadata cache (order_id -> BulkOrderModel)
+  Map<String, BulkOrderModel> _bulkMetadata = {};
   // BUG-15 FIX: preserve expanded state
   final Set<String> _expandedOrderIds = {};
 
@@ -58,7 +62,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadOrders();
     _setupRealtimeAndFcm();
   }
@@ -215,17 +219,37 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           .limit(
               150); // C1: Prevent OOM for high-volume sellers; 150 covers ~2 weeks at 10 orders/day
 
+      final ordersList = (response as List).map((o) {
+        final model = OrderModel.fromMap(o);
+        final rawItems = o['order_items'] as List? ?? [];
+        model.items = rawItems.map((i) => OrderItem.fromMap(i)).toList();
+        return model;
+      }).toList();
+
+      final bulkOrderIds = ordersList.where((o) => o.isBulkOrder).map((o) => o.id).toList();
+      final Map<String, BulkOrderModel> bulkMetaMap = {};
+      if (bulkOrderIds.isNotEmpty) {
+        try {
+          final bulkResp = await _supabase
+              .from('bulk_orders')
+              .select()
+              .inFilter('order_id', bulkOrderIds);
+          for (final b in (bulkResp as List)) {
+            final meta = BulkOrderModel.fromMap(b);
+            bulkMetaMap[meta.orderId] = meta;
+          }
+        } catch (e) {
+          debugPrint('Seller _loadOrders bulk fetch error: $e');
+        }
+      }
+
       if (mounted) {
         setState(() {
           _shopNames
             ..clear()
             ..addAll(shopNames);
-          _orders = (response as List).map((o) {
-            final model = OrderModel.fromMap(o);
-            final rawItems = o['order_items'] as List? ?? [];
-            model.items = rawItems.map((i) => OrderItem.fromMap(i)).toList();
-            return model;
-          }).toList();
+          _orders = ordersList;
+          _bulkMetadata = bulkMetaMap;
           _isLoading = false;
         });
       }
@@ -992,6 +1016,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   // ── Tab filters ────────────────────────────────────────────────────────────
   List<OrderModel> _pendingOrders() => _orders
       .where((o) =>
+          !o.isBulkOrder &&
           (o.status == 'awaiting_acceptance' || o.status == 'pending') &&
           !o.sellerAccepted &&
           !o.isExpired)
@@ -999,7 +1024,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   List<OrderModel> _activeOrders() => _orders
       .where((o) =>
-          ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
+          !o.isBulkOrder &&
+          (((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
               o.sellerAccepted &&
               !o.isExpired) ||
           [
@@ -1009,12 +1035,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             'ready_for_pickup',
             'picked_up',
             'out_for_delivery',
-          ].contains(o.status))
+          ].contains(o.status)))
       .toList();
 
   List<OrderModel> _doneOrders() => _orders
       .where((o) =>
-          [
+          !o.isBulkOrder &&
+          ([
             'delivered',
             'cancelled',
             'seller_rejected',
@@ -1030,12 +1057,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             'payment_failed',
           ].contains(o.status) ||
           ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
-              o.isExpired))
+              o.isExpired)))
       .toList();
+
+  List<OrderModel> _bulkOrders() => _orders.where((o) => o.isBulkOrder).toList();
 
   @override
   Widget build(BuildContext context) {
     final pendingCount = _pendingOrders().length;
+    final bulkPendingCount =
+        _orders.where((o) => o.isBulkOrder && o.status == 'bulk_pending').length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1142,6 +1173,32 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                               child: Text('Done',
                                   style: GoogleFonts.outfit(
                                       fontWeight: FontWeight.w600))),
+                          Tab(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('Bulk 🎉',
+                                    style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.w600)),
+                                if (bulkPendingCount > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: Colors.purple,
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                    child: Text('$bulkPendingCount',
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1158,6 +1215,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     _buildList(_pendingOrders(), 'pending'),
                     _buildList(_activeOrders(), 'active'),
                     _buildList(_doneOrders(), 'done'),
+                    _buildBulkOrdersList(),
                   ],
                 ),
         ),
@@ -2099,6 +2157,18 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         return Colors.blue;
       case 'out_for_delivery':
         return Colors.deepPurple;
+      case 'bulk_pending':
+        return Colors.purple;
+      case 'modification_proposed':
+        return Colors.amber.shade700;
+      case 'bulk_confirmed':
+        return AppColors.primary;
+      case 'bulk_preparing':
+        return Colors.orange;
+      case 'bulk_ready':
+        return Colors.teal;
+      case 'bulk_dispatched':
+        return Colors.deepPurple;
       case 'delivered':
         return AppColors.success;
       case 'seller_rejected':
@@ -2127,5 +2197,757 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     } else {
       _showSnack('Could not launch dialer', isError: true);
     }
+  }
+
+  // ── Bulk Order Action Handlers ──────────────────────────────────────────
+
+  Future<void> _respondBulkOrder(
+    OrderModel order,
+    String response, {
+    String? notes,
+    int? totalBatches,
+    Map<String, dynamic>? modification,
+  }) async {
+    try {
+      await _supabase.rpc('respond_bulk_order_seller', params: {
+        'p_order_id': order.id,
+        'p_response': response,
+        'p_notes': notes,
+        'p_modification': modification,
+        'p_total_batches': totalBatches,
+      });
+
+      if (mounted) {
+        _showSnack(
+          response == 'accepted'
+              ? '🎉 Bulk Order Accepted!'
+              : (response == 'declined'
+                  ? 'Bulk order declined.'
+                  : 'Modification proposal sent to customer.'),
+          isError: response == 'declined',
+        );
+        _loadOrders();
+      }
+    } catch (e) {
+      debugPrint('Error responding to bulk order: $e');
+      if (mounted) {
+        _showSnack('Action failed: $e', isError: true);
+      }
+    }
+  }
+
+  void _showBulkAcceptDialog(OrderModel order) {
+    int batches = 1;
+    final notesController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  const Text('🎉 ', style: TextStyle(fontSize: 22)),
+                  Expanded(
+                    child: Text(
+                      'Accept Bulk Order',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'How many kitchen batches / parcels will you pack this order into?',
+                    style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        color: batches > 1 ? AppColors.primary : Colors.grey,
+                        onPressed: batches > 1
+                            ? () => setDialogState(() => batches--)
+                            : null,
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          '$batches ${batches == 1 ? "Batch" : "Batches"}',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        color: AppColors.primary,
+                        onPressed: () => setDialogState(() => batches++),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: notesController,
+                    decoration: InputDecoration(
+                      labelText: 'Kitchen Notes (Optional)',
+                      hintText: 'e.g., Will start prep 4 hours prior',
+                      labelStyle: GoogleFonts.outfit(fontSize: 13),
+                      hintStyle: GoogleFonts.outfit(fontSize: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _respondBulkOrder(
+                      order,
+                      'accepted',
+                      notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                      totalBatches: batches,
+                    );
+                  },
+                  child: Text(
+                    'Confirm Acceptance',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showBulkDeclineDialog(OrderModel order) {
+    final reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'Decline Bulk Order',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Please provide a reason to release the scheduled delivery slot back to capacity.',
+                style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: 'Reason for declining',
+                  hintText: 'e.g., Kitchen fully booked for festival',
+                  labelStyle: GoogleFonts.outfit(fontSize: 13),
+                  hintStyle: GoogleFonts.outfit(fontSize: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              onPressed: () {
+                final reason = reasonController.text.trim();
+                if (reason.isEmpty) {
+                  _showSnack('Please enter a reason', isError: true);
+                  return;
+                }
+                Navigator.pop(ctx);
+                _respondBulkOrder(order, 'declined', notes: reason);
+              },
+              child: Text(
+                'Decline Order',
+                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _incrementBulkBatch(OrderModel order, BulkOrderModel metadata) async {
+    final current = metadata.batchesPacked;
+    final total = metadata.totalBatches;
+    if (current >= total) return;
+    final next = current + 1;
+    try {
+      await _supabase.rpc('update_bulk_batch_status', params: {
+        'p_order_id': order.id,
+        'p_batches_packed': next,
+      });
+      if (mounted) {
+        _showSnack('Batch $next of $total marked packed! 📦', isError: false);
+        _loadOrders();
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('Failed to update batch: $e', isError: true);
+      }
+    }
+  }
+
+  // ── Bulk Orders UI ────────────────────────────────────────────────────────
+
+  Widget _buildBulkOrdersList() {
+    final bulkOrders = _bulkOrders();
+    if (bulkOrders.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E2E) : Colors.purple.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.celebration_outlined, size: 52, color: Colors.purple),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No Bulk Catering Orders',
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Large group, corporate event, and party catering orders placed with lead times will appear here.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadOrders,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: bulkOrders.length,
+        itemBuilder: (context, index) => _buildBulkOrderCard(bulkOrders[index]),
+      ),
+    );
+  }
+
+  Widget _buildBulkOrderCard(OrderModel order) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final metadata = _bulkMetadata[order.id];
+    final statusColor = _statusColor(order);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black26 : Colors.purple.withValues(alpha: 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.purple.withValues(alpha: 0.15),
+          width: 1.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: statusColor, width: 6),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Header: Order ID & Date
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '🎉 BULK EVENT',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                              color: Colors.purple,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '#${order.id.substring(0, 8).toUpperCase()}',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    _statusBadge(order, statusColor),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Event Schedule Banner
+                if (metadata != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF26263A) : const Color(0xFFF9F7FD),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.purple.withValues(alpha: 0.12)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.event, size: 16, color: Colors.purple),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                metadata.eventName != null && metadata.eventName!.isNotEmpty
+                                    ? '${metadata.eventName} • ${metadata.eventDateDisplay}'
+                                    : 'Event Date: ${metadata.eventDateDisplay}',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time, size: 16, color: Colors.purple),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Slot: ${metadata.slotDisplay}',
+                              style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '📦 ~${metadata.totalPackagesEstimate} Packages',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                  color: Colors.purple,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (metadata.venueDeliveryNotes != null &&
+                            metadata.venueDeliveryNotes!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Note: "${metadata.venueDeliveryNotes}"',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.amber.shade800,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Customer info
+                Builder(
+                  builder: (context) {
+                    final customerName = metadata?.contactPersonName.isNotEmpty == true
+                        ? metadata!.contactPersonName
+                        : (order.addressLabel ?? 'Customer');
+                    final address = metadata?.venueAddress ?? order.address ?? 'Address not specified';
+                    final phone = (metadata?.contactPersonPhone != null &&
+                            metadata!.contactPersonPhone.isNotEmpty)
+                        ? metadata.contactPersonPhone
+                        : order.customerPhone;
+
+                    return Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 14,
+                          backgroundColor: Colors.grey.shade200,
+                          child: const Icon(Icons.person, size: 16, color: Colors.grey),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                customerName,
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                              Text(
+                                address,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (phone != null && phone.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.phone, size: 18, color: AppColors.primary),
+                            onPressed: () => _callPhone(phone),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // Order Items
+                Text(
+                  'Catering Items (${order.items.length})',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                ...order.items.map((item) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${item.quantity}x',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              item.productName,
+                              style: GoogleFonts.outfit(fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '₹${(item.price * item.quantity).toStringAsFixed(0)}',
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    )),
+                const Divider(height: 20),
+
+                // Total and Payment status
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.verified, size: 14, color: AppColors.success),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Prepaid (100% Online)',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Total: ₹${order.totalAmount.toStringAsFixed(0)}',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16),
+                    ),
+                  ],
+                ),
+
+                // Kitchen Packaging Stepper (if accepted / preparing)
+                if (['bulk_confirmed', 'bulk_preparing', 'bulk_ready'].contains(order.status) &&
+                    metadata != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF232338) : Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '📦 Kitchen Packaging Progress',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                            Text(
+                              '${metadata.batchesPacked} / ${metadata.totalBatches} Packed',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: metadata.totalBatches > 0
+                                ? (metadata.batchesPacked / metadata.totalBatches).clamp(0.0, 1.0)
+                                : 0.0,
+                            backgroundColor: Colors.orange.withValues(alpha: 0.2),
+                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
+                            minHeight: 8,
+                          ),
+                        ),
+                        if (metadata.batchesPacked < metadata.totalBatches) ...[
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              onPressed: () => _incrementBulkBatch(order, metadata),
+                              icon: const Icon(Icons.check_circle_outline, size: 16, color: Colors.white),
+                              label: Text(
+                                'Mark Batch #${metadata.batchesPacked + 1} Packed',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.task_alt, size: 14, color: AppColors.success),
+                              const SizedBox(width: 4),
+                              Text(
+                                'All batches packed & ready for fleet pickup!',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Action Buttons for bulk_pending
+                if (order.status == 'bulk_pending') ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.danger),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          onPressed: () => _showBulkDeclineDialog(order),
+                          child: Text(
+                            'Decline',
+                            style: GoogleFonts.outfit(
+                              color: AppColors.danger,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.blue),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                              ),
+                              builder: (_) => SellerBulkModificationSheet(
+                                order: order,
+                                onSubmitted: _loadOrders,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            'Modify',
+                            style: GoogleFonts.outfit(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          onPressed: () => _showBulkAcceptDialog(order),
+                          child: Text(
+                            'Accept 🎉',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                // Customer review note for modification_proposed
+                if (order.status == 'modification_proposed') ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.schedule, size: 16, color: Colors.blue),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Modification proposal sent to customer. Awaiting customer confirmation.',
+                            style: GoogleFonts.outfit(fontSize: 12, color: Colors.blue.shade900),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -1,3 +1,5 @@
+import '../config/app_categories.dart';
+
 class ProductVariant {
   final String id;
   final String name;
@@ -90,6 +92,11 @@ class ProductModel {
   /// If null, the checkout falls back to the category-level rate from tax_config.
   final double? gstRateOverride;
 
+  /// Bulk / Event catering configuration
+  final bool bulkEligible;
+  final int? minBulkQuantity;
+  final List<Map<String, dynamic>> bulkPriceTiers;
+
   ProductModel({
     required this.id,
     required this.shopId,
@@ -115,6 +122,9 @@ class ProductModel {
     this.medicineType = 'General',
     this.variants = const [],
     this.gstRateOverride,
+    this.bulkEligible = false,
+    this.minBulkQuantity,
+    this.bulkPriceTiers = const [],
   });
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
@@ -141,7 +151,9 @@ class ProductModel {
       unitType: map['unit_type'] ?? 'pieces',
       description: map['description'],
       images: imageList,
-      isVeg: map['is_veg'],
+      isVeg: AppCategories.isFoodCategory(map['category']?.toString())
+          ? map['is_veg']
+          : null,
       menuCategory: map['menu_category'],
       prepTimeMinutes: map['prep_time_minutes'],
       specialTags: map['special_tags'] is List
@@ -159,6 +171,12 @@ class ProductModel {
       gstRateOverride: map['gst_rate_override'] != null
           ? double.tryParse(map['gst_rate_override'].toString())
           : null,
+      bulkEligible: map['bulk_eligible'] == true || map['bulk_eligible'] == 'true',
+      minBulkQuantity: (map['min_bulk_quantity'] as num?)?.toInt(),
+      bulkPriceTiers: (map['bulk_price_tiers'] as List?)
+              ?.map((t) => Map<String, dynamic>.from(t as Map))
+              .toList() ??
+          const [],
     );
   }
 
@@ -176,7 +194,7 @@ class ProductModel {
         'unit_type': unitType,
         'description': description,
         'images': images,
-        'is_veg': isVeg,
+        'is_veg': isFood ? isVeg : null,
         'menu_category': menuCategory,
         'prep_time_minutes': prepTimeMinutes,
         'special_tags': specialTags,
@@ -185,6 +203,9 @@ class ProductModel {
         'medicine_type': medicineType,
         'variants': variants.map((v) => v.toMap()).toList(),
         'gst_rate_override': gstRateOverride,
+        'bulk_eligible': bulkEligible,
+        'min_bulk_quantity': minBulkQuantity,
+        'bulk_price_tiers': bulkPriceTiers,
       };
 
   String get firstImage => images.isNotEmpty ? images.first : '';
@@ -226,6 +247,9 @@ class ProductModel {
     String? medicineType,
     List<ProductVariant>? variants,
     double? gstRateOverride,
+    bool? bulkEligible,
+    int? minBulkQuantity,
+    List<Map<String, dynamic>>? bulkPriceTiers,
   }) {
     return ProductModel(
       id: id ?? this.id,
@@ -252,6 +276,40 @@ class ProductModel {
       medicineType: medicineType ?? this.medicineType,
       variants: variants ?? this.variants,
       gstRateOverride: gstRateOverride ?? this.gstRateOverride,
+      bulkEligible: bulkEligible ?? this.bulkEligible,
+      minBulkQuantity: minBulkQuantity ?? this.minBulkQuantity,
+      bulkPriceTiers: bulkPriceTiers ?? this.bulkPriceTiers,
     );
   }
+
+  /// Calculates the unit price for a given quantity based on tiered pricing
+  double getPriceForQuantity(int quantity) {
+    if (!bulkEligible || bulkPriceTiers.isEmpty) {
+      return price;
+    }
+    // Sort tiers descending by min_qty
+    final sortedTiers = List<Map<String, dynamic>>.from(bulkPriceTiers)
+      ..sort((a, b) => ((b['min_qty'] as num?)?.toInt() ?? 0)
+          .compareTo((a['min_qty'] as num?)?.toInt() ?? 0));
+
+    for (final tier in sortedTiers) {
+      final minQty = (tier['min_qty'] as num?)?.toInt() ?? 0;
+      if (quantity >= minQty) {
+        final tierPrice = (tier['price'] as num?)?.toDouble();
+        if (tierPrice != null && tierPrice > 0) {
+          return tierPrice;
+        }
+      }
+    }
+    return price;
+  }
+
+  /// Returns whether this product belongs to an edible food, dining, grocery, or perishable category.
+  bool get isFood => AppCategories.isFoodCategory(category);
+
+  /// Returns whether this product should display a dietary preference marker (Veg/Non-Veg emblem).
+  /// Strictly requires both:
+  /// 1. isVeg must not be null.
+  /// 2. category must be a recognized food or grocery category. Non-food items (Stationery, Clothing, Electronics, etc.) never show dietary emblems.
+  bool get showsDietEmblem => isVeg != null && isFood;
 }

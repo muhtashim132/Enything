@@ -185,7 +185,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (product.isVeg != null)
+                            if (product.showsDietEmblem)
                               _buildDietEmblem(product.isVeg!),
                             if (product.requiresPrescription) ...[
                               const SizedBox(width: 3),

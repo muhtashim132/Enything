@@ -249,18 +249,41 @@ class _NotificationPanel extends StatelessWidget {
                     itemBuilder: (ctx, i) => _NotificationTile(
                         notification: notifications[i],
                         isDark: isDark,
-                        onTap: notifications[i].orderId != null
-                            ? () {
-                                Navigator.pop(ctx);
-                                Navigator.pushNamed(
-                                  ctx,
-                                  AppRoutes.trackOrder,
-                                  arguments: {
-                                    'orderId': notifications[i].orderId
-                                  },
-                                );
-                              }
-                            : null),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          final notif = notifications[i];
+                          final id = notif.id.toLowerCase();
+                          final title = notif.title.toLowerCase();
+
+                          if (id.startsWith('quote_ready_') ||
+                              id.startsWith('quote_paid_') ||
+                              title.contains('quote is ready') ||
+                              title.contains('catering quote ready') ||
+                              title.contains('payment confirmed')) {
+                            final quoteId = notif.orderId ??
+                                notif.id
+                                    .replaceFirst('quote_ready_', '')
+                                    .replaceFirst('quote_paid_', '');
+                            Navigator.pushNamed(
+                              ctx,
+                              AppRoutes.quoteResponse,
+                              arguments: {'quote_id': quoteId},
+                            );
+                          } else if (id.startsWith('quote_new_') ||
+                              id.startsWith('quote_acc_') ||
+                              title.contains('new catering quote') ||
+                              title.contains('call to arrange payment')) {
+                            Navigator.pushNamed(ctx, AppRoutes.adminQuoteReview);
+                          } else if (notif.orderId != null) {
+                            Navigator.pushNamed(
+                              ctx,
+                              AppRoutes.trackOrder,
+                              arguments: {
+                                'orderId': notif.orderId,
+                              },
+                            );
+                          }
+                        }),
                   ),
           ),
         ],

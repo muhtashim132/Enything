@@ -2120,7 +2120,7 @@ class _AdminProductManagementPageState
                           ),
                   ),
                 ),
-                if (product.isVeg != null)
+                if (product.showsDietEmblem)
                   Positioned(
                     top: 4,
                     left: 4,

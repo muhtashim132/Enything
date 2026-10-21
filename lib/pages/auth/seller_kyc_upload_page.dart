@@ -10,6 +10,7 @@ import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
+import '../../services/kyc_draft_service.dart';
 
 class SellerKycUploadPage extends StatefulWidget {
   const SellerKycUploadPage({super.key});
@@ -35,6 +36,7 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
   String? _shopCategory;
   String? _shopName;
   bool _argsRead = false;
+  bool _loadingCategory = true;
   bool _isGstRegistered = true; // Non-food: true = has GSTIN, false = exempt <40L
   bool _exemptionDeclared = false;
 
@@ -61,48 +63,56 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
     final catArg = args?['category'] as String?;
     _shopId = args?['shop_id'] as String?;
 
-    final userId = context.read<AuthProvider>().currentUserId;
+    if (catArg != null && catArg.isNotEmpty) {
+      _shopCategory = catArg;
+      _loadingCategory = false;
+    }
 
-    // Self-healing fallback: If shop_id is not in route arguments, query DB by seller_id!
-    if ((_shopId == null || _shopId!.isEmpty) && userId != null) {
-      try {
+    final userId =
+        context.read<AuthProvider>().currentUserId ?? _db.auth.currentUser?.id;
+
+    try {
+      // Self-healing fallback: If shop_id is not in route arguments, query DB by seller_id!
+      if ((_shopId == null || _shopId!.isEmpty) && userId != null) {
         final res = await _db
             .from('shops')
-            .select('id, category, name')
+            .select('id, category, name, shop_type')
             .eq('seller_id', userId)
             .order('created_at', ascending: false)
             .limit(1)
             .maybeSingle();
         if (res != null && mounted) {
+          final rawCat = (res['category'] as String?)?.isNotEmpty == true
+              ? res['category'] as String
+              : (res['shop_type'] as String?);
           setState(() {
-            _shopId = res['id'] as String?;
-            _shopCategory ??= res['category'] as String?;
+            _shopId ??= res['id'] as String?;
+            _shopCategory ??= rawCat;
             _shopName ??= res['name'] as String?;
           });
         }
-      } catch (e) {
-        debugPrint('Error loading seller shop: $e');
-      }
-    } else if (_shopId != null && _shopId!.isNotEmpty) {
-      try {
+      } else if (_shopId != null && _shopId!.isNotEmpty) {
         final res = await _db
             .from('shops')
-            .select('category, name')
+            .select('category, name, shop_type')
             .eq('id', _shopId!)
             .maybeSingle();
         if (res != null && mounted) {
+          final rawCat = (res['category'] as String?)?.isNotEmpty == true
+              ? res['category'] as String
+              : (res['shop_type'] as String?);
           setState(() {
-            _shopCategory ??= res['category'] as String?;
+            _shopCategory ??= rawCat;
             _shopName ??= res['name'] as String?;
           });
         }
-      } catch (e) {
-        debugPrint('Error loading shop category: $e');
       }
-    }
-
-    if (catArg != null && catArg.isNotEmpty && mounted) {
-      setState(() => _shopCategory = catArg);
+    } catch (e) {
+      debugPrint('Error loading seller shop: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingCategory = false);
+      }
     }
   }
 
@@ -126,7 +136,31 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _aadharCtrl.addListener(_saveDraft);
+    _panCtrl.addListener(_saveDraft);
+    _gstCtrl.addListener(_saveDraft);
+    _enrolmentIdCtrl.addListener(_saveDraft);
+    _tradeLicenseCtrl.addListener(_saveDraft);
+    _accountHolderCtrl.addListener(_saveDraft);
+    _bankAccountCtrl.addListener(_saveDraft);
+    _ifscCtrl.addListener(_saveDraft);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkLostDataAndRestoreDraft();
+    });
+  }
+
+  @override
   void dispose() {
+    _aadharCtrl.removeListener(_saveDraft);
+    _panCtrl.removeListener(_saveDraft);
+    _gstCtrl.removeListener(_saveDraft);
+    _enrolmentIdCtrl.removeListener(_saveDraft);
+    _tradeLicenseCtrl.removeListener(_saveDraft);
+    _accountHolderCtrl.removeListener(_saveDraft);
+    _bankAccountCtrl.removeListener(_saveDraft);
+    _ifscCtrl.removeListener(_saveDraft);
     _aadharCtrl.dispose();
     _panCtrl.dispose();
     _gstCtrl.dispose();
@@ -138,13 +172,169 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
     super.dispose();
   }
 
-  Future<void> _pickImage(Function(File) onPicked) async {
+  void _saveDraft() {
+    final userId =
+        context.read<AuthProvider>().currentUserId ?? _db.auth.currentUser?.id;
+    if (userId == null) return;
+    KycDraftService.saveSellerDraft(
+      userId: userId,
+      textFields: {
+        'aadhar': _aadharCtrl.text,
+        'pan': _panCtrl.text,
+        'gst': _gstCtrl.text,
+        'enrolmentId': _enrolmentIdCtrl.text,
+        'tradeLicense': _tradeLicenseCtrl.text,
+        'accountHolder': _accountHolderCtrl.text,
+        'bankAccount': _bankAccountCtrl.text,
+        'ifsc': _ifscCtrl.text,
+      },
+      filePaths: {
+        'aadharFront': _aadharFront?.path,
+        'aadharBack': _aadharBack?.path,
+        'panFront': _panFront?.path,
+        'panBack': _panBack?.path,
+        'shopProof1': _shopProof1?.path,
+        'shopProof2': _shopProof2?.path,
+        'bankProof': _bankProof?.path,
+      },
+      isGstRegistered: _isGstRegistered,
+      exemptionDeclared: _exemptionDeclared,
+    );
+  }
+
+  Future<void> _checkLostDataAndRestoreDraft() async {
+    final userId =
+        context.read<AuthProvider>().currentUserId ?? _db.auth.currentUser?.id;
+    if (userId == null) return;
+
+    // 1. Restore saved form draft if available
+    try {
+      final draft = await KycDraftService.getSellerDraft(userId);
+      if (draft != null && mounted) {
+        final textFields =
+            (draft['textFields'] as Map?)?.cast<String, String>() ?? {};
+        final filePaths =
+            (draft['filePaths'] as Map?)?.cast<String, String?>() ?? {};
+
+        setState(() {
+          if (_aadharCtrl.text.isEmpty && textFields['aadhar'] != null) {
+            _aadharCtrl.text = textFields['aadhar']!;
+          }
+          if (_panCtrl.text.isEmpty && textFields['pan'] != null) {
+            _panCtrl.text = textFields['pan']!;
+          }
+          if (_gstCtrl.text.isEmpty && textFields['gst'] != null) {
+            _gstCtrl.text = textFields['gst']!;
+          }
+          if (_enrolmentIdCtrl.text.isEmpty &&
+              textFields['enrolmentId'] != null) {
+            _enrolmentIdCtrl.text = textFields['enrolmentId']!;
+          }
+          if (_tradeLicenseCtrl.text.isEmpty &&
+              textFields['tradeLicense'] != null) {
+            _tradeLicenseCtrl.text = textFields['tradeLicense']!;
+          }
+          if (_accountHolderCtrl.text.isEmpty &&
+              textFields['accountHolder'] != null) {
+            _accountHolderCtrl.text = textFields['accountHolder']!;
+          }
+          if (_bankAccountCtrl.text.isEmpty &&
+              textFields['bankAccount'] != null) {
+            _bankAccountCtrl.text = textFields['bankAccount']!;
+          }
+          if (_ifscCtrl.text.isEmpty && textFields['ifsc'] != null) {
+            _ifscCtrl.text = textFields['ifsc']!;
+          }
+          if (draft['isGstRegistered'] != null) {
+            _isGstRegistered = draft['isGstRegistered'] as bool;
+          }
+          if (draft['exemptionDeclared'] != null) {
+            _exemptionDeclared = draft['exemptionDeclared'] as bool;
+          }
+
+          _aadharFront ??=
+              KycDraftService.fileFromPath(filePaths['aadharFront']);
+          _aadharBack ??=
+              KycDraftService.fileFromPath(filePaths['aadharBack']);
+          _panFront ??= KycDraftService.fileFromPath(filePaths['panFront']);
+          _panBack ??= KycDraftService.fileFromPath(filePaths['panBack']);
+          _shopProof1 ??=
+              KycDraftService.fileFromPath(filePaths['shopProof1']);
+          _shopProof2 ??=
+              KycDraftService.fileFromPath(filePaths['shopProof2']);
+          _bankProof ??= KycDraftService.fileFromPath(filePaths['bankProof']);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error restoring seller KYC draft: $e');
+    }
+
+    // 2. Check if Android OS killed MainActivity during camera intent
+    try {
+      final picker = ImagePicker();
+      final lostData = await picker.retrieveLostData();
+      if (!lostData.isEmpty && lostData.file != null && mounted) {
+        final pendingSlot = await KycDraftService.getPendingSlot('seller');
+        final recoveredFile = File(lostData.file!.path);
+        String restoredDocName = 'Document';
+
+        setState(() {
+          switch (pendingSlot) {
+            case 'aadhar_front':
+              _aadharFront = recoveredFile;
+              restoredDocName = 'Aadhaar (Front)';
+              break;
+            case 'aadhar_back':
+              _aadharBack = recoveredFile;
+              restoredDocName = 'Aadhaar (Back)';
+              break;
+            case 'pan_front':
+              _panFront = recoveredFile;
+              restoredDocName = 'PAN Card (Front)';
+              break;
+            case 'pan_back':
+              _panBack = recoveredFile;
+              restoredDocName = 'PAN Card (Back)';
+              break;
+            case 'shop_proof_1':
+              _shopProof1 = recoveredFile;
+              restoredDocName = 'Shop Proof (Page 1)';
+              break;
+            case 'shop_proof_2':
+              _shopProof2 = recoveredFile;
+              restoredDocName = 'Shop Proof (Page 2)';
+              break;
+            case 'bank_proof':
+              _bankProof = recoveredFile;
+              restoredDocName = 'Bank Proof';
+              break;
+          }
+        });
+
+        await KycDraftService.clearPendingSlot('seller');
+        _saveDraft();
+        _showSnack('Restored your captured photo: $restoredDocName');
+      }
+    } catch (e) {
+      debugPrint('Error retrieving lost image data: $e');
+    }
+  }
+
+  Future<void> _pickImage(String slotKey, Function(File) onPicked) async {
     final source = await showImageSourceSheet(context);
     if (source == null) return;
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source, imageQuality: 70);
+    await KycDraftService.setPendingSlot('seller', slotKey);
+    final pickedFile = await pickSafeImage(
+      source: source,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 75,
+    );
     if (pickedFile != null) {
-      setState(() => onPicked(File(pickedFile.path)));
+      await KycDraftService.clearPendingSlot('seller');
+      final file = File(pickedFile.path);
+      setState(() => onPicked(file));
+      _saveDraft();
     }
   }
 
@@ -365,6 +555,10 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
           );
         }
 
+        // Purge local draft and pending slot on successful submission
+        await KycDraftService.clearSellerDraft(userId);
+        await KycDraftService.clearPendingSlot('seller');
+
         if (!mounted) return;
         Navigator.pushNamedAndRemoveUntil(
             context, AppRoutes.sellerPendingVerification, (_) => false);
@@ -466,8 +660,8 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
                   file2: _aadharBack,
                   label1: 'Front',
                   label2: 'Back',
-                  onPick1: () => _pickImage((f) => _aadharFront = f),
-                  onPick2: () => _pickImage((f) => _aadharBack = f),
+                  onPick1: () => _pickImage('aadhar_front', (f) => _aadharFront = f),
+                  onPick2: () => _pickImage('aadhar_back', (f) => _aadharBack = f),
                 ),
                 const SizedBox(height: 24),
                 _UploadRow(
@@ -476,8 +670,8 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
                   file2: _panBack,
                   label1: 'Front',
                   label2: 'Back',
-                  onPick1: () => _pickImage((f) => _panFront = f),
-                  onPick2: () => _pickImage((f) => _panBack = f),
+                  onPick1: () => _pickImage('pan_front', (f) => _panFront = f),
+                  onPick2: () => _pickImage('pan_back', (f) => _panBack = f),
                 ),
                 const SizedBox(height: 24),
                 _UploadRow(
@@ -486,8 +680,8 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
                   file2: _shopProof2,
                   label1: 'Page 1',
                   label2: 'Page 2 (Opt)',
-                  onPick1: () => _pickImage((f) => _shopProof1 = f),
-                  onPick2: () => _pickImage((f) => _shopProof2 = f),
+                  onPick1: () => _pickImage('shop_proof_1', (f) => _shopProof1 = f),
+                  onPick2: () => _pickImage('shop_proof_2', (f) => _shopProof2 = f),
                 ),
                 const SizedBox(height: 24),
                 _UploadRow(
@@ -496,7 +690,7 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
                   file2: null,
                   label1: 'Upload Image',
                   label2: '',
-                  onPick1: () => _pickImage((f) => _bankProof = f),
+                  onPick1: () => _pickImage('bank_proof', (f) => _bankProof = f),
                   onPick2: () {},
                   single: true,
                 ),
@@ -563,6 +757,21 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
 }
 
   Widget _buildGstSection() {
+    if (_loadingCategory && _shopCategory == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            color: Color(0xFFF4C542),
+            strokeWidth: 2,
+          ),
+        ),
+      );
+    }
+
     if (_isFoodCategory) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -174,7 +174,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'Terms & Conditions',
+                    'Terms & Privacy Policy',
                     style: GoogleFonts.outfit(
                       color: Colors.white,
                       fontSize: 22,
@@ -183,7 +183,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Please accept the terms and conditions before entering your phone number.',
+                    'Please accept the Terms & Conditions and Privacy Policy before entering your phone number.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       color: Colors.white70,
@@ -234,7 +234,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'I agree to the Terms & Conditions',
+                              'I agree to the Terms & Privacy Policy',
                               style: GoogleFonts.outfit(
                                 color: Colors.white,
                                 fontSize: 14,

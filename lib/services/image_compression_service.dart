@@ -10,28 +10,28 @@ class ImageCompressionService {
   /// to prevent massive 12MP+ raws from wasting storage/bandwidth.
   static Future<Uint8List?> compressFile(File file) async {
     try {
-      final bytes = await file.readAsBytes();
+      final fileLength = await file.length();
 
       // If the file is incredibly small already (e.g. < 50KB), don't bother compressing
-      if (bytes.lengthInBytes < 50 * 1024) {
-        return bytes;
+      if (fileLength < 50 * 1024) {
+        return await file.readAsBytes();
       }
 
       final compressedBytes = await FlutterImageCompress.compressWithFile(
         file.absolute.path,
-        minWidth: 2048,
-        minHeight: 2048,
-        quality: 88, // 88 is the sweet spot for "visually lossless" JPEG
+        minWidth: 1600,
+        minHeight: 1600,
+        quality: 80, // Balanced quality and minimal RAM usage on low-memory devices
         format: CompressFormat.jpeg,
       );
 
       // In case compression fails or results in a larger file (rare), fallback to original
       if (compressedBytes != null &&
-          compressedBytes.lengthInBytes < bytes.lengthInBytes) {
+          compressedBytes.lengthInBytes < fileLength) {
         return compressedBytes;
       }
 
-      return bytes;
+      return await file.readAsBytes();
     } catch (e) {
       debugPrint('Error during image compression: $e');
       // Graceful fallback: upload original file if compression errors out

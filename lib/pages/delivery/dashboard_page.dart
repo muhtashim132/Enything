@@ -44,6 +44,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   bool _isOnline = false;
   List<OrderGroup> _availableGroups = [];
   List<OrderGroup> _myGroups = [];
+  List<Map<String, dynamic>> _bulkAssignments = [];
   double _todayEarnings = 0.0;
   double _totalKmsDriven = 0.0;
   bool _isLoading = false;
@@ -672,6 +673,22 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         }
       }
 
+      List<Map<String, dynamic>> tempBulkAssignments = [];
+      if (auth.currentUserId != null) {
+        try {
+          final bulkAssignmentsResp = await _supabase
+              .from('bulk_dispatch_riders')
+              .select('*, bulk_dispatch_groups(*, orders(*, shops(*)))')
+              .eq('rider_id', auth.currentUserId!)
+              .neq('status', 'delivered')
+              .neq('status', 'dropped');
+          tempBulkAssignments =
+              List<Map<String, dynamic>>.from(bulkAssignmentsResp as List);
+        } catch (e) {
+          debugPrint('Bulk dispatch fetch error for rider: $e');
+        }
+      }
+
       if (mounted) {
         setState(() {
           _availableGroups = _groupOrders(filtered).where((g) {
@@ -741,6 +758,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
           _todayEarnings = tempTodayEarnings;
           _totalKmsDriven = tempTotalKmsDriven;
+          _bulkAssignments = tempBulkAssignments;
 
           _isLoading = false;
         });
@@ -2323,6 +2341,25 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 if (_myGroups.isNotEmpty)
                   const SliverPadding(
                     padding: EdgeInsets.only(bottom: 24),
+                  ),
+
+                if (_bulkAssignments.isNotEmpty)
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _sectionHeader(
+                          '🎉 Bulk Event Parcels',
+                          '${_bulkAssignments.length}',
+                          Colors.purple,
+                          isDark,
+                        ),
+                        const SizedBox(height: 12),
+                        ..._bulkAssignments
+                            .map((a) => _buildBulkAssignmentCard(a, isDark)),
+                        const SizedBox(height: 20),
+                      ]),
+                    ),
                   ),
 
                 SliverPadding(
@@ -3992,6 +4029,257 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         content: Text('Please enable location to view nearby orders.'),
         backgroundColor: AppColors.danger,
         duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // ── Bulk Event Dispatch Handlers ──────────────────────────────────────────
+
+  Future<void> _updateBulkDispatchStatus(
+      String dispatchGroupId, String newStatus) async {
+    try {
+      await _supabase.rpc('rider_update_bulk_dispatch_status', params: {
+        'p_dispatch_group_id': dispatchGroupId,
+        'p_status': newStatus,
+      });
+      _showSnack(
+        newStatus == 'picked_up'
+            ? '📦 Parcel marked Picked Up from store!'
+            : (newStatus == 'delivered'
+                ? '🎉 Parcel successfully delivered!'
+                : 'Status updated to $newStatus'),
+      );
+      _loadOrders();
+    } catch (e) {
+      debugPrint('Error updating bulk dispatch status: $e');
+      _showSnack('Status update failed: $e', isError: true);
+    }
+  }
+
+  Widget _buildBulkAssignmentCard(
+      Map<String, dynamic> assignment, bool isDark) {
+    final status = assignment['status']?.toString() ?? 'assigned';
+    final seq = assignment['package_sequence'] ?? 1;
+    final label = assignment['package_label'] ?? 'Parcel #$seq';
+    final group = assignment['bulk_dispatch_groups'] as Map<String, dynamic>?;
+    final order = group?['orders'] as Map<String, dynamic>?;
+    final shop = order?['shops'] as Map<String, dynamic>?;
+
+    final eventName = group?['event_name'] ?? 'Bulk Catering Event';
+    final destination = group?['destination_address'] ?? 'Event Venue';
+    final contactName = group?['contact_name'] ?? 'Event Organizer';
+    final contactPhone = group?['contact_phone']?.toString() ?? '';
+    final shopName = shop?['name'] ?? 'Merchant Partner';
+    final shopAddress = shop?['address'] ?? 'Store location';
+    final dispatchGroupId = assignment['dispatch_group_id']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color:
+                isDark ? Colors.black26 : Colors.purple.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: isDark
+              ? Colors.purple.withValues(alpha: 0.3)
+              : Colors.purple.withValues(alpha: 0.2),
+          width: 1.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(left: BorderSide(color: Colors.purple, width: 6)),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '📦 BULK PARCEL #$seq',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11,
+                            color: Colors.purple,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        label.toString(),
+                        style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (status == 'delivered'
+                              ? AppColors.success
+                              : (status == 'picked_up'
+                                  ? Colors.blue
+                                  : Colors.orange))
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      status.toUpperCase(),
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                        color: status == 'delivered'
+                            ? AppColors.success
+                            : (status == 'picked_up'
+                                ? Colors.blue
+                                : Colors.orange),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Event Name
+              Text(
+                eventName.toString(),
+                style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+
+              // Pickup location
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.storefront_rounded,
+                      size: 16, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Pickup from: $shopName',
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w600, fontSize: 12)),
+                        Text(shopAddress.toString(),
+                            style: GoogleFonts.outfit(
+                                fontSize: 11, color: AppColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Destination location
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_on_rounded,
+                      size: 16, color: Colors.green),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Deliver to: $destination',
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w600, fontSize: 12)),
+                        Text('Contact: $contactName',
+                            style: GoogleFonts.outfit(
+                                fontSize: 11, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  if (contactPhone.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.phone,
+                          size: 18, color: AppColors.primary),
+                      onPressed: () => _callPhone(contactPhone),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Action Buttons
+              Row(
+                children: [
+                  if (status == 'assigned')
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onPressed: () => _updateBulkDispatchStatus(
+                            dispatchGroupId, 'picked_up'),
+                        icon: const Icon(Icons.inventory_2_outlined,
+                            size: 16, color: Colors.white),
+                        label: Text(
+                          'Mark Parcel Picked Up',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (status == 'picked_up' || status == 'in_transit')
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onPressed: () => _updateBulkDispatchStatus(
+                            dispatchGroupId, 'delivered'),
+                        icon: const Icon(Icons.check_circle_rounded,
+                            size: 16, color: Colors.white),
+                        label: Text(
+                          'Mark Parcel Delivered ✅',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

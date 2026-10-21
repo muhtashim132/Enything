@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
@@ -42,8 +41,14 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   final _openTimeCtrl = TextEditingController();
   final _closeTimeCtrl = TextEditingController();
 
+  // ── Bulk & Event Catering Configuration ───────────────────────────────────
+  bool _acceptsBulkOrders = false;
+  final _maxBulkItemsCtrl = TextEditingController(text: '200');
+  final _minLeadHoursCtrl = TextEditingController(text: '4');
+  final _maxLeadHoursCtrl = TextEditingController(text: '168');
+  final _slotDurationCtrl = TextEditingController(text: '120');
+
   File? _selectedImage;
-  final _picker = ImagePicker();
 
   @override
   void initState() {
@@ -57,6 +62,10 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     _bannerCtrl.dispose();
     _openTimeCtrl.dispose();
     _closeTimeCtrl.dispose();
+    _maxBulkItemsCtrl.dispose();
+    _minLeadHoursCtrl.dispose();
+    _maxLeadHoursCtrl.dispose();
+    _slotDurationCtrl.dispose();
     super.dispose();
   }
 
@@ -68,7 +77,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
       final shopsResp = await _supabase
           .from('shops')
           .select(
-              'id, name, is_active, is_accepting_orders, banner_url, open_time, close_time, address, category, categories')
+              'id, name, is_active, is_accepting_orders, banner_url, open_time, close_time, address, category, categories, accepts_bulk_orders, max_bulk_items_per_slot, min_bulk_lead_time_hours, max_bulk_lead_time_hours, bulk_slot_duration_minutes')
           .eq('seller_id', auth.currentUserId!);
 
       final shopsList = List<Map<String, dynamic>>.from(shopsResp as List);
@@ -93,6 +102,14 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         _bannerCtrl.text = resp['banner_url'] ?? '';
         _openTimeCtrl.text = resp['open_time'] ?? '09:00';
         _closeTimeCtrl.text = resp['close_time'] ?? '21:00';
+
+        // Bulk settings
+        _acceptsBulkOrders = resp['accepts_bulk_orders'] ?? false;
+        _maxBulkItemsCtrl.text = (resp['max_bulk_items_per_slot'] ?? 200).toString();
+        _minLeadHoursCtrl.text = (resp['min_bulk_lead_time_hours'] ?? 4).toString();
+        _maxLeadHoursCtrl.text = (resp['max_bulk_lead_time_hours'] ?? 168).toString();
+        _slotDurationCtrl.text = (resp['bulk_slot_duration_minutes'] ?? 120).toString();
+
         _isLoading = false;
       });
     } catch (e) {
@@ -123,8 +140,12 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   Future<void> _pickImage() async {
     final source = await showImageSourceSheet(context);
     if (source == null) return;
-    final pickedFile =
-        await _picker.pickImage(source: source, imageQuality: 70);
+    final pickedFile = await pickSafeImage(
+      source: source,
+      maxWidth: 1920,
+      maxHeight: 1080,
+      imageQuality: 75,
+    );
     if (pickedFile != null && mounted) {
       final cropped = await cropImage(
         context,
@@ -163,6 +184,11 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         'banner_url': uploadedUrl,
         'open_time': _openTimeCtrl.text.trim(),
         'close_time': _closeTimeCtrl.text.trim(),
+        'accepts_bulk_orders': _acceptsBulkOrders,
+        'max_bulk_items_per_slot': int.tryParse(_maxBulkItemsCtrl.text.trim()) ?? 200,
+        'min_bulk_lead_time_hours': int.tryParse(_minLeadHoursCtrl.text.trim()) ?? 4,
+        'max_bulk_lead_time_hours': int.tryParse(_maxLeadHoursCtrl.text.trim()) ?? 168,
+        'bulk_slot_duration_minutes': int.tryParse(_slotDurationCtrl.text.trim()) ?? 120,
       }).eq('id', _shopId!);
       if (!mounted) return;
       _showSnack('✅ Shop details updated!');

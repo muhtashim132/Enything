@@ -10,6 +10,7 @@ import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
+import '../../services/kyc_draft_service.dart';
 
 class DeliveryKycUploadPage extends StatefulWidget {
   const DeliveryKycUploadPage({super.key});
@@ -39,7 +40,27 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
   File? _rcBack;
 
   @override
+  void initState() {
+    super.initState();
+    _aadharCtrl.addListener(_saveDraft);
+    _panCtrl.addListener(_saveDraft);
+    _dlCtrl.addListener(_saveDraft);
+    _accountHolderCtrl.addListener(_saveDraft);
+    _bankAccountCtrl.addListener(_saveDraft);
+    _ifscCtrl.addListener(_saveDraft);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkLostDataAndRestoreDraft();
+    });
+  }
+
+  @override
   void dispose() {
+    _aadharCtrl.removeListener(_saveDraft);
+    _panCtrl.removeListener(_saveDraft);
+    _dlCtrl.removeListener(_saveDraft);
+    _accountHolderCtrl.removeListener(_saveDraft);
+    _bankAccountCtrl.removeListener(_saveDraft);
+    _ifscCtrl.removeListener(_saveDraft);
     _aadharCtrl.dispose();
     _panCtrl.dispose();
     _dlCtrl.dispose();
@@ -49,13 +70,155 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
     super.dispose();
   }
 
-  Future<void> _pickImage(Function(File) onPicked) async {
+  void _saveDraft() {
+    final userId =
+        context.read<AuthProvider>().currentUserId ?? _db.auth.currentUser?.id;
+    if (userId == null) return;
+    KycDraftService.saveDeliveryDraft(
+      userId: userId,
+      textFields: {
+        'aadhar': _aadharCtrl.text,
+        'pan': _panCtrl.text,
+        'dl': _dlCtrl.text,
+        'accountHolder': _accountHolderCtrl.text,
+        'bankAccount': _bankAccountCtrl.text,
+        'ifsc': _ifscCtrl.text,
+      },
+      filePaths: {
+        'aadharFront': _aadharFront?.path,
+        'aadharBack': _aadharBack?.path,
+        'panFront': _panFront?.path,
+        'panBack': _panBack?.path,
+        'dlFront': _dlFront?.path,
+        'dlBack': _dlBack?.path,
+        'rcFront': _rcFront?.path,
+        'rcBack': _rcBack?.path,
+      },
+    );
+  }
+
+  Future<void> _checkLostDataAndRestoreDraft() async {
+    final userId =
+        context.read<AuthProvider>().currentUserId ?? _db.auth.currentUser?.id;
+    if (userId == null) return;
+
+    // 1. Restore saved form draft if available
+    try {
+      final draft = await KycDraftService.getDeliveryDraft(userId);
+      if (draft != null && mounted) {
+        final textFields =
+            (draft['textFields'] as Map?)?.cast<String, String>() ?? {};
+        final filePaths =
+            (draft['filePaths'] as Map?)?.cast<String, String?>() ?? {};
+
+        setState(() {
+          if (_aadharCtrl.text.isEmpty && textFields['aadhar'] != null) {
+            _aadharCtrl.text = textFields['aadhar']!;
+          }
+          if (_panCtrl.text.isEmpty && textFields['pan'] != null) {
+            _panCtrl.text = textFields['pan']!;
+          }
+          if (_dlCtrl.text.isEmpty && textFields['dl'] != null) {
+            _dlCtrl.text = textFields['dl']!;
+          }
+          if (_accountHolderCtrl.text.isEmpty &&
+              textFields['accountHolder'] != null) {
+            _accountHolderCtrl.text = textFields['accountHolder']!;
+          }
+          if (_bankAccountCtrl.text.isEmpty &&
+              textFields['bankAccount'] != null) {
+            _bankAccountCtrl.text = textFields['bankAccount']!;
+          }
+          if (_ifscCtrl.text.isEmpty && textFields['ifsc'] != null) {
+            _ifscCtrl.text = textFields['ifsc']!;
+          }
+
+          _aadharFront ??=
+              KycDraftService.fileFromPath(filePaths['aadharFront']);
+          _aadharBack ??=
+              KycDraftService.fileFromPath(filePaths['aadharBack']);
+          _panFront ??= KycDraftService.fileFromPath(filePaths['panFront']);
+          _panBack ??= KycDraftService.fileFromPath(filePaths['panBack']);
+          _dlFront ??= KycDraftService.fileFromPath(filePaths['dlFront']);
+          _dlBack ??= KycDraftService.fileFromPath(filePaths['dlBack']);
+          _rcFront ??= KycDraftService.fileFromPath(filePaths['rcFront']);
+          _rcBack ??= KycDraftService.fileFromPath(filePaths['rcBack']);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error restoring delivery KYC draft: $e');
+    }
+
+    // 2. Check if Android OS killed MainActivity during camera intent
+    try {
+      final picker = ImagePicker();
+      final lostData = await picker.retrieveLostData();
+      if (!lostData.isEmpty && lostData.file != null && mounted) {
+        final pendingSlot = await KycDraftService.getPendingSlot('delivery');
+        final recoveredFile = File(lostData.file!.path);
+        String restoredDocName = 'Document';
+
+        setState(() {
+          switch (pendingSlot) {
+            case 'aadhar_front':
+              _aadharFront = recoveredFile;
+              restoredDocName = 'Aadhaar (Front)';
+              break;
+            case 'aadhar_back':
+              _aadharBack = recoveredFile;
+              restoredDocName = 'Aadhaar (Back)';
+              break;
+            case 'pan_front':
+              _panFront = recoveredFile;
+              restoredDocName = 'PAN Card (Front)';
+              break;
+            case 'pan_back':
+              _panBack = recoveredFile;
+              restoredDocName = 'PAN Card (Back)';
+              break;
+            case 'dl_front':
+              _dlFront = recoveredFile;
+              restoredDocName = 'Driving License (Front)';
+              break;
+            case 'dl_back':
+              _dlBack = recoveredFile;
+              restoredDocName = 'Driving License (Back)';
+              break;
+            case 'rc_front':
+              _rcFront = recoveredFile;
+              restoredDocName = 'Vehicle RC (Front)';
+              break;
+            case 'rc_back':
+              _rcBack = recoveredFile;
+              restoredDocName = 'Vehicle RC (Back)';
+              break;
+          }
+        });
+
+        await KycDraftService.clearPendingSlot('delivery');
+        _saveDraft();
+        _showSnack('Restored your captured photo: $restoredDocName');
+      }
+    } catch (e) {
+      debugPrint('Error retrieving lost image data: $e');
+    }
+  }
+
+  Future<void> _pickImage(String slotKey, Function(File) onPicked) async {
     final source = await showImageSourceSheet(context);
     if (source == null) return;
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source, imageQuality: 70);
+    await KycDraftService.setPendingSlot('delivery', slotKey);
+    final pickedFile = await pickSafeImage(
+      source: source,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 75,
+    );
     if (pickedFile != null) {
-      setState(() => onPicked(File(pickedFile.path)));
+      await KycDraftService.clearPendingSlot('delivery');
+      final file = File(pickedFile.path);
+      setState(() => onPicked(file));
+      _saveDraft();
     }
   }
 
@@ -175,6 +338,10 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
                 'A delivery partner has submitted their KYC documents for review.',
           );
         }
+
+        // Purge local draft and pending slot on successful submission
+        await KycDraftService.clearDeliveryDraft(userId);
+        await KycDraftService.clearPendingSlot('delivery');
 
         if (!mounted) return;
         Navigator.pushNamedAndRemoveUntil(
@@ -419,8 +586,8 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
                   file2: _aadharBack,
                   label1: 'Front',
                   label2: 'Back',
-                  onPick1: () => _pickImage((f) => _aadharFront = f),
-                  onPick2: () => _pickImage((f) => _aadharBack = f),
+                  onPick1: () => _pickImage('aadhar_front', (f) => _aadharFront = f),
+                  onPick2: () => _pickImage('aadhar_back', (f) => _aadharBack = f),
                 ),
                 const SizedBox(height: 20),
                 _buildDocumentCard(
@@ -430,8 +597,8 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
                   file2: _panBack,
                   label1: 'Front',
                   label2: 'Back',
-                  onPick1: () => _pickImage((f) => _panFront = f),
-                  onPick2: () => _pickImage((f) => _panBack = f),
+                  onPick1: () => _pickImage('pan_front', (f) => _panFront = f),
+                  onPick2: () => _pickImage('pan_back', (f) => _panBack = f),
                 ),
                 const SizedBox(height: 20),
                 _buildDocumentCard(
@@ -441,8 +608,8 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
                   file2: _dlBack,
                   label1: 'Front',
                   label2: 'Back',
-                  onPick1: () => _pickImage((f) => _dlFront = f),
-                  onPick2: () => _pickImage((f) => _dlBack = f),
+                  onPick1: () => _pickImage('dl_front', (f) => _dlFront = f),
+                  onPick2: () => _pickImage('dl_back', (f) => _dlBack = f),
                 ),
                 const SizedBox(height: 20),
                 _buildDocumentCard(
@@ -452,8 +619,8 @@ class _DeliveryKycUploadPageState extends State<DeliveryKycUploadPage> {
                   file2: _rcBack,
                   label1: 'Front',
                   label2: 'Back (Opt)',
-                  onPick1: () => _pickImage((f) => _rcFront = f),
-                  onPick2: () => _pickImage((f) => _rcBack = f),
+                  onPick1: () => _pickImage('rc_front', (f) => _rcFront = f),
+                  onPick2: () => _pickImage('rc_back', (f) => _rcBack = f),
                 ),
                 const SizedBox(height: 48),
                 SizedBox(

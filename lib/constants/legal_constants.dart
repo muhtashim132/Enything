@@ -32,9 +32,9 @@ class LegalConstants {
           'You agree not to order, list, or attempt to purchase illegal, hazardous, banned, or counterfeit items. You must not use the platform for any fraudulent, abusive, or unlawful purpose. Violation will result in immediate account termination and may be reported to relevant authorities.',
     ),
     LegalSection(
-      heading: '4. Payment Terms',
+      heading: '4. Payment Terms & Dynamic Delivery Charges',
       content:
-          'All transactions are conducted exclusively in Indian Rupees (INR). Payments are processed by Razorpay Software Private Limited, a PCI DSS–compliant payment aggregator regulated under RBI guidelines. Enything does not store your card, UPI, or net-banking credentials at any time. The total amount shown at checkout is final; there are no hidden charges. A convenience or platform fee, if applicable, will be disclosed before order confirmation.',
+          'All transactions are conducted exclusively in Indian Rupees (INR). Payments are processed by Razorpay Software Private Limited, a PCI DSS–compliant payment aggregator regulated under RBI guidelines. Enything does not store your card, UPI, or net-banking credentials at any time. Delivery charges, distance fees, multi-shop surcharges, heavy order fees, small cart fees, and platform convenience fees are dynamic and subject to variation; Enything reserves the right to increase or decrease such delivery charges and fees at any time based on distance, order volume, weather conditions, peak demand surge hours, or hyper-local logistics. The final itemized total—including all dynamic delivery charges, platform fees, and applicable taxes—is displayed transparently at checkout before you authorize payment. Once payment is captured, the order total for that transaction is final with zero hidden charges.',
     ),
     LegalSection(
       heading: '5. Order Acceptance & Fulfilment',
@@ -104,6 +104,11 @@ class LegalConstants {
       content:
           'We use industry-standard encryption (TLS 1.2+) for all data in transit. Our backend infrastructure is hosted on Supabase, which is SOC 2 Type II certified. Access to your data is restricted to authorised personnel only.',
     ),
+    LegalSection(
+      heading: '9. Dynamic Delivery Charges, Surcharges & Transparency Notices',
+      content:
+          'Enything reserves the right to dynamically determine, adjust, increase, or decrease delivery charges, distance rates, small cart fees, multi-shop surcharges, heavy order fees, and platform convenience fees at any time based on real-time factors including travel distance, weather conditions, traffic density, high-demand peak hours (surge pricing), order weight/volume, and hyper-local operational logistics. Customers will always be presented with a transparent, fully itemized breakdown of all applicable delivery charges, surcharges, and taxes directly on the checkout screen for review and explicit approval prior to payment authorization and order placement. Itemized digital order receipts detailing all charged amounts are delivered immediately upon order confirmation.',
+    ),
   ];
 
   static final List<LegalSection> customerRefund = [
@@ -157,9 +162,9 @@ class LegalConstants {
           'Pharmacies must require customer prescription uploads for Schedule H drugs before dispensing. Dispensing must occur under a registered pharmacist. Sale of Schedule X drugs and narcotics (NDPS Act) via the platform is strictly prohibited and will result in immediate deactivation and reporting to authorities.',
     ),
     LegalSection(
-      heading: '4. Financial & Commission Terms',
+      heading: '4. Financial, Commission & Dynamic Rate Adjustment Terms',
       content:
-          'You agree to the platform commission fee structure disclosed in your onboarding agreement. Tax Collection at Source (TCS) under the GST framework will be deducted from settlements as required by Indian law. Payouts are processed to your registered bank account on a weekly cycle (Monday–Sunday earnings credited by following Wednesday).',
+          'You agree to the platform commission fee structure applicable to your store and listed categories. Enything and its platform owners reserve the unilateral and absolute right to periodically calibrate, adjust, increase, or decrease platform commission percentages, service charges, and category-level fees across any or all product categories at their sole discretion at any time based on operational economics, seasonal trends, or market dynamics. Commission rates are variable and not permanently fixed. Enything will communicate any revisions to commission rates or fee schedules in advance via in-app alerts, seller dashboard notices, SMS, or registered electronic communications prior to their effective date for subsequent orders. Continued listing and order fulfillment following notification constitutes acceptance of the revised schedule. Tax Collection at Source (TCS) under the GST framework will be deducted from settlements as required by Indian law. Payouts are processed to your registered bank account on a weekly cycle (Monday–Sunday earnings credited by following Wednesday).',
     ),
     LegalSection(
       heading: '5. Fulfilment SLAs',
@@ -199,6 +204,11 @@ class LegalConstants {
       content:
           'We do not store your bank account credentials beyond what is required for payout initiation. Bank account data is encrypted at rest and shared with Razorpay\'s payout service only.',
     ),
+    LegalSection(
+      heading: '5. Dynamic Platform Commission, Category Rates & Prior Notifications',
+      content:
+          'Enything, its platform proprietor, and authorized management reserve the unilateral and absolute right to review, adjust, increase, or decrease platform commission percentages, listing fees, and category-wise commission charges across any or all product categories at any time at their sole discretion based on business dynamics, operational overheads, category margins, or market conditions. Category commissions and seller fees are flexible and not permanently fixed. In the event of any upward or downward revision to category commission rates or fee schedules, Enything will provide advance notification to affected sellers via in-app alerts, dashboard notifications, registered SMS, or email before the revised rates take effect on subsequent customer orders. Continued use of the platform and product listing following such notification constitutes full acceptance of the updated commission structure.',
+    ),
   ];
 
   static final List<LegalSection> sellerRefund = [
@@ -232,9 +242,9 @@ class LegalConstants {
           'You are an independent contractor, not an employee of Enything. You are not entitled to employee benefits, health insurance, provident fund (PF), or gratuity under any applicable Indian labour law.',
     ),
     LegalSection(
-      heading: '2. Earnings & Revenue Share',
+      heading: '2. Dynamic Earnings, Delivery Charges & Revenue Share',
       content:
-          'You are entitled to a defined share of the delivery charge for each successfully completed delivery, as communicated during onboarding. Payout cycles are processed weekly to your registered bank account.',
+          'You are entitled to a defined share of the delivery charge for each successfully completed delivery. Enything and its platform management reserve the absolute right to revise, increase, or decrease delivery charges collected from customers as well as the corresponding delivery partner earnings, base payout rates, per-kilometer compensation, and incentive structures at their sole discretion at any time based on operational logistics, fuel inflation, weather, order density, or platform requirements. Payout rates and delivery fee structures are flexible and not permanently fixed. Enything will provide advance communication of any revisions to payout structures or fee rates through in-app alerts, notifications, or registered messages. Payout cycles are processed weekly to your registered bank account.',
     ),
     LegalSection(
       heading: '3. Vehicle & Document Compliance',
@@ -278,6 +288,11 @@ class LegalConstants {
       heading: '4. Payment Data',
       content:
           'Your bank account details are used solely for processing weekly payout settlements. This data is encrypted and shared with Razorpay\'s payout service only.',
+    ),
+    LegalSection(
+      heading: '5. Dynamic Delivery Charges, Partner Payouts & Advance Alerts',
+      content:
+          'Enything, its platform proprietor, and management reserve the exclusive right to modify, adjust, increase, or decrease customer delivery charges and delivery partner payouts—including base pickup/drop rates, per-kilometer distance rates, surge payouts, and earning distribution ratios—at any time at their sole discretion based on prevailing fuel costs, weather conditions, order volumes, operational logistics, or supply-demand balance. Delivery partner payout rates and compensation schedules are variable and not permanently fixed. Delivery partners will receive advance notification of any modifications to baseline payout formulas, rates, or incentive structures via the partner app, in-app notification, or registered mobile messaging.',
     ),
   ];
 

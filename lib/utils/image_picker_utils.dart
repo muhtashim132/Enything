@@ -4,6 +4,26 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart' show CropAspectRatio, CroppedFile;
 import '../widgets/common/custom_image_cropper.dart';
 
+/// Safely picks an image with memory-conscious limits (maxWidth/maxHeight)
+/// to prevent Android Low Memory Killer (LMK) process death and native
+/// OutOfMemoryError crashes on low-RAM devices (2GB-4GB).
+Future<XFile?> pickSafeImage({
+  required ImageSource source,
+  double maxWidth = 1600,
+  double maxHeight = 1600,
+  int imageQuality = 75,
+  CameraDevice preferredCameraDevice = CameraDevice.rear,
+}) async {
+  final picker = ImagePicker();
+  return await picker.pickImage(
+    source: source,
+    maxWidth: maxWidth,
+    maxHeight: maxHeight,
+    imageQuality: imageQuality,
+    preferredCameraDevice: preferredCameraDevice,
+  );
+}
+
 /// Shows a premium bottom sheet letting the user choose between
 /// Camera and Gallery. Returns the chosen [ImageSource] or null if dismissed.
 ///
@@ -11,7 +31,7 @@ import '../widgets/common/custom_image_cropper.dart';
 /// ```dart
 /// final source = await showImageSourceSheet(context);
 /// if (source == null) return;
-/// final file = await picker.pickImage(source: source, imageQuality: 70);
+/// final file = await pickSafeImage(source: source);
 /// ```
 Future<ImageSource?> showImageSourceSheet(BuildContext context) async {
   final isDark = Theme.of(context).brightness == Brightness.dark;

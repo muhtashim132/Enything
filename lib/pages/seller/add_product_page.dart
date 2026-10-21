@@ -40,7 +40,7 @@ class _AddProductPageState extends State<AddProductPage> {
   final _weightController = TextEditingController();
   final _inventoryController = TextEditingController();
 
-  bool? _isVeg = true;
+  bool? _isVeg;
   bool _isAvailable = true;
   bool _hasDiscount = false;
   bool _isSaving = false;
@@ -49,6 +49,11 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _requiresPrescription = false;
   String _medicineType = 'General';
   String? _shopId;
+
+  // ── Bulk Catering & Event Ordering ─────────────────────────────────────────
+  bool _bulkEligible = false;
+  final _minBulkQuantityController = TextEditingController(text: '10');
+  List<Map<String, dynamic>> _bulkPriceTiers = [];
   // BUG-FIX: Only categories belonging to the shop's CategoryGroup are allowed.
   // Prevents a restaurant seller from mis-categorising a product as Pharmacy etc.
   late List<String> _allowedCategories = [
@@ -104,6 +109,7 @@ class _AddProductPageState extends State<AddProductPage> {
     _menuCategoryController.addListener(_markDirty);
     _weightController.addListener(_markDirty);
     _inventoryController.addListener(_markDirty);
+    _minBulkQuantityController.addListener(_markDirty);
     if (widget.existingProduct != null) {
       final p = widget.existingProduct!;
       _nameController.text = p.name;
@@ -115,7 +121,7 @@ class _AddProductPageState extends State<AddProductPage> {
       _descriptionController.text = p.description ?? '';
       _productCategory = p.category;
       _menuCategoryController.text = p.menuCategory ?? '';
-      _isVeg = p.isVeg;
+      _isVeg = AppCategories.isFoodCategory(p.category) ? p.isVeg : null;
       _isAvailable = p.isAvailable;
       if (p.weightPerUnit != null) {
         _weightController.text = p.weightPerUnit.toString();
@@ -128,6 +134,14 @@ class _AddProductPageState extends State<AddProductPage> {
       _medicineType = p.medicineType;
       _existingImageUrls = List.from(p.images);
       _variants = List.from(p.variants);
+
+      // Bulk catering restoration
+      _bulkEligible = p.bulkEligible;
+      if (p.minBulkQuantity != null) {
+        _minBulkQuantityController.text = p.minBulkQuantity.toString();
+      }
+      _bulkPriceTiers = p.bulkPriceTiers.map((t) => Map<String, dynamic>.from(t)).toList();
+
       // Restore saved product-level GST override
       if (p.gstRateOverride != null) {
         _gstRateOverride = p.gstRateOverride;
@@ -217,6 +231,9 @@ class _AddProductPageState extends State<AddProductPage> {
           _productCategory = _allowedCategories.contains(primaryCat)
               ? primaryCat
               : _allowedCategories.first;
+        }
+        if (widget.existingProduct == null) {
+          _isVeg = AppCategories.isFoodCategory(_productCategory) ? true : null;
         }
       });
       _fetchExistingMenuCategories();
@@ -652,18 +669,19 @@ class _AddProductPageState extends State<AddProductPage> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                            isSelected ? FontWeight.w700 : FontWeight.w600,
                         color:
-                            isSelected ? Colors.white : AppColors.textPrimary,
+                            isSelected ? Colors.white : const Color(0xFF1E293B),
                       ),
                     ),
                     backgroundColor: isSelected
                         ? AppColors.primary
-                        : AppColors.cardBg,
+                        : const Color(0xFFF1F5F9),
                     side: BorderSide(
                       color: isSelected
                           ? AppColors.primary
-                          : AppColors.border,
+                          : const Color(0xFFCBD5E1),
+                      width: 1.2,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -922,18 +940,39 @@ class _AddProductPageState extends State<AddProductPage> {
         ],
         if (!hasImage)
           ElevatedButton.icon(
-            icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-            label: Text(isDimensional
-                ? 'Add Variant Image (Usually Not Needed)'
-                : 'Add Variant Image (Optional)'),
+            icon: Icon(
+              Icons.add_photo_alternate_rounded,
+              size: 18,
+              color: isDimensional ? const Color(0xFF475569) : AppColors.primary,
+            ),
+            label: Text(
+              isDimensional
+                  ? 'Add Variant Image (Usually Not Needed)'
+                  : 'Add Variant Image (Optional)',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                color: isDimensional ? const Color(0xFF475569) : AppColors.primary,
+              ),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: isDimensional
-                  ? AppColors.surfaceColor
-                  : AppColors.primary.withValues(alpha: 0.1),
+                  ? const Color(0xFFF1F5F9)
+                  : const Color(0xFFEFF6FF),
               foregroundColor: isDimensional
-                  ? AppColors.textSecondary
+                  ? const Color(0xFF475569)
                   : AppColors.primary,
+              side: BorderSide(
+                color: isDimensional
+                    ? const Color(0xFFCBD5E1)
+                    : const Color(0xFF93C5FD),
+                width: 1.2,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
             onPressed: () async {
               final file = await _pickVariantImage(dialogContext);
@@ -964,8 +1003,9 @@ class _AddProductPageState extends State<AddProductPage> {
                         errorBuilder: (_, __, ___) => Container(
                           height: 72,
                           width: 72,
-                          color: AppColors.primary.withValues(alpha: 0.08),
-                          child: const Icon(Icons.broken_image_outlined),
+                          color: const Color(0xFFEFF6FF),
+                          child: const Icon(Icons.broken_image_outlined,
+                              color: AppColors.primary),
                         ),
                       ),
               ),
@@ -973,9 +1013,19 @@ class _AddProductPageState extends State<AddProductPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.swap_horiz, size: 16),
-                    label: const Text('Change', style: TextStyle(fontSize: 13)),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: Color(0xFF93C5FD), width: 1.2),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                    ),
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                    label: const Text('Change',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w700)),
                     onPressed: () async {
                       final file = await _pickVariantImage(dialogContext);
                       if (file != null && dialogContext.mounted) {
@@ -985,12 +1035,23 @@ class _AddProductPageState extends State<AddProductPage> {
                       }
                     },
                   ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.delete_outline, size: 16,
-                        color: AppColors.danger),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.danger,
+                      side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.2),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded,
+                        size: 16, color: AppColors.danger),
                     label: const Text('Remove',
                         style: TextStyle(
-                            fontSize: 13, color: AppColors.danger)),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.danger)),
                     onPressed: () {
                       setDialogState(() {
                         _variantImageFiles.remove('temp_dialog');
@@ -1009,7 +1070,7 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
-  Future<void> _showAddVariantDialog() async {
+  Future<void> _showAddVariantDialog({String? prefilledName}) async {
     // P2: Max variant limit
     if (_variants.length >= 20) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1021,7 +1082,7 @@ class _AddProductPageState extends State<AddProductPage> {
       return;
     }
 
-    final nameCtrl = TextEditingController();
+    final nameCtrl = TextEditingController(text: prefilledName ?? '');
     final priceCtrl = TextEditingController();
     final originalPriceCtrl = TextEditingController();
 
@@ -1029,128 +1090,206 @@ class _AddProductPageState extends State<AddProductPage> {
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add Variation'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Name (e.g., Large, Full)'),
-              ),
-              if (AppCategories.getSuggestedVariants(_productCategory)
-                  .isNotEmpty) ...[
-                const SizedBox(height: 12),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Suggestions:',
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Add Variation',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(
+                    labelText: 'Name (e.g., Large, Full)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: AppCategories.getSuggestedVariants(_productCategory)
-                      .map((s) => ActionChip(
-                            label:
-                                Text(s, style: const TextStyle(fontSize: 12)),
-                            onPressed: () => nameCtrl.text = s,
-                            backgroundColor:
-                                AppColors.primary.withValues(alpha: 0.05),
-                            side: BorderSide(
-                                color:
-                                    AppColors.primary.withValues(alpha: 0.2)),
-                          ))
-                      .toList(),
+                if (AppCategories.getSuggestedVariants(_productCategory)
+                    .isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Quick Suggestions:',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: AppCategories.getSuggestedVariants(_productCategory)
+                        .map((s) {
+                      final isSelected =
+                          nameCtrl.text.trim().toLowerCase() == s.toLowerCase();
+                      return GestureDetector(
+                        onTap: () {
+                          HapticUtils.selection();
+                          setDialogState(() {
+                            nameCtrl.text = s;
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primary
+                                : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : const Color(0xFF93C5FD),
+                              width: isSelected ? 1.6 : 1.2,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color:
+                                          AppColors.primary.withValues(alpha: 0.3),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    )
+                                  ]
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.add_circle_outline_rounded,
+                                size: 14,
+                                color: isSelected ? Colors.white : AppColors.primary,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                s,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF1E3A8A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Selling Price (₹)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: originalPriceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Original Price (MRP) (₹)',
+                    hintText: 'Optional',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildVariantImageSection(
+                  ctx,
+                  setDialogState,
+                  isDimensional: _areVariantsDimensional(),
                 ),
               ],
-              const SizedBox(height: 16),
-              TextField(
-                controller: priceCtrl,
-                keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Selling Price (₹)'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: originalPriceCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Original Price (MRP) (₹)',
-                  hintText: 'Optional',
+            ),
+          ),
+          actions: [
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              const SizedBox(height: 16),
-              StatefulBuilder(
-                builder: (context, setDialogState) {
-                  return _buildVariantImageSection(
-                    ctx,
-                    setDialogState,
-                    isDimensional: _areVariantsDimensional(),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
               onPressed: () {
                 _variantImageFiles.remove('temp_dialog');
                 Navigator.pop(ctx);
               },
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              final n = nameCtrl.text.trim();
-              final p = double.tryParse(priceCtrl.text.trim());
-              final op = double.tryParse(originalPriceCtrl.text.trim());
-              if (n.isNotEmpty && p != null) {
-                if (op != null && op <= p) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+              child: const Text('Cancel',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+              ),
+              onPressed: () {
+                final n = nameCtrl.text.trim();
+                final p = double.tryParse(priceCtrl.text.trim());
+                final op = double.tryParse(originalPriceCtrl.text.trim());
+                if (n.isNotEmpty && p != null) {
+                  if (op != null && op <= p) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
                         content:
-                            Text('MRP must be greater than Selling Price')),
-                  );
-                  return;
-                }
-
-                final isDuplicate = _variants
-                    .any((v) => v.name.trim().toLowerCase() == n.toLowerCase());
-                if (isDuplicate) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('A variant with this name already exists!'),
-                      backgroundColor: AppColors.danger,
-                    ),
-                  );
-                  return;
-                }
-
-                final vId = DateTime.now().millisecondsSinceEpoch.toString();
-                setState(() {
-                  _variants.add(ProductVariant(
-                    id: vId,
-                    name: n,
-                    price: p,
-                    originalPrice: op,
-                  ));
-                  if (_variantImageFiles['temp_dialog'] != null) {
-                    _variantImageFiles[vId] =
-                        _variantImageFiles['temp_dialog']!;
+                            Text('MRP must be greater than Selling Price'),
+                      ),
+                    );
+                    return;
                   }
-                  _isDirty = true;
-                });
-                _variantImageFiles.remove('temp_dialog');
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
+
+                  final isDuplicate = _variants
+                      .any((v) => v.name.trim().toLowerCase() == n.toLowerCase());
+                  if (isDuplicate) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('A variant with this name already exists!'),
+                        backgroundColor: AppColors.danger,
+                      ),
+                    );
+                    return;
+                  }
+
+                  final vId = DateTime.now().millisecondsSinceEpoch.toString();
+                  setState(() {
+                    _variants.add(ProductVariant(
+                      id: vId,
+                      name: n,
+                      price: p,
+                      originalPrice: op,
+                    ));
+                    if (_variantImageFiles['temp_dialog'] != null) {
+                      _variantImageFiles[vId] =
+                          _variantImageFiles['temp_dialog']!;
+                    }
+                    _isDirty = true;
+                  });
+                  _variantImageFiles.remove('temp_dialog');
+                  Navigator.pop(ctx);
+                }
+              },
+              child: const Text('Add Variation',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1180,113 +1319,218 @@ class _AddProductPageState extends State<AddProductPage> {
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit Variation'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Name (e.g., Large, Full)'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: priceCtrl,
-                keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Selling Price (₹)'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: originalPriceCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Original Price (MRP) (₹)',
-                  hintText: 'Optional',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Edit Variation',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(
+                    labelText: 'Name (e.g., Large, Full)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                if (AppCategories.getSuggestedVariants(_productCategory)
+                    .isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Quick Suggestions:',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: AppCategories.getSuggestedVariants(_productCategory)
+                        .map((s) {
+                      final isSelected =
+                          nameCtrl.text.trim().toLowerCase() == s.toLowerCase();
+                      return GestureDetector(
+                        onTap: () {
+                          HapticUtils.selection();
+                          setDialogState(() {
+                            nameCtrl.text = s;
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primary
+                                : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : const Color(0xFF93C5FD),
+                              width: isSelected ? 1.6 : 1.2,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color:
+                                          AppColors.primary.withValues(alpha: 0.3),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    )
+                                  ]
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.add_circle_outline_rounded,
+                                size: 14,
+                                color: isSelected ? Colors.white : AppColors.primary,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                s,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF1E3A8A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Selling Price (₹)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: originalPriceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Original Price (MRP) (₹)',
+                    hintText: 'Optional',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildVariantImageSection(
+                  ctx,
+                  setDialogState,
+                  existingImageUrl: existingUrl,
+                  isDimensional: _areVariantsDimensional(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              const SizedBox(height: 16),
-              StatefulBuilder(
-                builder: (context, setDialogState) {
-                  return _buildVariantImageSection(
-                    ctx,
-                    setDialogState,
-                    existingImageUrl: existingUrl,
-                    isDimensional: _areVariantsDimensional(),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
               onPressed: () {
                 _variantImageFiles.remove('temp_dialog');
                 Navigator.pop(ctx);
               },
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              final n = nameCtrl.text.trim();
-              final p = double.tryParse(priceCtrl.text.trim());
-              final op = double.tryParse(originalPriceCtrl.text.trim());
-              if (n.isNotEmpty && p != null) {
-                if (op != null && op <= p) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+              child: const Text('Cancel',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+              ),
+              onPressed: () {
+                final n = nameCtrl.text.trim();
+                final p = double.tryParse(priceCtrl.text.trim());
+                final op = double.tryParse(originalPriceCtrl.text.trim());
+                if (n.isNotEmpty && p != null) {
+                  if (op != null && op <= p) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
                         content:
-                            Text('MRP must be greater than Selling Price')),
-                  );
-                  return;
-                }
-
-                // Check for duplicate names (excluding current variant)
-                final isDuplicate = _variants.asMap().entries.any((e) =>
-                    e.key != index &&
-                    e.value.name.trim().toLowerCase() == n.toLowerCase());
-                if (isDuplicate) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('A variant with this name already exists!'),
-                      backgroundColor: AppColors.danger,
-                    ),
-                  );
-                  return;
-                }
-
-                setState(() {
-                  // Determine new image URL
-                  String? newImageUrl = variant.imageUrl;
-                  if (_variantImageFiles['temp_dialog'] != null) {
-                    _variantImageFiles[variant.id] =
-                        _variantImageFiles['temp_dialog']!;
-                  } else if (_removedVariantImageUrls
-                      .contains(variant.imageUrl)) {
-                    newImageUrl = null;
-                    _variantImageFiles.remove(variant.id);
+                            Text('MRP must be greater than Selling Price'),
+                      ),
+                    );
+                    return;
                   }
 
-                  _variants[index] = variant.copyWith(
-                    name: n,
-                    price: p,
-                    originalPrice: op,
-                    imageUrl: _removedVariantImageUrls
-                            .contains(variant.imageUrl)
-                        ? null
-                        : newImageUrl,
-                  );
-                  _isDirty = true;
-                });
-                _variantImageFiles.remove('temp_dialog');
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
+                  // Check for duplicate names (excluding current variant)
+                  final isDuplicate = _variants.asMap().entries.any((e) =>
+                      e.key != index &&
+                      e.value.name.trim().toLowerCase() == n.toLowerCase());
+                  if (isDuplicate) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('A variant with this name already exists!'),
+                        backgroundColor: AppColors.danger,
+                      ),
+                    );
+                    return;
+                  }
+
+                  setState(() {
+                    // Determine new image URL
+                    String? newImageUrl = variant.imageUrl;
+                    if (_variantImageFiles['temp_dialog'] != null) {
+                      _variantImageFiles[variant.id] =
+                          _variantImageFiles['temp_dialog']!;
+                    } else if (_removedVariantImageUrls
+                        .contains(variant.imageUrl)) {
+                      newImageUrl = null;
+                      _variantImageFiles.remove(variant.id);
+                    }
+
+                    _variants[index] = variant.copyWith(
+                      name: n,
+                      price: p,
+                      originalPrice: op,
+                      imageUrl: _removedVariantImageUrls
+                              .contains(variant.imageUrl)
+                          ? null
+                          : newImageUrl,
+                    );
+                    _isDirty = true;
+                  });
+                  _variantImageFiles.remove('temp_dialog');
+                  Navigator.pop(ctx);
+                }
+              },
+              child: const Text('Save',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1415,7 +1659,7 @@ class _AddProductPageState extends State<AddProductPage> {
         'menu_category': _menuCategoryController.text.trim().isEmpty
             ? null
             : _menuCategoryController.text.trim(),
-        'is_veg': _isVeg,
+        'is_veg': AppCategories.isFoodCategory(_productCategory) ? _isVeg : null,
         'is_available': _isAvailable,
         'weight_per_unit': _weightController.text.trim().isEmpty
             ? null
@@ -1436,6 +1680,12 @@ class _AddProductPageState extends State<AddProductPage> {
         'variants': _variants.map((v) => v.toMap()).toList(),
         // Product-level GST override (null = use category default)
         'gst_rate_override': _gstRateOverride,
+        // Bulk Catering configuration
+        'bulk_eligible': _bulkEligible,
+        'min_bulk_quantity': _bulkEligible
+            ? (int.tryParse(_minBulkQuantityController.text.trim()) ?? 10)
+            : 10,
+        'bulk_price_tiers': _bulkEligible ? _bulkPriceTiers : [],
         'special_tags': () {
           var tags = widget.existingProduct?.specialTags.toList() ?? [];
           tags.removeWhere((t) => [
@@ -1535,6 +1785,7 @@ class _AddProductPageState extends State<AddProductPage> {
     _menuCategoryController.removeListener(_markDirty);
     _weightController.removeListener(_markDirty);
     _inventoryController.removeListener(_markDirty);
+    _minBulkQuantityController.removeListener(_markDirty);
     _nameController.dispose();
     _priceController.dispose();
     _originalPriceController.dispose();
@@ -1542,6 +1793,7 @@ class _AddProductPageState extends State<AddProductPage> {
     _menuCategoryController.dispose();
     _weightController.dispose();
     _inventoryController.dispose();
+    _minBulkQuantityController.dispose();
     super.dispose();
   }
 
@@ -1824,6 +2076,9 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
+  // ── Bulk Catering & Event Pricing Card (Custom quotes used instead) ─────────
+  Widget _buildBulkCateringCard() => const SizedBox.shrink();
+
   @override
   Widget build(BuildContext context) {
     final int totalImageCount = _images.length + _existingImageUrls.length;
@@ -1930,22 +2185,31 @@ class _AddProductPageState extends State<AddProductPage> {
                         width: double.infinity,
                         height: 180,
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.05),
+                          color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.3),
-                              width: 2,
+                              color: const Color(0xFF93C5FD),
+                              width: 1.8,
                               style: BorderStyle.solid),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
-                              Icons.add_photo_alternate_outlined,
-                              size: 48,
-                              color: AppColors.primary,
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: const Color(0xFFBFDBFE), width: 1.5),
+                              ),
+                              child: const Icon(
+                                Icons.add_a_photo_rounded,
+                                size: 36,
+                                color: AppColors.primary,
+                              ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 10),
                             Text(
                               _variants.isNotEmpty
                                   ? 'Tap to add your product gallery\n'
@@ -1954,8 +2218,8 @@ class _AddProductPageState extends State<AddProductPage> {
                                     'Recommended: 1:1 (Square)',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1E3A8A),
+                                fontWeight: FontWeight.w700,
                                 fontFamily: 'Poppins',
                                 fontSize: 13,
                               ),
@@ -1987,16 +2251,15 @@ class _AddProductPageState extends State<AddProductPage> {
                                   width: 120,
                                   margin: const EdgeInsets.only(right: 12),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.05),
+                                    color: const Color(0xFFF8FAFC),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                        color: AppColors.primary
-                                            .withValues(alpha: 0.3),
-                                        width: 2),
+                                        color: const Color(0xFF93C5FD),
+                                        width: 1.8),
                                   ),
                                   child: const Center(
-                                    child: Icon(Icons.add_photo_alternate,
+                                    child: Icon(Icons.add_photo_alternate_rounded,
+                                        size: 32,
                                         color: AppColors.primary),
                                   ),
                                 ),
@@ -2204,13 +2467,94 @@ class _AddProductPageState extends State<AddProductPage> {
                             ],
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: _showAddVariantDialog,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Add'),
+                        ElevatedButton.icon(
+                          onPressed: () => _showAddVariantDialog(),
+                          icon: const Icon(Icons.add_rounded, size: 16),
+                          label: const Text('Add Variation'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            elevation: 0,
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ],
                     ),
+                    if (AppCategories.getSuggestedVariants(_productCategory)
+                        .isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            const Text(
+                              'Quick Add:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ...AppCategories.getSuggestedVariants(
+                                    _productCategory)
+                                .map((s) {
+                              final isAlreadyAdded = _variants.any((v) =>
+                                  v.name.trim().toLowerCase() ==
+                                  s.toLowerCase());
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ActionChip(
+                                  avatar: Icon(
+                                    isAlreadyAdded
+                                        ? Icons.check_circle_rounded
+                                        : Icons.add_circle_outline_rounded,
+                                    size: 14,
+                                    color: isAlreadyAdded
+                                        ? Colors.white
+                                        : AppColors.primary,
+                                  ),
+                                  label: Text(
+                                    s,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: isAlreadyAdded
+                                          ? Colors.white
+                                          : const Color(0xFF1E3A8A),
+                                    ),
+                                  ),
+                                  backgroundColor: isAlreadyAdded
+                                      ? AppColors.primary
+                                      : const Color(0xFFEFF6FF),
+                                  side: BorderSide(
+                                    color: isAlreadyAdded
+                                        ? AppColors.primary
+                                        : const Color(0xFF93C5FD),
+                                    width: 1.2,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  onPressed: () {
+                                    HapticUtils.selection();
+                                    _showAddVariantDialog(prefilledName: s);
+                                  },
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (_variants.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       ..._variants.asMap().entries.map((entry) {
@@ -2223,80 +2567,126 @@ class _AddProductPageState extends State<AddProductPage> {
                             !_removedVariantImageUrls.contains(v.imageUrl);
                         final bool hasAnyImg = hasLocalImg || hasNetworkImg;
 
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          // I5: Variant image thumbnail
-                          leading: hasAnyImg
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: hasLocalImg
-                                      ? Image.file(
-                                          _variantImageFiles[v.id]!,
-                                          width: 40,
-                                          height: 40,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Image.network(
-                                          v.imageUrl!,
-                                          width: 40,
-                                          height: 40,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
-                                              Container(
-                                            width: 40,
-                                            height: 40,
-                                            color: AppColors.primary
-                                                .withValues(alpha: 0.08),
-                                            child: const Icon(
-                                                Icons.broken_image_outlined,
-                                                size: 16),
-                                          ),
-                                        ),
-                                )
-                              : Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.06),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                      Icons.image_outlined,
-                                      size: 18,
-                                      color: AppColors.textSecondary),
-                                ),
-                          title: Text(v.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600)),
-                          subtitle: Row(
-                            children: [
-                              Text('₹${v.price}'),
-                              if (v.originalPrice != null &&
-                                  v.originalPrice! > v.price) ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  '₹${v.originalPrice}',
-                                  style: const TextStyle(
-                                    decoration: TextDecoration.lineThrough,
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ],
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: const Color(0xFFE2E8F0), width: 1.2),
                           ),
-                          // C3: Tap to edit
-                          onTap: () => _showEditVariantDialog(idx),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                color: AppColors.danger),
-                            onPressed: () => setState(() {
-                              final variantId = _variants[idx].id;
-                              _variants.removeAt(idx);
-                              _variantImageFiles.remove(variantId);
-                              _isDirty = true;
-                            }),
+                          child: Row(
+                            children: [
+                              hasAnyImg
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: hasLocalImg
+                                          ? Image.file(
+                                              _variantImageFiles[v.id]!,
+                                              width: 44,
+                                              height: 44,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : Image.network(
+                                              v.imageUrl!,
+                                              width: 44,
+                                              height: 44,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Container(
+                                                width: 44,
+                                                height: 44,
+                                                color: const Color(0xFFEFF6FF),
+                                                child: const Icon(
+                                                    Icons
+                                                        .broken_image_outlined,
+                                                    size: 18,
+                                                    color: AppColors.primary),
+                                              ),
+                                            ),
+                                    )
+                                  : Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF6FF),
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: const Color(0xFFBFDBFE)),
+                                      ),
+                                      child: const Icon(
+                                          Icons.label_important_outline_rounded,
+                                          size: 20,
+                                          color: AppColors.primary),
+                                    ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => _showEditVariantDialog(idx),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        v.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                          color: Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            '₹${v.price}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.primary,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          if (v.originalPrice != null &&
+                                              v.originalPrice! > v.price) ...[
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              '₹${v.originalPrice}',
+                                              style: const TextStyle(
+                                                decoration: TextDecoration
+                                                    .lineThrough,
+                                                color: AppColors.textSecondary,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Edit',
+                                icon: const Icon(Icons.edit_outlined,
+                                    size: 20, color: AppColors.primary),
+                                onPressed: () => _showEditVariantDialog(idx),
+                              ),
+                              IconButton(
+                                tooltip: 'Delete',
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    size: 20, color: AppColors.danger),
+                                onPressed: () => setState(() {
+                                  final variantId = _variants[idx].id;
+                                  _variants.removeAt(idx);
+                                  _variantImageFiles.remove(variantId);
+                                  _isDirty = true;
+                                }),
+                              ),
+                            ],
                           ),
                         );
                       }),
@@ -2352,6 +2742,11 @@ class _AddProductPageState extends State<AddProductPage> {
                           if (v != null) {
                             setState(() {
                               _productCategory = v;
+                              if (!AppCategories.isFoodCategory(v)) {
+                                _isVeg = null;
+                              } else {
+                                _isVeg ??= true;
+                              }
                               if (!_availableUnitTypes.contains(_unitType)) {
                                 _unitType = _availableUnitTypes.first;
                               }
@@ -2394,16 +2789,28 @@ class _AddProductPageState extends State<AddProductPage> {
                                       selected: _selectedDemographic == demo,
                                       onSelected: (selected) {
                                         if (selected) {
+                                          HapticUtils.selection();
                                           setState(() {
                                             _selectedDemographic = demo;
                                           });
                                         }
                                       },
                                       selectedColor: AppColors.primary,
+                                      backgroundColor: const Color(0xFFF1F5F9),
+                                      side: BorderSide(
+                                        color: _selectedDemographic == demo
+                                            ? AppColors.primary
+                                            : const Color(0xFFCBD5E1),
+                                        width: 1.2,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
                                       labelStyle: TextStyle(
+                                        fontWeight: FontWeight.w700,
                                         color: _selectedDemographic == demo
                                             ? Colors.white
-                                            : AppColors.textPrimary,
+                                            : const Color(0xFF1E293B),
                                       ),
                                     ))
                                 .toList(),
@@ -2471,25 +2878,29 @@ class _AddProductPageState extends State<AddProductPage> {
                 const SizedBox(height: 16),
                 _card(
                   children: [
-                    DropdownButtonFormField<bool?>(
-                      initialValue: _isVeg,
-                      decoration: const InputDecoration(
-                        labelText: 'Dietary Preference',
-                        prefixIcon: Icon(Icons.eco_outlined),
+                    if (AppCategories.isFoodCategory(_productCategory)) ...[
+                      DropdownButtonFormField<bool?>(
+                        key: ValueKey('diet_pref_$_productCategory'),
+                        initialValue: _isVeg,
+                        decoration: const InputDecoration(
+                          labelText: 'Dietary Preference',
+                          prefixIcon: Icon(Icons.eco_outlined),
+                        ),
+                        items: const [
+                          DropdownMenuItem<bool?>(
+                              value: true, child: Text('Vegetarian 🟢')),
+                          DropdownMenuItem<bool?>(
+                              value: false, child: Text('Non-Vegetarian 🔴')),
+                          DropdownMenuItem<bool?>(
+                              value: null, child: Text('None (N/A)')),
+                        ],
+                        onChanged: (v) => setState(() {
+                          _isVeg = v;
+                          _isDirty = true;
+                        }),
                       ),
-                      items: const [
-                        DropdownMenuItem<bool?>(
-                            value: true, child: Text('Vegetarian 🟢')),
-                        DropdownMenuItem<bool?>(
-                            value: false, child: Text('Non-Vegetarian 🔴')),
-                        DropdownMenuItem<bool?>(
-                            value: null, child: Text('None (N/A)')),
-                      ],
-                      onChanged: (v) => setState(() {
-                        _isVeg = v;
-                        _isDirty = true;
-                      }),
-                    ),
+                      const SizedBox(height: 12),
+                    ],
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Available',
@@ -2509,6 +2920,8 @@ class _AddProductPageState extends State<AddProductPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                _buildBulkCateringCard(),
                 if (_productCategory == 'Pharmacy' ||
                     _productCategory == 'Medical Store') ...[
                   const SizedBox(height: 16),

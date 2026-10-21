@@ -52,6 +52,7 @@ class AppCategories {
 
   static const Map<String, CategoryGroup> _groupMap = {
     // Food group
+    'Food': CategoryGroup.food,
     'Restaurant': CategoryGroup.food,
     'Fast Food': CategoryGroup.food,
     'Bakery': CategoryGroup.food,
@@ -74,6 +75,40 @@ class AppCategories {
     'Grocery': CategoryGroup.perishable,
     'Organic': CategoryGroup.perishable,
   };
+
+  /// Returns whether a category is an edible food, dining, grocery, or perishable category
+  /// where a dietary preference (Vegetarian / Non-Vegetarian) is legally and practically applicable.
+  /// Non-food categories (Stationery, Clothing, Electronics, Pharmacy, Hardware, Auto Parts, etc.) return false.
+  static bool isFoodCategory(String? categoryName) {
+    if (categoryName == null || categoryName.trim().isEmpty) return false;
+    final cat = categoryName.trim().toLowerCase();
+
+    // Fast-path checks for common category names
+    if (cat == 'food' ||
+        cat == 'restaurant' ||
+        cat == 'fast food' ||
+        cat == 'bakery' ||
+        cat == 'sweets & mithai' ||
+        cat == 'sweets and mithai' ||
+        cat == 'tea & coffee' ||
+        cat == 'ice cream' ||
+        cat == 'paan shop' ||
+        cat == 'cafe' ||
+        cat == 'beverages' ||
+        cat == 'grocery' ||
+        cat == 'supermarket / hypermarket' ||
+        cat == 'fruits & vegs' ||
+        cat == 'fruits and vegetables' ||
+        cat == 'dairy & eggs' ||
+        cat == 'butcher' ||
+        cat == 'fish & seafood' ||
+        cat == 'organic') {
+      return true;
+    }
+
+    final group = groupFor(categoryName);
+    return group == CategoryGroup.food || group == CategoryGroup.perishable;
+  }
 
   /// Returns whether a category is considered Fashion/Apparel (e.g. Clothing, Footwear).
   /// These categories naturally benefit from a 3:4 portrait aspect ratio.

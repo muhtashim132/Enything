@@ -244,9 +244,12 @@ Deno.serve(async (req: Request) => {
       await Promise.all(batch.map(async ({ token, role }) => {
         try {
           const effectiveRole = role || (data && data.role) || 'customer';
-          const isUrgent = (effectiveRole === 'seller' || effectiveRole === 'delivery' || effectiveRole === 'delivery_partner') ||
+          const isUrgent = (effectiveRole === 'seller' || effectiveRole === 'delivery' || effectiveRole === 'delivery_partner' || effectiveRole === 'admin') ||
                            String(title).toLowerCase().includes('new order') ||
-                           String(title).toLowerCase().includes('payment done');
+                           String(title).toLowerCase().includes('payment done') ||
+                           String(title).toLowerCase().includes('quote') ||
+                           String(title).toLowerCase().includes('catering') ||
+                           String(title).toLowerCase().includes('kyc');
                                        
           const channelId = 'enything_urgent_order_v1';
           const soundFile = 'enything_bell';

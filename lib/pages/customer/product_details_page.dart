@@ -613,7 +613,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                   isDark ? Colors.white : AppColors.textPrimary,
                             ),
                           ),
-                          if (_product!.isVeg != null)
+                          if (_product!.showsDietEmblem)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 4),

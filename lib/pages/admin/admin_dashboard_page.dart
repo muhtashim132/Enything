@@ -36,6 +36,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   final Set<int> _visitedIndices = {0};
   int _openTicketsCount = 0;
   int _pendingDispatchCount = 0;
+  int _pendingQuotesCount = 0;
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
   DateTime? _lastBackPressTime;
@@ -115,10 +116,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         dispatchCount = (unaccepted as List).length;
       } catch (_) {}
 
+      int quoteCount = 0;
+      try {
+        final q = await supabase
+            .from('bulk_quote_requests')
+            .select('id')
+            .inFilter('quote_status', ['pending_review', 'customer_accepted']);
+        quoteCount = (q as List).length;
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _openTicketsCount = count;
           _pendingDispatchCount = dispatchCount;
+          _pendingQuotesCount = quoteCount;
         });
       }
     } catch (_) {}
@@ -249,6 +260,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           activeIcon: Icons.shopping_bag_rounded,
           label: 'Orders',
           visible: rbac.isSuperAdmin || rbac.can('orders.view'),
+          badgeCount: _pendingQuotesCount,
         ),
         _NavDef(
           icon: Icons.inventory_2_outlined,

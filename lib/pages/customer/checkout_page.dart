@@ -404,7 +404,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final targetKey = (_applyToAllPharmacies || shopId == null) ? '__ALL__' : shopId;
 
     if (source == ImageSource.camera) {
-      final picked = await picker.pickImage(source: source, imageQuality: 70);
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 75,
+      );
       _isPickerOpen = false;
       if (picked != null) {
         setState(() {
@@ -412,7 +417,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         });
       }
     } else {
-      final picked = await picker.pickMultiImage(imageQuality: 70);
+      final picked = await picker.pickMultiImage(
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 75,
+      );
       _isPickerOpen = false;
       if (picked.isNotEmpty) {
         setState(() {
@@ -1621,17 +1630,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: item.product.isVeg == true
-                                        ? AppColors.vegGreen
-                                        : AppColors.nonVegRed,
-                                    shape: BoxShape.circle,
+                                if (item.product.showsDietEmblem) ...[
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: item.product.isVeg == true
+                                          ? AppColors.vegGreen
+                                          : AppColors.nonVegRed,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
+                                  const SizedBox(width: 8),
+                                ],
                                 Expanded(
                                   child: Text(
                                     '${item.quantity}x ${item.product.name}',

@@ -24,6 +24,13 @@ class ShopModel {
   final String? bannerImage;
   double? distanceKm;
 
+  /// Bulk & Event catering configuration
+  final bool acceptsBulkOrders;
+  final int maxBulkItemsPerSlot;
+  final int minBulkLeadTimeHours;
+  final int maxBulkLeadTimeHours;
+  final int bulkSlotDurationMinutes;
+
   ShopModel({
     required this.id,
     required this.sellerId,
@@ -46,6 +53,11 @@ class ShopModel {
     this.totalOrders = 0,
     this.bannerImage,
     this.distanceKm,
+    this.acceptsBulkOrders = false,
+    this.maxBulkItemsPerSlot = 200,
+    this.minBulkLeadTimeHours = 6,
+    this.maxBulkLeadTimeHours = 72,
+    this.bulkSlotDurationMinutes = 60,
   });
 
   factory ShopModel.fromMap(Map<String, dynamic> map) {
@@ -124,6 +136,11 @@ class ShopModel {
       totalReviews: map['total_reviews'] ?? 0,
       totalOrders: map['total_orders'] ?? 0,
       bannerImage: map['banner_url'] ?? map['banner_image'],
+      acceptsBulkOrders: map['accepts_bulk_orders'] == true || map['accepts_bulk_orders'] == 'true',
+      maxBulkItemsPerSlot: (map['max_bulk_items_per_slot'] as num?)?.toInt() ?? 200,
+      minBulkLeadTimeHours: (map['min_bulk_lead_time_hours'] as num?)?.toInt() ?? 6,
+      maxBulkLeadTimeHours: (map['max_bulk_lead_time_hours'] as num?)?.toInt() ?? 72,
+      bulkSlotDurationMinutes: (map['bulk_slot_duration_minutes'] as num?)?.toInt() ?? 60,
     );
   }
 
@@ -180,6 +197,11 @@ class ShopModel {
     int? totalOrders,
     String? bannerImage,
     double? distanceKm,
+    bool? acceptsBulkOrders,
+    int? maxBulkItemsPerSlot,
+    int? minBulkLeadTimeHours,
+    int? maxBulkLeadTimeHours,
+    int? bulkSlotDurationMinutes,
   }) {
     return ShopModel(
       id: id ?? this.id,
@@ -203,6 +225,11 @@ class ShopModel {
       totalOrders: totalOrders ?? this.totalOrders,
       bannerImage: bannerImage ?? this.bannerImage,
       distanceKm: distanceKm ?? this.distanceKm,
+      acceptsBulkOrders: acceptsBulkOrders ?? this.acceptsBulkOrders,
+      maxBulkItemsPerSlot: maxBulkItemsPerSlot ?? this.maxBulkItemsPerSlot,
+      minBulkLeadTimeHours: minBulkLeadTimeHours ?? this.minBulkLeadTimeHours,
+      maxBulkLeadTimeHours: maxBulkLeadTimeHours ?? this.maxBulkLeadTimeHours,
+      bulkSlotDurationMinutes: bulkSlotDurationMinutes ?? this.bulkSlotDurationMinutes,
     );
   }
 
@@ -230,5 +257,10 @@ class ShopModel {
         'total_reviews': totalReviews,
         'total_orders': totalOrders,
         'banner_image': bannerImage,
+        'accepts_bulk_orders': acceptsBulkOrders,
+        'max_bulk_items_per_slot': maxBulkItemsPerSlot,
+        'min_bulk_lead_time_hours': minBulkLeadTimeHours,
+        'max_bulk_lead_time_hours': maxBulkLeadTimeHours,
+        'bulk_slot_duration_minutes': bulkSlotDurationMinutes,
       };
 }

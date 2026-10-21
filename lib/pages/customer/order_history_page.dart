@@ -14,6 +14,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
+import '../../providers/quote_request_provider.dart';
+import '../../models/quote_request_model.dart';
 import '../settings/faq_support_page.dart';
 
 class OrderHistoryPage extends StatefulWidget {
@@ -185,6 +187,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
     _fetchOrders();
     _scrollController.addListener(_onScroll);
     _setupRealtimeOrders();
+    // Subscribe & load customer catering quotes
+    final quoteProv = context.read<QuoteRequestProvider>();
+    quoteProv.loadCustomerQuotes();
+    quoteProv.subscribeToCustomerQuotes();
   }
 
   void _setupRealtimeOrders() {
@@ -254,6 +260,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
   Future<void> _fetchOrders() async {
     final auth = context.read<AuthProvider>();
     try {
+      context.read<QuoteRequestProvider>().loadCustomerQuotes();
+    } catch (_) {}
+    try {
       final response = await _supabase
           .from('orders')
           .select()
@@ -322,8 +331,16 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
       case 'payment_failed':
       case 'shop_dispute_cancel':
         return AppColors.danger;
+      case 'bulk_pending':
+        return const Color(0xFFF59E0B);
+      case 'bulk_confirmed':
+      case 'bulk_preparing':
+        return const Color(0xFF2563EB);
+      case 'bulk_ready':
+        return const Color(0xFF8B5CF6);
+      case 'bulk_dispatched':
       case 'out_for_delivery':
-        return AppColors.info;
+        return const Color(0xFF059669);
       default:
         return AppColors.primary;
     }
@@ -342,6 +359,15 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
       case 'payment_failed':
       case 'shop_dispute_cancel':
         return Icons.cancel_outlined;
+      case 'bulk_pending':
+        return Icons.event_available_rounded;
+      case 'bulk_confirmed':
+      case 'bulk_preparing':
+        return Icons.restaurant_rounded;
+      case 'bulk_ready':
+        return Icons.inventory_2_rounded;
+      case 'bulk_dispatched':
+        return Icons.directions_car_filled_rounded;
       case 'out_for_delivery':
         return Icons.delivery_dining;
       case 'pending':
@@ -506,6 +532,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final isFirst = ModalRoute.of(context)?.isFirst ?? false;
+    final quoteProv = context.watch<QuoteRequestProvider>();
+    final quotes = quoteProv.customerQuotes;
+
     return PopScope(
         canPop: !isFirst,
         onPopInvokedWithResult: (didPop, result) {
@@ -551,28 +580,49 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
           body: MaxWidthContainer(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _orders.isEmpty
+                : (_orders.isEmpty && quotes.isEmpty)
                     ? _buildEmptyState(isDark)
                     : RefreshIndicator(
-                        onRefresh: _fetchOrders,
+                        onRefresh: () async {
+                          await _fetchOrders();
+                          await quoteProv.loadCustomerQuotes();
+                        },
                         color: AppColors.primary,
                         backgroundColor:
                             isDark ? AppColors.darkSurface : Colors.white,
-                        child: ListView.builder(
+                        child: ListView(
                           controller: _scrollController,
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                          itemCount: _orders.length + (_hasMoreOrders ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == _orders.length) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 20),
-                                child: Center(
-                                    child: CircularProgressIndicator(
-                                        color: AppColors.primary)),
-                              );
-                            }
-                            return _buildOrderCard(_orders[index], isDark);
-                          },
+                          children: [
+                            if (quotes.isNotEmpty) ...[
+                              _buildQuotesSectionHeader(isDark, quotes.length),
+                              ...quotes.map((q) => _buildQuoteCard(q, isDark)),
+                              const SizedBox(height: 14),
+                            ],
+                            if (_orders.isNotEmpty) ...[
+                              if (quotes.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 10),
+                                  child: Text(
+                                    'FOOD & STORE ORDERS',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.0,
+                                      color: isDark ? Colors.white38 : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ..._orders.map((o) => _buildOrderCard(o, isDark)),
+                              if (_hasMoreOrders)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 20),
+                                  child: Center(
+                                    child: CircularProgressIndicator(color: AppColors.primary),
+                                  ),
+                                ),
+                            ],
+                          ],
                         ),
                       ),
           ),
@@ -583,11 +633,23 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
     final statusColor = _getStatusColor(order.status);
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(
-        context,
-        AppRoutes.trackOrder,
-        arguments: {'orderId': order.id},
-      ),
+      onTap: () {
+        if (order.orderType == 'bulk' ||
+            order.orderType == 'manual_quote' ||
+            order.status.startsWith('bulk_')) {
+          Navigator.pushNamed(
+            context,
+            AppRoutes.bulkOrderTracking,
+            arguments: {'order_id': order.id},
+          );
+        } else {
+          Navigator.pushNamed(
+            context,
+            AppRoutes.trackOrder,
+            arguments: {'orderId': order.id},
+          );
+        }
+      },
       child: AnimatedContainer(
         duration: PremiumAnimations.normal,
         margin: const EdgeInsets.only(bottom: 12),
@@ -826,6 +888,289 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuotesSectionHeader(bool isDark, int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(Icons.celebration_rounded, color: Color(0xFF10B981), size: 14),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'EVENT & CATERING QUOTES',
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+              color: isDark ? Colors.white70 : AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$count',
+              style: GoogleFonts.outfit(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuoteCard(QuoteRequestModel quote, bool isDark) {
+    final isQuoted = quote.quoteStatus == 'quoted';
+    final isPending = quote.quoteStatus == 'pending_review';
+    final isAccepted = quote.quoteStatus == 'customer_accepted';
+    final isPaid = quote.quoteStatus == 'paid';
+    final isDeclined = quote.quoteStatus == 'declined' || quote.quoteStatus == 'customer_rejected';
+
+    Color statusColor;
+    String statusLabel;
+    IconData statusIcon;
+
+    if (isQuoted) {
+      statusColor = const Color(0xFF10B981);
+      statusLabel = 'Quote Ready';
+      statusIcon = Icons.check_circle_outline_rounded;
+    } else if (isPending) {
+      statusColor = const Color(0xFF6366F1);
+      statusLabel = 'Under Review';
+      statusIcon = Icons.hourglass_top_rounded;
+    } else if (isAccepted) {
+      statusColor = const Color(0xFFF59E0B);
+      statusLabel = 'Payment Pending';
+      statusIcon = Icons.payment_rounded;
+    } else if (isPaid) {
+      statusColor = const Color(0xFF10B981);
+      statusLabel = 'Paid & Confirmed';
+      statusIcon = Icons.verified_rounded;
+    } else if (isDeclined) {
+      statusColor = Colors.red;
+      statusLabel = 'Declined';
+      statusIcon = Icons.cancel_outlined;
+    } else {
+      statusColor = Colors.grey;
+      statusLabel = quote.quoteStatus.replaceAll('_', ' ').toUpperCase();
+      statusIcon = Icons.info_outline;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isQuoted
+              ? const Color(0xFF10B981).withValues(alpha: 0.6)
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.08)),
+          width: isQuoted ? 1.5 : 1.0,
+        ),
+        boxShadow: isQuoted
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                )
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            if (isPaid && quote.resultingOrderId != null && quote.resultingOrderId!.isNotEmpty) {
+              Navigator.pushNamed(
+                context,
+                AppRoutes.bulkOrderTracking,
+                arguments: {'order_id': quote.resultingOrderId},
+              );
+            } else {
+              Navigator.pushNamed(
+                context,
+                AppRoutes.quoteResponse,
+                arguments: {'quote_id': quote.id},
+              );
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        quote.eventName.isNotEmpty ? quote.eventName : 'Catering & Event Quote',
+                        style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(statusIcon, size: 12, color: statusColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            statusLabel,
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: statusColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.people_outline,
+                        size: 14,
+                        color: isDark ? Colors.white38 : AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${quote.estimatedGuestCount} guests',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.calendar_today_outlined,
+                        size: 13,
+                        color: isDark ? Colors.white38 : AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${quote.eventDate.day}/${quote.eventDate.month}/${quote.eventDate.year}',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (quote.quotedAmount != null && quote.quotedAmount! > 0)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Quoted Price',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: isDark ? Colors.white38 : AppColors.textSecondary,
+                            ),
+                          ),
+                          Text(
+                            '₹${quote.quotedAmount!.toStringAsFixed(0)}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF10B981),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Text(
+                        'Awaiting Admin Pricing',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: isDark ? Colors.white38 : AppColors.textSecondary,
+                        ),
+                      ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        gradient: isQuoted
+                            ? const LinearGradient(
+                                colors: [Color(0xFF10B981), Color(0xFF059669)])
+                            : (isPaid
+                                ? const LinearGradient(
+                                    colors: [Color(0xFF6366F1), Color(0xFF4F46E5)])
+                                : null),
+                        color: (isQuoted || isPaid)
+                            ? null
+                            : (isDark ? Colors.white12 : Colors.grey.shade100),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            isQuoted
+                                ? 'Review Quote'
+                                : (isPaid ? 'Track Feast 🚚' : 'View Details'),
+                            style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: (isQuoted || isPaid)
+                                  ? Colors.white
+                                  : (isDark ? Colors.white70 : AppColors.textPrimary),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 14,
+                            color: (isQuoted || isPaid)
+                                ? Colors.white
+                                : (isDark ? Colors.white70 : AppColors.textPrimary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -470,8 +470,8 @@ class _SheetContent extends StatelessWidget {
                           ),
                         ),
 
-                      // Veg / Non-veg indicator — bottom-left
-                      if (product.isVeg != null)
+                      // Veg / Non-veg indicator — bottom-left (Food & Grocery items only)
+                      if (product.showsDietEmblem)
                         Positioned(
                           bottom: 12,
                           left: 16,

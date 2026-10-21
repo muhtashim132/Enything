@@ -24,6 +24,7 @@ class OrderModel {
   final String id;
   final String customerId;
   String status;
+  final String orderType; // 'instant' | 'bulk'
   final double totalAmount;
   final double deliveryCharges;
   final double riderEarnings;
@@ -45,6 +46,7 @@ class OrderModel {
   final String? riderPhone;
   final String? paymentMethod;
   final String? paymentStatus;
+  final String? deliveryOtp;
 
   // Cancellation metadata
   final String?
@@ -159,6 +161,7 @@ class OrderModel {
     required this.id,
     required this.customerId,
     required this.status,
+    this.orderType = 'instant',
     required this.totalAmount,
     required this.deliveryCharges,
     this.riderEarnings = 0.0,
@@ -177,6 +180,7 @@ class OrderModel {
     this.riderPhone,
     this.paymentMethod,
     this.paymentStatus,
+    this.deliveryOtp,
     this.cancelledReason,
     this.rejectionMessage,
     this.cartGroupId,
@@ -239,6 +243,7 @@ class OrderModel {
       id: map['id']?.toString() ?? '',
       customerId: map['customer_id']?.toString() ?? '',
       status: map['status']?.toString() ?? 'pending',
+      orderType: map['order_type']?.toString() ?? 'instant',
       totalAmount: _parseDouble(map['total_amount']),
       deliveryCharges: _parseDouble(map['delivery_charges']),
       riderEarnings: _parseDouble(map['rider_earnings']) > 0
@@ -261,6 +266,7 @@ class OrderModel {
       riderPhone: map['rider_phone']?.toString(),
       paymentMethod: map['payment_method']?.toString(),
       paymentStatus: map['payment_status']?.toString(),
+      deliveryOtp: map['delivery_otp']?.toString(),
       cancelledReason: map['cancelled_reason']?.toString(),
       rejectionMessage: map['rejection_message']?.toString(),
       cartGroupId: map['cart_group_id']?.toString(),
@@ -334,6 +340,15 @@ class OrderModel {
     return DateTime.now().toUtc().isAfter(acceptanceDeadline!);
   }
 
+  /// True when the order is a bulk event catering order (menu or manual quote)
+  bool get isBulkOrder => orderType == 'bulk' || orderType == 'manual_quote';
+
+  /// True when the order was created from an offline manual quote
+  bool get isManualQuote => orderType == 'manual_quote';
+
+  /// True when the order is an instant on-demand delivery order
+  bool get isInstantOrder => orderType == 'instant';
+
   /// True when both the seller and delivery partner have accepted.
   bool get isFullyConfirmed => sellerAccepted && partnerAccepted;
 
@@ -400,6 +415,7 @@ class OrderModel {
     DateTime? orderReadyTime,
     DateTime? acceptanceDeadline,
     DateTime? paymentDeadline,
+    String? orderType,
     bool clearDeliveryPartner = false,
     bool clearRiderLocation = false,
   }) {
@@ -407,6 +423,7 @@ class OrderModel {
       id: id,
       customerId: customerId,
       status: status ?? this.status,
+      orderType: orderType ?? this.orderType,
       totalAmount: totalAmount,
       deliveryCharges: deliveryCharges,
       riderEarnings: riderEarnings,
@@ -485,6 +502,18 @@ class OrderModel {
         return 'Waiting for Confirmation';
       case 'awaiting_payment':
         return 'Pay Now';
+      case 'bulk_pending':
+        return 'Feast Booked · Scheduling Kitchen';
+      case 'bulk_confirmed':
+        return 'Kitchen Confirmed & Cooking';
+      case 'bulk_preparing':
+        return 'Kitchen Cooking';
+      case 'bulk_ready':
+        return 'Feast Prepared & Packed';
+      case 'bulk_dispatched':
+        return 'Out for Delivery 🚗';
+      case 'modification_proposed':
+        return 'Modification Proposed';
       case 'pending':
         if (sellerAccepted && !partnerAccepted) return 'Awaiting Rider';
         if (!sellerAccepted && partnerAccepted) return 'Awaiting Shop';

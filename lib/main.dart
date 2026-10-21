@@ -26,6 +26,8 @@ import 'providers/platform_config_provider.dart';
 import 'providers/coupon_provider.dart';
 import 'providers/recently_viewed_provider.dart';
 import 'providers/referral_provider.dart';
+import 'providers/bulk_order_provider.dart';
+import 'providers/quote_request_provider.dart';
 
 import 'services/notification_service.dart';
 import 'services/rider_background_service.dart';
@@ -526,6 +528,8 @@ class _EnythingAppState extends State<EnythingApp> with WidgetsBindingObserver {
         ChangeNotifierProvider<RecentlyViewedProvider>.value(
             value: widget.recentlyViewedProvider),
         ChangeNotifierProvider(create: (_) => ReferralProvider()),
+        ChangeNotifierProvider(create: (_) => BulkOrderProvider()),
+        ChangeNotifierProvider(create: (_) => QuoteRequestProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

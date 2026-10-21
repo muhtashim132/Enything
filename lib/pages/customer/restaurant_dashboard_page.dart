@@ -375,7 +375,7 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
             ),
             // Badge row
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Wrap(
                 spacing: 8,
                 children: [

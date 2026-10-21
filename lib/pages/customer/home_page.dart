@@ -37,6 +37,7 @@ import '../../widgets/common/animated_search_ticker.dart';
 import '../../widgets/3d/perspective_card.dart';
 import '../../theme/sensory_haptics.dart';
 import '../../widgets/address_picker_sheet.dart';
+import '../../providers/quote_request_provider.dart';
 import 'all_listings_page.dart';
 
 class CustomerHomeView extends StatefulWidget {
@@ -756,6 +757,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         notifProvider.listenAsCustomer(userId);
         notifProvider.registerFcmToken(
             userId, 'customer'); // Register push token
+        // Subscribe to customer's catering quotes in realtime
+        final quoteProv = context.read<QuoteRequestProvider>();
+        quoteProv.subscribeToCustomerQuotes();
+        quoteProv.loadCustomerQuotes();
       }
     });
   }
@@ -2593,6 +2598,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           // NORMAL MODE: banner + shops + products
                           // ──────────────────────────────────────────────────
                         ] else ...[
+                          // Active Catering Quote Banner (always shown at top if customer has an active quote)
+                          SliverToBoxAdapter(
+                            child: _buildActiveQuoteBanner(isDark),
+                          ),
                           if (_selectedTabIndex < 0 &&
                               _selectedFilterCategories.isEmpty) ...[
                             // Featured Banner
@@ -2605,10 +2614,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           // Shown FIRST so users can orient themselves immediately.
                           // Always visible when no search + no filter chip active.
                           if (_searchQuery.isEmpty &&
-                              _selectedFilterCategories.isEmpty)
+                              _selectedFilterCategories.isEmpty) ...[
                             SliverToBoxAdapter(
                               child: _buildCategorySection(isDark),
                             ),
+                            SliverToBoxAdapter(
+                              child: _buildBulkCateringCard(isDark),
+                            ),
+                          ],
 
                           // ── Recently Viewed ─────────────────────────────
                           if (_selectedTabIndex < 0 &&
@@ -3309,6 +3322,503 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     );
   }
 
+  Widget _buildBulkCateringCard(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF281838), const Color(0xFF1B2338)]
+              : [const Color(0xFFFFF4EB), const Color(0xFFF3E8FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFF8E24AA).withValues(alpha: 0.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purple.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () {
+            Navigator.pushNamed(context, AppRoutes.bulkOrderDiscovery);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8E24AA).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Center(
+                    child: Text('🎉', style: TextStyle(fontSize: 26)),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Host an Event or Party?',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8E24AA).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'NEW',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF8E24AA),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Order 20 to 500+ items with tiered discounts & guaranteed kitchen slots.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? Colors.white70 : Colors.grey[700],
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF8E24AA)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveQuoteBanner(bool isDark) {
+    final quoteProv = context.watch<QuoteRequestProvider>();
+    final activeOrder = quoteProv.activeCateringOrder;
+
+    // ── 1. Priority: Live Active Catering Order in Progress ──────────────────
+    if (activeOrder != null) {
+      final orderId = activeOrder['id']?.toString() ?? '';
+      final status = activeOrder['status']?.toString() ?? 'bulk_pending';
+      final totalAmount = (activeOrder['total_amount'] as num?)?.toDouble() ?? 0.0;
+      final deliveryOtp = activeOrder['delivery_otp']?.toString() ?? '';
+      final eventName = activeOrder['event_name']?.toString() ??
+          quoteProv.customerQuotes.where((q) => q.resultingOrderId == orderId).firstOrNull?.eventName ??
+          'Event Catering';
+
+      final Color primaryColor;
+      final String emoji;
+      final String title;
+      final String subtitle;
+      final String statusTag;
+      final String buttonText;
+
+      switch (status) {
+        case 'bulk_confirmed':
+        case 'bulk_preparing':
+          primaryColor = const Color(0xFF2563EB); // Royal Blue
+          emoji = '👨‍🍳';
+          title = 'Kitchen Confirmed · Cooking in Progress!';
+          subtitle = '$eventName · ₹${totalAmount.toStringAsFixed(0)} · Kitchen chefs are preparing and cooking your feast fresh.';
+          statusTag = 'KITCHEN COOKING';
+          buttonText = 'Live Prep Details →';
+          break;
+        case 'bulk_ready':
+          primaryColor = const Color(0xFF8B5CF6); // Purple / Violet
+          emoji = '🍱';
+          title = 'All Food Prepared & Ready!';
+          subtitle = '$eventName · All dishes freshly packed in containers, awaiting dispatch.';
+          statusTag = 'ALL FOOD PACKED & READY';
+          buttonText = 'View Packing Status →';
+          break;
+        case 'bulk_dispatched':
+          primaryColor = const Color(0xFF059669); // Emerald Green
+          emoji = '🚗';
+          title = 'Feast Out for Delivery${deliveryOtp.isNotEmpty ? ' · OTP: $deliveryOtp' : ''}';
+          subtitle = '$eventName · In-house delivery team is en route to your venue! Share OTP $deliveryOtp upon arrival.';
+          statusTag = 'OUT FOR DELIVERY';
+          buttonText = 'Track Fleet Live →';
+          break;
+        case 'bulk_pending':
+        default:
+          primaryColor = const Color(0xFFF59E0B); // Amber / Gold
+          emoji = '🎉';
+          title = 'Feast Booked · Scheduling Kitchen';
+          subtitle = '$eventName · ₹${totalAmount.toStringAsFixed(0)} · Catering team is appointing your dedicated kitchen.';
+          statusTag = 'SCHEDULING KITCHEN';
+          buttonText = 'Track Feast →';
+          break;
+      }
+
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [
+                      primaryColor.withValues(alpha: 0.32),
+                      const Color(0xFF16192E),
+                    ]
+                  : [
+                      primaryColor.withValues(alpha: 0.18),
+                      Colors.white,
+                    ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: primaryColor.withValues(alpha: 0.85),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.22),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                Navigator.pushNamed(
+                  context,
+                  AppRoutes.bulkOrderTracking,
+                  arguments: {'order_id': orderId},
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.22),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark ? Colors.white : AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                subtitle,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12.5,
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: primaryColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    statusTag,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: primaryColor,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (status == 'bulk_dispatched' && deliveryOtp.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: primaryColor.withValues(alpha: 0.25),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: primaryColor, width: 1),
+                                ),
+                                child: Text(
+                                  'OTP: $deliveryOtp',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: primaryColor,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        Text(
+                          buttonText,
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── 2. Fallback: Pre-Order Custom Event Quotes ───────────────────────────
+    final activeQuotes = quoteProv.customerQuotes.where((q) {
+      return q.quoteStatus == 'quoted' ||
+          q.quoteStatus == 'pending_review' ||
+          q.quoteStatus == 'customer_accepted';
+    }).toList();
+
+    if (activeQuotes.isEmpty) return const SizedBox.shrink();
+
+    activeQuotes.sort((a, b) {
+      if (a.quoteStatus == 'quoted' && b.quoteStatus != 'quoted') return -1;
+      if (b.quoteStatus == 'quoted' && a.quoteStatus != 'quoted') return 1;
+      return b.createdAt.compareTo(a.createdAt);
+    });
+
+    final quote = activeQuotes.first;
+    final isQuoted = quote.quoteStatus == 'quoted';
+    final isAccepted = quote.quoteStatus == 'customer_accepted';
+
+    final Color primaryColor = isQuoted
+        ? const Color(0xFF10B981) // Emerald
+        : isAccepted
+            ? const Color(0xFFF59E0B) // Amber
+            : const Color(0xFF6366F1); // Indigo
+
+    final String title = isQuoted
+        ? '🧾 Catering Quote Ready: ₹${quote.quotedAmount?.toStringAsFixed(0)}'
+        : isAccepted
+            ? '✅ Quote Accepted — Payment Pending'
+            : '⏳ Catering Request Under Review';
+
+    final String subtitle = isQuoted
+        ? '${quote.eventName} · Muhtashim priced your request. Tap to review & accept!'
+        : isAccepted
+            ? '${quote.eventName} (₹${quote.quotedAmount?.toStringAsFixed(0)}) · Manager will call to complete offline payment.'
+            : '${quote.eventName} (${quote.estimatedGuestCount} guests) · Reviewing requirements, custom quote arriving shortly.';
+
+    final String buttonText = isQuoted
+        ? 'Review & Accept →'
+        : 'View Details →';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [
+                    primaryColor.withValues(alpha: 0.28),
+                    const Color(0xFF16192E),
+                  ]
+                : [
+                    primaryColor.withValues(alpha: 0.18),
+                    Colors.white,
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: primaryColor.withValues(alpha: isQuoted ? 0.9 : 0.4),
+            width: isQuoted ? 2 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: primaryColor.withValues(alpha: isQuoted ? 0.25 : 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              Navigator.pushNamed(
+                context,
+                AppRoutes.quoteResponse,
+                arguments: {'quote_id': quote.id},
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          isQuoted
+                              ? '🎉'
+                              : isAccepted
+                                  ? '📞'
+                                  : '📋',
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? Colors.white : AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.outfit(
+                                fontSize: 12.5,
+                                color: isDark ? Colors.white70 : Colors.black87,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          isQuoted
+                              ? 'ACTION REQUIRED'
+                              : quote.quoteStatus.replaceAll('_', ' ').toUpperCase(),
+                          style: GoogleFonts.outfit(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            color: primaryColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        buttonText,
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFeaturedBanner() {
     final isDark = context.watch<ThemeProvider>().isDarkMode;
     final slides = [
@@ -3426,6 +3936,22 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             _selectedFilterCategories.clear();
           });
           _loadData('Clothing');
+        },
+      },
+      {
+        'tag': '🎉 EVENT & CATERING',
+        'title': 'Bulk Food Catering\nFor Parties & Events',
+        'sub': 'Tiered discounts · Advance slots · Fleet delivery',
+        'icon': Icons.celebration_rounded,
+        'colors': <Color>[
+          const Color(0xFF4A0E4E),
+          const Color(0xFF8E24AA),
+          const Color(0xFF673AB7),
+        ],
+        'accent': const Color(0xFFFFD54F),
+        'emoji': '🍕🎉',
+        'action': () {
+          Navigator.pushNamed(context, AppRoutes.bulkOrderDiscovery);
         },
       },
     ];

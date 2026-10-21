@@ -377,7 +377,11 @@ class NotificationProvider extends ChangeNotifier {
             if (newStatus == lastStatus) return;
             _lastProcessedStatus[orderId] = newStatus;
 
-            final (title, body) = _customerStatusMessage(newStatus, orderId);
+            var (title, body) = _customerStatusMessage(newStatus, orderId);
+            final otp = payload.newRecord['delivery_otp'] as String?;
+            if (newStatus == 'bulk_dispatched' && otp != null && otp.isNotEmpty) {
+              body = 'Your event feast is en route with our in-house delivery team! Handover OTP: $otp';
+            }
             if (title != null) {
               // For statuses that happen to the whole group at once, deduplicate using cart_group_id
               final isGroupStatus = newStatus == 'confirmed' ||
@@ -414,16 +418,102 @@ class NotificationProvider extends ChangeNotifier {
           callback: (payload) {
             final orderId = payload.newRecord['id'] as String?;
             final cartGroupId = payload.newRecord['cart_group_id'] as String?;
+            final orderType = payload.newRecord['order_type'] as String?;
 
+            if (orderType == 'manual_quote' || orderType == 'bulk') {
+              _add(AppNotification(
+                id: '${orderId}_placed',
+                title: '🎉 Catering Order Placed & Confirmed!',
+                body:
+                    'Your catering booking is confirmed and in kitchen preparation.',
+                orderId: orderId,
+              ));
+            } else {
+              _add(AppNotification(
+                id: cartGroupId != null
+                    ? '${cartGroupId}_placed'
+                    : '${orderId}_placed',
+                title: '🛍️ Order Sent!',
+                body:
+                    'Waiting for the shop & rider to accept. No charge yet — you pay only after both confirm.',
+                orderId: orderId,
+              ));
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'bulk_quote_requests',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'customer_id',
+            value: customerId,
+          ),
+          callback: (payload) {
+            final quoteId = payload.newRecord['id'] as String?;
+            final newStatus = payload.newRecord['quote_status'] as String?;
+            final oldStatus = payload.oldRecord['quote_status'] as String?;
+            final eventName =
+                payload.newRecord['event_name'] as String? ?? 'Event';
+            final amount = payload.newRecord['quoted_amount'] ?? 0;
+
+            if (newStatus == 'quoted' && oldStatus != 'quoted') {
+              _add(AppNotification(
+                id: 'quote_ready_$quoteId',
+                title: '🧾 Catering Quote Ready!',
+                body:
+                    '₹$amount quoted for $eventName. Tap to review and accept.',
+                orderId: quoteId,
+              ));
+            } else if ((newStatus == 'order_placed' ||
+                    newStatus == 'payment_confirmed') &&
+                oldStatus != 'order_placed' &&
+                oldStatus != 'payment_confirmed') {
+              final resultingOrderId =
+                  payload.newRecord['resulting_order_id'] as String?;
+              _add(AppNotification(
+                id: 'quote_paid_$quoteId',
+                title: '🎉 Catering Order Confirmed & Paid!',
+                body:
+                    'Payment of ₹$amount received for $eventName. Your catering order is in kitchen preparation!',
+                orderId: resultingOrderId ?? quoteId,
+              ));
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: customerId,
+          ),
+          callback: (payload) {
+            final notifKey = payload.newRecord['notif_key'] as String? ?? '';
+            final title =
+                payload.newRecord['title'] as String? ?? 'Notification';
+            final body = payload.newRecord['body'] as String? ?? '';
+            final orderId = payload.newRecord['order_id'] as String?;
             _add(AppNotification(
-              id: cartGroupId != null
-                  ? '${cartGroupId}_placed'
-                  : '${orderId}_placed',
-              title: '🛍️ Order Sent!',
-              body:
-                  'Waiting for the shop & rider to accept. No charge yet — you pay only after both confirm.',
+              id: notifKey.isNotEmpty
+                  ? notifKey
+                  : 'notif_${DateTime.now().millisecondsSinceEpoch}',
+              title: title,
+              body: body,
               orderId: orderId,
             ));
+            // If user is also an admin or receives priority alerts while in customer view:
+            if (title.contains('Catering Quote') ||
+                title.contains('Quote Accepted') ||
+                title.contains('New Rider KYC')) {
+              final trackId = orderId ?? notifKey;
+              if (trackId.isNotEmpty) {
+                BellAlertService.instance.addPendingOrder(trackId);
+              }
+            }
           },
         )
         .subscribe((status, [error]) => _onChannelDisconnect(status));
@@ -811,6 +901,93 @@ class NotificationProvider extends ChangeNotifier {
             ));
           },
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'bulk_quote_requests',
+          callback: (payload) {
+            final quoteId = payload.newRecord['id'] as String?;
+            final customerName =
+                payload.newRecord['customer_name'] as String? ?? 'A customer';
+            final eventName =
+                payload.newRecord['event_name'] as String? ?? 'Event';
+            final guests = payload.newRecord['estimated_guest_count'] ?? 0;
+            final phone = payload.newRecord['customer_phone'] as String? ?? '';
+            _add(AppNotification(
+              id: 'quote_new_$quoteId',
+              title: '📋 New Catering Quote!',
+              body:
+                  '$customerName requested catering for $guests guests ($eventName). 📞 $phone',
+            ));
+            if (quoteId != null) {
+              BellAlertService.instance.addPendingOrder('quote_$quoteId');
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'bulk_quote_requests',
+          callback: (payload) {
+            final quoteId = payload.newRecord['id'] as String?;
+            final newStatus = payload.newRecord['quote_status'] as String?;
+            final oldStatus = payload.oldRecord['quote_status'] as String?;
+            if (newStatus == 'customer_accepted' &&
+                oldStatus != 'customer_accepted') {
+              final customerName =
+                  payload.newRecord['customer_name'] as String? ?? 'Customer';
+              final eventName =
+                  payload.newRecord['event_name'] as String? ?? 'Event';
+              final amount = payload.newRecord['quoted_amount'] ?? 0;
+              final phone =
+                  payload.newRecord['customer_phone'] as String? ?? '';
+              _add(AppNotification(
+                id: 'quote_acc_$quoteId',
+                title: '✅ Quote Accepted! Call to arrange payment',
+                body:
+                    '$customerName accepted ₹$amount for $eventName. 📞 $phone',
+              ));
+              if (quoteId != null) {
+                BellAlertService.instance
+                    .addPendingOrder('quote_accepted_$quoteId');
+              }
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: adminId,
+          ),
+          callback: (payload) {
+            final notifKey = payload.newRecord['notif_key'] as String? ?? '';
+            final title =
+                payload.newRecord['title'] as String? ?? 'Admin Notification';
+            final body = payload.newRecord['body'] as String? ?? '';
+            final orderId = payload.newRecord['order_id'] as String?;
+            _add(AppNotification(
+              id: notifKey.isNotEmpty
+                  ? notifKey
+                  : 'notif_${DateTime.now().millisecondsSinceEpoch}',
+              title: title,
+              body: body,
+              orderId: orderId,
+            ));
+            if (title.contains('Catering Quote') ||
+                title.contains('Quote Accepted') ||
+                title.contains('New Order') ||
+                title.contains('New Rider KYC')) {
+              final trackId = orderId ?? notifKey;
+              if (trackId.isNotEmpty) {
+                BellAlertService.instance.addPendingOrder(trackId);
+              }
+            }
+          },
+        )
         .subscribe((status, [error]) => _onChannelDisconnect(status));
 
     // Restore persisted notification history for this user
@@ -1169,6 +1346,31 @@ class NotificationProvider extends ChangeNotifier {
         );
       case 'delivered':
         return ('🎉 Order Delivered!', 'Your order has been delivered. Enjoy!');
+      case 'bulk_pending':
+        return (
+          '⏳ Catering Order Received',
+          'Your event catering order is confirmed and under admin review.'
+        );
+      case 'bulk_confirmed':
+        return (
+          '👨‍🍳 Kitchen Confirmed & Cooking!',
+          'Kitchen confirmed! Chefs have begun preparing your event dishes.'
+        );
+      case 'bulk_preparing':
+        return (
+          '🍳 Dishes Cooking in Kitchen',
+          'Your event feast is being cooked and packed in catering containers.'
+        );
+      case 'bulk_ready':
+        return (
+          '🍱 All Food Prepared & Ready!',
+          'All catering containers are packed, sealed, and ready for venue transport.'
+        );
+      case 'bulk_dispatched':
+        return (
+          '🚗 Feast Out for Delivery (In-House Van)!',
+          'In-house team is en route to your venue with your feast! Have your Handover OTP ready.'
+        );
       case 'cancelled':
         return (
           '❌ Order Cancelled',

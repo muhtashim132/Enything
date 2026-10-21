@@ -215,8 +215,8 @@ class _ProductCardState extends State<ProductCard>
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Veg / Non-Veg Icon
-                              if (product.isVeg != null) ...[
+                              // Veg / Non-Veg Icon (Food & Grocery items only)
+                              if (product.showsDietEmblem) ...[
                                 _buildDietEmblem(product.isVeg!),
                                 const SizedBox(width: 3),
                               ],
