@@ -30,6 +30,7 @@ import '../../utils/delivery_calculator.dart';
 import '../../services/rider_background_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/bell_alert_service.dart';
+import '../../services/practice_order_service.dart';
 import '../../utils/permission_utils.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
@@ -785,6 +786,25 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (_needsReload && mounted) {
         _debouncedLoadOrders();
       }
+    }
+  }
+
+  Future<void> _triggerPracticeDelivery() async {
+    final auth = context.read<AuthProvider>();
+    final riderId = auth.currentUserId;
+    if (riderId == null) {
+      _showSnack('Rider not logged in.', isError: true);
+      return;
+    }
+    _showSnack('Dispatching practice delivery with audio bell...', isError: false);
+    final orderId =
+        await PracticeOrderService.instance.createSelfPracticeOrderForRider(
+      riderId,
+      riderLat: _riderLat,
+      riderLng: _riderLng,
+    );
+    if (orderId != null) {
+      _loadOrders();
     }
   }
 
@@ -2652,6 +2672,33 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   : Colors.transparent),
         ),
         child: Column(children: [
+          if (group.isPractice)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0284C7), Color(0xFF4F46E5)],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.science_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    '🧪 PRACTICE DELIVERY · TRAINING SIMULATION',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (isLinkedAddon)
             Container(
               width: double.infinity,
@@ -3035,6 +3082,45 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(children: [
+                if (group.isPractice) ...[
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0284C7), Color(0xFF4F46E5)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.science_rounded,
+                            size: 16, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '🧪 PRACTICE DELIVERY · 💳 PREPAID ₹0 CASH TO COLLECT',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 // Destination
                 Row(children: [
                   const Icon(Icons.location_on_outlined,
@@ -3549,6 +3635,23 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               style: GoogleFonts.outfit(
                   color: isDark ? Colors.white60 : Colors.grey.shade600,
                   fontSize: 14)),
+          const SizedBox(height: 18),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF0284C7),
+              side: const BorderSide(color: Color(0xFF0284C7)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: _triggerPracticeDelivery,
+            icon: const Icon(Icons.science_rounded, size: 18),
+            label: Text(
+              '🧪 Try Practice Delivery',
+              style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+          ),
         ]),
       );
 

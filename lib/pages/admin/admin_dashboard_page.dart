@@ -11,6 +11,7 @@ import '../../providers/notification_provider.dart';
 import '../../config/routes.dart';
 import '../../theme/admin_theme.dart';
 import '../../widgets/common/notification_bell.dart';
+import '../../services/admin_dispatch_settings_service.dart';
 
 import 'modules/overview_admin_page.dart';
 import 'modules/orders_admin_page.dart';
@@ -40,6 +41,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   late AnimationController _bgCtrl;
   late Animation<double> _bgAnim;
   DateTime? _lastBackPressTime;
+  RealtimeChannel? _ordersBadgeChannel;
+
+  void _onPendingDispatchCountChanged() {
+    if (mounted) {
+      final count =
+          AdminDispatchSettingsService.instance.pendingOrderCountNotifier.value;
+      setState(() {
+        _pendingDispatchCount = count;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -48,6 +60,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         AnimationController(duration: const Duration(seconds: 12), vsync: this)
           ..repeat(reverse: true);
     _bgAnim = CurvedAnimation(parent: _bgCtrl, curve: Curves.easeInOut);
+
+    AdminDispatchSettingsService.instance.pendingOrderCountNotifier
+        .addListener(_onPendingDispatchCountChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
@@ -58,31 +73,64 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       }
       final userId = auth.currentUserId;
       if (userId != null) {
-        context.read<RbacProvider>().loadCurrentAdmin(userId).then((_) {
+        context.read<RbacProvider>().loadCurrentAdmin(userId).then((_) async {
           if (!mounted) return;
           final rbac = context.read<RbacProvider>();
+          final navItems = _buildNavItems(rbac);
+          final dispatchIdx =
+              navItems.indexWhere((n) => n.label == 'Dispatch');
+
+          // Check if this admin has Dispatch Radar active
+          final isRadarOn =
+              await AdminDispatchSettingsService.instance.isRadarActive(userId);
+
           if (rbac.currentAdmin?.role?.slug == 'dispatcher') {
-            final navItems = _buildNavItems(rbac);
-            final dispatchIdx =
-                navItems.indexWhere((n) => n.label == 'Dispatch');
             if (dispatchIdx != -1) {
               setState(() {
                 _currentIndex = dispatchIdx;
                 _visitedIndices.add(dispatchIdx);
               });
             }
+          } else if (isRadarOn &&
+              dispatchIdx != -1 &&
+              (rbac.isSuperAdmin || rbac.can('dispatch.view'))) {
+            // Pre-mount DispatchAdminPage in IndexedStack so live radar & audio buzz
+            // run in background for this admin on the admin panel
+            setState(() {
+              _visitedIndices.add(dispatchIdx);
+            });
           }
         });
         context.read<NotificationProvider>().listenAsAdmin(userId);
         context.read<NotificationProvider>().registerFcmToken(userId, 'admin');
+        _setupOrdersBadgeStream();
       }
       _loadBadges();
     });
   }
 
+  void _setupOrdersBadgeStream() {
+    _ordersBadgeChannel?.unsubscribe();
+    _ordersBadgeChannel = Supabase.instance.client
+        .channel('admin-dashboard-orders-badge-stream')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'orders',
+          callback: (payload) {
+            _loadBadges();
+          },
+        )
+        .subscribe();
+  }
+
   @override
   void dispose() {
     _bgCtrl.dispose();
+    _ordersBadgeChannel?.unsubscribe();
+    _ordersBadgeChannel = null;
+    AdminDispatchSettingsService.instance.pendingOrderCountNotifier
+        .removeListener(_onPendingDispatchCountChanged);
     super.dispose();
   }
 
@@ -136,6 +184,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   }
 
   void _signOut() {
+    _ordersBadgeChannel?.unsubscribe();
+    _ordersBadgeChannel = null;
     // N1 FIX: Clean up notification subscriptions
     context.read<NotificationProvider>().clearFcmSubs();
     context.read<NotificationProvider>().stopListening();

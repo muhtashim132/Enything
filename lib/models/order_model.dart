@@ -491,6 +491,20 @@ class OrderModel {
     );
   }
 
+  /// True if this order is a practice / simulation / dummy order for training.
+  bool get isPracticeOrder {
+    if (deliveryNotes != null && deliveryNotes!.contains('[PRACTICE ORDER]')) {
+      return true;
+    }
+    if (addressLabel != null && addressLabel!.contains('Practice')) {
+      return true;
+    }
+    if (paymentMethod == 'practice') {
+      return true;
+    }
+    return false;
+  }
+
   String get statusDisplay {
     switch (status) {
       case 'pending_verification':

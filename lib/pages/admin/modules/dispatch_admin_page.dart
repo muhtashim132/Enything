@@ -11,10 +11,12 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../providers/rbac_provider.dart';
 import '../../../providers/notification_provider.dart';
 import '../../../services/bell_alert_service.dart';
+import '../../../services/admin_dispatch_settings_service.dart';
 import '../../../config/routes.dart';
 import '../../../theme/admin_theme.dart';
 import '../../../utils/time_utils.dart';
 import '../../../widgets/order_countdown_timer.dart';
+import '../../../widgets/admin/practice_order_simulator_modal.dart';
 import '../rbac/forbidden_page.dart';
 
 class DispatchAdminPage extends StatefulWidget {
@@ -28,12 +30,15 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
     with SingleTickerProviderStateMixin {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  String? get _adminId => _supabase.auth.currentUser?.id;
+
   // ── Master Controls ──────────────────────────────────────────────
-  bool _isProxyModeActive = true;
+  bool _isProxyModeActive = false; // Loaded from AdminDispatchSettingsService per admin
   bool _isBuzzEnabled = true;
   bool _includeRiders = true;
   bool _includeSellers = true;
   double? _radiusKm = 15.0; // null = Unlimited
+  bool _isSettingsLoaded = false;
 
   // ── Location State ───────────────────────────────────────────────
   double? _adminLat;
@@ -71,23 +76,107 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
       }
     });
 
+    _loadAdminSettingsAndStart();
+  }
+
+  /// Hydrate persistent settings scoped to the currently authenticated admin
+  Future<void> _loadAdminSettingsAndStart() async {
+    final uid = _adminId;
+    if (uid != null) {
+      final active =
+          await AdminDispatchSettingsService.instance.isRadarActive(uid);
+      final buzz =
+          await AdminDispatchSettingsService.instance.isBuzzEnabled(uid);
+      final radius =
+          await AdminDispatchSettingsService.instance.getRadiusKm(uid);
+      if (mounted) {
+        setState(() {
+          _isProxyModeActive = active;
+          _isBuzzEnabled = buzz;
+          _radiusKm = radius;
+          _isSettingsLoaded = true;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _isSettingsLoaded = true;
+        });
+      }
+    }
+
+    if (_isProxyModeActive) {
+      _startMonitoring();
+    } else {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _startMonitoring() {
     _initGps();
     _fetchFeed();
     _setupRealtime();
     _startPeriodicRefresh();
-
-    // Keep screen awake while monitoring if buzz is on
+    // Keep screen awake while actively monitoring radar
     WakelockPlus.enable().catchError((_) {});
+  }
+
+  void _stopMonitoring() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    _realtimeChannel?.unsubscribe();
+    _realtimeChannel = null;
+    _silenceAllBuzz();
+    WakelockPlus.disable().catchError((_) {});
+    if (mounted) {
+      setState(() {
+        _feedOrders = [];
+        _bulkOrders = [];
+        _isLoading = false;
+      });
+    }
+    AdminDispatchSettingsService.instance.updatePendingCount(0);
+  }
+
+  Future<void> _toggleProxyMode(bool val) async {
+    final uid = _adminId;
+    setState(() => _isProxyModeActive = val);
+    if (uid != null) {
+      await AdminDispatchSettingsService.instance
+          .setRadarActive(uid, active: val);
+    }
+    if (val) {
+      _startMonitoring();
+      _showSnack('📡 Dispatch Radar Activated');
+    } else {
+      _stopMonitoring();
+      _showSnack('Dispatch Radar Turned OFF');
+    }
+  }
+
+  Future<void> _toggleBuzz() async {
+    final newBuzz = !_isBuzzEnabled;
+    setState(() => _isBuzzEnabled = newBuzz);
+    final uid = _adminId;
+    if (uid != null) {
+      await AdminDispatchSettingsService.instance
+          .setBuzzEnabled(uid, enabled: newBuzz);
+    }
+    if (!newBuzz) {
+      _silenceAllBuzz();
+      _showSnack('Audio buzz muted');
+    } else {
+      _syncAudioBuzz(_feedOrders);
+      _showSnack('Audio buzz enabled');
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _pollingTimer?.cancel();
-    _realtimeChannel?.unsubscribe();
-    // Safety cleanup: silence all buzz loops
-    _silenceAllBuzz();
-    WakelockPlus.disable().catchError((_) {});
+    _stopMonitoring();
     super.dispose();
   }
 
@@ -214,6 +303,7 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
       });
 
       _syncAudioBuzz(orders);
+      AdminDispatchSettingsService.instance.updatePendingCount(orders.length);
     } catch (e) {
       debugPrint('Error fetching dispatch feed: $e');
       if (mounted && !silent) {
@@ -598,6 +688,12 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
       return const ForbiddenPage(fullPage: false);
     }
 
+    if (!_isSettingsLoaded) {
+      return const Center(
+        child: CircularProgressIndicator(color: AdminColors.primary),
+      );
+    }
+
     final filtered = _filteredOrders;
 
     final riderPendingCount = _feedOrders
@@ -755,10 +851,7 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
                     child: Switch(
                       value: _isProxyModeActive,
                       activeThumbColor: AdminColors.success,
-                      onChanged: (val) {
-                        setState(() => _isProxyModeActive = val);
-                        _fetchFeed();
-                      },
+                      onChanged: (val) => _toggleProxyMode(val),
                     ),
                   ),
                 ],
@@ -774,16 +867,7 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
                   size: 22,
                 ),
                 tooltip: _isBuzzEnabled ? 'Mute Buzzer' : 'Enable Buzzer',
-                onPressed: () {
-                  setState(() => _isBuzzEnabled = !_isBuzzEnabled);
-                  if (!_isBuzzEnabled) {
-                    _silenceAllBuzz();
-                    _showSnack('Audio buzz muted');
-                  } else {
-                    _syncAudioBuzz(_feedOrders);
-                    _showSnack('Audio buzz enabled');
-                  }
-                },
+                onPressed: _toggleBuzz,
               ),
               // Quotes Shortcut
               IconButton(
@@ -795,6 +879,18 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
                 tooltip: 'Event Quotes',
                 onPressed: () {
                   Navigator.pushNamed(context, AppRoutes.adminQuoteReview);
+                },
+              ),
+              // Practice Order Simulator Shortcut
+              IconButton(
+                icon: const Icon(
+                  Icons.science_rounded,
+                  color: Color(0xFF38BDF8),
+                  size: 22,
+                ),
+                tooltip: 'Practice Order Simulator',
+                onPressed: () {
+                  PracticeOrderSimulatorModal.show(context);
                 },
               ),
             ],
@@ -1000,9 +1096,15 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
               divisions: 11,
               label: _radiusKm != null ? '${_radiusKm!.toInt()} km' : 'Unlimited',
               onChanged: (v) {
+                final newRadius = v >= 55.0 ? null : v;
                 setState(() {
-                  _radiusKm = v >= 55.0 ? null : v;
+                  _radiusKm = newRadius;
                 });
+                final uid = _adminId;
+                if (uid != null) {
+                  AdminDispatchSettingsService.instance
+                      .setRadiusKm(uid, newRadius);
+                }
                 _fetchFeed();
               },
             ),

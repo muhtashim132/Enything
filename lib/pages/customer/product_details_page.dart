@@ -326,7 +326,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Row(
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(
@@ -337,6 +340,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         const Icon(Icons.star_rounded,
                                             color: Colors.amber, size: 16),
@@ -355,6 +359,41 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                       ],
                                     ),
                                   ),
+                                  if (_product!.menuCategory != null &&
+                                      _product!.menuCategory!.trim().isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: AppColors.primary
+                                              .withValues(alpha: 0.3),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.restaurant_menu_rounded,
+                                            color: AppColors.primary,
+                                            size: 14,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _product!.menuCategory!.trim(),
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 12,
+                                              color: AppColors.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
                             ],

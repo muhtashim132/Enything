@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:enythingmobilenew/models/product_model.dart';
 
 void main() {
   group('100x Shop Menu Category Dropdown & Discovery Engine Tests', () {
@@ -116,5 +117,39 @@ void main() {
 
       expect(categories.isEmpty, isTrue);
     });
+
+    test('Menu Category validator rejects null, empty, or whitespace strings and accepts valid names', () {
+      String? validateMenuCategory(String? val) {
+        if (val == null || val.trim().isEmpty) {
+          return 'Menu Category is required';
+        }
+        return null;
+      }
+
+      expect(validateMenuCategory(null), 'Menu Category is required');
+      expect(validateMenuCategory(''), 'Menu Category is required');
+      expect(validateMenuCategory('   '), 'Menu Category is required');
+      expect(validateMenuCategory('\t\n'), 'Menu Category is required');
+      expect(validateMenuCategory('Starters'), isNull);
+      expect(validateMenuCategory('  Main Course  '), isNull);
+    });
+
+    test('ProductModel properly serializes and deserializes menuCategory', () {
+      final model = ProductModel(
+        id: 'p-1',
+        shopId: 's-1',
+        name: 'Paneer Tikka',
+        category: 'Food',
+        price: 250,
+        menuCategory: 'Starters',
+      );
+
+      final map = model.toMap();
+      expect(map['menu_category'], 'Starters');
+
+      final fromMap = ProductModel.fromMap(map);
+      expect(fromMap.menuCategory, 'Starters');
+    });
   });
 }
+

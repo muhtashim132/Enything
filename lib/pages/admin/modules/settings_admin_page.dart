@@ -17,6 +17,7 @@ import '../platform/category_management_page.dart';
 import '../platform/maintenance_settings_page.dart';
 import '../platform/admin_product_management_page.dart';
 import '../../../providers/platform_config_provider.dart';
+import '../../../widgets/admin/practice_order_simulator_modal.dart';
 
 class SettingsAdminPage extends StatelessWidget {
   const SettingsAdminPage({super.key});
@@ -197,6 +198,20 @@ class SettingsAdminPage extends StatelessWidget {
               onTap: () =>
                   Navigator.push(context, _route(const TaxSettingsPage())),
             ).animate().fadeIn(delay: 450.ms).slideX(begin: -0.1),
+        ],
+
+        // ── Simulation & Training ─────────────────────────────────
+        if (rbac.isSuperAdmin ||
+            rbac.can('dispatch.view') ||
+            rbac.can('settings.edit')) ...[
+          const _SectionLabel('Simulation & Training'),
+          _SettingsTile(
+            icon: Icons.science_rounded,
+            iconColor: const Color(0xFF06B6D4),
+            title: 'Practice Order Simulator',
+            subtitle: 'Dispatch dummy orders to sellers & riders for training',
+            onTap: () => PracticeOrderSimulatorModal.show(context),
+          ).animate().fadeIn(delay: 480.ms).slideX(begin: -0.1),
         ],
 
         // ── Danger Zone ──────────────────────────────────────────

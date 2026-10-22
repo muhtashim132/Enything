@@ -47,6 +47,9 @@ class OrderGroup {
   /// Since COD is not available in Enything, doorstep collection is always 0.0.
   double get codAmountToCollect => 0.0;
 
+  /// True if this order group contains practice/dummy simulation orders.
+  bool get isPractice => orders.any((o) => o.isPracticeOrder);
+
   /// Total items across all active orders in this group.
   int get totalItemCount => activeOrders
       .fold<int>(0, (sum, o) => sum + o.items.fold<int>(0, (s, i) => s + i.quantity));

@@ -339,7 +339,7 @@ class _AddProductPageState extends State<AddProductPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Menu / Section Categories',
+                          'Menu Categories',
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
@@ -499,10 +499,16 @@ class _AddProductPageState extends State<AddProductPage> {
             Expanded(
               child: TextFormField(
                 controller: _menuCategoryController,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Menu Category is required';
+                  }
+                  return null;
+                },
                 decoration: InputDecoration(
-                  labelText: 'Menu/Section Category (Optional)',
-                  hintText: 'e.g. Main Course, Beverages, Shirts',
-                  prefixIcon: const Icon(Icons.category_outlined),
+                  labelText: 'Menu Category *',
+                  hintText: 'e.g. Starters, Main Course, Beverages, Desserts',
+                  prefixIcon: const Icon(Icons.restaurant_menu_rounded),
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -705,7 +711,7 @@ class _AddProductPageState extends State<AddProductPage> {
         ] else if (!_loadingMenuCategories) ...[
           const SizedBox(height: 6),
           const Text(
-            '💡 Type a category name to create your shop\'s first menu section (e.g., Starters, Main Course, Drinks).',
+            '💡 Type a category name to create your shop\'s first menu category (e.g., Starters, Main Course, Drinks).',
             style: TextStyle(
               fontSize: 11,
               color: AppColors.textSecondary,
@@ -1538,6 +1544,16 @@ class _AddProductPageState extends State<AddProductPage> {
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_menuCategoryController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Menu Category is required. Please enter or select a category.'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
+
     // C1: Require at least 1 product image
     if (_images.isEmpty && _existingImageUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1656,9 +1672,7 @@ class _AddProductPageState extends State<AddProductPage> {
             ? null
             : _descriptionController.text.trim(),
         'category': _productCategory,
-        'menu_category': _menuCategoryController.text.trim().isEmpty
-            ? null
-            : _menuCategoryController.text.trim(),
+        'menu_category': _menuCategoryController.text.trim(),
         'is_veg': AppCategories.isFoodCategory(_productCategory) ? _isVeg : null,
         'is_available': _isAvailable,
         'weight_per_unit': _weightController.text.trim().isEmpty

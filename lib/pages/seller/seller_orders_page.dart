@@ -18,6 +18,7 @@ import '../../widgets/common/notification_bell.dart';
 import '../../pages/seller/seller_order_map_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/bell_alert_service.dart';
+import '../../services/practice_order_service.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/time_utils.dart';
 import '../../utils/delivery_calculator.dart';
@@ -311,6 +312,25 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           }
           return;
         }
+      }
+
+      if (order.isPracticeOrder) {
+        // Practice Order special handling:
+        // Automatically transition directly to 'preparing' so seller can test prep timer
+        // without waiting for customer payment or mock customer intervention.
+        await _supabase.from('orders').update({
+          'seller_accepted': true,
+          'status': 'preparing',
+          'order_ready_time': null,
+        }).eq('id', order.id);
+        BellAlertService.instance.removePendingOrder(order.id);
+        if (mounted) {
+          _showSnack('🧪 Practice Order Accepted! Preparing countdown started.',
+              isError: false);
+          _tabController.animateTo(1);
+        }
+        _loadOrders();
+        return;
       }
 
       // Update DB and capture boolean return value to prevent TOCTOU races
@@ -1223,6 +1243,22 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     );
   }
 
+  Future<void> _triggerPracticeOrder() async {
+    if (_shopNames.isEmpty) {
+      _showSnack('No shop found to practice with.', isError: true);
+      return;
+    }
+    final primaryShopId = _shopNames.keys.first;
+    _showSnack('Dispatching practice order with audio bell...', isError: false);
+    final orderId = await PracticeOrderService.instance.createSelfPracticeOrderForSeller(
+      primaryShopId,
+      sellerId: context.read<AuthProvider>().currentUserId,
+    );
+    if (orderId != null) {
+      _loadOrders();
+    }
+  }
+
   Widget _buildList(List<OrderModel> orders, String tab) {
     if (orders.isEmpty) {
       final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1275,6 +1311,23 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               style: GoogleFonts.outfit(
                   color: AppColors.textSecondary, fontSize: 14),
             ),
+            if (tab == 'pending') ...[
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0284C7),
+                  side: const BorderSide(color: Color(0xFF0284C7)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _triggerPracticeOrder,
+                icon: const Icon(Icons.science_rounded, size: 18),
+                label: Text(
+                  '🧪 Try Practice Order',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+            ],
           ],
         ),
       );
@@ -1333,6 +1386,45 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (order.isPracticeOrder) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF0284C7), Color(0xFF4F46E5)],
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.science_rounded,
+                                size: 16, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '🧪 TRAINING / PRACTICE ORDER · DO NOT PREPARE FOOD',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     // Header row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
