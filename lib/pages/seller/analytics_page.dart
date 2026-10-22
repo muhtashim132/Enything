@@ -82,11 +82,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         dates.add(d);
       }
 
+      double parseD(dynamic v) =>
+          v is num ? v.toDouble() : (double.tryParse(v?.toString() ?? '') ?? 0.0);
+
       for (final order in (orders as List)) {
         final status = order['status'];
-        final amount = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
-        final sp = (order['seller_payout'] as num?)?.toDouble() ?? 0.0;
-        final zc = (order['enything_commission'] as num?)?.toDouble() ?? 0.0;
+        final amount = parseD(order['total_amount']);
+        final sp = parseD(order['seller_payout']);
+        final zc = parseD(order['enything_commission']);
 
         if (status == 'delivered') {
           total += amount;

@@ -51,13 +51,17 @@ class CartItem {
 
   factory CartItem.fromMap(Map<String, dynamic> map) {
     return CartItem(
-      product: ProductModel.fromMap(map['product'] as Map<String, dynamic>),
-      shop: ShopModel.fromMap(map['shop'] as Map<String, dynamic>),
-      quantity: map['quantity'] as int? ?? 1,
+      product: ProductModel.fromMap(map['product'] != null
+          ? Map<String, dynamic>.from(map['product'] as Map)
+          : <String, dynamic>{}),
+      shop: ShopModel.fromMap(map['shop'] != null
+          ? Map<String, dynamic>.from(map['shop'] as Map)
+          : <String, dynamic>{}),
+      quantity: (map['quantity'] as num?)?.toInt() ?? 1,
       specialInstructions: map['special_instructions'] as String?,
       selectedVariant: map['selected_variant'] != null
           ? ProductVariant.fromMap(
-              map['selected_variant'] as Map<String, dynamic>)
+              Map<String, dynamic>.from(map['selected_variant'] as Map))
           : null,
     );
   }

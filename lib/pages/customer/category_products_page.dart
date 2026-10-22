@@ -196,12 +196,12 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                 final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
                 return ratingB.compareTo(ratingA);
               });
-              rawProducts.addAll(shopProds.take(5));
-              if (rawProducts.length >= 150) break;
+              rawProducts.addAll(shopProds);
+              if (rawProducts.length >= 500) break;
             }
           }
-          if (rawProducts.length > 150) {
-            rawProducts = rawProducts.sublist(0, 150);
+          if (rawProducts.length > 500) {
+            rawProducts = rawProducts.sublist(0, 500);
           }
         }
 
@@ -243,8 +243,13 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           final shop = ShopModel.fromMap(p['shops']);
           if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
 
-          if (shop.location.latitude != 0 && shop.location.longitude != 0) {
-            shop.distanceKm = locationProvider.distanceTo(shop.location);
+          if (locationProvider.hasLocation) {
+            if (shop.location.latitude == 0 || shop.location.longitude == 0) {
+              continue;
+            }
+            final d = locationProvider.distanceTo(shop.location);
+            if (!DeliveryCalculator.isWithinRange(d)) continue;
+            shop.distanceKm = d;
           }
 
           prods.add(product);

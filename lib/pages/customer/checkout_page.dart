@@ -81,6 +81,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _fetchActiveGroupState() async {
+    if (!mounted) return;
     final cartProvider = context.read<CartProvider>();
     final pendingGroupId = cartProvider.pendingCartGroupId;
     final cartGroupId = widget.existingCartGroupId ?? pendingGroupId;
@@ -202,6 +203,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _validateStockPreCheckout() async {
+    if (!mounted) return;
     final cart = context.read<CartProvider>();
     if (cart.items.isEmpty) return;
 

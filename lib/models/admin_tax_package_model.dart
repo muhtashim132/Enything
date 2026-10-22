@@ -50,9 +50,15 @@ class AdminTaxPackage {
   });
 
   factory AdminTaxPackage.fromJson(Map<String, dynamic> json) {
-    final period = json['period'] as Map<String, dynamic>? ?? {};
-    final summary = json['summary'] as Map<String, dynamic>? ?? {};
-    final stats = json['compliance_stats'] as Map<String, dynamic>? ?? {};
+    final period = json['period'] is Map
+        ? Map<String, dynamic>.from(json['period'] as Map)
+        : <String, dynamic>{};
+    final summary = json['summary'] is Map
+        ? Map<String, dynamic>.from(json['summary'] as Map)
+        : <String, dynamic>{};
+    final stats = json['compliance_stats'] is Map
+        ? Map<String, dynamic>.from(json['compliance_stats'] as Map)
+        : <String, dynamic>{};
     final vendorsRaw = json['vendor_schedule'] as List<dynamic>? ?? [];
 
     return AdminTaxPackage(
@@ -79,8 +85,9 @@ class AdminTaxPackage {
           (summary['net_cash_payable_govt'] as num?)?.toDouble() ?? 0.0,
       deliveredOrders: (summary['delivered_orders'] as num?)?.toInt() ?? 0,
       vendorSchedule: vendorsRaw
+          .whereType<Map>()
           .map((v) =>
-              VendorTaxScheduleRow.fromJson(v as Map<String, dynamic>))
+              VendorTaxScheduleRow.fromJson(Map<String, dynamic>.from(v)))
           .toList(),
       complianceStats: TaxComplianceStats.fromJson(stats),
     );

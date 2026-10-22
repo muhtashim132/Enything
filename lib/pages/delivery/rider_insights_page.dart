@@ -69,8 +69,11 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
         }
 
         final isDelivered = o['status'] == 'delivered';
-        final isCompensated = o['status'] == 'cancelled' &&
-            ((o['rider_earnings'] as num?)?.toDouble() ?? 0.0) > 0;
+        final rawRE = o['rider_earnings'];
+        final riderComp = rawRE is num
+            ? rawRE.toDouble()
+            : (double.tryParse(rawRE?.toString() ?? '') ?? 0.0);
+        final isCompensated = o['status'] == 'cancelled' && riderComp > 0;
 
         if (isDelivered) {
           deliveredCount++;
@@ -107,10 +110,15 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
           if (effectiveDate != null) {
             final dateKey =
                 "${effectiveDate.year}-${effectiveDate.month.toString().padLeft(2, '0')}-${effectiveDate.day.toString().padLeft(2, '0')}";
-            final orderEarnings =
-                ((o['rider_earnings'] ?? o['delivery_charges'] ?? 0.0) as num)
-                        .toDouble() +
-                    ((o['wait_time_penalty'] ?? 0.0) as num).toDouble();
+            final rawE = o['rider_earnings'] ?? o['delivery_charges'];
+            final riderE = rawE is num
+                ? rawE.toDouble()
+                : (double.tryParse(rawE?.toString() ?? '') ?? 0.0);
+            final rawP = o['wait_time_penalty'];
+            final penalty = rawP is num
+                ? rawP.toDouble()
+                : (double.tryParse(rawP?.toString() ?? '') ?? 0.0);
+            final orderEarnings = riderE + penalty;
             earningsByDate[dateKey] =
                 (earningsByDate[dateKey] ?? 0.0) + orderEarnings;
           }
@@ -141,7 +149,10 @@ class _RiderInsightsPageState extends State<RiderInsightsPage> {
 
       int sumRatings = 0;
       for (var r in ratings) {
-        final val = (r['rating'] as num).toInt();
+        final rawRating = r['rating'];
+        final val = rawRating is num
+            ? rawRating.toInt()
+            : (int.tryParse(rawRating?.toString() ?? '') ?? 0);
         sumRatings += val;
         _ratingDistribution[val] = (_ratingDistribution[val] ?? 0) + 1;
       }

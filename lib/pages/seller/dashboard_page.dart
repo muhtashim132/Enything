@@ -193,7 +193,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
       final shopsResp = await _supabase
           .from('shops')
           .select(
-              'id, name, category, categories, is_active, is_accepting_orders, average_rating, verification_status')
+              'id, name, category, categories, is_active, is_accepting_orders, average_rating, verification_status, open_time, close_time')
           .eq('seller_id', auth.currentUserId ?? '');
 
       final shopsList = List<Map<String, dynamic>>.from(shopsResp as List);

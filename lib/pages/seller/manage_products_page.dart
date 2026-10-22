@@ -159,7 +159,8 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
           .from('products')
           .update({'is_available': newState})
           .eq('id', product.id)
-          .eq('shop_id', product.shopId);
+          .eq('shop_id', product.shopId)
+          .eq('is_deleted', false);
 
       _showSnack(
         newState ? '✅ "${product.name}" is now Available' : '👁️ "${product.name}" is now Hidden',

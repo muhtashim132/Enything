@@ -118,28 +118,50 @@ class _CaReportPageState extends State<CaReportPage> {
           .order('updated_at', ascending: false)
           .limit(100);
 
-      setState(() {
-        _shops = shopsList;
-        _selectedShopId = shopId;
-        _totalBaseSales = (response['total_base_sales'] ?? 0).toDouble();
-        _nonFoodGst = (response['non_food_gst'] ?? 0).toDouble();
-        _s9_5Gst = (response['s9_5_gst'] ?? 0).toDouble();
-        _deliveryGst = (response['delivery_gst'] ?? 0).toDouble();
-        _platformGst = (response['platform_gst'] ?? 0).toDouble();
-        _tcsDeducted = (response['tcs_deducted'] ?? 0).toDouble();
-        _tdsDeducted = (response['tds_deducted'] ?? 0).toDouble();
-        _commission = (response['commission'] ?? 0).toDouble();
-        _sellerPayout = (response['seller_payout'] ?? 0).toDouble();
-        _grandCollected = (response['grand_collected'] ?? 0).toDouble();
-        _gatewayFees = (response['gateway_fees'] ?? 0).toDouble();
-        _deliveredOrders = (response['delivered_orders'] as num?)?.toInt() ?? 0;
-        _monthlyOrders =
-            List<Map<String, dynamic>>.from(ordersListResp as List);
-        _isLoading = false;
-      });
+      double parseD(dynamic v) =>
+          v is num ? v.toDouble() : (double.tryParse(v?.toString() ?? '') ?? 0.0);
+      int parseI(dynamic v) =>
+          v is num ? v.toInt() : (int.tryParse(v?.toString() ?? '') ?? 0);
+
+      if (mounted) {
+        setState(() {
+          _shops = shopsList;
+          _selectedShopId = shopId;
+          if (response != null) {
+            _totalBaseSales = parseD(response['total_base_sales']);
+            _nonFoodGst = parseD(response['non_food_gst']);
+            _s9_5Gst = parseD(response['s9_5_gst']);
+            _deliveryGst = parseD(response['delivery_gst']);
+            _platformGst = parseD(response['platform_gst']);
+            _tcsDeducted = parseD(response['tcs_deducted']);
+            _tdsDeducted = parseD(response['tds_deducted']);
+            _commission = parseD(response['commission']);
+            _sellerPayout = parseD(response['seller_payout']);
+            _grandCollected = parseD(response['grand_collected']);
+            _gatewayFees = parseD(response['gateway_fees']);
+            _deliveredOrders = parseI(response['delivered_orders']);
+          } else {
+            _totalBaseSales = 0;
+            _nonFoodGst = 0;
+            _s9_5Gst = 0;
+            _deliveryGst = 0;
+            _platformGst = 0;
+            _tcsDeducted = 0;
+            _tdsDeducted = 0;
+            _commission = 0;
+            _sellerPayout = 0;
+            _grandCollected = 0;
+            _gatewayFees = 0;
+            _deliveredOrders = 0;
+          }
+          _monthlyOrders =
+              List<Map<String, dynamic>>.from(ordersListResp as List);
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('CaReport error: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

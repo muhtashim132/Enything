@@ -582,12 +582,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       // 100x ARCHITECTURE FIX: Offload geographic search to PostGIS RPC
       // Prevents "Pixel Overloading" OOM crashes and "Geographic Starvation"
-      final available =
-          await _supabase.rpc('get_nearby_unassigned_orders', params: {
-        'p_rider_lat': _riderLat,
-        'p_rider_lng': _riderLng,
-        'p_radius_km': _maxRadiusKm,
-      }).select('*, order_items(*), shops!shop_id(id, name, location)');
+      final List<dynamic> available;
+      if (_riderLat == null || _riderLng == null) {
+        available = [];
+      } else {
+        available = await _supabase.rpc('get_nearby_unassigned_orders', params: {
+          'p_rider_lat': _riderLat,
+          'p_rider_lng': _riderLng,
+          'p_radius_km': _maxRadiusKm,
+        }).select('*, order_items(*), shops!shop_id(id, name, location)');
+      }
 
       final myOrders = await _supabase
           .from('orders')
@@ -613,7 +617,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       // Populate _shopInfoCache from the joined shop data
       _shopInfoCache.clear();
-      for (final o in (available as List)) {
+      for (final o in available) {
         final shopMap = o['shops'] as Map<String, dynamic>?;
         if (shopMap != null) {
           try {
@@ -632,7 +636,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (!mounted) return;
 
       // The RPC already filters geographically and prevents Data Overload!
-      final filtered = (available as List)
+      // In addition, client-side fortress verifies distance against rider GPS.
+      final filtered = available
           .map((o) {
             final model = OrderModel.fromMap(o);
             model.items = (o['order_items'] as List? ?? [])
@@ -641,6 +646,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             return model;
           })
           .where((o) => DateTime.now().difference(o.createdAt).inHours < 24)
+          .where((o) {
+            if (_riderLat != null && _riderLng != null) {
+              final dist = _pickupDistKm(o);
+              if (dist != null && dist > _maxRadiusKm) {
+                return false;
+              }
+            }
+            return true;
+          })
           .toList();
 
       if (filtered.isEmpty && _isOnline) {
@@ -3134,8 +3148,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   ),
                 ]),
                 // ── ETA chip for rider (drop-off time estimate) ──
-                if (group.orders.isNotEmpty &&
-                    group.orders.first.estimatedDistanceKm > 0) ...[
+                if (group.activeOrders.isNotEmpty &&
+                    group.primaryOrder.estimatedDistanceKm > 0) ...[
                   const SizedBox(height: 8),
                   Container(
                     padding:
@@ -3153,7 +3167,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             color: Colors.white, size: 14),
                         const SizedBox(width: 6),
                         Text(
-                          'Drop in ~${DeliveryCalculator.etaLabel(group.orders.first.estimatedDistanceKm, 0)}',
+                          'Drop in ~${DeliveryCalculator.etaLabel(group.primaryOrder.estimatedDistanceKm, 0)}',
                           style: GoogleFonts.outfit(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -3162,7 +3176,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '· by ${DeliveryCalculator.etaArrivalTime(group.orders.first.estimatedDistanceKm, 0)}',
+                          '· by ${DeliveryCalculator.etaArrivalTime(group.primaryOrder.estimatedDistanceKm, 0)}',
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             color: Colors.white70,

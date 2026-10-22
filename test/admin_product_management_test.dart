@@ -4,13 +4,16 @@ import 'package:enythingmobilenew/pages/admin/platform/admin_product_management_
 
 void main() {
   group('AdminProductManagement - AdminShopItem Model Tests', () {
-    test('parses complete shop map with profile information', () {
+    test('parses complete shop map with profile information, operating hours, and accepting orders', () {
       final map = {
         'id': 'shop_123',
         'shop_name': 'Green Grocers',
         'category': 'Grocery',
         'address': '123 Market St, Downtown',
         'is_active': true,
+        'is_accepting_orders': true,
+        'open_time': '08:30:00',
+        'close_time': '22:15:00',
         'seller_id': 'seller_999',
         'banner_url': 'https://example.com/banner.jpg',
         'profiles': {
@@ -28,18 +31,22 @@ void main() {
       expect(item.category, equals('Grocery'));
       expect(item.address, equals('123 Market St, Downtown'));
       expect(item.isActive, isTrue);
+      expect(item.isAcceptingOrders, isTrue);
+      expect(item.openTime, equals('08:30'));
+      expect(item.closeTime, equals('22:15'));
       expect(item.sellerId, equals('seller_999'));
       expect(item.sellerName, equals('John Seller'));
       expect(item.sellerPhone, equals('+919876543210'));
       expect(item.bannerUrl, equals('https://example.com/banner.jpg'));
     });
 
-    test('parses fallback shop map without profile info or alternative keys', () {
+    test('parses fallback shop map without profile info or alternative keys and sets default hours', () {
       final map = {
         'id': 'shop_456',
         'name': 'Bakery Delights',
         'category': 'Food & Dining',
         'is_active': false,
+        'is_accepting_orders': false,
         'seller_id': 'seller_888',
         'banner_image': 'https://example.com/banner2.jpg',
         'profiles': null,
@@ -51,9 +58,73 @@ void main() {
       expect(item.name, equals('Bakery Delights'));
       expect(item.category, equals('Food & Dining'));
       expect(item.isActive, isFalse);
+      expect(item.isAcceptingOrders, isFalse);
+      expect(item.openTime, equals('09:00'));
+      expect(item.closeTime, equals('21:00'));
       expect(item.sellerName, isNull);
       expect(item.sellerPhone, isNull);
       expect(item.bannerUrl, equals('https://example.com/banner2.jpg'));
+    });
+
+    test('copyWith updates isAcceptingOrders, openTime, and closeTime cleanly', () {
+      const original = AdminShopItem(
+        id: 'shop_789',
+        name: 'Late Night Diner',
+        category: 'Restaurant',
+        isActive: true,
+        isAcceptingOrders: true,
+        openTime: '18:00',
+        closeTime: '04:00',
+      );
+
+      final closed = original.copyWith(isAcceptingOrders: false);
+      expect(closed.isAcceptingOrders, isFalse);
+      expect(closed.isActive, isTrue);
+      expect(closed.openTime, equals('18:00'));
+      expect(closed.closeTime, equals('04:00'));
+
+      final rescheduled = original.copyWith(openTime: '19:00', closeTime: '05:00');
+      expect(rescheduled.openTime, equals('19:00'));
+      expect(rescheduled.closeTime, equals('05:00'));
+      expect(rescheduled.isAcceptingOrders, isTrue);
+    });
+
+    test('parses legacy column names (opening_time, closing_time) and falls back correctly', () {
+      final map = {
+        'id': 'shop_legacy',
+        'name': 'Old Cafe',
+        'category': 'Cafe',
+        'is_active': true,
+        'is_open': true,
+        'opening_time': '07:30:00',
+        'closing_time': '23:00:00',
+      };
+
+      final item = AdminShopItem.fromMap(map);
+
+      expect(item.id, equals('shop_legacy'));
+      expect(item.name, equals('Old Cafe'));
+      expect(item.openTime, equals('07:30'));
+      expect(item.closeTime, equals('23:00'));
+      expect(item.isAcceptingOrders, isTrue);
+    });
+
+    test('preserves explicit isAcceptingOrders false even if is_active is true', () {
+      final map = {
+        'id': 'shop_closed_manual',
+        'name': 'Resting Bistro',
+        'category': 'Restaurant',
+        'is_active': true,
+        'is_accepting_orders': false,
+        'is_open': false,
+        'open_time': '10:00',
+        'close_time': '22:00',
+      };
+
+      final item = AdminShopItem.fromMap(map);
+
+      expect(item.isActive, isTrue);
+      expect(item.isAcceptingOrders, isFalse);
     });
   });
 
@@ -85,7 +156,8 @@ void main() {
     });
 
     test('soft delete payload sets is_deleted true and is_available false', () {
-      const bool hasOrderHistory = true;
+      bool checkHistory(bool flag) => flag;
+      final hasOrderHistory = checkHistory(true);
       final updatePayloadWithHistory = <String, dynamic>{
         'is_deleted': true,
         'is_available': false,
@@ -96,7 +168,7 @@ void main() {
       expect(updatePayloadWithHistory['is_available'], isFalse);
       expect(updatePayloadWithHistory.containsKey('images'), isFalse);
 
-      const bool noOrderHistory = false;
+      final noOrderHistory = checkHistory(false);
       final updatePayloadNoHistory = <String, dynamic>{
         'is_deleted': true,
         'is_available': false,

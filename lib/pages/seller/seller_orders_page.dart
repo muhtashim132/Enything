@@ -184,9 +184,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   Future<void> _loadOrders() async {
     if (_isOrdersLoadInProgress) {
       _needsReload = true;
-      // Phase 8: Prevent pull-to-refresh instant snap
-      while (_isOrdersLoadInProgress) {
+      // Phase 8: Prevent pull-to-refresh instant snap with stalled lock recovery
+      int waitTicks = 0;
+      while (_isOrdersLoadInProgress && waitTicks < 50) {
         await Future.delayed(const Duration(milliseconds: 100));
+        waitTicks++;
+      }
+      if (_isOrdersLoadInProgress) {
+        _isOrdersLoadInProgress = false; // Force reset stalled lock
       }
       return;
     }

@@ -70,21 +70,28 @@ class SavedAddress {
   /// Whether the GPS coordinates are valid (not 0,0 placeholder)
   bool get hasValidCoordinates => latitude != 0 || longitude != 0;
 
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   factory SavedAddress.fromMap(Map<String, dynamic> map) {
     return SavedAddress(
-      id: map['id'] ?? '',
-      userId: map['user_id'] ?? '',
-      label: map['label'] ?? 'Home',
-      customLabel: map['custom_label'],
-      flatNumber: map['flat_number'],
-      address: map['address'] ?? '',
-      landmark: map['landmark'],
-      pincode: map['pincode'],
-      latitude: (map['latitude'] ?? 0).toDouble(),
-      longitude: (map['longitude'] ?? 0).toDouble(),
-      isDefault: map['is_default'] ?? false,
-      createdAt: DateTime.tryParse(map['created_at'] ?? ''),
-      updatedAt: DateTime.tryParse(map['updated_at'] ?? ''),
+      id: map['id']?.toString() ?? '',
+      userId: map['user_id']?.toString() ?? '',
+      label: map['label']?.toString() ?? 'Home',
+      customLabel: map['custom_label']?.toString(),
+      flatNumber: map['flat_number']?.toString(),
+      address: map['address']?.toString() ?? '',
+      landmark: map['landmark']?.toString(),
+      pincode: map['pincode']?.toString(),
+      latitude: _parseDouble(map['latitude']),
+      longitude: _parseDouble(map['longitude']),
+      isDefault: map['is_default'] == true || map['is_default']?.toString() == 'true',
+      createdAt: DateTime.tryParse(map['created_at']?.toString() ?? ''),
+      updatedAt: DateTime.tryParse(map['updated_at']?.toString() ?? ''),
     );
   }
 

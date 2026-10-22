@@ -297,7 +297,7 @@ class CartProvider extends ChangeNotifier {
     double gst = 0;
     for (final item in _items) {
       final category = item.product.category;
-      final price = item.product.price;
+      final price = item.selectedVariant?.price ?? item.product.price;
       // Use product-level override if set; otherwise use category rate (unchanged)
       final rate = TaxConfig.gstRateForProduct(
         category,
@@ -325,7 +325,7 @@ class CartProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get taxBreakdownItems => _items
       .map((i) => {
             'category': i.product.category,
-            'price': i.product.price, // BASE price, pre-GST
+            'price': i.selectedVariant?.price ?? i.product.price, // BASE price, pre-GST
             'quantity': i.quantity,
             'gst_rate_override':
                 i.product.gstRateOverride, // null = use category

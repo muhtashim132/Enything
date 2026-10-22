@@ -70,22 +70,144 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   ProductVariant? _selectedVariant;
   final GlobalKey _variantKey = GlobalKey();
   final PageController _pageController = PageController();
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
+  final DraggableScrollableController _draggableController =
+      DraggableScrollableController();
+  late bool _highlightVariants;
+  int _highlightPulseCount = 0;
+  OverlayEntry? _activeWarningOverlay;
 
   @override
   void initState() {
     super.initState();
+    _highlightVariants = widget.highlightVariants;
     _fetchProduct();
   }
 
-  void _scrollToVariants({int retries = 4}) {
-    if (!mounted || !widget.highlightVariants) return;
-    Future.delayed(const Duration(milliseconds: 320), () {
+  @override
+  void dispose() {
+    _dismissWarningBanner();
+    _pageController.dispose();
+    _draggableController.dispose();
+    super.dispose();
+  }
+
+  void _dismissWarningBanner() {
+    if (_activeWarningOverlay != null) {
+      if (_activeWarningOverlay!.mounted) {
+        _activeWarningOverlay!.remove();
+      }
+      _activeWarningOverlay = null;
+    }
+  }
+
+  void _showVariantWarningBanner() {
+    _dismissWarningBanner();
+    if (!mounted) return;
+
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (ctx) => Positioned(
+        bottom: 110,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) {
+              return Transform.scale(
+                scale: value.clamp(0.0, 1.0),
+                child: Opacity(
+                  opacity: value.clamp(0.0, 1.0),
+                  child: child,
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFE85050), Color(0xFFD32F2F)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFD32F2F).withValues(alpha: 0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.touch_app_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Please Select an Option',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'Choose a size, weight, or variant to proceed.',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.92),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    _activeWarningOverlay = entry;
+    overlay.insert(entry);
+
+    Future.delayed(const Duration(milliseconds: 2800), () {
+      if (entry == _activeWarningOverlay) {
+        _dismissWarningBanner();
+      }
+    });
+  }
+
+  void _scrollToVariants({bool forceExpand = false, int retries = 5}) {
+    if (!mounted) return;
+    if (forceExpand || _highlightVariants) {
+      if (_draggableController.isAttached && _draggableController.size < 0.88) {
+        _draggableController.animateTo(
+          0.88,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
+    Future.delayed(const Duration(milliseconds: 140), () {
       if (!mounted) return;
       if (_variantKey.currentContext != null) {
         Scrollable.ensureVisible(
@@ -95,9 +217,19 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           alignment: 0.18,
         );
       } else if (retries > 0) {
-        _scrollToVariants(retries: retries - 1);
+        _scrollToVariants(forceExpand: forceExpand, retries: retries - 1);
       }
     });
+  }
+
+  void _promptVariantSelection() {
+    SensoryHaptics.error();
+    setState(() {
+      _highlightVariants = true;
+      _highlightPulseCount++;
+    });
+    _showVariantWarningBanner();
+    _scrollToVariants(forceExpand: true);
   }
 
   Future<void> _fetchProduct() async {
@@ -128,7 +260,9 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
               orElse: () => product.variants.first,
             );
           } else {
-            initialVariant = product.variants.first;
+            // 100x ARCHITECTURE FIX: When variants exist and not in cart, DO NOT blindly
+            // default to the smallest/first variant. User must consciously pick an option.
+            initialVariant = null;
           }
         }
 
@@ -162,6 +296,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           child: const SizedBox.expand(),
         ),
         DraggableScrollableSheet(
+          controller: _draggableController,
           initialChildSize: widget.highlightVariants ? 0.88 : 0.65,
           minChildSize: 0.4,
           maxChildSize: 1.0,
@@ -192,22 +327,20 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                             selectedVariant: _selectedVariant,
                             onVariantChanged: (v) {
                               SensoryHaptics.selection();
-                              setState(() => _selectedVariant = v);
+                              _dismissWarningBanner();
+                              setState(() {
+                                _selectedVariant = v;
+                                _highlightVariants = false;
+                              });
                               if (_pageController.hasClients) {
                                 _pageController.animateToPage(0,
                                     duration: const Duration(milliseconds: 300),
                                     curve: Curves.easeInOut);
                               }
-                              // 100x UX: When selecting a variant, smoothly scroll back up to the top where the image and title are
-                              if (scrollController.hasClients) {
-                                scrollController.animateTo(
-                                  0.0,
-                                  duration: const Duration(milliseconds: 480),
-                                  curve: Curves.easeOutCubic,
-                                );
-                              }
                             },
-                            highlightVariants: widget.highlightVariants,
+                            highlightVariants: _highlightVariants,
+                            highlightPulseCount: _highlightPulseCount,
+                            onVariantSelectionRequired: _promptVariantSelection,
                             variantKey: _variantKey,
                             pageController: _pageController,
                           ),
@@ -233,6 +366,8 @@ class _SheetContent extends StatelessWidget {
   final ProductVariant? selectedVariant;
   final ValueChanged<ProductVariant?> onVariantChanged;
   final bool highlightVariants;
+  final int highlightPulseCount;
+  final VoidCallback onVariantSelectionRequired;
   final GlobalKey? variantKey;
   final PageController? pageController;
 
@@ -246,6 +381,8 @@ class _SheetContent extends StatelessWidget {
     this.selectedVariant,
     required this.onVariantChanged,
     this.highlightVariants = false,
+    this.highlightPulseCount = 0,
+    required this.onVariantSelectionRequired,
     this.variantKey,
     this.pageController,
   });
@@ -634,6 +771,22 @@ class _SheetContent extends StatelessWidget {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.end,
                                       children: [
+                                        if (product.variants.isNotEmpty &&
+                                            selectedVariant == null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                                right: 4, bottom: 4),
+                                            child: Text(
+                                              'From ',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: isDark
+                                                    ? Colors.white60
+                                                    : AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ),
                                         Text(
                                           '₹',
                                           style: GoogleFonts.outfit(
@@ -686,27 +839,29 @@ class _SheetContent extends StatelessWidget {
                       if (product.variants.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         TweenAnimationBuilder<double>(
-                            key: variantKey,
+                            key: ValueKey(
+                                'variant_highlight_${highlightVariants ? highlightPulseCount : -1}'),
                             tween: Tween<double>(
                                 begin: highlightVariants ? 0.0 : 1.0, end: 1.0),
-                            duration: const Duration(milliseconds: 1500),
+                            duration: const Duration(milliseconds: 1200),
                             curve: Curves.elasticOut,
                             builder: (context, value, child) {
                               return Container(
+                                key: variantKey,
                                 padding: highlightVariants
                                     ? const EdgeInsets.all(12)
                                     : EdgeInsets.zero,
                                 decoration: BoxDecoration(
                                   color: highlightVariants
                                       ? AppColors.primary
-                                          .withValues(alpha: 0.1 * (2 - value))
+                                          .withValues(alpha: 0.12 * (2 - value))
                                       : Colors.transparent,
                                   borderRadius: BorderRadius.circular(16),
                                   border: highlightVariants
                                       ? Border.all(
                                           color: AppColors.primary.withValues(
-                                              alpha: 0.5 * (2 - value)),
-                                          width: 2)
+                                              alpha: 0.6 * (2 - value)),
+                                          width: 2.2)
                                       : null,
                                 ),
                                 child: Column(
@@ -730,7 +885,7 @@ class _SheetContent extends StatelessWidget {
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 8, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: AppColors.primary,
+                                              gradient: AppColors.ctaGradient,
                                               borderRadius:
                                                   BorderRadius.circular(10),
                                             ),
@@ -740,6 +895,18 @@ class _SheetContent extends StatelessWidget {
                                                     fontSize: 10,
                                                     fontWeight:
                                                         FontWeight.bold)),
+                                          ),
+                                        ] else if (selectedVariant == null) ...[
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '(Choose 1 option)',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark
+                                                  ? Colors.white54
+                                                  : AppColors.textSecondary,
+                                            ),
                                           ),
                                         ],
                                       ],
@@ -1181,7 +1348,7 @@ class _SheetContent extends StatelessWidget {
                       if (shop != null) {
                         if (product.variants.isNotEmpty &&
                             selectedVariant == null) {
-                          _showVariantWarning(context);
+                          onVariantSelectionRequired();
                           return;
                         }
                         cart.addItemWithFeedback(context, product, shop!,
@@ -1225,7 +1392,7 @@ class _SheetContent extends StatelessWidget {
                           if (shop != null) {
                             if (product.variants.isNotEmpty &&
                                 selectedVariant == null) {
-                              _showVariantWarning(context);
+                              onVariantSelectionRequired();
                               return;
                             }
                             cart.addItemWithFeedback(context, product, shop!,
@@ -1265,7 +1432,7 @@ class _SheetContent extends StatelessWidget {
                           if (shop != null) {
                             if (product.variants.isNotEmpty &&
                                 selectedVariant == null) {
-                              _showVariantWarning(context);
+                              onVariantSelectionRequired();
                               return;
                             }
                             final err = cart.addItem(
@@ -1310,104 +1477,6 @@ class _SheetContent extends StatelessWidget {
                   ],
                 ),
     );
-  }
-
-  void _showVariantWarning(BuildContext context) {
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        bottom: 110, // Floats right above the bottom bar
-        left: 16,
-        right: 16,
-        child: Material(
-          color: Colors.transparent,
-          child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOutBack,
-            builder: (context, value, child) {
-              return Transform.scale(
-                scale: value,
-                child: Opacity(
-                  opacity: value.clamp(0.0, 1.0),
-                  child: child,
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE85050), // Premium Coral/Red
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 16,
-                      offset: Offset(0, 6)),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.touch_app_rounded,
-                        color: Colors.white, size: 20),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Almost there!',
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        Text(
-                          'Please select a variation to continue.',
-                          style: GoogleFonts.outfit(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withValues(alpha: 0.9),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(entry);
-
-    // Auto-remove after 2.5 seconds
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (entry.mounted) {
-        entry.remove();
-      }
-    });
-
-    if (variantKey?.currentContext != null) {
-      Scrollable.ensureVisible(variantKey!.currentContext!,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-          alignment: 0.3);
-    }
   }
 
   Widget _qtyBtn(IconData icon, VoidCallback onTap, bool isDark) {

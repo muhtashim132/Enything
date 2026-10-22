@@ -67,7 +67,10 @@ class _RiderWithdrawalsPageState extends State<RiderWithdrawalsPage> {
       });
 
       if (balanceRes != null) {
-        _availableBalance = (balanceRes['available_balance'] as num).toDouble();
+        final rawBal = balanceRes['available_balance'];
+        _availableBalance = rawBal is num
+            ? rawBal.toDouble()
+            : (double.tryParse(rawBal?.toString() ?? '') ?? 0.0);
       } else {
         _availableBalance = 0;
       }

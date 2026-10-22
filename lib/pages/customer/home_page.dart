@@ -1237,8 +1237,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             shop.distanceKm = null;
           }
         }
-        // The RPC already enforces delivery range mathematically, so we just populate distanceKm.
-        shopResults = allShops.toList();
+        shopResults = allShops
+            .where((s) =>
+                s.distanceKm != null &&
+                DeliveryCalculator.isWithinRange(s.distanceKm!))
+            .toList();
       } else {
         shopResults = allShops;
       }
@@ -1269,10 +1272,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           }
 
           if (locationProvider.hasLocation) {
-            // Distance is enforced by RPC, just populate it
-            if (shop.location.latitude != 0 && shop.location.longitude != 0) {
-              shop.distanceKm = locationProvider.distanceTo(shop.location);
+            if (shop.location.latitude == 0 || shop.location.longitude == 0) {
+              continue;
             }
+            final d = locationProvider.distanceTo(shop.location);
+            if (!DeliveryCalculator.isWithinRange(d)) continue;
+            shop.distanceKm = d;
           }
 
           prodResults.add(product);
@@ -1280,10 +1285,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           addedProductIds.add(product.id);
 
           // Phase 25 Fix: Additive logic to ensure shops that sell the searched product
-          // also appear in the "Shops & Restaurants" section. Zero SQL changes required.
+          // also appear in the "Shops & Restaurants" section within delivery radius.
           if (!allShopsSet.containsKey(shop.id)) {
             allShopsSet[shop.id] = shop;
-            shopResults.add(shop);
+            if (!locationProvider.hasLocation ||
+                (shop.distanceKm != null &&
+                    DeliveryCalculator.isWithinRange(shop.distanceKm!))) {
+              shopResults.add(shop);
+            }
           }
         }
       }
@@ -2991,6 +3000,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       'productShops':
                                           Map<String, ShopModel>.from(
                                               _productShops),
+                                      'shops': List<ShopModel>.from(_shops),
                                       'sectionTitle': 'Popular in Your Area',
                                     },
                                   ),

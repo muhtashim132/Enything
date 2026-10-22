@@ -1,14 +1,19 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../config/app_categories.dart';
 import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/location_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/delivery_calculator.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
@@ -31,8 +36,8 @@ enum _AllListingsSortMode {
 }
 
 /// A dedicated full-screen page that shows all shops, all restaurants, or all
-/// products. Receives pre-fetched data from the home page — makes zero
-/// Supabase calls so the existing SQL / RPC logic is entirely untouched.
+/// products. Seamlessly exhausts the full catalog for nearby shops with pagination
+/// while preserving the admin-configured delivery radius.
 class AllListingsPage extends StatefulWidget {
   final ListingType type;
   final List<ShopModel> shops;
@@ -61,6 +66,245 @@ class _AllListingsPageState extends State<AllListingsPage> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   Timer? _searchDebounce;
+
+  // ── 100x Dynamic Product Catalog State ────────────────────────────────────
+  late List<ProductModel> _allProducts;
+  late Map<String, ShopModel> _allProductShops;
+  final Map<String, ShopModel> _shopsMap = {};
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _totalAvailableProducts = 0;
+  int _currentOffset = 0;
+  static const int _batchSize = 50;
+
+  @override
+  void initState() {
+    super.initState();
+    _allProducts = List<ProductModel>.from(widget.products);
+    _allProductShops = Map<String, ShopModel>.from(widget.productShops);
+
+    for (final s in widget.shops) {
+      _shopsMap[s.id] = s;
+    }
+    for (final s in widget.productShops.values) {
+      _shopsMap[s.id] = s;
+    }
+
+    if (widget.type == ListingType.products) {
+      _totalAvailableProducts = widget.products.length;
+      _currentOffset = widget.products.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _initializeAndFetchProductCatalog();
+      });
+    }
+  }
+
+  Future<List<String>> _resolveNearbyShopIds() async {
+    final loc = context.read<LocationProvider>();
+
+    // 1. Dynamic geospatial query using LocationProvider + DeliveryCalculator.maxRadiusKm
+    try {
+      if (loc.hasLocation && loc.currentLocation != null) {
+        final resp = await Supabase.instance.client.rpc('get_nearby_shops', params: {
+          'p_lat': loc.currentLocation!.latitude,
+          'p_lng': loc.currentLocation!.longitude,
+          'p_radius_km': DeliveryCalculator.maxRadiusKm,
+          'p_limit': 500,
+        });
+        final fetched =
+            (resp as List).map((s) => ShopModel.fromMap(s)).toList();
+        final validIds = <String>[];
+        for (final s in fetched) {
+          if (s.location.latitude != 0 && s.location.longitude != 0) {
+            final dist = loc.distanceTo(s.location);
+            if (DeliveryCalculator.isWithinRange(dist)) {
+              s.distanceKm = dist;
+              _shopsMap[s.id] = s;
+              validIds.add(s.id);
+            }
+          }
+        }
+        if (validIds.isNotEmpty) return validIds;
+      }
+    } catch (e) {
+      debugPrint('[AllListingsPage] _resolveNearbyShopIds error: $e');
+    }
+
+    // 2. From widget.shops if already provided, filtering strictly by delivery radius
+    if (widget.shops.isNotEmpty) {
+      return widget.shops
+          .where((s) {
+            if (!loc.hasLocation) return true;
+            if (s.location.latitude == 0 || s.location.longitude == 0) return false;
+            final d = s.distanceKm ?? loc.distanceTo(s.location);
+            return DeliveryCalculator.isWithinRange(d);
+          })
+          .map((s) => s.id)
+          .toList();
+    }
+
+    // 3. From shops already cached in _shopsMap, filtering strictly by delivery radius
+    if (_shopsMap.isNotEmpty) {
+      return _shopsMap.values
+          .where((s) {
+            if (!loc.hasLocation) return true;
+            if (s.location.latitude == 0 || s.location.longitude == 0) return false;
+            final d = s.distanceKm ?? loc.distanceTo(s.location);
+            return DeliveryCalculator.isWithinRange(d);
+          })
+          .map((s) => s.id)
+          .toList();
+    }
+
+    return [];
+  }
+
+  Future<void> _initializeAndFetchProductCatalog() async {
+    if (!mounted || widget.type != ListingType.products) return;
+
+    try {
+      final config = context.read<PlatformConfigProvider>();
+      final shopIds = await _resolveNearbyShopIds();
+      if (!mounted || shopIds.isEmpty) return;
+
+      // 1. Query exact total product count in database for nearby shops (excluding soft deletes)
+      final countResp = await Supabase.instance.client
+          .from('products')
+          .select('id')
+          .inFilter('shop_id', shopIds)
+          .eq('is_deleted', false)
+          .eq('is_available', true);
+
+      final totalInDb = (countResp as List).length;
+
+      if (mounted) {
+        setState(() {
+          _totalAvailableProducts =
+              math.max(totalInDb, _allProducts.length);
+        });
+      }
+
+      // If database has more products than the initial preview sample, load next batch immediately
+      if (_allProducts.length < totalInDb) {
+        await _fetchMoreProductsFromDb(shopIds, config);
+      } else {
+        if (mounted) {
+          setState(() {
+            _hasMore = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[AllListingsPage] Catalog init error: $e');
+    }
+  }
+
+  Future<void> _fetchMoreProductsFromDb(
+      [List<String>? providedShopIds, PlatformConfigProvider? config]) async {
+    if (_isLoadingMore || !_hasMore || !mounted) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final effectiveConfig =
+          config ?? context.read<PlatformConfigProvider>();
+      final loc = context.read<LocationProvider>();
+      final shopIds = providedShopIds ?? await _resolveNearbyShopIds();
+      if (!mounted || shopIds.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoadingMore = false;
+            _hasMore = false;
+          });
+        }
+        return;
+      }
+
+      final response = await Supabase.instance.client
+          .from('products')
+          .select()
+          .inFilter('shop_id', shopIds)
+          .eq('is_deleted', false)
+          .eq('is_available', true)
+          .order('rating', ascending: false)
+          .order('created_at', ascending: false)
+          .range(_currentOffset, _currentOffset + _batchSize - 1);
+
+      final rows = response as List<dynamic>;
+      if (rows.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasMore = false;
+            _isLoadingMore = false;
+          });
+        }
+        return;
+      }
+
+      final existingIds = _allProducts.map((p) => p.id).toSet();
+      final newProducts = <ProductModel>[];
+      final missingShopIds = <String>{};
+
+      for (final r in rows) {
+        final p = ProductModel.fromMap(r as Map<String, dynamic>);
+        if (!existingIds.contains(p.id) &&
+            effectiveConfig.isActiveCategory(p.category)) {
+          newProducts.add(p);
+          existingIds.add(p.id);
+          if (!_shopsMap.containsKey(p.shopId)) {
+            missingShopIds.add(p.shopId);
+          }
+        }
+      }
+
+      // Batch-fetch missing shop details if any product belongs to a shop not yet cached
+      if (missingShopIds.isNotEmpty) {
+        try {
+          final shopRows = await Supabase.instance.client
+              .from('shops')
+              .select('*')
+              .inFilter('id', missingShopIds.toList());
+          for (final sr in (shopRows as List)) {
+            final sm = ShopModel.fromMap(sr);
+            if (loc.hasLocation &&
+                sm.location.latitude != 0 &&
+                sm.location.longitude != 0) {
+              sm.distanceKm = loc.distanceTo(sm.location);
+            }
+            _shopsMap[sm.id] = sm;
+          }
+        } catch (e) {
+          debugPrint('[AllListingsPage] Error fetching missing shops: $e');
+        }
+      }
+
+      for (final p in newProducts) {
+        if (_shopsMap.containsKey(p.shopId)) {
+          _allProductShops[p.id] = _shopsMap[p.shopId]!;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _allProducts.addAll(newProducts);
+          _currentOffset += rows.length;
+          _isLoadingMore = false;
+          if (rows.length < _batchSize ||
+              _allProducts.length >= _totalAvailableProducts) {
+            _hasMore = false;
+          }
+          if (_allProducts.length > _totalAvailableProducts) {
+            _totalAvailableProducts = _allProducts.length;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[AllListingsPage] Fetch error: $e');
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -95,7 +339,16 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
   // ── Sorted + filtered shops ───────────────────────────────────────────────
   List<ShopModel> get _sortedShops {
-    var list = widget.shops.toList();
+    final loc = context.read<LocationProvider>();
+    var list = widget.shops.where((s) {
+      if (loc.hasLocation) {
+        if (s.location.latitude == 0 || s.location.longitude == 0) return false;
+        final d = s.distanceKm ?? loc.distanceTo(s.location);
+        if (!DeliveryCalculator.isWithinRange(d)) return false;
+      }
+      return true;
+    }).toList();
+
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       list = list
@@ -133,7 +386,19 @@ class _AllListingsPageState extends State<AllListingsPage> {
   }
 
   List<ProductModel> get _sortedProducts {
-    var list = widget.products.toList();
+    final loc = context.read<LocationProvider>();
+    var list = _allProducts.where((p) {
+      final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
+      if (loc.hasLocation && shop != null) {
+        if (shop.location.latitude == 0 || shop.location.longitude == 0) {
+          return false;
+        }
+        final d = shop.distanceKm ?? loc.distanceTo(shop.location);
+        if (!DeliveryCalculator.isWithinRange(d)) return false;
+      }
+      return true;
+    }).toList();
+
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       list = list
@@ -151,8 +416,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
     }
 
     list.sort((a, b) {
-      final sA = widget.productShops[a.id];
-      final sB = widget.productShops[b.id];
+      final sA = _allProductShops[a.id] ?? _shopsMap[a.shopId];
+      final sB = _allProductShops[b.id] ?? _shopsMap[b.shopId];
       final availA = a.isAvailable && (sA?.isOpenRightNow ?? true);
       final availB = b.isAvailable && (sB?.isOpenRightNow ?? true);
 
@@ -180,7 +445,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
   bool get _hasFoodItems {
     if (widget.type == ListingType.restaurants) return true;
-    return widget.products.any((p) => p.isFood || p.isVeg != null);
+    return _allProducts.any((p) => p.isFood || p.isVeg != null);
   }
 
   // ── Sort chip definitions ─────────────────────────────────────────────────
@@ -219,8 +484,13 @@ class _AllListingsPageState extends State<AllListingsPage> {
     final themeProvider = context.watch<ThemeProvider>();
     final cart = context.watch<CartProvider>();
     final isDark = themeProvider.isDarkMode;
-    final totalCount =
-        _isProducts ? widget.products.length : widget.shops.length;
+    final totalCount = _isProducts
+        ? (_totalAvailableProducts > 0
+            ? (_searchQuery.isNotEmpty || _vegFilterMode != VegFilterMode.all
+                ? _sortedProducts.length
+                : _totalAvailableProducts)
+            : _sortedProducts.length)
+        : widget.shops.length;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -612,7 +882,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           sliver: SliverLayoutBuilder(
             builder: (context, constraints) {
               final crossAxisCount = Responsive.getGridCrossAxisCount(context,
@@ -633,36 +903,124 @@ class _AllListingsPageState extends State<AllListingsPage> {
                 itemCount: displayProducts.length,
                 itemBuilder: (_, i) {
                   final product = displayProducts[i];
-                  final shop = widget.productShops[product.id];
+                  final shop =
+                      _allProductShops[product.id] ?? _shopsMap[product.shopId];
                   return ProductCard(product: product, shop: shop);
                 },
               );
             },
           ),
         ),
-        if (sorted.length > _displayLimit)
+        // ── Load More / Infinite Pagination / End of Feed Footer ─────────────
+        if (sorted.length > _displayLimit || _hasMore)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 24),
-              child: Center(
-                child: TextButton(
-                  onPressed: () => setState(() => _displayLimit += 20),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                    backgroundColor: isDark
-                        ? Colors.white.withValues(alpha: 0.05)
-                        : AppColors.primary.withValues(alpha: 0.05),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
-                  ),
-                  child: Text(
-                    'Load more products',
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _isLoadingMore
+                      ? null
+                      : () {
+                          HapticFeedback.lightImpact();
+                          setState(() {
+                            _displayLimit += 20;
+                          });
+                          if (_displayLimit >= sorted.length && _hasMore) {
+                            _fetchMoreProductsFromDb();
+                          }
+                        },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : AppColors.primary.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_isLoadingMore) ...[
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Loading more items...',
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : AppColors.primary,
+                            ),
+                          ),
+                        ] else ...[
+                          Text(
+                            'Load more products',
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 20,
+                            color: isDark ? Colors.white : AppColors.primary,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
+                ),
+              ),
+            ),
+          )
+        else if (!_hasMore && sorted.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+              child: Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 1,
+                      color: isDark ? Colors.white24 : Colors.black12,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'You\'ve reached the end of popular items in your area 🛍️',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 24,
+                      height: 1,
+                      color: isDark ? Colors.white24 : Colors.black12,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -681,7 +1039,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           sliver: SliverLayoutBuilder(
             builder: (context, constraints) {
               final crossAxisCount = Responsive.getGridCrossAxisCount(context,
@@ -717,24 +1075,47 @@ class _AllListingsPageState extends State<AllListingsPage> {
         if (sorted.length > _displayLimit)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 24),
-              child: Center(
-                child: TextButton(
-                  onPressed: () => setState(() => _displayLimit += 20),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                    backgroundColor: isDark
-                        ? Colors.white.withValues(alpha: 0.05)
-                        : AppColors.primary.withValues(alpha: 0.05),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
-                  ),
-                  child: Text(
-                    'Load more items',
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    setState(() => _displayLimit += 20);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : AppColors.primary.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Load more shops',
+                          style: GoogleFonts.outfit(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 20,
+                          color: isDark ? Colors.white : AppColors.primary,
+                        ),
+                      ],
                     ),
                   ),
                 ),

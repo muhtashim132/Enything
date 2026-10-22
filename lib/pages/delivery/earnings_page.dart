@@ -45,13 +45,21 @@ class _EarningsPageState extends State<EarningsPage> {
       List<double> weeklyMap = List.filled(7, 0.0);
 
       if (stats != null) {
-        today = (stats['today_earnings'] as num?)?.toDouble() ?? 0.0;
-        total = (stats['total_earnings'] as num?)?.toDouble() ?? 0.0;
-        deliveriesCount = (stats['total_deliveries'] as num?)?.toInt() ?? 0;
+        today = stats['today_earnings'] is num
+            ? (stats['today_earnings'] as num).toDouble()
+            : (double.tryParse(stats['today_earnings']?.toString() ?? '') ?? 0.0);
+        total = stats['total_earnings'] is num
+            ? (stats['total_earnings'] as num).toDouble()
+            : (double.tryParse(stats['total_earnings']?.toString() ?? '') ?? 0.0);
+        deliveriesCount = stats['total_deliveries'] is num
+            ? (stats['total_deliveries'] as num).toInt()
+            : (int.tryParse(stats['total_deliveries']?.toString() ?? '') ?? 0);
 
         final rawWeekly = stats['weekly_earnings'] as List<dynamic>?;
         if (rawWeekly != null && rawWeekly.length == 7) {
-          weeklyMap = rawWeekly.map((e) => (e as num).toDouble()).toList();
+          weeklyMap = rawWeekly.map((e) => e is num
+              ? e.toDouble()
+              : (double.tryParse(e?.toString() ?? '') ?? 0.0)).toList();
         }
       }
 
@@ -74,7 +82,10 @@ class _EarningsPageState extends State<EarningsPage> {
             .eq('id', auth.currentUserId ?? '')
             .maybeSingle();
         if (profile != null && profile['average_rating'] != null) {
-          avgRating = (profile['average_rating'] as num).toDouble();
+          final rawAvg = profile['average_rating'];
+          avgRating = rawAvg is num
+              ? rawAvg.toDouble()
+              : (double.tryParse(rawAvg.toString()) ?? 0.0);
         }
       } catch (_) {}
 
@@ -86,12 +97,17 @@ class _EarningsPageState extends State<EarningsPage> {
           _weeklyEarnings = weeklyMap;
           _averageRating = avgRating;
           _recentDeliveries = deliveries.take(20).map((d) {
+            final rawE = d['rider_earnings'] ?? d['delivery_charges'];
+            final riderE = rawE is num
+                ? rawE.toDouble()
+                : (double.tryParse(rawE?.toString() ?? '') ?? 0.0);
+            final rawP = d['wait_time_penalty'];
+            final penalty = rawP is num
+                ? rawP.toDouble()
+                : (double.tryParse(rawP?.toString() ?? '') ?? 0.0);
             return {
               'id': d['id'],
-              'amount':
-                  ((d['rider_earnings'] ?? d['delivery_charges'] ?? 0.0) as num)
-                          .toDouble() +
-                      ((d['wait_time_penalty'] ?? 0.0) as num).toDouble(),
+              'amount': riderE + penalty,
               'date': d['created_at'],
             };
           }).toList();

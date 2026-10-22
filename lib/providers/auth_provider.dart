@@ -86,7 +86,11 @@ class AuthProvider extends ChangeNotifier {
             if (role == 'seller') {
               _supabase
                   .from('shops')
-                  .update({'is_accepting_orders': false})
+                  .update({
+                    'is_accepting_orders': false,
+                    'is_open': false,
+                    'is_manually_closed': true,
+                  })
                   .eq('seller_id', userId)
                   .then((_) {})
                   .catchError((_) {});
@@ -264,7 +268,11 @@ class AuthProvider extends ChangeNotifier {
         if (role == 'seller') {
           await _supabase
               .from('shops')
-              .update({'is_accepting_orders': false}).eq('seller_id', userId);
+              .update({
+                'is_accepting_orders': false,
+                'is_open': false,
+                'is_manually_closed': true,
+              }).eq('seller_id', userId);
         } else if (role == 'delivery_partner') {
           await _supabase
               .from('delivery_partners')
@@ -773,7 +781,11 @@ class AuthProvider extends ChangeNotifier {
       try {
         await _supabase
             .from('shops')
-            .update({'is_accepting_orders': false}).eq('seller_id', _user!.id);
+            .update({
+              'is_accepting_orders': false,
+              'is_open': false,
+              'is_manually_closed': true,
+            }).eq('seller_id', _user!.id);
       } catch (e) {
         debugPrint('Failed to deactivate seller orders: $e');
       }
@@ -1405,7 +1417,11 @@ class AuthProvider extends ChangeNotifier {
         if (role == 'seller') {
           await _supabase
               .from('shops')
-                  .update({'is_accepting_orders': false}).eq('seller_id', userId);
+              .update({
+                'is_accepting_orders': false,
+                'is_open': false,
+                'is_manually_closed': true,
+              }).eq('seller_id', userId);
         } else if (role == 'delivery_partner') {
           await _supabase
               .from('delivery_partners')

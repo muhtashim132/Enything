@@ -21,6 +21,9 @@ class AdminShopItem {
   final String category;
   final String? address;
   final bool isActive;
+  final bool isAcceptingOrders;
+  final String? openTime;
+  final String? closeTime;
   final String? sellerId;
   final String? sellerName;
   final String? sellerPhone;
@@ -32,6 +35,9 @@ class AdminShopItem {
     required this.category,
     this.address,
     required this.isActive,
+    this.isAcceptingOrders = true,
+    this.openTime,
+    this.closeTime,
     this.sellerId,
     this.sellerName,
     this.sellerPhone,
@@ -44,6 +50,9 @@ class AdminShopItem {
     String? category,
     String? address,
     bool? isActive,
+    bool? isAcceptingOrders,
+    String? openTime,
+    String? closeTime,
     String? sellerId,
     String? sellerName,
     String? sellerPhone,
@@ -55,6 +64,9 @@ class AdminShopItem {
       category: category ?? this.category,
       address: address ?? this.address,
       isActive: isActive ?? this.isActive,
+      isAcceptingOrders: isAcceptingOrders ?? this.isAcceptingOrders,
+      openTime: openTime ?? this.openTime,
+      closeTime: closeTime ?? this.closeTime,
       sellerId: sellerId ?? this.sellerId,
       sellerName: sellerName ?? this.sellerName,
       sellerPhone: sellerPhone ?? this.sellerPhone,
@@ -70,12 +82,31 @@ class AdminShopItem {
       sName = profile['full_name'] ?? profile['name'];
       sPhone = profile['phone'];
     }
+    final rawOpen = (map['open_time'] ?? map['opening_time'])?.toString();
+    final rawClose = (map['close_time'] ?? map['closing_time'])?.toString();
+    final openStr = (rawOpen != null && rawOpen.length >= 5)
+        ? rawOpen.substring(0, 5)
+        : (rawOpen ?? '09:00');
+    final closeStr = (rawClose != null && rawClose.length >= 5)
+        ? rawClose.substring(0, 5)
+        : (rawClose ?? '21:00');
+
+    final accepting = map['is_accepting_orders'];
+    final isOpen = map['is_open'];
+    final isActive = map['is_active'];
+    final bool isAccepting = accepting != null
+        ? (accepting == true)
+        : (isOpen != null ? (isOpen == true) : (isActive == true));
+
     return AdminShopItem(
       id: map['id']?.toString() ?? '',
       name: (map['shop_name'] ?? map['name'] ?? 'Unnamed Shop').toString(),
       category: (map['category'] ?? 'Retail').toString(),
       address: map['address']?.toString(),
-      isActive: (map['is_active'] == true),
+      isActive: (map['is_active'] ?? true),
+      isAcceptingOrders: isAccepting,
+      openTime: openStr,
+      closeTime: closeStr,
       sellerId: map['seller_id']?.toString(),
       sellerName: sName,
       sellerPhone: sPhone,
@@ -115,6 +146,7 @@ class _AdminProductManagementPageState
   final TextEditingController _shopSearchCtrl = TextEditingController();
   String _selectedShopCategoryFilter = 'All';
   String _selectedShopStatusFilter = 'All'; // All, Active, Inactive
+  RealtimeChannel? _shopsRealtimeChannel;
 
   // ── Selected Shop & Products State ────────────────────────────────────────
   AdminShopItem? _selectedShop;
@@ -131,10 +163,68 @@ class _AdminProductManagementPageState
     _shopSearchCtrl.addListener(() => setState(() {}));
     _productSearchCtrl.addListener(() => setState(() {}));
     _fetchShopsAndCounts();
+    _initShopsRealtimeSubscription();
+  }
+
+  void _initShopsRealtimeSubscription() {
+    _shopsRealtimeChannel = _supabase
+        .channel('admin-shops-realtime-sync')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shops',
+          callback: (payload) {
+            _handleRealtimeShopPayload(payload);
+          },
+        )
+        .subscribe();
+  }
+
+  void _handleRealtimeShopPayload(PostgresChangePayload payload) {
+    if (!mounted) return;
+    final newRec = payload.newRecord;
+    if (newRec.isEmpty) return;
+    final sId = newRec['id']?.toString();
+    if (sId == null || sId.isEmpty) return;
+
+    setState(() {
+      final sIdx = _shops.indexWhere((s) => s.id == sId);
+      if (sIdx != -1) {
+        final current = _shops[sIdx];
+        final rawOpen = newRec['open_time']?.toString() ?? current.openTime;
+        final rawClose = newRec['close_time']?.toString() ?? current.closeTime;
+        final openStr = (rawOpen != null && rawOpen.length >= 5)
+            ? rawOpen.substring(0, 5)
+            : rawOpen;
+        final closeStr = (rawClose != null && rawClose.length >= 5)
+            ? rawClose.substring(0, 5)
+            : rawClose;
+
+        final updated = current.copyWith(
+          name: (newRec['name'] ?? newRec['shop_name'] ?? current.name).toString(),
+          category: (newRec['category'] ?? current.category).toString(),
+          address: newRec['address']?.toString() ?? current.address,
+          isActive: newRec['is_active'] ?? current.isActive,
+          isAcceptingOrders: newRec['is_accepting_orders'] ?? current.isAcceptingOrders,
+          openTime: openStr,
+          closeTime: closeStr,
+          bannerUrl: (newRec['banner_url'] ?? newRec['banner_image'])?.toString() ?? current.bannerUrl,
+        );
+        _shops[sIdx] = updated;
+        if (_selectedShop?.id == sId) {
+          _selectedShop = updated;
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
+    _shopsRealtimeChannel?.unsubscribe();
+    if (_shopsRealtimeChannel != null) {
+      _supabase.removeChannel(_shopsRealtimeChannel!);
+      _shopsRealtimeChannel = null;
+    }
     _shopSearchCtrl.dispose();
     _productSearchCtrl.dispose();
     super.dispose();
@@ -166,6 +256,27 @@ class _AdminProductManagementPageState
             .select('*, profiles:seller_id(id, full_name, phone, avatar_url)')
             .order('name', ascending: true);
         rawShops = List<Map<String, dynamic>>.from(tableRes);
+      } else {
+        // Defensive enrichment: If any shop lacks is_accepting_orders or open_time, enrich directly from shops table
+        final bool needsEnrichment = rawShops.any((s) =>
+            s['is_accepting_orders'] == null ||
+            (s['open_time'] == null && s['opening_time'] == null));
+        if (needsEnrichment) {
+          try {
+            final enrichResp = await _supabase.from('shops').select(
+                'id, is_active, is_accepting_orders, is_open, is_manually_closed, open_time, close_time, opening_time, closing_time');
+            final enrichMap = {for (var r in enrichResp) r['id'].toString(): r};
+            rawShops = rawShops.map((s) {
+              final extra = enrichMap[s['id'].toString()];
+              if (extra != null) {
+                return {...s, ...extra};
+              }
+              return s;
+            }).toList();
+          } catch (enrichErr) {
+            debugPrint('[AdminProductManagement] Error enriching shop timing data: $enrichErr');
+          }
+        }
       }
 
       final parsedShops =
@@ -325,7 +436,8 @@ class _AdminProductManagementPageState
           .from('products')
           .update({'is_available': newState})
           .eq('id', product.id)
-          .eq('shop_id', product.shopId);
+          .eq('shop_id', product.shopId)
+          .eq('is_deleted', false);
 
       // Fire-and-forget audit log
       final currentUserId = _supabase.auth.currentUser?.id;
@@ -376,11 +488,11 @@ class _AdminProductManagementPageState
       return;
     }
 
-    final originalStatus = shop.isActive;
-    final newStatus = !originalStatus;
+    final originalOpen = shop.isAcceptingOrders;
+    final newOpen = !originalOpen;
 
-    // Edge Case: When deactivating an active shop, inspect if in-flight active orders exist
-    if (originalStatus == true) {
+    // Edge Case: When closing an open shop, inspect if in-flight active orders exist
+    if (originalOpen == true) {
       int activeOrdersCount = 0;
       try {
         final activeResp = await _supabase
@@ -412,7 +524,7 @@ class _AdminProductManagementPageState
                   color: AdminColors.warning, size: 24),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('Pause Restaurant?',
+                child: Text('Close Shop for Orders?',
                     style: AdminStyles.title(size: 16)),
               ),
             ],
@@ -422,7 +534,7 @@ class _AdminProductManagementPageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Are you sure you want to deactivate "${shop.name}"?',
+                'Are you sure you want to close "${shop.name}" for new orders?',
                 style: AdminStyles.body(size: 14, color: Colors.white),
               ),
               const SizedBox(height: 12),
@@ -448,8 +560,8 @@ class _AdminProductManagementPageState
                       const SizedBox(height: 6),
                     ],
                     Text(
-                      '• Immediately hidden from customer home feeds, search, and nearby shops.\n'
-                      '• Checkout will be blocked for this store.\n'
+                      '• Marked Closed on Seller Dashboard & Customer App.\n'
+                      '• New checkouts will be blocked for this store.\n'
                       '• Existing orders in progress can complete delivery safely without interruption.',
                       style: AdminStyles.caption(
                           size: 11, color: AdminColors.textSecondary),
@@ -472,7 +584,7 @@ class _AdminProductManagementPageState
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
-              child: Text('Deactivate Restaurant',
+              child: Text('Close Shop',
                   style: AdminStyles.body(size: 13, color: Colors.white)),
             ),
           ],
@@ -491,31 +603,54 @@ class _AdminProductManagementPageState
     setState(() {
       final sIdx = _shops.indexWhere((s) => s.id == shop.id);
       if (sIdx != -1) {
-        _shops[sIdx] = shop.copyWith(isActive: newStatus);
+        _shops[sIdx] = shop.copyWith(
+          isAcceptingOrders: newOpen,
+          isActive: newOpen ? true : shop.isActive,
+        );
       }
       if (_selectedShop?.id == shop.id) {
-        _selectedShop = _selectedShop!.copyWith(isActive: newStatus);
+        _selectedShop = _selectedShop!.copyWith(
+          isAcceptingOrders: newOpen,
+          isActive: newOpen ? true : shop.isActive,
+        );
       }
     });
 
     try {
-      // 2. Invoke RPC admin_toggle_active with fallback to direct table update
+      // 2. Invoke RPC admin_toggle_shop_accepting_orders with fallback to direct table update
       bool rpcSuccess = false;
       try {
-        await _supabase.rpc('admin_toggle_active', params: {
-          'p_target_id': shop.id,
-          'p_type': 'shop',
-          'p_is_active': newStatus,
+        await _supabase.rpc('admin_toggle_shop_accepting_orders', params: {
+          'p_shop_id': shop.id,
+          'p_is_open': newOpen,
         });
         rpcSuccess = true;
       } catch (rpcErr) {
-        debugPrint('admin_toggle_active RPC fallback to direct update: $rpcErr');
+        debugPrint('admin_toggle_shop_accepting_orders RPC fallback: $rpcErr');
+      }
+
+      if (!rpcSuccess) {
+        try {
+          await _supabase.rpc('admin_toggle_active', params: {
+            'p_target_id': shop.id,
+            'p_type': 'shop',
+            'p_is_active': newOpen,
+          });
+          rpcSuccess = true;
+        } catch (e2) {
+          debugPrint('admin_toggle_active fallback to direct update: $e2');
+        }
       }
 
       if (!rpcSuccess) {
         await _supabase
             .from('shops')
-            .update({'is_active': newStatus})
+            .update({
+              'is_accepting_orders': newOpen,
+              'is_open': newOpen,
+              'is_manually_closed': !newOpen,
+              if (newOpen) 'is_active': true,
+            })
             .eq('id', shop.id);
       }
 
@@ -525,21 +660,21 @@ class _AdminProductManagementPageState
         AuditRepository().log(
           actorId: currentUserId,
           actorRole: rbac.isSuperAdmin ? 'super_admin' : 'admin',
-          action: newStatus ? 'shop.activated' : 'shop.deactivated',
+          action: newOpen ? 'shop.opened' : 'shop.closed',
           entityType: 'shop',
           entityId: shop.id,
           metadata: {
             'shop_name': shop.name,
-            'previous_status': originalStatus,
-            'new_status': newStatus,
+            'previous_status': originalOpen,
+            'new_status': newOpen,
           },
         );
       }
 
       _showSnack(
-        newStatus
-            ? '🟢 "${shop.name}" is now Active & Open for Orders'
-            : '⏸️ "${shop.name}" is now Deactivated / Paused',
+        newOpen
+            ? '🟢 "${shop.name}" is now Open & Accepting Orders'
+            : '⏸️ "${shop.name}" is now Closed (Not Taking Orders)',
         isError: false,
       );
     } catch (e) {
@@ -549,13 +684,282 @@ class _AdminProductManagementPageState
         setState(() {
           final sIdx = _shops.indexWhere((s) => s.id == shop.id);
           if (sIdx != -1) {
-            _shops[sIdx] = shop.copyWith(isActive: originalStatus);
+            _shops[sIdx] = shop.copyWith(
+              isAcceptingOrders: originalOpen,
+              isActive: shop.isActive,
+            );
           }
           if (_selectedShop?.id == shop.id) {
-            _selectedShop = _selectedShop!.copyWith(isActive: originalStatus);
+            _selectedShop = _selectedShop!.copyWith(
+              isAcceptingOrders: originalOpen,
+              isActive: shop.isActive,
+            );
           }
         });
         _showSnack('Failed to update shop status: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _editShopOperatingHours(AdminShopItem shop) async {
+    final rbac = context.read<RbacProvider>();
+    if (!rbac.isSuperAdmin &&
+        !rbac.can('shops.manage') &&
+        !rbac.can('products.manage')) {
+      _showSnack('Permission denied: You cannot edit store operating hours.',
+          isError: true);
+      return;
+    }
+
+    String openTimeVal = shop.openTime ?? '09:00';
+    String closeTimeVal = shop.closeTime ?? '21:00';
+
+    final result = await showDialog<Map<String, String>?>(
+      context: context,
+      builder: (ctx) {
+        String localOpen = openTimeVal;
+        String localClose = closeTimeVal;
+
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AdminColors.surface,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+              title: Row(
+                children: [
+                  const Icon(Icons.access_time_filled_rounded,
+                      color: AdminColors.primary, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Edit Operating Hours',
+                        style: AdminStyles.title(size: 16)),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Set opening and closing hours for "${shop.name}". This will sync live to the seller dashboard and update customer ordering hours.',
+                    style: AdminStyles.caption(
+                        size: 12, color: AdminColors.textSecondary),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Opens at',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white70)),
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: () async {
+                                final parts = localOpen.split(':');
+                                final initial = TimeOfDay(
+                                  hour: int.tryParse(parts.firstOrNull ?? '') ?? 9,
+                                  minute: int.tryParse(parts.elementAtOrNull(1) ?? '') ?? 0,
+                                );
+                                final picked = await showTimePicker(
+                                  context: dialogCtx,
+                                  initialTime: initial,
+                                );
+                                if (picked != null) {
+                                  final h = picked.hour.toString().padLeft(2, '0');
+                                  final m = picked.minute.toString().padLeft(2, '0');
+                                  setDialogState(() => localOpen = '$h:$m');
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: AdminColors.cardBg,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: AdminColors.cardBorder),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time_rounded,
+                                        size: 16, color: AdminColors.primary),
+                                    const SizedBox(width: 8),
+                                    Text(localOpen,
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Closes at',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white70)),
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: () async {
+                                final parts = localClose.split(':');
+                                final initial = TimeOfDay(
+                                  hour: int.tryParse(parts.firstOrNull ?? '') ?? 21,
+                                  minute: int.tryParse(parts.elementAtOrNull(1) ?? '') ?? 0,
+                                );
+                                final picked = await showTimePicker(
+                                  context: dialogCtx,
+                                  initialTime: initial,
+                                );
+                                if (picked != null) {
+                                  final h = picked.hour.toString().padLeft(2, '0');
+                                  final m = picked.minute.toString().padLeft(2, '0');
+                                  setDialogState(() => localClose = '$h:$m');
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: AdminColors.cardBg,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: AdminColors.cardBorder),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time_filled_rounded,
+                                        size: 16, color: AdminColors.warning),
+                                    const SizedBox(width: 8),
+                                    Text(localClose,
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: Text('Cancel',
+                      style: AdminStyles.body(color: AdminColors.textMuted)),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(
+                      ctx, {'open_time': localOpen, 'close_time': localClose}),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AdminColors.primary,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text('Save Hours',
+                      style: AdminStyles.body(size: 13, color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    final newOpen = result['open_time']!;
+    final newClose = result['close_time']!;
+
+    final oldOpen = shop.openTime;
+    final oldClose = shop.closeTime;
+
+    // Optimistically update local state
+    setState(() {
+      final sIdx = _shops.indexWhere((s) => s.id == shop.id);
+      if (sIdx != -1) {
+        _shops[sIdx] = shop.copyWith(openTime: newOpen, closeTime: newClose);
+      }
+      if (_selectedShop?.id == shop.id) {
+        _selectedShop = _selectedShop!.copyWith(openTime: newOpen, closeTime: newClose);
+      }
+    });
+
+    try {
+      bool rpcOk = false;
+      try {
+        await _supabase.rpc('admin_update_shop_operating_hours', params: {
+          'p_shop_id': shop.id,
+          'p_open_time': newOpen,
+          'p_close_time': newClose,
+        });
+        rpcOk = true;
+      } catch (rpcErr) {
+        debugPrint('admin_update_shop_operating_hours fallback to direct update: $rpcErr');
+      }
+
+      if (!rpcOk) {
+        await _supabase.from('shops').update({
+          'open_time': newOpen,
+          'close_time': newClose,
+          'opening_time': newOpen,
+          'closing_time': newClose,
+          'is_manually_closed': false,
+        }).eq('id', shop.id);
+      }
+
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId != null) {
+        AuditRepository().log(
+          actorId: currentUserId,
+          actorRole: rbac.isSuperAdmin ? 'super_admin' : 'admin',
+          action: 'shop.hours_updated',
+          entityType: 'shop',
+          entityId: shop.id,
+          metadata: {
+            'shop_name': shop.name,
+            'open_time': newOpen,
+            'close_time': newClose,
+          },
+        );
+      }
+
+      _showSnack(
+        '🕒 Operating hours updated to $newOpen - $newClose',
+        isError: false,
+      );
+    } catch (e) {
+      debugPrint('Error updating shop operating hours: $e');
+      if (mounted) {
+        setState(() {
+          final sIdx = _shops.indexWhere((s) => s.id == shop.id);
+          if (sIdx != -1) {
+            _shops[sIdx] = shop.copyWith(openTime: oldOpen, closeTime: oldClose);
+          }
+          if (_selectedShop?.id == shop.id) {
+            _selectedShop = _selectedShop!.copyWith(openTime: oldOpen, closeTime: oldClose);
+          }
+        });
+        _showSnack('Failed to update operating hours: $e', isError: true);
       }
     }
   }
@@ -946,8 +1350,13 @@ class _AdminProductManagementPageState
   List<AdminShopItem> get _filteredShops {
     final query = _shopSearchCtrl.text.toLowerCase().trim();
     return _shops.where((s) {
-      if (_selectedShopStatusFilter == 'Active' && !s.isActive) return false;
-      if (_selectedShopStatusFilter == 'Inactive' && s.isActive) return false;
+      final isOpen = s.isAcceptingOrders && s.isActive;
+      if ((_selectedShopStatusFilter == 'Active' || _selectedShopStatusFilter == 'Open') && !isOpen) {
+        return false;
+      }
+      if ((_selectedShopStatusFilter == 'Inactive' || _selectedShopStatusFilter == 'Closed') && isOpen) {
+        return false;
+      }
       if (_selectedShopCategoryFilter != 'All' &&
           s.category.toLowerCase() !=
               _selectedShopCategoryFilter.toLowerCase()) {
@@ -1457,6 +1866,34 @@ class _AdminProductManagementPageState
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AdminColors.cardBg,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: AdminColors.cardBorder, width: 0.8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.access_time_rounded,
+                                    size: 10, color: AdminColors.primary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${shop.openTime ?? '09:00'} - ${shop.closeTime ?? '21:00'}',
+                                  style: AdminStyles.caption(
+                                      size: 10, color: AdminColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -1467,7 +1904,7 @@ class _AdminProductManagementPageState
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Interactive Switch for Shop Active Status
+                    // Interactive Switch for Shop Status (is_accepting_orders)
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1475,18 +1912,18 @@ class _AdminProductManagementPageState
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: (shop.isActive
+                            color: ((shop.isAcceptingOrders && shop.isActive)
                                     ? AdminColors.success
                                     : AdminColors.warning)
                                 .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            shop.isActive ? 'Active' : 'Paused',
+                            (shop.isAcceptingOrders && shop.isActive) ? 'Open' : 'Closed',
                             style: GoogleFonts.poppins(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
-                              color: shop.isActive
+                              color: (shop.isAcceptingOrders && shop.isActive)
                                   ? AdminColors.success
                                   : AdminColors.warning,
                             ),
@@ -1496,7 +1933,7 @@ class _AdminProductManagementPageState
                         Transform.scale(
                           scale: 0.72,
                           child: Switch(
-                            value: shop.isActive,
+                            value: shop.isAcceptingOrders && shop.isActive,
                             activeThumbColor: AdminColors.success,
                             inactiveThumbColor: Colors.white60,
                             inactiveTrackColor: Colors.white24,
@@ -1618,18 +2055,18 @@ class _AdminProductManagementPageState
                 const Divider(color: AdminColors.cardBorder, height: 1),
                 const SizedBox(height: 12),
 
-                // Master Restaurant/Shop Active Status Switch
+                // Master Restaurant/Shop Active & Accepting Orders Status Switch
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: (shop.isActive
+                    color: ((shop.isAcceptingOrders && shop.isActive)
                             ? AdminColors.success
                             : AdminColors.warning)
                         .withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: (shop.isActive
+                      color: ((shop.isAcceptingOrders && shop.isActive)
                               ? AdminColors.success
                               : AdminColors.warning)
                           .withValues(alpha: 0.25),
@@ -1638,11 +2075,11 @@ class _AdminProductManagementPageState
                   child: Row(
                     children: [
                       Icon(
-                        shop.isActive
+                        (shop.isAcceptingOrders && shop.isActive)
                             ? Icons.check_circle_rounded
                             : Icons.pause_circle_filled_rounded,
                         size: 18,
-                        color: shop.isActive
+                        color: (shop.isAcceptingOrders && shop.isActive)
                             ? AdminColors.success
                             : AdminColors.warning,
                       ),
@@ -1652,20 +2089,20 @@ class _AdminProductManagementPageState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              shop.isActive
-                                  ? 'Restaurant Active & Taking Orders'
-                                  : 'Restaurant Paused by Administration',
+                              (shop.isAcceptingOrders && shop.isActive)
+                                  ? 'Shop Open & Accepting Orders'
+                                  : 'Shop Closed (Not Taking Orders)',
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: shop.isActive
+                                color: (shop.isAcceptingOrders && shop.isActive)
                                     ? AdminColors.success
                                     : AdminColors.warning,
                               ),
                             ),
                             Text(
-                              shop.isActive
-                                  ? 'Visible to all customers on home feed & search'
+                              (shop.isAcceptingOrders && shop.isActive)
+                                  ? 'Synchronized live with Seller Dashboard & Customer App'
                                   : 'Hidden from feeds; in-flight orders finish safely',
                               style: AdminStyles.caption(
                                   size: 10, color: AdminColors.textSecondary),
@@ -1676,12 +2113,71 @@ class _AdminProductManagementPageState
                       Transform.scale(
                         scale: 0.82,
                         child: Switch(
-                          value: shop.isActive,
+                          value: shop.isAcceptingOrders && shop.isActive,
                           activeThumbColor: AdminColors.success,
                           inactiveThumbColor: Colors.white60,
                           inactiveTrackColor: Colors.white24,
                           onChanged: (_) => _toggleShopActive(shop),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // Store Operating Hours Section with 1-Tap Edit
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AdminColors.cardBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AdminColors.cardBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.access_time_filled_rounded,
+                          size: 18, color: AdminColors.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Operating Hours: ${shop.openTime ?? '09:00'} - ${shop.closeTime ?? '21:00'}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'Syncs with customer ordering window & seller dashboard',
+                              style: AdminStyles.caption(
+                                  size: 10, color: AdminColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AdminColors.primary,
+                          side: BorderSide(
+                              color: AdminColors.primary.withValues(alpha: 0.5)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.edit_rounded, size: 13),
+                        label: Text(
+                          'Edit Hours',
+                          style: GoogleFonts.poppins(
+                              fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () => _editShopOperatingHours(shop),
                       ),
                     ],
                   ),

@@ -499,38 +499,52 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         data: NavigationBarThemeData(
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return AdminStyles.label(color: AdminColors.primary, size: 10)
-                  .copyWith(fontWeight: FontWeight.w700);
+              return GoogleFonts.outfit(
+                color: AdminColors.primary,
+                fontSize: 8.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              );
             }
-            return AdminStyles.label(color: AdminColors.textMuted, size: 10);
+            return GoogleFonts.outfit(
+              color: AdminColors.textMuted,
+              fontSize: 8.5,
+              fontWeight: FontWeight.w500,
+              letterSpacing: -0.2,
+            );
           }),
         ),
-        child: NavigationBar(
-          selectedIndex: selected,
-          onDestinationSelected: (i) {
-            HapticFeedback.lightImpact();
-            setState(() {
-              _currentIndex = i;
-              _visitedIndices.add(i);
-            });
-            _loadBadges();
-          },
-          backgroundColor: Colors.transparent,
-          indicatorColor: AdminColors.primary.withValues(alpha: 0.2),
-          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-          destinations: items
-              .map((n) => NavigationDestination(
-                    icon: n.badgeCount > 0
-                        ? Badge(
-                            label: Text('${n.badgeCount}'),
-                            child: Icon(n.icon, color: AdminColors.textMuted),
-                          )
-                        : Icon(n.icon, color: AdminColors.textMuted),
-                    selectedIcon:
-                        Icon(n.activeIcon, color: AdminColors.primary),
-                    label: n.label,
-                  ))
-              .toList(),
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.noScaling,
+          ),
+          child: NavigationBar(
+            selectedIndex: selected,
+            onDestinationSelected: (i) {
+              HapticFeedback.lightImpact();
+              setState(() {
+                _currentIndex = i;
+                _visitedIndices.add(i);
+              });
+              _loadBadges();
+            },
+            backgroundColor: Colors.transparent,
+            indicatorColor: AdminColors.primary.withValues(alpha: 0.2),
+            labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+            destinations: items
+                .map((n) => NavigationDestination(
+                      icon: n.badgeCount > 0
+                          ? Badge(
+                              label: Text('${n.badgeCount}'),
+                              child: Icon(n.icon, color: AdminColors.textMuted),
+                            )
+                          : Icon(n.icon, color: AdminColors.textMuted),
+                      selectedIcon:
+                          Icon(n.activeIcon, color: AdminColors.primary),
+                      label: n.label,
+                    ))
+                .toList(),
+          ),
         ),
       ),
     );

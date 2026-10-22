@@ -798,42 +798,54 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
       ),
       child: Column(
         children: [
-          // Row 1: Master Mode + Buzz Toggle
+          // Row 1: Master Mode + Buzz Toggle + Action Shortcuts (Compact, Responsive, Zero Overflow)
           Row(
             children: [
-              // Pulse Indicator
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _isProxyModeActive
-                      ? AdminColors.success
-                      : AdminColors.textMuted,
-                  boxShadow: _isProxyModeActive
-                      ? [
-                          BoxShadow(
-                            color: AdminColors.success.withValues(alpha: 0.6),
-                            blurRadius: 8,
-                            spreadRadius: 2,
-                          )
-                        ]
-                      : null,
+              // Pulse Indicator + Title (Flexible so it never overflows)
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isProxyModeActive
+                            ? AdminColors.success
+                            : AdminColors.textMuted,
+                        boxShadow: _isProxyModeActive
+                            ? [
+                                BoxShadow(
+                                  color: AdminColors.success.withValues(alpha: 0.6),
+                                  blurRadius: 6,
+                                  spreadRadius: 1,
+                                )
+                              ]
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'DISPATCH RADAR',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                'DISPATCH RADAR',
-                style: GoogleFonts.outfit(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const Spacer(),
+              const SizedBox(width: 6),
               // Master Switch
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     _isProxyModeActive ? 'ACTIVE' : 'OFF',
@@ -841,52 +853,64 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
                       color: _isProxyModeActive
                           ? AdminColors.success
                           : AdminColors.textMuted,
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 2),
                   Transform.scale(
-                    scale: 0.8,
+                    scale: 0.75,
                     child: Switch(
                       value: _isProxyModeActive,
                       activeThumbColor: AdminColors.success,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       onChanged: (val) => _toggleProxyMode(val),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               // Buzz Toggle
               IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                visualDensity: VisualDensity.compact,
                 icon: Icon(
                   _isBuzzEnabled
                       ? Icons.notifications_active_rounded
                       : Icons.notifications_off_rounded,
                   color: _isBuzzEnabled ? Colors.amber : Colors.white38,
-                  size: 22,
+                  size: 20,
                 ),
                 tooltip: _isBuzzEnabled ? 'Mute Buzzer' : 'Enable Buzzer',
                 onPressed: _toggleBuzz,
               ),
+              const SizedBox(width: 2),
               // Quotes Shortcut
               IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(
                   Icons.receipt_long_rounded,
                   color: Colors.cyanAccent,
-                  size: 22,
+                  size: 20,
                 ),
                 tooltip: 'Event Quotes',
                 onPressed: () {
                   Navigator.pushNamed(context, AppRoutes.adminQuoteReview);
                 },
               ),
+              const SizedBox(width: 2),
               // Practice Order Simulator Shortcut
               IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(
                   Icons.science_rounded,
                   color: Color(0xFF38BDF8),
-                  size: 22,
+                  size: 20,
                 ),
                 tooltip: 'Practice Order Simulator',
                 onPressed: () {

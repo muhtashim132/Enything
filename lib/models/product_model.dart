@@ -23,8 +23,8 @@ class ProductVariant {
     return ProductVariant(
       id: map['id'] ?? '',
       name: map['name'] ?? '',
-      price: (map['price'] ?? 0.0).toDouble(),
-      originalPrice: map['original_price']?.toDouble(),
+      price: ProductModel._parseDouble(map['price']),
+      originalPrice: ProductModel._parseDoubleNullable(map['original_price']),
       isAvailable: map['is_available'] ?? true,
       imageUrl: map['image_url'],
     );
@@ -129,6 +129,27 @@ class ProductModel {
     this.bulkPriceTiers = const [],
   });
 
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  static double? _parseDoubleNullable(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static int? _parseIntNullable(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
   factory ProductModel.fromMap(Map<String, dynamic> map) {
     List<String> imageList = [];
     if (map['images'] != null) {
@@ -146,10 +167,10 @@ class ProductModel {
       category: map['category'] ?? '',
       subCategory: map['sub_category'],
       brand: map['brand'],
-      price: (map['price'] ?? 0.0).toDouble(),
-      originalPrice: map['original_price']?.toDouble(),
-      totalQuantity: map['total_quantity'],
-      weightPerUnit: map['weight_per_unit']?.toDouble(),
+      price: _parseDouble(map['price']),
+      originalPrice: _parseDoubleNullable(map['original_price']),
+      totalQuantity: _parseIntNullable(map['total_quantity']),
+      weightPerUnit: _parseDoubleNullable(map['weight_per_unit']),
       unitType: map['unit_type'] ?? 'pieces',
       description: map['description'],
       images: imageList,
@@ -157,24 +178,22 @@ class ProductModel {
           ? map['is_veg']
           : null,
       menuCategory: map['menu_category'],
-      prepTimeMinutes: map['prep_time_minutes'],
+      prepTimeMinutes: _parseIntNullable(map['prep_time_minutes']),
       specialTags: map['special_tags'] is List
           ? (map['special_tags'] as List).map((e) => e.toString()).toList()
           : [],
       isAvailable: map['is_available'] ?? true,
-      rating: (map['rating'] ?? 0.0).toDouble(),
-      totalReviews: map['total_reviews'] ?? 0,
+      rating: _parseDouble(map['rating']),
+      totalReviews: _parseIntNullable(map['total_reviews']) ?? 0,
       requiresPrescription: map['requires_prescription'] ?? false,
       medicineType: map['medicine_type'] ?? 'General',
       variants: (map['variants'] as List<dynamic>?)
               ?.map((v) => ProductVariant.fromMap(v as Map<String, dynamic>))
               .toList() ??
           [],
-      gstRateOverride: map['gst_rate_override'] != null
-          ? double.tryParse(map['gst_rate_override'].toString())
-          : null,
+      gstRateOverride: _parseDoubleNullable(map['gst_rate_override']),
       bulkEligible: map['bulk_eligible'] == true || map['bulk_eligible'] == 'true',
-      minBulkQuantity: (map['min_bulk_quantity'] as num?)?.toInt(),
+      minBulkQuantity: _parseIntNullable(map['min_bulk_quantity']),
       bulkPriceTiers: (map['bulk_price_tiers'] as List?)
               ?.map((t) => Map<String, dynamic>.from(t as Map))
               .toList() ??
@@ -291,13 +310,13 @@ class ProductModel {
     }
     // Sort tiers descending by min_qty
     final sortedTiers = List<Map<String, dynamic>>.from(bulkPriceTiers)
-      ..sort((a, b) => ((b['min_qty'] as num?)?.toInt() ?? 0)
-          .compareTo((a['min_qty'] as num?)?.toInt() ?? 0));
+      ..sort((a, b) => (_parseIntNullable(b['min_qty']) ?? 0)
+          .compareTo(_parseIntNullable(a['min_qty']) ?? 0));
 
     for (final tier in sortedTiers) {
-      final minQty = (tier['min_qty'] as num?)?.toInt() ?? 0;
+      final minQty = _parseIntNullable(tier['min_qty']) ?? 0;
       if (quantity >= minQty) {
-        final tierPrice = (tier['price'] as num?)?.toDouble();
+        final tierPrice = _parseDoubleNullable(tier['price']);
         if (tierPrice != null && tierPrice > 0) {
           return tierPrice;
         }

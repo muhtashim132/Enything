@@ -118,11 +118,8 @@ class ShopModel {
       prepTimeMinutes: map['prep_time_minutes'] ?? 30,
       isVegOnly: map['is_veg_only'] ?? false,
       openingHours: map['opening_hours'],
-      openTime: map['open_time']
-          ?.toString()
-          .padLeft(5, '0')
-          .substring(0, 5), // e.g., '09:00' from '09:00:00'
-      closeTime: map['close_time']?.toString().padLeft(5, '0').substring(0, 5),
+      openTime: _parseTimeString(map['open_time'] ?? map['opening_time']),
+      closeTime: _parseTimeString(map['close_time'] ?? map['closing_time']),
       address: map['address'] ?? '',
       location: LatLng(lat, lng),
       category: map['category'] ??
@@ -263,4 +260,16 @@ class ShopModel {
         'max_bulk_lead_time_hours': maxBulkLeadTimeHours,
         'bulk_slot_duration_minutes': bulkSlotDurationMinutes,
       };
+
+  static String? _parseTimeString(dynamic raw) {
+    if (raw == null) return null;
+    final str = raw.toString().trim();
+    if (str.isEmpty) return null;
+    if (!str.contains(':')) return null;
+    final parts = str.split(':');
+    if (parts.isEmpty) return null;
+    final h = parts[0].padLeft(2, '0');
+    final m = parts.length > 1 ? parts[1].padLeft(2, '0') : '00';
+    return '$h:$m';
+  }
 }

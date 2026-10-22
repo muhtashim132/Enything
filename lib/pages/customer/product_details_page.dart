@@ -19,6 +19,7 @@ import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
+import '../../theme/sensory_haptics.dart';
 import '../../widgets/common/premium_product_image.dart';
 
 class ProductDetailsPage extends StatefulWidget {
@@ -37,11 +38,138 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   int _currentImageIndex = 0;
   ProductVariant? _selectedVariant;
   final PageController _pageController = PageController();
+  final GlobalKey _variantKey = GlobalKey();
+  bool _highlightVariants = false;
+  int _highlightPulseCount = 0;
+  OverlayEntry? _activeWarningOverlay;
 
   @override
   void dispose() {
+    _dismissWarningBanner();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _dismissWarningBanner() {
+    if (_activeWarningOverlay != null) {
+      if (_activeWarningOverlay!.mounted) {
+        _activeWarningOverlay!.remove();
+      }
+      _activeWarningOverlay = null;
+    }
+  }
+
+  void _showVariantWarningBanner() {
+    _dismissWarningBanner();
+    if (!mounted) return;
+
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (ctx) => Positioned(
+        bottom: 110,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) {
+              return Transform.scale(
+                scale: value.clamp(0.0, 1.0),
+                child: Opacity(
+                  opacity: value.clamp(0.0, 1.0),
+                  child: child,
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFE85050), Color(0xFFD32F2F)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFD32F2F).withValues(alpha: 0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.touch_app_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Please Select an Option',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'Choose a size, weight, or variant to proceed.',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.92),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    _activeWarningOverlay = entry;
+    overlay.insert(entry);
+
+    Future.delayed(const Duration(milliseconds: 2800), () {
+      if (entry == _activeWarningOverlay) {
+        _dismissWarningBanner();
+      }
+    });
+  }
+
+  void _promptVariantSelection() {
+    SensoryHaptics.error();
+    setState(() {
+      _highlightVariants = true;
+      _highlightPulseCount++;
+    });
+    _showVariantWarningBanner();
+    if (_variantKey.currentContext != null) {
+      Scrollable.ensureVisible(
+        _variantKey.currentContext!,
+        duration: const Duration(milliseconds: 550),
+        curve: Curves.easeInOutCubic,
+        alignment: 0.18,
+      );
+    }
   }
 
   @override
@@ -79,7 +207,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             orElse: () => product.variants.first,
           );
         } else {
-          initialVariant = product.variants.first;
+          initialVariant = null;
         }
       }
 
@@ -415,6 +543,22 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
+                          if (_product!.variants.isNotEmpty &&
+                              _selectedVariant == null)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.only(right: 6, bottom: 4),
+                              child: Text(
+                                'From ',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.white60
+                                      : AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
                           Text(
                             '₹${currentPrice.toStringAsFixed(0)}',
                             style: GoogleFonts.outfit(
@@ -465,103 +609,193 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     }),
                     if (_product!.variants.isNotEmpty) ...[
                       const SizedBox(height: 24),
-                      Text(
-                        'Select Variation',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _product!.variants.map((v) {
-                          final isSelected = _selectedVariant?.name == v.name;
-                          final variantQty = cart.getItemQuantity(_product!.id,
-                              variantName: v.name);
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() => _selectedVariant = v);
-                              if (_pageController.hasClients) {
-                                _pageController.animateToPage(0,
-                                    duration:
-                                        const Duration(milliseconds: 300),
-                                    curve: Curves.easeInOut);
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppColors.primary.withValues(alpha: 0.1)
-                                    : (variantQty > 0
-                                        ? AppColors.secondary.withValues(
-                                            alpha: isDark ? 0.15 : 0.08)
-                                        : (isDark
+                      TweenAnimationBuilder<double>(
+                        key: ValueKey(
+                            'detail_variant_highlight_${_highlightVariants ? _highlightPulseCount : -1}'),
+                        tween: Tween<double>(
+                            begin: _highlightVariants ? 0.0 : 1.0, end: 1.0),
+                        duration: const Duration(milliseconds: 1200),
+                        curve: Curves.elasticOut,
+                        builder: (context, value, child) {
+                          return Container(
+                            key: _variantKey,
+                            padding: _highlightVariants
+                                ? const EdgeInsets.all(12)
+                                : EdgeInsets.zero,
+                            decoration: BoxDecoration(
+                              color: _highlightVariants
+                                  ? AppColors.primary
+                                      .withValues(alpha: 0.12 * (2 - value))
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                              border: _highlightVariants
+                                  ? Border.all(
+                                      color: AppColors.primary.withValues(
+                                          alpha: 0.6 * (2 - value)),
+                                      width: 2.2)
+                                  : null,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Select Variation',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark
                                             ? Colors.white
-                                                .withValues(alpha: 0.05)
-                                            : Colors.grey.shade100)),
-                                borderRadius: BorderRadius.circular(100),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.primary
-                                      : (variantQty > 0
-                                          ? AppColors.secondary
-                                              .withValues(alpha: 0.5)
-                                          : Colors.transparent),
-                                  width: isSelected || variantQty > 0
-                                      ? 1.4
-                                      : 1.0,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '${v.name} - ₹${v.price.toStringAsFixed(0)}',
-                                    style: GoogleFonts.outfit(
-                                      fontWeight: isSelected
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                      color: isSelected
-                                          ? AppColors.primary
-                                          : (variantQty > 0
-                                              ? (isDark
-                                                  ? AppColors.secondaryLight
-                                                  : AppColors.secondary)
-                                              : (isDark
-                                                  ? Colors.white70
-                                                  : AppColors.textSecondary)),
-                                    ),
-                                  ),
-                                  if (variantQty > 0) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 1.5),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.secondary,
-                                        borderRadius:
-                                            BorderRadius.circular(10),
+                                            : AppColors.textPrimary,
                                       ),
-                                      child: Text(
-                                        '$variantQty in cart',
+                                    ),
+                                    if (_highlightVariants) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          gradient: AppColors.ctaGradient,
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Text('Required',
+                                            style: GoogleFonts.outfit(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold)),
+                                      ),
+                                    ] else if (_selectedVariant == null) ...[
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '(Choose 1 option)',
                                         style: GoogleFonts.outfit(
-                                          fontSize: 9.5,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? Colors.white54
+                                              : AppColors.textSecondary,
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ],
-                                ],
-                              ),
+                                ),
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _product!.variants.map((v) {
+                                    final isSelected =
+                                        _selectedVariant?.name == v.name;
+                                    final variantQty = cart.getItemQuantity(
+                                        _product!.id,
+                                        variantName: v.name);
+                                    return GestureDetector(
+                                      onTap: () {
+                                        SensoryHaptics.selection();
+                                        _dismissWarningBanner();
+                                        setState(() {
+                                          _selectedVariant = v;
+                                          _highlightVariants = false;
+                                        });
+                                        if (_pageController.hasClients) {
+                                          _pageController.animateToPage(0,
+                                              duration: const Duration(
+                                                  milliseconds: 300),
+                                              curve: Curves.easeInOut);
+                                        }
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? AppColors.primary
+                                                  .withValues(alpha: 0.1)
+                                              : (variantQty > 0
+                                                  ? AppColors.secondary
+                                                      .withValues(
+                                                          alpha: isDark
+                                                              ? 0.15
+                                                              : 0.08)
+                                                  : (isDark
+                                                      ? Colors.white.withValues(
+                                                          alpha: 0.05)
+                                                      : Colors.grey.shade100)),
+                                          borderRadius:
+                                              BorderRadius.circular(100),
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? AppColors.primary
+                                                : (variantQty > 0
+                                                    ? AppColors.secondary
+                                                        .withValues(alpha: 0.5)
+                                                    : (_highlightVariants
+                                                        ? AppColors.primary
+                                                            .withValues(
+                                                                alpha: 0.4)
+                                                        : Colors.transparent)),
+                                            width: isSelected || variantQty > 0
+                                                ? 1.4
+                                                : 1.0,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '${v.name} - ₹${v.price.toStringAsFixed(0)}',
+                                              style: GoogleFonts.outfit(
+                                                fontWeight: isSelected
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w500,
+                                                color: isSelected
+                                                    ? AppColors.primary
+                                                    : (variantQty > 0
+                                                        ? (isDark
+                                                            ? AppColors
+                                                                .secondaryLight
+                                                            : AppColors
+                                                                .secondary)
+                                                        : (isDark
+                                                            ? Colors.white70
+                                                            : AppColors
+                                                                .textSecondary)),
+                                              ),
+                                            ),
+                                            if (variantQty > 0) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.secondary,
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                child: Text(
+                                                  '$variantQty in cart',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
                             ),
                           );
-                        }).toList(),
+                        },
                       ),
                     ],
                     const SizedBox(height: 28),
@@ -898,6 +1132,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       const SizedBox(width: 28),
                       _qtyBtn(Icons.add, () {
                         if (_shop != null) {
+                          if (_product!.variants.isNotEmpty &&
+                              _selectedVariant == null) {
+                            _promptVariantSelection();
+                            return;
+                          }
                           cart.addItemWithFeedback(context, _product!, _shop!,
                               selectedVariant: _selectedVariant);
                         }
@@ -940,6 +1179,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         child: OutlinedButton(
                           onPressed: () {
                             if (_shop != null) {
+                              if (_product!.variants.isNotEmpty &&
+                                  _selectedVariant == null) {
+                                _promptVariantSelection();
+                                return;
+                              }
                               cart.addItemWithFeedback(
                                   context, _product!, _shop!,
                                   selectedVariant: _selectedVariant);
@@ -964,6 +1208,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         child: GestureDetector(
                           onTap: () {
                             if (_shop != null) {
+                              if (_product!.variants.isNotEmpty &&
+                                  _selectedVariant == null) {
+                                _promptVariantSelection();
+                                return;
+                              }
                               final err = cart.addItem(
                                 _product!,
                                 _shop!,

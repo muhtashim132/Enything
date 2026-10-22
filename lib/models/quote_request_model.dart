@@ -14,7 +14,9 @@ class QuoteLineItem {
   factory QuoteLineItem.fromMap(Map<String, dynamic> map) {
     return QuoteLineItem(
       item: map['item'] as String? ?? '',
-      price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      price: map['price'] is num
+          ? (map['price'] as num).toDouble()
+          : (double.tryParse(map['price']?.toString() ?? '') ?? 0.0),
     );
   }
 
@@ -146,8 +148,12 @@ class QuoteRequestModel {
       dietaryPreferences: map['dietary_preferences'] as String?,
       requirementsDescription: map['requirements_description'] as String? ?? '',
       venueAddress: map['venue_address'] as String?,
-      venueLat: (map['venue_lat'] as num?)?.toDouble(),
-      venueLng: (map['venue_lng'] as num?)?.toDouble(),
+      venueLat: map['venue_lat'] is num
+          ? (map['venue_lat'] as num).toDouble()
+          : (double.tryParse(map['venue_lat']?.toString() ?? '')),
+      venueLng: map['venue_lng'] is num
+          ? (map['venue_lng'] as num).toDouble()
+          : (double.tryParse(map['venue_lng']?.toString() ?? '')),
       venueDeliveryNotes: map['venue_delivery_notes'] as String?,
       preferredDeliveryTime: map['preferred_delivery_time'] as String?,
       contactPersonName: map['contact_person_name'] as String? ?? '',
@@ -161,7 +167,9 @@ class QuoteRequestModel {
       reviewedAt: map['reviewed_at'] != null
           ? DateTime.tryParse(map['reviewed_at'].toString())
           : null,
-      quotedAmount: (map['quoted_amount'] as num?)?.toDouble(),
+      quotedAmount: map['quoted_amount'] is num
+          ? (map['quoted_amount'] as num).toDouble()
+          : (double.tryParse(map['quoted_amount']?.toString() ?? '')),
       quotedNotes: map['quoted_notes'] as String?,
       quotedValidUntil: map['quoted_valid_until'] != null
           ? DateTime.tryParse(map['quoted_valid_until'].toString())

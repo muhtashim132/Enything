@@ -143,6 +143,9 @@ class OrderGroup {
     if (list.any((o) => o.status == 'awaiting_payment')) {
       return 'awaiting_payment';
     }
+    if (list.any((o) => o.status == 'awaiting_acceptance')) {
+      return 'awaiting_acceptance';
+    }
     if (list.any((o) => o.status == 'pending')) return 'pending';
 
     // BUG-OG1 FIX: confirmed and ready_for_pickup were missing — fell through to

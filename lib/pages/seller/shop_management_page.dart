@@ -49,6 +49,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   final _slotDurationCtrl = TextEditingController(text: '120');
 
   File? _selectedImage;
+  RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
@@ -59,6 +60,10 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
 
   @override
   void dispose() {
+    if (_realtimeChannel != null) {
+      _supabase.removeChannel(_realtimeChannel!);
+      _realtimeChannel = null;
+    }
     _bannerCtrl.dispose();
     _openTimeCtrl.dispose();
     _closeTimeCtrl.dispose();
@@ -67,6 +72,45 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     _maxLeadHoursCtrl.dispose();
     _slotDurationCtrl.dispose();
     super.dispose();
+  }
+
+  void _subscribeToShopRealtime(String targetShopId) {
+    if (_realtimeChannel != null) {
+      _supabase.removeChannel(_realtimeChannel!);
+      _realtimeChannel = null;
+    }
+
+    _realtimeChannel = _supabase
+        .channel('seller-shop-management-$targetShopId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'shops',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: targetShopId,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+            final rec = payload.newRecord;
+            if (rec.isNotEmpty) {
+              setState(() {
+                _adminSuspended = rec['is_active'] == false;
+                _isActive = rec['is_accepting_orders'] ?? false;
+                final oTime = rec['open_time']?.toString();
+                final cTime = rec['close_time']?.toString();
+                if (oTime != null && oTime.length >= 5) {
+                  _openTimeCtrl.text = oTime.substring(0, 5);
+                }
+                if (cTime != null && cTime.length >= 5) {
+                  _closeTimeCtrl.text = cTime.substring(0, 5);
+                }
+              });
+            }
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadShop() async {
@@ -93,9 +137,11 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         orElse: () => shopsList.first,
       );
 
+      final selectedId = resp['id'] as String;
+
       setState(() {
         _shops = shopsList;
-        _shopId = resp['id'];
+        _shopId = selectedId;
         _adminSuspended = resp['is_active'] == false;
         _isActive = resp['is_accepting_orders'] ?? false;
         _currentAddress = resp['address'];
@@ -112,6 +158,8 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
 
         _isLoading = false;
       });
+
+      _subscribeToShopRealtime(selectedId);
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
