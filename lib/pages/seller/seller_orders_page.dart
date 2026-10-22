@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -42,6 +45,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
   Map<String, BulkOrderModel> _bulkMetadata = {};
   // BUG-15 FIX: preserve expanded state
   final Set<String> _expandedOrderIds = {};
+  // Tracks user-collapsed orders so incoming/pending orders can default to expanded
+  final Set<String> _manuallyCollapsedOrderIds = {};
+  // In-memory product image cache: productId -> primary image, '${productId}_${variantName}' -> variant image
+  final Map<String, String> _productImageCache = {};
 
   // Realtime channel for live order updates
   final List<RealtimeChannel> _realtimeChannels = [];
@@ -226,6 +233,82 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         model.items = rawItems.map((i) => OrderItem.fromMap(i)).toList();
         return model;
       }).toList();
+
+      // 100X FORENSIC IMAGE RESOLUTION: Batch resolve product images for all order items
+      final allProductIds = ordersList
+          .expand((o) => o.items)
+          .map((i) => i.productId)
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      final missingProductIds = allProductIds
+          .where((id) => !_productImageCache.containsKey(id))
+          .toList();
+
+      if (missingProductIds.isNotEmpty) {
+        try {
+          // Batch fetch in chunks of 50 to avoid URL query length limits
+          for (var i = 0; i < missingProductIds.length; i += 50) {
+            final chunk = missingProductIds.sublist(
+              i,
+              math.min(i + 50, missingProductIds.length),
+            );
+            // RULE: Products table queries MUST ALWAYS include .eq('is_deleted', false)
+            final prodRows = await _supabase
+                .from('products')
+                .select('id, images, variants')
+                .inFilter('id', chunk)
+                .eq('is_deleted', false);
+
+            for (final p in (prodRows as List)) {
+              final pid = p['id']?.toString() ?? '';
+              if (pid.isEmpty) continue;
+
+              // 1. Primary product image
+              if (p['images'] is List && (p['images'] as List).isNotEmpty) {
+                final first = (p['images'] as List).first?.toString();
+                if (first != null && first.trim().isNotEmpty) {
+                  _productImageCache[pid] = first.trim();
+                }
+              }
+
+              // 2. Specific variant images if defined
+              if (p['variants'] is List) {
+                for (final v in (p['variants'] as List)) {
+                  if (v is Map) {
+                    final vName = v['name']?.toString().trim();
+                    final vImg = v['image_url']?.toString().trim();
+                    if (vName != null &&
+                        vName.isNotEmpty &&
+                        vImg != null &&
+                        vImg.isNotEmpty) {
+                      _productImageCache['${pid}_${vName.toLowerCase()}'] = vImg;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Seller _loadOrders product image batch error: $e');
+        }
+      }
+
+      // Attach resolved image URLs to each OrderItem
+      for (final order in ordersList) {
+        for (var idx = 0; idx < order.items.length; idx++) {
+          final item = order.items[idx];
+          if (item.imageUrl == null || item.imageUrl!.isEmpty) {
+            final variantKey =
+                '${item.productId}_${(item.variantName ?? '').trim().toLowerCase()}';
+            final resolvedImg =
+                _productImageCache[variantKey] ?? _productImageCache[item.productId];
+            if (resolvedImg != null) {
+              order.items[idx] = item.copyWith(imageUrl: resolvedImg);
+            }
+          }
+        }
+      }
 
       final bulkOrderIds = ordersList.where((o) => o.isBulkOrder).map((o) => o.id).toList();
       final Map<String, BulkOrderModel> bulkMetaMap = {};
@@ -567,9 +650,35 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                               items: order.items.map((item) {
                                 return DropdownMenuItem<String>(
                                   value: item.productId,
-                                  child: Text(
-                                    item.productName,
-                                    overflow: TextOverflow.ellipsis,
+                                  child: Row(
+                                    children: [
+                                      if (item.imageUrl != null &&
+                                          item.imageUrl!.isNotEmpty) ...[
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(4),
+                                          child: CachedNetworkImage(
+                                            imageUrl: item.imageUrl!,
+                                            width: 22,
+                                            height: 22,
+                                            fit: BoxFit.cover,
+                                            memCacheWidth: 60,
+                                            errorWidget: (_, __, ___) =>
+                                                const Icon(
+                                              Icons.fastfood,
+                                              size: 16,
+                                              color: Colors.white38,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Expanded(
+                                        child: Text(
+                                          item.productName,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 );
                               }).toList(),
@@ -1344,11 +1453,368 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     );
   }
 
+  Widget _buildItemFallbackIcon(bool isDark) {
+    return Center(
+      child: Icon(
+        Icons.restaurant_rounded,
+        size: 22,
+        color: isDark ? Colors.white30 : Colors.black26,
+      ),
+    );
+  }
+
+  void _showProductImageDialog(
+    BuildContext context,
+    OrderItem item,
+    bool isDark,
+  ) {
+    final hasImage = item.imageUrl != null && item.imageUrl!.trim().isNotEmpty;
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 420),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 25,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header with Title & Close
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${item.quantity}x',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.productName,
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (item.variantName != null &&
+                                item.variantName!.trim().isNotEmpty)
+                              Text(
+                                item.variantName!.trim(),
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+
+                // Product Picture Area
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(24)),
+                  child: hasImage
+                      ? CachedNetworkImage(
+                          imageUrl: item.imageUrl!,
+                          height: 280,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          placeholder: (c, url) => Container(
+                            height: 280,
+                            color: isDark
+                                ? Colors.white10
+                                : Colors.grey.shade100,
+                            child: const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          errorWidget: (c, url, err) => Container(
+                            height: 200,
+                            color: isDark
+                                ? Colors.white10
+                                : Colors.grey.shade100,
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.image_not_supported_rounded,
+                                      size: 40,
+                                      color: isDark
+                                          ? Colors.white38
+                                          : Colors.grey),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Image not available',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      color: isDark
+                                          ? Colors.white38
+                                          : Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          height: 180,
+                          width: double.infinity,
+                          color: isDark ? Colors.white10 : Colors.grey.shade100,
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.restaurant_menu_rounded,
+                                    size: 48,
+                                    color: isDark
+                                        ? Colors.white30
+                                        : Colors.black26),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No picture uploaded for this item',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    color:
+                                        isDark ? Colors.white38 : Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOrderItemRow(
+    BuildContext context,
+    OrderItem item,
+    bool isDark,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // 1. Product Picture Thumbnail
+          GestureDetector(
+            onTap: () => _showProductImageDialog(context, item, isDark),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1E1E2E)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : const Color(0xFFCBD5E1),
+                      width: 1,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(9),
+                    child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: item.imageUrl!,
+                            fit: BoxFit.cover,
+                            memCacheWidth: 200,
+                            maxWidthDiskCache: 400,
+                            placeholder: (ctx, url) => Shimmer.fromColors(
+                              baseColor: isDark
+                                  ? Colors.white10
+                                  : Colors.grey.shade300,
+                              highlightColor: isDark
+                                  ? Colors.white24
+                                  : Colors.grey.shade100,
+                              child: Container(color: Colors.white),
+                            ),
+                            errorWidget: (ctx, url, error) =>
+                                _buildItemFallbackIcon(isDark),
+                          )
+                        : _buildItemFallbackIcon(isDark),
+                  ),
+                ),
+                if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
+                  Positioned(
+                    bottom: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color:
+                              isDark ? const Color(0xFF2A2A3A) : Colors.white,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.zoom_in_rounded,
+                        size: 10,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // 2. Quantity Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${item.quantity}x',
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // 3. Name, Variant & Notes
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.productName,
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (item.variantName != null &&
+                    item.variantName!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Variant: ${item.variantName!.trim()}',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+                if (item.specialInstructions != null &&
+                    item.specialInstructions!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          size: 11, color: Colors.amber),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          item.specialInstructions!.trim(),
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.amber.shade700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // 4. Item Total Price
+          Text(
+            '₹${item.totalPrice.toStringAsFixed(0)}',
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOrderCard(OrderModel order, String tab) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final statusColor = _statusColor(order);
 
-    bool isExpanded = _expandedOrderIds.contains(order.id);
+    final bool isIncomingPending = order.status == 'awaiting_acceptance' ||
+        order.status == 'pending' ||
+        order.status == 'pending_verification' ||
+        order.status == 'preparing';
+    bool isExpanded = _expandedOrderIds.contains(order.id) ||
+        (isIncomingPending && !_manuallyCollapsedOrderIds.contains(order.id));
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -1703,8 +2169,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                           setState(() {
                             if (isExpanded) {
                               _expandedOrderIds.remove(order.id);
+                              _manuallyCollapsedOrderIds.add(order.id);
                             } else {
                               _expandedOrderIds.add(order.id);
+                              _manuallyCollapsedOrderIds.remove(order.id);
                             }
                             isExpanded = !isExpanded;
                           });
@@ -1731,13 +2199,68 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('Items (${order.items.length})',
-                                      style: GoogleFonts.outfit(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: isDark
-                                              ? Colors.white70
-                                              : AppColors.textSecondary)),
+                                  Row(
+                                    children: [
+                                      Text('Items (${order.items.length})',
+                                          style: GoogleFonts.outfit(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : AppColors.textSecondary)),
+                                      if (!isExpanded &&
+                                          order.items.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
+                                        ...order.items.take(3).map((it) {
+                                          return Padding(
+                                            padding:
+                                                const EdgeInsets.only(right: 4),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(5),
+                                              child: Container(
+                                                width: 22,
+                                                height: 22,
+                                                color: isDark
+                                                    ? Colors.white10
+                                                    : Colors.grey.shade200,
+                                                child: it.imageUrl != null &&
+                                                        it.imageUrl!.isNotEmpty
+                                                    ? CachedNetworkImage(
+                                                        imageUrl: it.imageUrl!,
+                                                        fit: BoxFit.cover,
+                                                        memCacheWidth: 60,
+                                                        errorWidget:
+                                                            (_, __, ___) =>
+                                                                const Icon(
+                                                          Icons
+                                                              .restaurant_rounded,
+                                                          size: 12,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      )
+                                                    : const Icon(
+                                                        Icons
+                                                            .restaurant_rounded,
+                                                        size: 12,
+                                                        color: Colors.grey,
+                                                      ),
+                                              ),
+                                            ),
+                                          );
+                                        }),
+                                        if (order.items.length > 3)
+                                          Text(
+                                            '+${order.items.length - 3}',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.primary,
+                                            ),
+                                          ),
+                                      ],
+                                    ],
+                                  ),
                                   Icon(
                                     isExpanded
                                         ? Icons.keyboard_arrow_up
@@ -1749,52 +2272,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 ],
                               ),
                               if (isExpanded) ...[
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 10),
                                 const Divider(height: 1),
-                                const SizedBox(height: 8),
-                                ...order.items.map((item) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 6),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            margin: const EdgeInsets.only(
-                                                top: 4, right: 8),
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.primary
-                                                  .withValues(alpha: 0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                            ),
-                                            child: Text(
-                                              '${item.quantity}x',
-                                              style: GoogleFonts.outfit(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                                color: AppColors.primary,
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Text(
-                                              item.productName,
-                                              style: GoogleFonts.outfit(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500),
-                                            ),
-                                          ),
-                                          Text(
-                                            '₹${item.totalPrice.toStringAsFixed(0)}',
-                                            style: GoogleFonts.outfit(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w700),
-                                          ),
-                                        ],
-                                      ),
-                                    )),
+                                const SizedBox(height: 10),
+                                ...order.items.map((item) =>
+                                    _buildOrderItemRow(context, item, isDark)),
                               ],
                             ],
                           ),
@@ -2772,40 +3254,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   'Catering Items (${order.items.length})',
                   style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
-                const SizedBox(height: 6),
-                ...order.items.map((item) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${item.quantity}x',
-                              style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              item.productName,
-                              style: GoogleFonts.outfit(fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Text(
-                            '₹${(item.price * item.quantity).toStringAsFixed(0)}',
-                            style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
-                          ),
-                        ],
-                      ),
+                const SizedBox(height: 8),
+                ...order.items.map((item) => _buildOrderItemRow(
+                      context,
+                      item,
+                      Theme.of(context).brightness == Brightness.dark,
                     )),
                 const Divider(height: 20),
 

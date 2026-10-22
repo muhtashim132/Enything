@@ -3,6 +3,7 @@
 // ============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_theme.dart';
 import '../../../models/order_model.dart';
@@ -157,6 +158,24 @@ class _SellerBulkModificationSheetState
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(
                     children: [
+                      if (item.imageUrl != null && item.imageUrl!.isNotEmpty) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: CachedNetworkImage(
+                            imageUrl: item.imageUrl!,
+                            width: 32,
+                            height: 32,
+                            fit: BoxFit.cover,
+                            memCacheWidth: 80,
+                            errorWidget: (_, __, ___) => const Icon(
+                              Icons.restaurant_rounded,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       Expanded(
                         child: Text(
                           item.productName,

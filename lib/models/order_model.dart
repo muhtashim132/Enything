@@ -586,6 +586,7 @@ class OrderItem {
   final double weightKg;
   final String? specialInstructions;
   final bool requiresPrescription;
+  final String? imageUrl;
 
   OrderItem({
     required this.id,
@@ -597,9 +598,22 @@ class OrderItem {
     required this.weightKg,
     this.specialInstructions,
     this.requiresPrescription = false,
+    this.imageUrl,
   });
 
   factory OrderItem.fromMap(Map<String, dynamic> map) {
+    String? resolvedImageUrl;
+    if (map['image_url'] != null && map['image_url'].toString().trim().isNotEmpty) {
+      resolvedImageUrl = map['image_url'].toString().trim();
+    } else if (map['product_image'] != null && map['product_image'].toString().trim().isNotEmpty) {
+      resolvedImageUrl = map['product_image'].toString().trim();
+    } else if (map['products'] != null && map['products'] is Map) {
+      final pMap = map['products'] as Map;
+      if (pMap['images'] is List && (pMap['images'] as List).isNotEmpty) {
+        resolvedImageUrl = (pMap['images'] as List).first?.toString();
+      }
+    }
+
     return OrderItem(
       id: map['id']?.toString() ?? '',
       productId: map['product_id']?.toString() ?? '',
@@ -613,6 +627,7 @@ class OrderItem {
       specialInstructions: map['special_instructions']?.toString(),
       requiresPrescription: map['requires_prescription'] == true ||
           map['requires_prescription'] == 'true',
+      imageUrl: resolvedImageUrl,
     );
   }
 
@@ -628,6 +643,7 @@ class OrderItem {
     double? weightKg,
     String? specialInstructions,
     bool? requiresPrescription,
+    String? imageUrl,
   }) {
     return OrderItem(
       id: id ?? this.id,
@@ -639,6 +655,7 @@ class OrderItem {
       weightKg: weightKg ?? this.weightKg,
       specialInstructions: specialInstructions ?? this.specialInstructions,
       requiresPrescription: requiresPrescription ?? this.requiresPrescription,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 
@@ -652,5 +669,6 @@ class OrderItem {
         'weight_kg': weightKg,
         'special_instructions': specialInstructions,
         'requires_prescription': requiresPrescription,
+        if (imageUrl != null) 'image_url': imageUrl,
       };
 }
