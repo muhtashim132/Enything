@@ -1,5 +1,7 @@
 import '../config/app_categories.dart';
 
+enum VegFilterMode { all, vegOnly, nonVegOnly }
+
 class ProductVariant {
   final String id;
   final String name;

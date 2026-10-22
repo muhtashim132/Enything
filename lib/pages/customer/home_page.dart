@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -88,6 +89,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   String _searchQuery = '';
   String _selectedSearchDemographic = 'All';
   _SortMode _sortMode = _SortMode.relevant;
+  VegFilterMode _vegFilterMode = VegFilterMode.all;
   final _searchController = TextEditingController();
   final Set<String> _selectedFilterCategories = {};
   final Set<String> _selectedSizes = {};
@@ -182,9 +184,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     return 0;
   }
 
-  /// Returns search product results sorted by the current _sortMode.
+  /// Returns search product results sorted by the current _sortMode and filtered by _vegFilterMode.
   List<ProductModel> get _sortedProductResults {
     var list = List<ProductModel>.from(_searchProductResults);
+
+    // 100x Dietary Filter: Veg / Non-Veg
+    if (_vegFilterMode == VegFilterMode.vegOnly) {
+      list = list.where((p) => p.isVeg == true).toList();
+    } else if (_vegFilterMode == VegFilterMode.nonVegOnly) {
+      list = list.where((p) => p.isVeg == false).toList();
+    }
+
     list.sort((a, b) {
       final availCmp = _compareAvailability(a, b, _searchProductShops);
       if (availCmp != 0) return availCmp;
@@ -239,9 +249,38 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     return list;
   }
 
-  /// Returns search shop results sorted by the current _sortMode.
+  /// Returns search shop results sorted by the current _sortMode and filtered by dietary preference.
   List<ShopModel> get _sortedShopResults {
-    final list = List<ShopModel>.from(_searchResults);
+    var list = List<ShopModel>.from(_searchResults);
+
+    // 100x Dietary Filter: Coherence for food shops & restaurants
+    if (_vegFilterMode == VegFilterMode.vegOnly) {
+      list = list.where((s) {
+        if (s.isVegOnly) return true;
+        if (s.category == 'Butcher' || s.category == 'Fish & Seafood') {
+          return false;
+        }
+        final hasVegProduct = _searchProductResults
+            .any((p) => p.shopId == s.id && p.isVeg == true);
+        if (hasVegProduct) return true;
+        if (_searchProductResults.isNotEmpty) {
+          return false;
+        }
+        return true;
+      }).toList();
+    } else if (_vegFilterMode == VegFilterMode.nonVegOnly) {
+      list = list.where((s) {
+        if (s.isVegOnly) return false;
+        final hasNonVegProduct = _searchProductResults
+            .any((p) => p.shopId == s.id && p.isVeg == false);
+        if (hasNonVegProduct) return true;
+        if (_searchProductResults.isNotEmpty) {
+          return s.category == 'Butcher' || s.category == 'Fish & Seafood';
+        }
+        return true;
+      }).toList();
+    }
+
     switch (_sortMode) {
       case _SortMode.bestRating:
         list.sort((a, b) => b.rating.compareTo(a.rating));
@@ -251,6 +290,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         break;
     }
     return list;
+  }
+
+  /// Returns whether the active search results contain food items or food/dining establishments.
+  bool get _hasFoodItemsInSearch {
+    final hasFoodProduct =
+        _searchProductResults.any((p) => p.isFood || p.isVeg != null);
+    if (hasFoodProduct) return true;
+
+    final hasFoodShop =
+        _searchResults.any((s) => AppCategories.isFoodCategory(s.category));
+    if (hasFoodShop) return true;
+
+    if (_vegFilterMode != VegFilterMode.all) return true;
+
+    return false;
   }
 
   /// Returns normal shop results sorted by the current _sortMode.
@@ -819,6 +873,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _sortMode = _SortMode.relevant; // reset sort on clear
         _selectedSearchDemographic = 'All'; // reset demographic on clear
         _selectedSizes.clear(); // reset sizes on clear
+        _vegFilterMode = VegFilterMode.all; // reset dietary filter on clear
       });
       return;
     }
@@ -2250,7 +2305,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       ),
                                       if (!_isSearching)
                                         Text(
-                                          '${_searchResults.length + _searchProductResults.length} result${(_searchResults.length + _searchProductResults.length) == 1 ? "" : "s"} for "$_searchQuery"',
+                                          '${_sortedShopResults.length + _sortedProductResults.length} result${(_sortedShopResults.length + _sortedProductResults.length) == 1 ? "" : "s"} for "$_searchQuery"',
                                           style: GoogleFonts.outfit(
                                               fontSize: 13,
                                               color: AppColors.textSecondary),
@@ -2392,10 +2447,97 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               ),
                             )
 
+                          // Empty state when dietary filter produces zero matches
+                          else if (_sortedProductResults.isEmpty &&
+                              _sortedShopResults.isEmpty)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 48, horizontal: 24),
+                                child: Center(
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        width: 72,
+                                        height: 72,
+                                        decoration: BoxDecoration(
+                                          color: (_vegFilterMode ==
+                                                      VegFilterMode.vegOnly
+                                                  ? const Color(0xFF2E7D32)
+                                                  : const Color(0xFFC62828))
+                                              .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(22),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            _vegFilterMode ==
+                                                    VegFilterMode.vegOnly
+                                                ? '🥦'
+                                                : '🍗',
+                                            style:
+                                                const TextStyle(fontSize: 32),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        _vegFilterMode == VegFilterMode.vegOnly
+                                            ? 'No Pure Veg items found'
+                                            : 'No Non-Veg items found',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark
+                                              ? Colors.white
+                                              : AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'No matches for "$_searchQuery" under this filter.\nTry switching to All or resetting your dietary preference.',
+                                        textAlign: TextAlign.center,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 18),
+                                      OutlinedButton.icon(
+                                        onPressed: () {
+                                          HapticFeedback.lightImpact();
+                                          setState(() => _vegFilterMode =
+                                              VegFilterMode.all);
+                                        },
+                                        icon: const Icon(Icons.refresh_rounded,
+                                            size: 16),
+                                        label: Text(
+                                          'Show All (${_searchProductResults.length + _searchResults.length})',
+                                          style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppColors.primary,
+                                          side: const BorderSide(
+                                              color: AppColors.primary),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(20)),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 20, vertical: 10),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            )
+
                           // Results
                           else ...[
                             // Products first (most relevant for the user)
-                            if (_searchProductResults.isNotEmpty) ...[
+                            if (_sortedProductResults.isNotEmpty) ...[
                               SliverToBoxAdapter(
                                 child: Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
@@ -2426,7 +2568,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                             borderRadius:
                                                 BorderRadius.circular(10)),
                                         child: Text(
-                                            '${_searchProductResults.length}',
+                                            '${_sortedProductResults.length}',
                                             style: GoogleFonts.outfit(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w700,
@@ -2451,7 +2593,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       product: product, shop: shop);
                                 },
                               ),
-                              if (_searchProductResults.length >
+                              if (_sortedProductResults.length >
                                   _searchProductsDisplayLimit)
                                 SliverToBoxAdapter(
                                   child: Padding(
@@ -2489,7 +2631,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             ],
 
                             // Shops below products
-                            if (_searchResults.isNotEmpty) ...[
+                            if (_sortedShopResults.isNotEmpty) ...[
                               SliverToBoxAdapter(
                                 child: Padding(
                                   padding:
@@ -2520,7 +2662,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                                 .withValues(alpha: 0.1),
                                             borderRadius:
                                                 BorderRadius.circular(10)),
-                                        child: Text('${_searchResults.length}',
+                                        child: Text('${_sortedShopResults.length}',
                                             style: GoogleFonts.outfit(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w700,
@@ -2558,7 +2700,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   );
                                 },
                               ),
-                              if (_searchResults.length >
+                              if (_sortedShopResults.length >
                                   _searchShopsDisplayLimit)
                                 SliverToBoxAdapter(
                                   child: Padding(
@@ -3128,6 +3270,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (_hasFoodItemsInSearch)
+          _buildDietaryFilterRow(isDark),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -3228,6 +3372,162 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildDietaryFilterRow(bool isDark) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // All chip
+          _buildDietaryChip(
+            mode: VegFilterMode.all,
+            label: 'All',
+            iconWidget: Icon(
+              Icons.restaurant_menu_rounded,
+              size: 14,
+              color: _vegFilterMode == VegFilterMode.all
+                  ? Colors.white
+                  : (isDark ? Colors.white70 : AppColors.textPrimary),
+            ),
+            isSelected: _vegFilterMode == VegFilterMode.all,
+            activeColor: AppColors.primary,
+            isDark: isDark,
+          ),
+          const SizedBox(width: 8),
+
+          // Pure Veg chip
+          _buildDietaryChip(
+            mode: VegFilterMode.vegOnly,
+            label: 'Pure Veg',
+            iconWidget: _buildDietBadgeEmblem(isVeg: true),
+            isSelected: _vegFilterMode == VegFilterMode.vegOnly,
+            activeColor: const Color(0xFF2E7D32),
+            isDark: isDark,
+          ),
+          const SizedBox(width: 8),
+
+          // Non-Veg chip
+          _buildDietaryChip(
+            mode: VegFilterMode.nonVegOnly,
+            label: 'Non-Veg',
+            iconWidget: _buildDietBadgeEmblem(isVeg: false),
+            isSelected: _vegFilterMode == VegFilterMode.nonVegOnly,
+            activeColor: const Color(0xFFC62828),
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDietaryChip({
+    required VegFilterMode mode,
+    required String label,
+    required Widget iconWidget,
+    required bool isSelected,
+    required Color activeColor,
+    required bool isDark,
+  }) {
+    final bgColor = isSelected
+        ? (mode == VegFilterMode.all
+            ? activeColor
+            : activeColor.withValues(alpha: isDark ? 0.25 : 0.12))
+        : (isDark ? const Color(0xFF1E1E2E) : Colors.white);
+
+    final borderColor = isSelected
+        ? activeColor
+        : (isDark ? Colors.white24 : Colors.grey.shade300);
+
+    final textColor = isSelected
+        ? (mode == VegFilterMode.all
+            ? Colors.white
+            : (isDark ? Colors.white : activeColor))
+        : (isDark ? Colors.white70 : AppColors.textPrimary);
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() {
+          if (_vegFilterMode == mode) {
+            // Tapping selected dietary toggle reverts to All
+            _vegFilterMode = VegFilterMode.all;
+          } else {
+            _vegFilterMode = mode;
+          }
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: borderColor,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+          boxShadow: isSelected && !isDark
+              ? [
+                  BoxShadow(
+                    color: activeColor.withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            iconWidget,
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: textColor,
+              ),
+            ),
+            if (isSelected && mode != VegFilterMode.all) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.check_rounded,
+                size: 14,
+                color: isDark ? Colors.white : activeColor,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDietBadgeEmblem({required bool isVeg}) {
+    final color = isVeg ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: color, width: 1.2),
+      ),
+      child: Center(
+        child: Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
     );
   }
 

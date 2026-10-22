@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -38,6 +39,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   int _displayLimit = 20;
   String _selectedDemographic = 'All';
   String _selectedSize = 'All';
+  VegFilterMode _vegFilterMode = VegFilterMode.all;
   List<String> _availableSizes = [];
 
   static const Map<String, List<String>> _tabCategories = {
@@ -451,7 +453,61 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                   ],
                 ),
               )
-            : null,
+            : (AppCategories.isFoodCategory(widget.categoryName)
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(48),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 6),
+                      child: Row(
+                        children: [
+                          _buildDietaryChoiceChip(
+                            label: 'All',
+                            isSelected: _vegFilterMode == VegFilterMode.all,
+                            isDark: isDark,
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(() =>
+                                  _vegFilterMode = VegFilterMode.all);
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _buildDietaryChoiceChip(
+                            label: 'Pure Veg',
+                            iconWidget: _buildDietBadgeEmblem(isVeg: true),
+                            isSelected: _vegFilterMode == VegFilterMode.vegOnly,
+                            activeColor: const Color(0xFF2E7D32),
+                            isDark: isDark,
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(() => _vegFilterMode =
+                                  _vegFilterMode == VegFilterMode.vegOnly
+                                      ? VegFilterMode.all
+                                      : VegFilterMode.vegOnly);
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _buildDietaryChoiceChip(
+                            label: 'Non-Veg',
+                            iconWidget: _buildDietBadgeEmblem(isVeg: false),
+                            isSelected:
+                                _vegFilterMode == VegFilterMode.nonVegOnly,
+                            activeColor: const Color(0xFFC62828),
+                            isDark: isDark,
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(() => _vegFilterMode =
+                                  _vegFilterMode == VegFilterMode.nonVegOnly
+                                      ? VegFilterMode.all
+                                      : VegFilterMode.nonVegOnly);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : null),
       ),
       body: _isLoading
           ? _buildShimmer(isDark)
@@ -576,6 +632,15 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                         final childAspectRatio = itemWidth / itemHeight;
 
                         var filteredProducts = _products;
+                        if (_vegFilterMode == VegFilterMode.vegOnly) {
+                          filteredProducts = filteredProducts
+                              .where((p) => p.isVeg == true)
+                              .toList();
+                        } else if (_vegFilterMode == VegFilterMode.nonVegOnly) {
+                          filteredProducts = filteredProducts
+                              .where((p) => p.isVeg == false)
+                              .toList();
+                        }
                         if (_selectedDemographic != 'All') {
                           final List<String> allowedTags = [
                             '#$_selectedDemographic',
@@ -589,6 +654,77 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                               .where((p) => p.specialTags
                                   .any((tag) => allowedTags.contains(tag)))
                               .toList();
+                        }
+
+                        if (filteredProducts.isEmpty && _products.isNotEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 32, vertical: 40),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 72,
+                                    height: 72,
+                                    decoration: BoxDecoration(
+                                      color: (_vegFilterMode ==
+                                                  VegFilterMode.vegOnly
+                                              ? const Color(0xFF2E7D32)
+                                              : const Color(0xFFC62828))
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(22),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        _vegFilterMode == VegFilterMode.vegOnly
+                                            ? '🥦'
+                                            : '🍗',
+                                        style: const TextStyle(fontSize: 32),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    _vegFilterMode == VegFilterMode.vegOnly
+                                        ? 'No Pure Veg items found'
+                                        : 'No Non-Veg items found',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark
+                                          ? Colors.white
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      HapticFeedback.lightImpact();
+                                      setState(() =>
+                                          _vegFilterMode = VegFilterMode.all);
+                                    },
+                                    icon: const Icon(Icons.refresh_rounded,
+                                        size: 16),
+                                    label: Text(
+                                      'Show All (${_products.length})',
+                                      style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.primary,
+                                      side: const BorderSide(
+                                          color: AppColors.primary),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(20)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
                         }
 
                         final displayProducts =
@@ -659,6 +795,96 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                       );
                     },
                   ),
+    );
+  }
+
+  Widget _buildDietaryChoiceChip({
+    required String label,
+    Widget? iconWidget,
+    required bool isSelected,
+    Color activeColor = AppColors.primary,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    final bgColor = isSelected
+        ? (iconWidget == null
+            ? activeColor
+            : activeColor.withValues(alpha: isDark ? 0.25 : 0.12))
+        : (isDark ? const Color(0xFF1E1E2E) : Colors.white);
+
+    final borderColor = isSelected
+        ? activeColor
+        : (isDark ? Colors.white24 : Colors.grey.shade300);
+
+    final textColor = isSelected
+        ? (iconWidget == null
+            ? Colors.white
+            : (isDark ? Colors.white : activeColor))
+        : (isDark ? Colors.white70 : AppColors.textPrimary);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: borderColor,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (iconWidget != null) ...[
+              iconWidget,
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: textColor,
+              ),
+            ),
+            if (isSelected && iconWidget != null) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.check_rounded,
+                size: 13,
+                color: isDark ? Colors.white : activeColor,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDietBadgeEmblem({required bool isVeg}) {
+    final color = isVeg ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: color, width: 1.2),
+      ),
+      child: Center(
+        child: Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
     );
   }
 }
