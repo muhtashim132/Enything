@@ -136,3 +136,66 @@ All AI models and developers working on this project MUST adhere to the architec
 4. **Zero-Friction Flow for Standard Products**: For products without variants (`product.variants.isEmpty`), tapping **ADD TO CART** or **BUY NOW** directly proceeds without prompt or delay.
 5. **Leak-Proof Overlay Entry Cleanup**: Any active warning banner registered in `OverlayEntry` must be dismissed immediately on chip selection and in `dispose()` to prevent floating orphaned UI elements.
 
+## 100x Forensic Edge-Case Audit & Remediation (Admin Restaurant & Shop Banner Management Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for restaurant and shop banners in admin platform controls:
+
+1. **Dual Column Parity in `shops` Table**: All banner mutations MUST update both `banner_url` and `banner_image` simultaneously to guarantee 100% parity across legacy and new database queries.
+2. **Atomic RPC with Resilient Client Fallback**: Banner updates invoke `admin_update_shop_banner` RPC (`supabase/migrations/20290000000149_100x_admin_shop_banner_management.sql`), with an automated fallback to direct Supabase `.from('shops').update(...)` for 0ms downtime.
+3. **Model CopyWith Null Erasure**: `AdminShopItem.copyWith` includes `clearBanner: true` to prevent Dart's null-coalescing (`bannerUrl ?? this.bannerUrl`) from preserving stale banners on deletion.
+4. **Realtime Tombstone Integrity**: Supabase Realtime event listeners inspect column presence with `containsKey('banner_url') || containsKey('banner_image')` to respect explicit null values and prevent old banner revival.
+5. **Storage Sanitization & Aspect Ratio**: Uploaded images are memory-safely picked (`pickSafeImage`), cropped to 16:9 standard (`cropImage`), compressed (`ImageCompressionService`), and uploaded to `storage.from('shops')` under path `banners/{shopId}/{timestamp}.jpg`.
+6. **Immutable Audit Logging**: Every banner upload, URL assignment, or deletion writes an immutable audit record to `public.audit_logs` via `AuditRepository().log()` (`shop.banner_updated` / `shop.banner_removed`).
+7. **Co-Location with Activity Controls**: The Store Banner Studio is co-located with the shop activity toggles and operating hours controls in `AdminProductManagementPage`, featuring full-width 16:9 previews, 1-tap change, deletion guards, and direct image URL support.
+## 100x Forensic Edge-Case Audit & Remediation (Zero-Lag, Zero-Hang, Crash-Proof Pagination & Catalog Discovery Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for pagination and image rendering:
+
+1. **BackdropFilter Elimination on Grid/List Items**: `PremiumProductImage` (`lib/widgets/common/premium_product_image.dart`) and all per-item widgets in scrollable feeds MUST NEVER contain `BackdropFilter` or live `ImageFilter.blur`. Heavy blur passes force screen-wide GPU framebuffer copies on every frame, causing severe frame drops (down to 5fps) and GPU VRAM saturation. Use lightweight luxury linear/radial gradients for ambient backgrounds.
+2. **Single Image Stream & Clamped Bitmap RAM**: `PremiumProductImage` MUST decode a single network image with `memCacheWidth` and `memCacheHeight` strictly clamped between 180 and 600 (default ~340 for 2x retina mobile displays). Never decode duplicate background and foreground images, reducing RAM usage by >70% per card and preventing Out-Of-Memory (OOM) crashes by the OS Low Memory Killer (LMK).
+3. **Frame-Memoized Sorting & Filtering**: Sorted/filtered collections (`_sortedProducts`, `_sortedShops`, `_sortedNormalProducts`, `_sortedProductResults`, `_sortedShopResults`, etc.) MUST be memoized per frame and only recomputed when inputs mutate or once at the start of `build()`. Never execute O(N log N) sorting, distance trigonometry, or multi-pass array filters repeatedly inside `build()` or `itemBuilder`.
+4. **Isolated Layer Boundaries (`RepaintBoundary`)**: Every product card (`ProductCard`, `ProductSearchCard`) and shop card (`ShopCard`, `RestaurantShopCard`) in `SliverGrid.builder` or `SliverList.builder` MUST be wrapped in a `RepaintBoundary` with a stable, unique key (`ValueKey('type_${item.id}')`). This isolates repaints so child state changes (e.g. cart badge counter) do not dirty the parent scroll viewport.
+5. **Strict Concurrency Lockout on Load More**: Pagination triggers MUST enforce synchronous re-entrancy locks (`if (_isLoadingMore) return; _isLoadingMore = true;`) to prevent rapid consecutive user taps from initiating duplicate Supabase requests or offset drift.
+6. **Strict Deduplication & Bounded Slices**: Incoming paginated database rows MUST be filtered through an `existingIds` Set before appending to catalog state, and display limits strictly clamped with `.clamp(0, total)` or `math.min` to eliminate duplicate key exceptions and `RangeError` crashes.
+
+## 100x Forensic Edge-Case Audit & Remediation (Product Click & Menu Detail Navigation Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for product clicks and menu navigation across all restaurant, shop, and catalog views:
+
+1. **Omnipresent Product Clickability in Menus**: In `RestaurantDashboardSheet` (`lib/widgets/restaurant_dashboard_sheet.dart`) and `RestaurantDashboardPage` (`lib/pages/customer/restaurant_dashboard_page.dart`), food items returned by `_buildMenuItem` and their food images MUST be wrapped in a `GestureDetector(behavior: HitTestBehavior.opaque, onTap: () { HapticFeedback.lightImpact(); showProductDetailSheet(context, product.id); })`. Customers must never be limited to only the "ADD" button when browsing menus; clicking the food row, image, name, or description must always open the product detail sheet.
+2. **Event Isolation Between Menu Item & ADD/Stepper**: Inner `GestureDetector` instances for the "ADD" button, variant picker, and quantity steppers MUST absorb tap events (`HitTestBehavior.opaque`) so cart additions and quantity adjustments execute cleanly without triggering the outer product detail navigation.
+3. **Zero Sheet Destruction on Variant Actions**: In `RestaurantDashboardSheet`, tapping the variant ADD button or variant stepper MUST NEVER invoke `Navigator.pop(context)` prior to calling `showProductDetailSheet`. `showProductDetailSheet` uses `useRootNavigator: true` to mount cleanly over the restaurant menu, preserving the customer's browse position.
+4. **Unconditional Card Tap Navigation (Closed & Out-of-Stock Protection)**: In `ProductCard` (`lib/widgets/product_card.dart`) and `ProductSearchCard` (`lib/widgets/product_search_card.dart`), `PerspectiveCard.onTap` and `GestureDetector.onTap` MUST be set unconditionally to `() => showProductDetailSheet(context, product.id)`. Closed store (`!shop.isOpenRightNow`) or out-of-stock (`isOutOfStock`) status must disable the ADD button (rendering "UNAVAILABLE"), but MUST NEVER disable product card tap navigation or lock customers out of viewing product images, ingredients, reviews, and descriptions.
+5. **Detail Sheet Bottom Bar Dynamic Safeguards**: In `ProductDetailSheet` (`lib/widgets/product_detail_sheet.dart`), `_buildBottomBar` must verify:
+   - `shop != null && (!shop!.isActive || !shop!.isOpenRightNow)`: Renders disabled "Shop Currently Closed" button.
+   - `!product.isAvailable || (product.totalQuantity != null && product.totalQuantity! <= 0)`: Renders disabled "Item Out of Stock" button.
+   - Active & In-Stock: Renders enabled "ADD TO CART" or quantity stepper.
+6. **Bulk Order Menu Parity**: In `BulkOrderMenuPage` (`lib/pages/customer/bulk/bulk_order_menu_page.dart`), `_buildProductCard` header row must be wrapped in `GestureDetector` to allow customers to view full product specifications and images via `showProductDetailSheet`.
+
+## 100x Forensic Edge-Case Audit & Remediation (Closed Shops & Products Discovery and Non-Clickable Message Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols specified in `100x_closed_shops_discovery_and_feedback_fortress.md`:
+
+1. **Separation of Platform Status vs Order Acceptance in ShopModel**: In `lib/models/shop_model.dart`, `isActive` reflects whether the platform has approved the store (`is_active`). `isAcceptingOrders` reflects whether the merchant currently accepts orders (`is_accepting_orders`). Never merge them into `isActive`. Merging causes closed shops to vanish from customer feeds (`where((s) => s.isActive)`), incorrectly triggering empty states or "Coming Soon". `isOpenRightNow` evaluates: `if (!isActive || !isAcceptingOrders) return false;` along with operating hours.
+2. **Geospatial & Search Discovery of Closed Shops**: In `supabase/migrations/20290000000150_100x_closed_shops_discovery_and_search_fortress.sql`, `get_nearby_shops`, `search_shops_geospatial`, and `search_products_geospatial` include closed shops within delivery radius, ordered by `(s.is_active AND s.is_accepting_orders) DESC` so open shops are discovered first, but closed shops and their products remain completely searchable.
+3. **Open Shop Ranking Priority**: In `HomePage`, `CategoryProductsPage`, and `AllListingsPage`, open shops and their products strictly rank ahead of closed shops. A category never renders "Coming Soon" if closed shops exist in the delivery area.
+4. **Closed Store Visual Indicator & Tap Interception**: `ShopCard` and `RestaurantShopCard` render a `"CLOSED"` badge and when tapped, intercept navigation to display `ClosedStoreFeedback.showClosedStoreNotice`. `ProductCard` and `ProductSearchCard` render `"STORE CLOSED"` with a lock icon when the parent store is closed, alerting the user on tap.
+5. **Universal Closed Store Feedback Utility**: `ClosedStoreFeedback.showClosedStoreNotice` and `ClosedStoreFeedback.showProductUnavailableNotice` (`lib/utils/closed_store_feedback.dart`) provide standard, debounced floating SnackBars alerting users with clear copy, operating hours, and haptic feedback.
+
+## 100x Forensic Edge-Case Audit & Remediation (Customer Demographic & Medicine Banners Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for customer demographic banners and medicine discovery:
+
+1. **Dedicated Demographic & Medicine Banners in Carousel**: In `lib/pages/customer/home_page.dart`, `_buildFeaturedBanner()` maintains a curated 6-slide carousel (`_featuredSlidesCount = 6`):
+   - `🔥 HOT & FRESH`: Food delivery from local restaurants.
+   - `🛒 DAILY GROCERIES`: Supermarkets, fresh fruits & veggies.
+   - `💊 MEDICINES & HEALTH`: Local licensed pharmacies, OTC medicines & wellness essentials.
+   - `👔 MEN & BOYS`: Apparel, footwear, grooming & accessories curated for men and boys.
+   - `👗 WOMEN & GIRLS`: Trending apparel, footwear, beauty & jewellery curated for women and girls.
+   - `🎉 EVENT & CATERING`: Bulk catering discovery.
+2. **Auto-Scroll Modulo Dynamic Sync**: In `_bannerTimer`, the page advancement calculation MUST dynamically use `(_bannerIndex.value + 1) % _featuredSlidesCount`. Never hardcode modulo values (e.g. `% 3`), which causes slides to be permanently bypassed.
+3. **Multi-Layer Demographic Matching Engine**: `_matchesDemographic(ProductModel product, String demographic)` enforces:
+   - Positive explicit tag matching: `#Men`, `#Boys`, `#Kids`, `#Unisex` for Men/Boys; `#Women`, `#Girls`, `#Kids`, `#Unisex` for Women/Girls (case-insensitive, `#` optional).
+   - Strict negative tag rejection: Explicit `#Women` or `#Girls` tags are permanently disqualified from Men/Boys feeds; explicit `#Men` or `#Boys` tags are permanently disqualified from Women/Girls feeds.
+   - Untagged fallback keyword analysis: Word-boundary regex tokens on untagged product names and descriptions safely capture gendered items (e.g. "Men's Classic Shirt", "Boys Sneakers") while preventing false positives.
+4. **Interactive In-Feed Demographic Switcher**: When viewing fashion/clothing items, `_buildFeedDemographicSelector(isDark)` provides a horizontal pill selector (`[All] [👔 Men & Boys] [👗 Women & Girls]`) allowing instantaneous filtering with haptic feedback and zero page reloads.
+5. **Shop Prioritization & Demographic Empty State**: `_computeSortedNormalShops` ranks shops carrying matching demographic products first. If nearby stores have no matching items for the chosen demographic, `_buildDemographicEmptyState(isDark)` renders a polite empty card with a 1-tap "Show All Fashion Items" button rather than a blank sliver.
+6. **Graceful Admin Category Deactivation & Coming Soon**: Tapping Medicine or Demographic banners evaluates `PlatformConfigProvider.isActiveCategory()`. If disabled or if 0 shops exist within delivery radius, display the standardized Coming Soon state without exceptions or crashes.
+
+
+

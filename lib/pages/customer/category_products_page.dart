@@ -20,8 +20,13 @@ import '../../config/app_categories.dart';
 
 class CategoryProductsPage extends StatefulWidget {
   final String categoryName;
+  final String? initialDemographic;
 
-  const CategoryProductsPage({super.key, required this.categoryName});
+  const CategoryProductsPage({
+    super.key,
+    required this.categoryName,
+    this.initialDemographic,
+  });
 
   @override
   State<CategoryProductsPage> createState() => _CategoryProductsPageState();
@@ -84,6 +89,10 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialDemographic != null &&
+        widget.initialDemographic!.trim().isNotEmpty) {
+      _selectedDemographic = widget.initialDemographic!.trim();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchProducts();
     });
@@ -167,7 +176,11 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                   ? tagsRaw.map((t) => t.toString().trim()).toList()
                   : [];
               final allowedTags = <String>['#$_selectedDemographic', '#Unisex'];
-              if (_selectedDemographic == 'Boys' ||
+              if (_selectedDemographic == 'Men/Boys') {
+                allowedTags.addAll(['#Men', '#Boys', '#Kids']);
+              } else if (_selectedDemographic == 'Women/Girls') {
+                allowedTags.addAll(['#Women', '#Girls', '#Kids']);
+              } else if (_selectedDemographic == 'Boys' ||
                   _selectedDemographic == 'Girls') {
                 allowedTags.add('#Kids');
               } else if (_selectedDemographic == 'Kids') {
@@ -237,7 +250,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
 
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
-          if (!product.isAvailable || !config.isActiveCategory(product.category)) continue;
+          if (!config.isActiveCategory(product.category)) continue;
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
@@ -283,7 +296,11 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                     '#$_selectedDemographic',
                     '#Unisex'
                   ];
-                  if (_selectedDemographic == 'Boys' ||
+                  if (_selectedDemographic == 'Men/Boys') {
+                    allowedTags.addAll(['#Men', '#Boys', '#Kids']);
+                  } else if (_selectedDemographic == 'Women/Girls') {
+                    allowedTags.addAll(['#Women', '#Girls', '#Kids']);
+                  } else if (_selectedDemographic == 'Boys' ||
                       _selectedDemographic == 'Girls') {
                     allowedTags.add('#Kids');
                   }
@@ -651,7 +668,11 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                             '#$_selectedDemographic',
                             '#Unisex'
                           ];
-                          if (_selectedDemographic == 'Boys' ||
+                          if (_selectedDemographic == 'Men/Boys') {
+                            allowedTags.addAll(['#Men', '#Boys', '#Kids']);
+                          } else if (_selectedDemographic == 'Women/Girls') {
+                            allowedTags.addAll(['#Women', '#Girls', '#Kids']);
+                          } else if (_selectedDemographic == 'Boys' ||
                               _selectedDemographic == 'Girls') {
                             allowedTags.add('#Kids');
                           }
@@ -753,10 +774,13 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                   itemBuilder: (context, index) {
                                     final product = displayProducts[index];
                                     final shop = _productShops[product.id];
-                                    return ProductCard(
-                                      product: product,
-                                      shop: shop,
-                                      imageAspectRatio: imageRatio,
+                                    return RepaintBoundary(
+                                      key: ValueKey('cat_p_${product.id}'),
+                                      child: ProductCard(
+                                        product: product,
+                                        shop: shop,
+                                        imageAspectRatio: imageRatio,
+                                      ),
                                     );
                                   },
                                 ),
@@ -768,8 +792,12 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                         const EdgeInsets.only(top: 8, bottom: 90),
                                     child: Center(
                                       child: TextButton(
-                                        onPressed: () =>
-                                            setState(() => _displayLimit += 20),
+                                        onPressed: () {
+                                          HapticFeedback.lightImpact();
+                                          setState(() => _displayLimit =
+                                              (_displayLimit + 20).clamp(
+                                                  0, filteredProducts.length));
+                                        },
                                         style: TextButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 24, vertical: 12),

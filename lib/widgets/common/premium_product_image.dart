@@ -1,9 +1,11 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../theme/premium_effects.dart';
 
+/// Ultra-high-performance product image renderer.
+/// Uses native hardware-accelerated gradients and optimized memory caching
+/// without expensive live GPU BackdropFilters that cause frame drops or OOM crashes.
 class PremiumProductImage extends StatelessWidget {
   final String imageUrl;
   final bool isDark;
@@ -53,46 +55,35 @@ class PremiumProductImage extends StatelessWidget {
       return _buildFallback(isDark);
     }
 
-    return SizedBox(
+    // High performance memory cache bounds (optimal 2x device pixel ratio for mobile)
+    final cacheW = (width != null ? (width! * 2).toInt() : 340).clamp(180, 600);
+    final cacheH = (height != null ? (height! * 2).toInt() : 340).clamp(180, 600);
+
+    return Container(
       width: width ?? double.infinity,
       height: height ?? double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // 1. Blurred Background Image (Frosted Glass Effect)
-          CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            memCacheWidth: 300,
-            maxWidthDiskCache: 600,
-            fadeInDuration: const Duration(milliseconds: 250),
-            placeholder: (c, url) => _buildPlaceholder(c, url),
-            errorWidget: (c, e, s) => _buildFallback(isDark),
-          ),
-
-          // 2. Heavy Blur Filter & Overlay Tint
-          ClipRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.6)
-                    : Colors.white.withValues(alpha: 0.4),
+      decoration: BoxDecoration(
+        gradient: isDark
+            ? const LinearGradient(
+                colors: [Color(0xFF222332), Color(0xFF171824)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : const LinearGradient(
+                colors: [Color(0xFFFAFBFE), Color(0xFFEFF2F8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-            ),
-          ),
-
-          // 3. Foreground Image (Uncropped)
-          CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: foregroundFit,
-            memCacheWidth: 600,
-            maxWidthDiskCache: 800,
-            fadeInDuration: const Duration(milliseconds: 300),
-            errorWidget: (c, e, s) =>
-                const SizedBox(), // Fallback already handled by bg
-          ),
-        ],
+      ),
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: foregroundFit,
+        memCacheWidth: cacheW,
+        memCacheHeight: cacheH,
+        maxWidthDiskCache: 800,
+        fadeInDuration: const Duration(milliseconds: 200),
+        placeholder: (c, url) => _buildPlaceholder(c, url),
+        errorWidget: (c, e, s) => _buildFallback(isDark),
       ),
     );
   }

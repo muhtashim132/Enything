@@ -268,7 +268,10 @@ class AppRoutes {
       case categoryProducts:
         final args = routeSettings.arguments as Map<String, dynamic>?;
         return _build(
-            CategoryProductsPage(categoryName: args?['categoryName'] ?? ''),
+            CategoryProductsPage(
+              categoryName: args?['categoryName'] ?? '',
+              initialDemographic: args?['initialDemographic'] as String?,
+            ),
             routeSettings);
       case allCategories:
         return _build(const AllCategoriesPage(), routeSettings);

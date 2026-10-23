@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
 import '../widgets/3d/perspective_card.dart';
 import '../utils/delivery_calculator.dart';
+import '../utils/closed_store_feedback.dart';
 
 class ShopCard extends StatefulWidget {
   final ShopModel shop;
@@ -122,7 +123,13 @@ class _ShopCardState extends State<ShopCard> {
 
     return PerspectiveCard(
       enableHaptics: false,
-      onTap: onTap,
+      onTap: isOpen
+          ? onTap
+          : () => ClosedStoreFeedback.showClosedStoreNotice(
+                context,
+                shopName: shop.name,
+                openTime: shop.openTime,
+              ),
       borderRadius: PremiumRadius.large,
       maxTiltAngle: 0.05,
       pressScale: 0.98,

@@ -3,6 +3,7 @@
 // ============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../theme/app_theme.dart';
@@ -10,6 +11,7 @@ import '../../../config/routes.dart';
 import '../../../models/product_model.dart';
 import '../../../models/shop_model.dart';
 import '../../../providers/bulk_order_provider.dart';
+import '../../../widgets/product_detail_sheet.dart';
 
 class BulkOrderMenuPage extends StatefulWidget {
   final ShopModel? shop;
@@ -278,8 +280,14 @@ class _BulkOrderMenuPageState extends State<BulkOrderMenuPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              showProductDetailSheet(context, product.id);
+            },
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Product Image
               ClipRRect(
@@ -389,6 +397,7 @@ class _BulkOrderMenuPageState extends State<BulkOrderMenuPage> {
               ),
             ],
           ),
+        ),
 
           // Tiered Pricing Pill List
           if (product.bulkPriceTiers.isNotEmpty) ...[

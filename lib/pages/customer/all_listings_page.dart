@@ -337,8 +337,22 @@ class _AllListingsPageState extends State<AllListingsPage> {
     }
   }
 
-  // ── Sorted + filtered shops ───────────────────────────────────────────────
+  // ── Sorted + filtered shops (Memoized per build frame) ─────────────────────
+  List<ShopModel>? _memoizedSortedShops;
+  List<ProductModel>? _memoizedSortedProducts;
+
+  void _invalidateSortMemo() {
+    _memoizedSortedShops = null;
+    _memoizedSortedProducts = null;
+  }
+
   List<ShopModel> get _sortedShops {
+    if (_memoizedSortedShops != null) return _memoizedSortedShops!;
+    _memoizedSortedShops = _computeSortedShops();
+    return _memoizedSortedShops!;
+  }
+
+  List<ShopModel> _computeSortedShops() {
     final loc = context.read<LocationProvider>();
     var list = widget.shops.where((s) {
       if (loc.hasLocation) {
@@ -365,27 +379,37 @@ class _AllListingsPageState extends State<AllListingsPage> {
       list = list.where((s) => !s.isVegOnly).toList();
     }
 
-    switch (_sortMode) {
-      case _AllListingsSortMode.bestRating:
-        list.sort((a, b) {
+    list.sort((a, b) {
+      final openA = a.isOpenRightNow ? 1 : 0;
+      final openB = b.isOpenRightNow ? 1 : 0;
+      if (openA != openB) return openB.compareTo(openA);
+
+      switch (_sortMode) {
+        case _AllListingsSortMode.bestRating:
           final rCmp = b.rating.compareTo(a.rating);
           if (rCmp != 0) return rCmp;
           return (a.distanceKm ?? double.infinity)
               .compareTo(b.distanceKm ?? double.infinity);
-        });
-      case _AllListingsSortMode.nearest:
-        list.sort((a, b) => (a.distanceKm ?? double.infinity)
-            .compareTo(b.distanceKm ?? double.infinity));
-      case _AllListingsSortMode.priceLow:
-      case _AllListingsSortMode.priceHigh:
-      case _AllListingsSortMode.discount:
-        // For shops, these fall back to rating sort
-        list.sort((a, b) => b.rating.compareTo(a.rating));
-    }
+        case _AllListingsSortMode.nearest:
+          return (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity);
+        case _AllListingsSortMode.priceLow:
+        case _AllListingsSortMode.priceHigh:
+        case _AllListingsSortMode.discount:
+          // For shops, these fall back to rating sort
+          return b.rating.compareTo(a.rating);
+      }
+    });
     return list;
   }
 
   List<ProductModel> get _sortedProducts {
+    if (_memoizedSortedProducts != null) return _memoizedSortedProducts!;
+    _memoizedSortedProducts = _computeSortedProducts();
+    return _memoizedSortedProducts!;
+  }
+
+  List<ProductModel> _computeSortedProducts() {
     final loc = context.read<LocationProvider>();
     var list = _allProducts.where((p) {
       final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
@@ -481,6 +505,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    _invalidateSortMemo();
     final themeProvider = context.watch<ThemeProvider>();
     final cart = context.watch<CartProvider>();
     final isDark = themeProvider.isDarkMode;
@@ -905,7 +930,10 @@ class _AllListingsPageState extends State<AllListingsPage> {
                   final product = displayProducts[i];
                   final shop =
                       _allProductShops[product.id] ?? _shopsMap[product.shopId];
-                  return ProductCard(product: product, shop: shop);
+                  return RepaintBoundary(
+                    key: ValueKey('all_prod_${product.id}'),
+                    child: ProductCard(product: product, shop: shop),
+                  );
                 },
               );
             },
@@ -926,7 +954,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
                           setState(() {
                             _displayLimit += 20;
                           });
-                          if (_displayLimit >= sorted.length && _hasMore) {
+                          if (_displayLimit >= sorted.length &&
+                              _hasMore &&
+                              !_isLoadingMore) {
                             _fetchMoreProductsFromDb();
                           }
                         },
@@ -1057,16 +1087,19 @@ class _AllListingsPageState extends State<AllListingsPage> {
                   final shop = displayShops[i];
                   final isFood = AppCategories.groupFor(shop.category) ==
                       CategoryGroup.food;
-                  return isFood
-                      ? RestaurantShopCard(
-                          shop: shop,
-                          onTap: () =>
-                              showRestaurantDashboardSheet(context, shop.id),
-                        )
-                      : ShopCard(
-                          shop: shop,
-                          onTap: () => showShopDetailSheet(context, shop.id),
-                        );
+                  return RepaintBoundary(
+                    key: ValueKey('all_shop_${shop.id}'),
+                    child: isFood
+                        ? RestaurantShopCard(
+                            shop: shop,
+                            onTap: () =>
+                                showRestaurantDashboardSheet(context, shop.id),
+                          )
+                        : ShopCard(
+                            shop: shop,
+                            onTap: () => showShopDetailSheet(context, shop.id),
+                          ),
+                  );
                 },
               );
             },
@@ -1081,7 +1114,10 @@ class _AllListingsPageState extends State<AllListingsPage> {
                 child: InkWell(
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    setState(() => _displayLimit += 20);
+                    setState(() {
+                      _displayLimit =
+                          math.min(_displayLimit + 20, sorted.length);
+                    });
                   },
                   borderRadius: BorderRadius.circular(16),
                   child: Container(

@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
 import '../widgets/3d/perspective_card.dart';
 import '../utils/delivery_calculator.dart';
+import '../utils/closed_store_feedback.dart';
 
 /// A full-width, Swiggy/Zomato-style restaurant card used exclusively
 /// when browsing the Food category.
@@ -79,7 +80,13 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
 
     return PerspectiveCard(
       enableHaptics: false,
-      onTap: onTap,
+      onTap: isOpen
+          ? onTap
+          : () => ClosedStoreFeedback.showClosedStoreNotice(
+                context,
+                shopName: shop.name,
+                openTime: shop.openTime,
+              ),
       borderRadius: 24,
       maxTiltAngle: 0.05,
       pressScale: 0.98,

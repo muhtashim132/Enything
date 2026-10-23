@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_cropper/image_cropper.dart' show CropAspectRatio;
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../models/product_model.dart';
 import '../../../services/product_storage_service.dart';
+import '../../../services/image_compression_service.dart';
+import '../../../utils/image_picker_utils.dart';
 import '../../../theme/admin_theme.dart';
 import '../../../utils/haptic_utils.dart';
 import '../../seller/add_product_page.dart';
@@ -57,6 +63,7 @@ class AdminShopItem {
     String? sellerName,
     String? sellerPhone,
     String? bannerUrl,
+    bool clearBanner = false,
   }) {
     return AdminShopItem(
       id: id ?? this.id,
@@ -70,7 +77,7 @@ class AdminShopItem {
       sellerId: sellerId ?? this.sellerId,
       sellerName: sellerName ?? this.sellerName,
       sellerPhone: sellerPhone ?? this.sellerPhone,
-      bannerUrl: bannerUrl ?? this.bannerUrl,
+      bannerUrl: clearBanner ? null : (bannerUrl ?? this.bannerUrl),
     );
   }
 
@@ -200,6 +207,10 @@ class _AdminProductManagementPageState
             ? rawClose.substring(0, 5)
             : rawClose;
 
+        final hasBannerField = newRec.containsKey('banner_url') || newRec.containsKey('banner_image');
+        final rawBanner = (newRec['banner_url'] ?? newRec['banner_image'])?.toString();
+        final updatedBannerUrl = hasBannerField ? rawBanner : current.bannerUrl;
+
         final updated = current.copyWith(
           name: (newRec['name'] ?? newRec['shop_name'] ?? current.name).toString(),
           category: (newRec['category'] ?? current.category).toString(),
@@ -208,7 +219,8 @@ class _AdminProductManagementPageState
           isAcceptingOrders: newRec['is_accepting_orders'] ?? current.isAcceptingOrders,
           openTime: openStr,
           closeTime: closeStr,
-          bannerUrl: (newRec['banner_url'] ?? newRec['banner_image'])?.toString() ?? current.bannerUrl,
+          bannerUrl: updatedBannerUrl,
+          clearBanner: hasBannerField && (rawBanner == null || rawBanner.isEmpty),
         );
         _shops[sIdx] = updated;
         if (_selectedShop?.id == sId) {
@@ -257,14 +269,15 @@ class _AdminProductManagementPageState
             .order('name', ascending: true);
         rawShops = List<Map<String, dynamic>>.from(tableRes);
       } else {
-        // Defensive enrichment: If any shop lacks is_accepting_orders or open_time, enrich directly from shops table
+        // Defensive enrichment: If any shop lacks is_accepting_orders, open_time, or banner info, enrich directly from shops table
         final bool needsEnrichment = rawShops.any((s) =>
             s['is_accepting_orders'] == null ||
-            (s['open_time'] == null && s['opening_time'] == null));
+            (s['open_time'] == null && s['opening_time'] == null) ||
+            (!s.containsKey('banner_url') && !s.containsKey('banner_image')));
         if (needsEnrichment) {
           try {
             final enrichResp = await _supabase.from('shops').select(
-                'id, is_active, is_accepting_orders, is_open, is_manually_closed, open_time, close_time, opening_time, closing_time');
+                'id, is_active, is_accepting_orders, is_open, is_manually_closed, open_time, close_time, opening_time, closing_time, banner_url, banner_image');
             final enrichMap = {for (var r in enrichResp) r['id'].toString(): r};
             rawShops = rawShops.map((s) {
               final extra = enrichMap[s['id'].toString()];
@@ -962,6 +975,1133 @@ class _AdminProductManagementPageState
         _showSnack('Failed to update operating hours: $e', isError: true);
       }
     }
+  }
+
+  // ── Shop Banner Management (100x Forensic Parity) ─────────────────────────
+
+  Future<void> _updateShopBanner(AdminShopItem shop, String? newBannerUrl) async {
+    final rbac = context.read<RbacProvider>();
+    if (!rbac.isSuperAdmin &&
+        !rbac.can('shops.manage') &&
+        !rbac.can('products.manage') &&
+        !rbac.can('sellers.manage')) {
+      _showSnack('Permission denied: You cannot modify store banners.',
+          isError: true);
+      return;
+    }
+
+    final sanitizedUrl = (newBannerUrl != null && newBannerUrl.trim().isNotEmpty)
+        ? newBannerUrl.trim()
+        : null;
+
+    if (sanitizedUrl != null && sanitizedUrl.length > 1000) {
+      _showSnack('Banner URL must be 1000 characters or fewer.', isError: true);
+      return;
+    }
+
+    final oldBanner = shop.bannerUrl;
+
+    // 1. Optimistic Local State Update
+    setState(() {
+      final sIdx = _shops.indexWhere((s) => s.id == shop.id);
+      if (sIdx != -1) {
+        _shops[sIdx] = shop.copyWith(
+          bannerUrl: sanitizedUrl,
+          clearBanner: sanitizedUrl == null,
+        );
+      }
+      if (_selectedShop?.id == shop.id) {
+        _selectedShop = _selectedShop!.copyWith(
+          bannerUrl: sanitizedUrl,
+          clearBanner: sanitizedUrl == null,
+        );
+      }
+    });
+
+    try {
+      // 2. Atomic RPC invocation with fallback
+      bool rpcOk = false;
+      try {
+        await _supabase.rpc('admin_update_shop_banner', params: {
+          'p_shop_id': shop.id,
+          'p_banner_url': sanitizedUrl,
+        });
+        rpcOk = true;
+      } catch (rpcErr) {
+        debugPrint('admin_update_shop_banner RPC fallback to direct update: $rpcErr');
+      }
+
+      if (!rpcOk) {
+        // Dual column sync to guarantee 100% parity across legacy and new queries
+        await _supabase.from('shops').update({
+          'banner_url': sanitizedUrl,
+          'banner_image': sanitizedUrl,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', shop.id);
+      }
+
+      // 3. Fire-and-forget Audit Log
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId != null) {
+        AuditRepository().log(
+          actorId: currentUserId,
+          actorRole: rbac.isSuperAdmin ? 'super_admin' : 'admin',
+          action: sanitizedUrl != null ? 'shop.banner_updated' : 'shop.banner_removed',
+          entityType: 'shop',
+          entityId: shop.id,
+          metadata: {
+            'shop_name': shop.name,
+            'previous_banner': oldBanner,
+            'new_banner': sanitizedUrl,
+          },
+        );
+      }
+
+      _showSnack(
+        sanitizedUrl != null
+            ? '🖼️ Store banner updated successfully!'
+            : '🗑️ Store banner removed',
+        isError: false,
+      );
+    } catch (e) {
+      debugPrint('Error updating shop banner: $e');
+      if (mounted) {
+        setState(() {
+          final sIdx = _shops.indexWhere((s) => s.id == shop.id);
+          if (sIdx != -1) {
+            _shops[sIdx] = shop.copyWith(
+              bannerUrl: oldBanner,
+              clearBanner: oldBanner == null,
+            );
+          }
+          if (_selectedShop?.id == shop.id) {
+            _selectedShop = _selectedShop!.copyWith(
+              bannerUrl: oldBanner,
+              clearBanner: oldBanner == null,
+            );
+          }
+        });
+        _showSnack('Failed to update banner: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _confirmRemoveBanner(AdminShopItem shop) async {
+    final rbac = context.read<RbacProvider>();
+    if (!rbac.isSuperAdmin &&
+        !rbac.can('shops.manage') &&
+        !rbac.can('products.manage') &&
+        !rbac.can('sellers.manage')) {
+      _showSnack('Permission denied: You cannot modify store banners.',
+          isError: true);
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AdminColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.delete_outline_rounded,
+                color: AdminColors.danger, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Remove Store Banner?',
+                  style: AdminStyles.title(size: 16)),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to remove the banner for "${shop.name}"?',
+              style: AdminStyles.body(size: 14, color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AdminColors.danger.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AdminColors.danger.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '• Store will revert to default category branding in feeds.\n'
+                    '• Customer app restaurant header will use standard styling.\n'
+                    '• You can upload or set a new banner at any time.',
+                    style: AdminStyles.caption(
+                        size: 11, color: AdminColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel',
+                style: AdminStyles.body(color: AdminColors.textMuted)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AdminColors.danger,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('Remove Banner',
+                style: AdminStyles.body(size: 13, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _updateShopBanner(shop, null);
+    }
+  }
+
+  void _showFullBannerViewer(AdminShopItem shop) {
+    if (shop.bannerUrl == null || shop.bannerUrl!.trim().isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AdminColors.surface,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
+                border: Border.all(color: AdminColors.cardBorder),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.photo_size_select_actual_rounded,
+                      color: AdminColors.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${shop.name} • Banner',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        color: Colors.white70, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(16)),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 460),
+                color: Colors.black,
+                child: InteractiveViewer(
+                  maxScale: 4.0,
+                  child: CachedNetworkImage(
+                    imageUrl: shop.bannerUrl!,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => Container(
+                      height: 220,
+                      color: AdminColors.cardBg,
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AdminColors.primary),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      height: 220,
+                      color: AdminColors.cardBg,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.broken_image_rounded,
+                                size: 40, color: AdminColors.warning),
+                            const SizedBox(height: 6),
+                            Text('Failed to load full image',
+                                style: AdminStyles.caption(
+                                    size: 12, color: AdminColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _manageShopBanner(AdminShopItem shop) async {
+    final rbac = context.read<RbacProvider>();
+    if (!rbac.isSuperAdmin &&
+        !rbac.can('shops.manage') &&
+        !rbac.can('products.manage') &&
+        !rbac.can('sellers.manage')) {
+      _showSnack('Permission denied: You cannot modify store banners.',
+          isError: true);
+      return;
+    }
+
+    final urlCtrl = TextEditingController(text: shop.bannerUrl ?? '');
+    int activeTab = 0; // 0: Upload from Device, 1: Enter Image URL
+    bool isUploading = false;
+    String? uploadStatusMessage;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !isUploading,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final currentBanner = shop.bannerUrl;
+            final hasCurrent =
+                currentBanner != null && currentBanner.trim().isNotEmpty;
+
+            return AlertDialog(
+              backgroundColor: AdminColors.surface,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AdminColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.photo_library_rounded,
+                        color: AdminColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Store Banner Studio',
+                            style: AdminStyles.title(size: 16)),
+                        Text(
+                          shop.name,
+                          style: AdminStyles.caption(
+                              size: 11, color: AdminColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 480,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Promotional 16:9 banner displayed on customer discovery, search listings, and store menu header.',
+                      style: AdminStyles.caption(
+                          size: 11, color: AdminColors.textSecondary),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Active / Current Banner Mini Preview
+                    if (hasCurrent) ...[
+                      Container(
+                        height: 90,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AdminColors.cardBorder),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              CachedNetworkImage(
+                                imageUrl: currentBanner,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => Container(
+                                  color: AdminColors.cardBg,
+                                  child: const Center(
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AdminColors.primary),
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (_, __, ___) => Container(
+                                  color: AdminColors.cardBg,
+                                  child: const Icon(Icons.broken_image_rounded,
+                                      color: AdminColors.textMuted),
+                                ),
+                              ),
+                              Positioned(
+                                top: 6,
+                                left: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.7),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'Active Banner',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: AdminColors.success,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                    // Mode Selection Tabs (Device vs URL)
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AdminColors.cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AdminColors.cardBorder),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: isUploading
+                                  ? null
+                                  : () => setDialogState(() => activeTab = 0),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: activeTab == 0
+                                      ? AdminColors.primary
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.upload_file_rounded,
+                                        size: 14,
+                                        color: activeTab == 0
+                                            ? Colors.white
+                                            : AdminColors.textSecondary,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Device Upload',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: activeTab == 0
+                                              ? Colors.white
+                                              : AdminColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: InkWell(
+                              onTap: isUploading
+                                  ? null
+                                  : () => setDialogState(() => activeTab = 1),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: activeTab == 1
+                                      ? AdminColors.primary
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.link_rounded,
+                                        size: 14,
+                                        color: activeTab == 1
+                                            ? Colors.white
+                                            : AdminColors.textSecondary,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Image URL',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: activeTab == 1
+                                              ? Colors.white
+                                              : AdminColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // TAB 0: Device Upload
+                    if (activeTab == 0) ...[
+                      if (isUploading) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 28),
+                          decoration: BoxDecoration(
+                            color: AdminColors.cardBg,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AdminColors.cardBorder),
+                          ),
+                          child: Column(
+                            children: [
+                              const CircularProgressIndicator(
+                                  color: AdminColors.primary),
+                              const SizedBox(height: 14),
+                              Text(
+                                uploadStatusMessage ??
+                                    'Uploading banner to storage...',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Compressing & generating public asset URL',
+                                style: AdminStyles.caption(
+                                    size: 10,
+                                    color: AdminColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        InkWell(
+                          onTap: () async {
+                            final source =
+                                await showImageSourceSheet(dialogCtx);
+                            if (source == null || !mounted || !dialogCtx.mounted) return;
+
+                            final picked = await pickSafeImage(
+                              source: source,
+                              maxWidth: 1920,
+                              maxHeight: 1080,
+                              imageQuality: 80,
+                            );
+                            if (picked == null || !mounted || !dialogCtx.mounted) return;
+
+                            final cropped = await cropImage(
+                              dialogCtx,
+                              picked.path,
+                              aspectRatio:
+                                  const CropAspectRatio(ratioX: 16, ratioY: 9),
+                              title: 'Crop Store Banner (16:9)',
+                            );
+                            if (cropped == null || !mounted) return;
+
+                            setDialogState(() {
+                              isUploading = true;
+                              uploadStatusMessage =
+                                  'Compressing banner image...';
+                            });
+
+                            try {
+                              Uint8List bytes;
+                              if (!kIsWeb) {
+                                final file = File(cropped.path);
+                                bytes = await ImageCompressionService
+                                        .compressFile(file) ??
+                                    await file.readAsBytes();
+                              } else {
+                                bytes = await cropped.readAsBytes();
+                              }
+
+                              setDialogState(() {
+                                uploadStatusMessage =
+                                    'Uploading to secure storage...';
+                              });
+
+                              final fileName =
+                                  '${DateTime.now().millisecondsSinceEpoch}.jpg';
+                              final filePath = 'banners/${shop.id}/$fileName';
+
+                              await _supabase.storage.from('shops').uploadBinary(
+                                    filePath,
+                                    bytes,
+                                    fileOptions: const FileOptions(
+                                      contentType: 'image/jpeg',
+                                      upsert: true,
+                                    ),
+                                  );
+
+                              final uploadedUrl = _supabase.storage
+                                  .from('shops')
+                                  .getPublicUrl(filePath);
+
+                              if (dialogCtx.mounted) {
+                                Navigator.pop(dialogCtx);
+                              }
+
+                              await _updateShopBanner(shop, uploadedUrl);
+                            } catch (uploadErr) {
+                              debugPrint('Error uploading banner: $uploadErr');
+                              if (dialogCtx.mounted) {
+                                setDialogState(() {
+                                  isUploading = false;
+                                  uploadStatusMessage = null;
+                                });
+                              }
+                              _showSnack('Upload failed: $uploadErr',
+                                  isError: true);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 22, horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: AdminColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AdminColors.primary.withValues(alpha: 0.35),
+                                style: BorderStyle.solid,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: AdminColors.primary
+                                        .withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.cloud_upload_rounded,
+                                    color: AdminColors.primary,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Choose Photo / Camera',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Tap to select image • Standard 16:9 crop will open automatically',
+                                  style: AdminStyles.caption(
+                                      size: 11,
+                                      color: AdminColors.textSecondary),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+
+                    // TAB 1: Enter Direct Image URL
+                    if (activeTab == 1) ...[
+                      TextField(
+                        controller: urlCtrl,
+                        style: GoogleFonts.poppins(
+                            fontSize: 12, color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'https://example.com/banner.jpg',
+                          hintStyle: AdminStyles.caption(
+                              size: 11, color: AdminColors.textMuted),
+                          filled: true,
+                          fillColor: AdminColors.cardBg,
+                          prefixIcon: const Icon(Icons.link_rounded,
+                              size: 16, color: AdminColors.primary),
+                          suffixIcon: urlCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded,
+                                      size: 14, color: Colors.white54),
+                                  onPressed: () {
+                                    urlCtrl.clear();
+                                    setDialogState(() {});
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AdminColors.cardBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AdminColors.cardBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AdminColors.primary),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                        ),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Live Dynamic Preview Box
+                      if (urlCtrl.text.trim().isNotEmpty) ...[
+                        Container(
+                          height: 90,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AdminColors.cardBorder),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: CachedNetworkImage(
+                              imageUrl: urlCtrl.text.trim(),
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(
+                                color: AdminColors.cardBg,
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AdminColors.primary),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (_, __, ___) => Container(
+                                color: AdminColors.cardBg,
+                                child: Center(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.error_outline_rounded,
+                                          size: 16, color: AdminColors.warning),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Invalid URL or image not accessible',
+                                        style: AdminStyles.caption(
+                                            size: 11,
+                                            color: AdminColors.warning),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: isUploading
+                              ? null
+                              : () async {
+                                  final rawUrl = urlCtrl.text.trim();
+                                  if (rawUrl.isEmpty) {
+                                    _showSnack('Please enter an image URL.',
+                                        isError: true);
+                                    return;
+                                  }
+                                  final uri = Uri.tryParse(rawUrl);
+                                  if (uri == null ||
+                                      (!uri.isScheme('http') &&
+                                          !uri.isScheme('https')) ||
+                                      uri.host.isEmpty) {
+                                    _showSnack(
+                                        'Please enter a valid HTTP/HTTPS image URL.',
+                                        isError: true);
+                                    return;
+                                  }
+                                  if (rawUrl.length > 1000) {
+                                    _showSnack(
+                                        'URL exceeds maximum limit of 1000 characters.',
+                                        isError: true);
+                                    return;
+                                  }
+
+                                  Navigator.pop(dialogCtx);
+                                  await _updateShopBanner(shop, rawUrl);
+                                },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AdminColors.primary,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: const Icon(Icons.check_circle_outline_rounded,
+                              size: 16),
+                          label: Text('Save Banner URL',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                if (hasCurrent && !isUploading)
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(dialogCtx);
+                      _confirmRemoveBanner(shop);
+                    },
+                    icon: const Icon(Icons.delete_outline_rounded,
+                        size: 14, color: AdminColors.danger),
+                    label: Text(
+                      'Remove Banner',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AdminColors.danger,
+                      ),
+                    ),
+                  ),
+                TextButton(
+                  onPressed:
+                      isUploading ? null : () => Navigator.pop(dialogCtx),
+                  child: Text('Close',
+                      style: AdminStyles.body(color: AdminColors.textMuted)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildShopBannerSection(AdminShopItem shop) {
+    final hasBanner =
+        shop.bannerUrl != null && shop.bannerUrl!.trim().isNotEmpty;
+
+    if (hasBanner) {
+      return Container(
+        height: 145,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: AdminColors.cardBorder.withValues(alpha: 0.8), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Banner Background Image with High-Speed CachedNetworkImage
+              CachedNetworkImage(
+                imageUrl: shop.bannerUrl!,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(
+                  color: AdminColors.cardBg,
+                  child: const Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.2, color: AdminColors.primary),
+                    ),
+                  ),
+                ),
+                errorWidget: (_, __, ___) => Container(
+                  color: AdminColors.cardBg,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.broken_image_rounded,
+                            size: 28, color: AdminColors.warning),
+                        const SizedBox(height: 4),
+                        Text('Image Failed to Load',
+                            style: AdminStyles.caption(
+                                size: 11, color: AdminColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Gradient Scrim for Contrast & Legibility
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.45),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.78),
+                    ],
+                    stops: const [0.0, 0.35, 1.0],
+                  ),
+                ),
+              ),
+
+              // Top Row: Status Chip & Fullscreen Button
+              Positioned(
+                top: 10,
+                left: 10,
+                right: 10,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.photo_size_select_actual_rounded,
+                              size: 12, color: AdminColors.info),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Store Banner • 16:9',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    Material(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(20),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => _showFullBannerViewer(shop),
+                        child: const Padding(
+                          padding: EdgeInsets.all(6),
+                          child: Icon(Icons.fullscreen_rounded,
+                              size: 16, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Bottom Actions: Remove & Change Banner
+              Positioned(
+                bottom: 10,
+                right: 10,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Material(
+                      color: AdminColors.danger.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _confirmRemoveBanner(shop),
+                        child: const Padding(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.delete_outline_rounded,
+                                  size: 13, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                'Remove',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Material(
+                      color: AdminColors.primary,
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _manageShopBanner(shop),
+                        child: const Padding(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.camera_alt_rounded,
+                                  size: 13, color: Colors.white),
+                              SizedBox(width: 5),
+                              Text(
+                                'Change Banner',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Unconfigured Banner State
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AdminColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: AdminColors.cardBorder.withValues(alpha: 0.9), width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AdminColors.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.add_photo_alternate_outlined,
+                color: AdminColors.primary, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No Store Banner Configured',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Upload a 16:9 banner for restaurant header & customer discovery feeds',
+                  style: AdminStyles.caption(
+                      size: 10, color: AdminColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AdminColors.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              visualDensity: VisualDensity.compact,
+            ),
+            icon: const Icon(Icons.cloud_upload_rounded, size: 14),
+            label: Text(
+              'Add Banner',
+              style:
+                  GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+            onPressed: () => _manageShopBanner(shop),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _batchToggleProducts(bool isAvailable) async {
@@ -1782,33 +2922,72 @@ class _AdminProductManagementPageState
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                // Avatar / Thumbnail
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: AdminColors.primary.withValues(alpha: 0.15),
+                // Avatar / Banner Thumbnail with 1-Tap Studio Action
+                Tooltip(
+                  message: 'Manage Store Banner',
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AdminColors.cardBorder),
-                  ),
-                  child: shop.bannerUrl != null && shop.bannerUrl!.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            shop.bannerUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              Icons.storefront_rounded,
-                              color: AdminColors.primary,
-                              size: 26,
+                    onTap: () => _manageShopBanner(shop),
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: AdminColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AdminColors.cardBorder),
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          shop.bannerUrl != null && shop.bannerUrl!.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: CachedNetworkImage(
+                                    imageUrl: shop.bannerUrl!,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, __) => const Center(
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AdminColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                    errorWidget: (_, __, ___) => const Icon(
+                                      Icons.storefront_rounded,
+                                      color: AdminColors.primary,
+                                      size: 26,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.storefront_rounded,
+                                  color: AdminColors.primary,
+                                  size: 26,
+                                ),
+                          Positioned(
+                            bottom: 2,
+                            right: 2,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.7),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white30, width: 0.8),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt_rounded,
+                                size: 9,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                        )
-                      : const Icon(
-                          Icons.storefront_rounded,
-                          color: AdminColors.primary,
-                          size: 26,
-                        ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
 
                 const SizedBox(width: 14),
@@ -2001,6 +3180,10 @@ class _AdminProductManagementPageState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── Restaurant / Shop Banner Showcase & Management ────────
+                _buildShopBannerSection(shop),
+                const SizedBox(height: 14),
+
                 Row(
                   children: [
                     Container(
@@ -2009,9 +3192,33 @@ class _AdminProductManagementPageState
                       decoration: BoxDecoration(
                         color: AdminColors.primary.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AdminColors.cardBorder),
                       ),
-                      child: const Icon(Icons.storefront_rounded,
-                          color: AdminColors.primary, size: 24),
+                      child: shop.bannerUrl != null && shop.bannerUrl!.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: CachedNetworkImage(
+                                imageUrl: shop.bannerUrl!,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => const Center(
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AdminColors.primary,
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (_, __, ___) => const Icon(
+                                  Icons.storefront_rounded,
+                                  color: AdminColors.primary,
+                                  size: 24,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.storefront_rounded,
+                              color: AdminColors.primary, size: 24),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

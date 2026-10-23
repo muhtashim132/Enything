@@ -555,8 +555,14 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
     final cart = context.watch<CartProvider>();
     final totalQuantity = cart.getProductTotalQuantity(product.id);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        showProductDetailSheet(context, product.id);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -612,19 +618,26 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
           // ── Image + Add button ──────────────────────────────────────
           Column(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: product.displayImage.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: product.displayImage,
-                        width: 100,
-                        height: 90,
-                        fit: BoxFit.cover,
-                        memCacheWidth: 300,
-                        errorWidget: (_, __, ___) => _foodImgPlaceholder(),
-                        placeholder: (_, __) => _foodImgPlaceholder(),
-                      )
-                    : _foodImgPlaceholder(),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  showProductDetailSheet(context, product.id);
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: product.displayImage.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: product.displayImage,
+                          width: 100,
+                          height: 90,
+                          fit: BoxFit.cover,
+                          memCacheWidth: 300,
+                          errorWidget: (_, __, ___) => _foodImgPlaceholder(),
+                          placeholder: (_, __) => _foodImgPlaceholder(),
+                        )
+                      : _foodImgPlaceholder(),
+                ),
               ),
               const SizedBox(height: 8),
               // Quantity stepper / ADD button
@@ -824,8 +837,9 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _foodImgPlaceholder() => Container(
         width: 100,

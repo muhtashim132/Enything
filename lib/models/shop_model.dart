@@ -18,6 +18,7 @@ class ShopModel {
   final String category;
   final List<String> categories;
   final bool isActive;
+  final bool isAcceptingOrders;
   final double rating;
   final int totalReviews;
   final int totalOrders;
@@ -48,6 +49,7 @@ class ShopModel {
     required this.category,
     required this.categories,
     required this.isActive,
+    this.isAcceptingOrders = true,
     this.rating = 4.0,
     this.totalReviews = 0,
     this.totalOrders = 0,
@@ -127,8 +129,8 @@ class ShopModel {
               ? map['categories'][0]
               : 'Other'),
       categories: List<String>.from(map['categories'] ?? []),
-      isActive:
-          (map['is_active'] ?? true) && (map['is_accepting_orders'] ?? true),
+      isActive: (map['is_active'] ?? true),
+      isAcceptingOrders: (map['is_accepting_orders'] ?? true),
       rating: (map['average_rating'] ?? map['rating'] ?? 0.0).toDouble(),
       totalReviews: map['total_reviews'] ?? 0,
       totalOrders: map['total_orders'] ?? 0,
@@ -142,14 +144,14 @@ class ShopModel {
   }
 
   bool get isOpenRightNow {
-    if (!isActive) return false;
-    if (openTime == null || closeTime == null) return isActive;
+    if (!isActive || !isAcceptingOrders) return false;
+    if (openTime == null || closeTime == null) return true;
 
     try {
       final now = DateTime.now();
       final openParts = openTime!.split(':');
       final closeParts = closeTime!.split(':');
-      if (openParts.length < 2 || closeParts.length < 2) return isActive;
+      if (openParts.length < 2 || closeParts.length < 2) return true;
 
       final openH = int.parse(openParts[0]);
       final openM = int.parse(openParts[1]);
@@ -168,7 +170,7 @@ class ShopModel {
         return (nowMinutes >= openMinutes && nowMinutes <= closeMinutes);
       }
     } catch (_) {
-      return isActive;
+      return true;
     }
   }
 
@@ -189,6 +191,7 @@ class ShopModel {
     String? category,
     List<String>? categories,
     bool? isActive,
+    bool? isAcceptingOrders,
     double? rating,
     int? totalReviews,
     int? totalOrders,
@@ -217,6 +220,7 @@ class ShopModel {
       category: category ?? this.category,
       categories: categories ?? this.categories,
       isActive: isActive ?? this.isActive,
+      isAcceptingOrders: isAcceptingOrders ?? this.isAcceptingOrders,
       rating: rating ?? this.rating,
       totalReviews: totalReviews ?? this.totalReviews,
       totalOrders: totalOrders ?? this.totalOrders,
@@ -250,6 +254,7 @@ class ShopModel {
         'category': category,
         'categories': categories,
         'is_active': isActive,
+        'is_accepting_orders': isAcceptingOrders,
         'rating': rating,
         'total_reviews': totalReviews,
         'total_orders': totalOrders,

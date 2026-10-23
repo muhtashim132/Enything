@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
 import '../widgets/product_detail_sheet.dart';
 import 'common/premium_product_image.dart';
+import '../utils/closed_store_feedback.dart';
 
 class ProductSearchCard extends StatefulWidget {
   final ProductModel product;
@@ -63,11 +64,21 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     final weightLabel = _formatWeightUnit();
 
     return GestureDetector(
-      onTap:
-          isLocked ? null : () => showProductDetailSheet(context, product.id),
-      onTapDown: isLocked ? null : (_) => setState(() => _isPressed = true),
-      onTapUp: isLocked ? null : (_) => setState(() => _isPressed = false),
-      onTapCancel: isLocked ? null : () => setState(() => _isPressed = false),
+      onTap: isShopClosed
+          ? () => ClosedStoreFeedback.showClosedStoreNotice(
+                context,
+                shopName: shop.name,
+                openTime: shop.openTime,
+              )
+          : (isProductUnavailable
+              ? () => ClosedStoreFeedback.showProductUnavailableNotice(
+                    context,
+                    productName: product.name,
+                  )
+              : () => showProductDetailSheet(context, product.id)),
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
         scale: _isPressed
             ? PremiumAnimations.pressedScale
@@ -529,7 +540,8 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                                     opacity: animation, child: child),
                               ),
                               child: isLocked
-                                  ? _buildUnavailableButton(context, isDark)
+                                  ? _buildUnavailableButton(context, isDark,
+                                      isShopClosed: isShopClosed)
                                   : product.variants.isNotEmpty
                                       ? (totalQuantity > 0
                                           ? _buildVariantStepper(
@@ -915,27 +927,68 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     );
   }
 
-  Widget _buildUnavailableButton(BuildContext context, bool isDark) {
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white10 : Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'UNAVAILABLE',
-            style: GoogleFonts.outfit(
-              fontWeight: FontWeight.w800,
-              fontSize: 10,
-              color: isDark ? Colors.white38 : Colors.grey.shade500,
-              letterSpacing: 0.4,
+  Widget _buildUnavailableButton(BuildContext context, bool isDark,
+      {bool isShopClosed = false}) {
+    final label = isShopClosed ? 'STORE CLOSED' : 'UNAVAILABLE';
+    return GestureDetector(
+      onTap: () {
+        if (isShopClosed) {
+          ClosedStoreFeedback.showClosedStoreNotice(
+            context,
+            shopName: shop.name,
+            openTime: shop.openTime,
+          );
+        } else {
+          ClosedStoreFeedback.showProductUnavailableNotice(
+            context,
+            productName: product.name,
+          );
+        }
+      },
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: isShopClosed
+              ? (isDark ? const Color(0xFF2D2418) : const Color(0xFFFFFBEB))
+              : (isDark ? Colors.white10 : Colors.grey.shade200),
+          border: isShopClosed
+              ? Border.all(
+                  color: isDark
+                      ? const Color(0xFFF59E0B).withValues(alpha: 0.35)
+                      : const Color(0xFFFDE68A),
+                  width: 0.8,
+                )
+              : null,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isShopClosed) ...[
+              Icon(
+                Icons.lock_clock_outlined,
+                size: 11,
+                color:
+                    isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w800,
+                fontSize: 10,
+                color: isShopClosed
+                    ? (isDark
+                        ? const Color(0xFFFBBF24)
+                        : const Color(0xFFD97706))
+                    : (isDark ? Colors.white38 : Colors.grey.shade500),
+                letterSpacing: 0.4,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

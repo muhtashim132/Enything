@@ -15,6 +15,7 @@ import '../widgets/product_detail_sheet.dart';
 import '../widgets/3d/perspective_card.dart';
 import '../utils/share_utils.dart';
 import '../widgets/common/premium_product_image.dart';
+import '../utils/closed_store_feedback.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -100,7 +101,18 @@ class _ProductCardState extends State<ProductCard>
 
     return PerspectiveCard(
       enableHaptics: false,
-      onTap: isLocked ? null : () => showProductDetailSheet(context, product.id),
+      onTap: isShopClosed
+          ? () => ClosedStoreFeedback.showClosedStoreNotice(
+                context,
+                shopName: shop?.name ?? 'Store',
+                openTime: shop?.openTime,
+              )
+          : (isProductUnavailable
+              ? () => ClosedStoreFeedback.showProductUnavailableNotice(
+                    context,
+                    productName: product.name,
+                  )
+              : () => showProductDetailSheet(context, product.id)),
       borderRadius: PremiumRadius.large,
       maxTiltAngle: 0.06,
       pressScale: 0.98,
@@ -642,7 +654,8 @@ class _ProductCardState extends State<ProductCard>
                               );
                             },
                             child: isLocked
-                                ? _buildUnavailableButton(isDark)
+                                ? _buildUnavailableButton(isDark,
+                                    isShopClosed: isShopClosed)
                                 : product.variants.isNotEmpty
                                     ? (totalQuantity > 0
                                         ? _buildVariantStepper(
@@ -1107,22 +1120,68 @@ class _ProductCardState extends State<ProductCard>
     );
   }
 
-  Widget _buildUnavailableButton(bool isDark) {
-    return Container(
-      width: double.infinity,
-      height: 30,
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white10 : Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Center(
-        child: Text(
-          'UNAVAILABLE',
-          style: GoogleFonts.outfit(
-            color: isDark ? Colors.white38 : Colors.grey.shade500,
-            fontWeight: FontWeight.w800,
-            fontSize: 10,
-            letterSpacing: 0.4,
+  Widget _buildUnavailableButton(bool isDark, {bool isShopClosed = false}) {
+    final label = isShopClosed ? 'STORE CLOSED' : 'UNAVAILABLE';
+    return GestureDetector(
+      onTap: () {
+        if (isShopClosed) {
+          ClosedStoreFeedback.showClosedStoreNotice(
+            context,
+            shopName: shop?.name ?? 'Store',
+            openTime: shop?.openTime,
+          );
+        } else {
+          ClosedStoreFeedback.showProductUnavailableNotice(
+            context,
+            productName: product.name,
+          );
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        height: 30,
+        decoration: BoxDecoration(
+          color: isShopClosed
+              ? (isDark ? const Color(0xFF2D2418) : const Color(0xFFFFFBEB))
+              : (isDark ? Colors.white10 : Colors.grey.shade200),
+          border: isShopClosed
+              ? Border.all(
+                  color: isDark
+                      ? const Color(0xFFF59E0B).withValues(alpha: 0.35)
+                      : const Color(0xFFFDE68A),
+                  width: 0.8,
+                )
+              : null,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isShopClosed) ...[
+                Icon(
+                  Icons.lock_clock_outlined,
+                  size: 11,
+                  color: isDark
+                      ? const Color(0xFFFBBF24)
+                      : const Color(0xFFD97706),
+                ),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: GoogleFonts.outfit(
+                  color: isShopClosed
+                      ? (isDark
+                          ? const Color(0xFFFBBF24)
+                          : const Color(0xFFD97706))
+                      : (isDark ? Colors.white38 : Colors.grey.shade500),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 9.5,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
           ),
         ),
       ),

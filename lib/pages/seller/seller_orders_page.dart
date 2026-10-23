@@ -1943,8 +1943,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                   color: AppColors.textSecondary, fontSize: 12),
                             ),
                             if (tab == 'active' &&
-                                ['confirmed', 'preparing']
-                                    .contains(order.status))
+                                [
+                                  'confirmed',
+                                  'preparing',
+                                  'awaiting_acceptance',
+                                  'pending',
+                                  'awaiting_payment'
+                                ].contains(order.status))
                               PopupMenuButton<String>(
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
@@ -2078,21 +2083,27 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.07),
+                          color: (order.sellerAccepted ? Colors.orange : Colors.red)
+                              .withValues(alpha: 0.07),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                              color: Colors.red.withValues(alpha: 0.18)),
+                              color: (order.sellerAccepted ? Colors.orange : Colors.red)
+                                  .withValues(alpha: 0.18)),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Flexible(
                               child: Text(
-                                'Acceptance Time Left',
+                                order.sellerAccepted
+                                    ? 'Finding Rider (Time Left)'
+                                    : 'Acceptance Time Left',
                                 style: GoogleFonts.outfit(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
-                                  color: Colors.red,
+                                  color: order.sellerAccepted
+                                      ? Colors.orange
+                                      : Colors.red,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),

@@ -717,183 +717,359 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
     final hasDiscount =
         product.discountPercent != null && product.discountPercent! > 0;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: totalQuantity > 0
-            ? Border.all(
-                color: AppColors.secondary
-                    .withValues(alpha: isDark ? 0.45 : 0.40),
-                width: 1.2,
-              )
-            : isDark
-                ? Border.all(color: Colors.white.withValues(alpha: 0.07))
-                : null,
-        boxShadow: [
-          BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.3)
-                  : Colors.black.withValues(alpha: 0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 5)),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Info ───────────────────────────────────────────────────
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Bestseller tag
-                  if (isBestseller) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF9F43), Color(0xFFEE5A24)],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        showProductDetailSheet(context, product.id);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: totalQuantity > 0
+              ? Border.all(
+                  color: AppColors.secondary
+                      .withValues(alpha: isDark ? 0.45 : 0.40),
+                  width: 1.2,
+                )
+              : isDark
+                  ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                  : null,
+          boxShadow: [
+            BoxShadow(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.3)
+                    : Colors.black.withValues(alpha: 0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 5)),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Info ───────────────────────────────────────────────────
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Bestseller tag
+                    if (isBestseller) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF9F43), Color(0xFFEE5A24)],
+                          ),
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.local_fire_department_rounded,
-                              size: 10, color: Colors.white),
-                          const SizedBox(width: 3),
-                          Text('BESTSELLER',
-                              style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-
-                  Text(
-                    product.name,
-                    style: GoogleFonts.outfit(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : const Color(0xFF1A1A2E),
-                      height: 1.2,
-                    ),
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  // Rating + reviews
-                  Row(
-                    children: [
-                      const Icon(Icons.star_rounded,
-                          color: Color(0xFFF6C90E), size: 14),
-                      const SizedBox(width: 2),
-                      Text(
-                        product.totalReviews > 0
-                            ? product.rating.toStringAsFixed(1)
-                            : 'New',
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                          color: isDark ? Colors.white70 : AppColors.textPrimary,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.local_fire_department_rounded,
+                                size: 10, color: Colors.white),
+                            const SizedBox(width: 3),
+                            Text('BESTSELLER',
+                                style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900)),
+                          ],
                         ),
                       ),
-                      if (product.totalReviews > 0) ...[
+                      const SizedBox(height: 6),
+                    ],
+
+                    Text(
+                      product.name,
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                        height: 1.2,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // Rating + reviews
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            color: Color(0xFFF6C90E), size: 14),
                         const SizedBox(width: 2),
                         Text(
-                          '(${product.totalReviews})',
+                          product.totalReviews > 0
+                              ? product.rating.toStringAsFixed(1)
+                              : 'New',
                           style: GoogleFonts.outfit(
-                            fontSize: 11,
-                            color: isDark
-                                ? Colors.white38
-                                : AppColors.textSecondary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                            color: isDark ? Colors.white70 : AppColors.textPrimary,
                           ),
                         ),
+                        if (product.totalReviews > 0) ...[
+                          const SizedBox(width: 2),
+                          Text(
+                            '(${product.totalReviews})',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.white38
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
 
-                  if (product.description != null &&
-                      product.description!.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      product.description!,
-                      style: GoogleFonts.outfit(
-                          fontSize: 11.5,
-                          color:
-                              isDark ? Colors.white54 : AppColors.textSecondary,
-                          height: 1.35),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    if (product.description != null &&
+                        product.description!.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        product.description!,
+                        style: GoogleFonts.outfit(
+                            fontSize: 11.5,
+                            color:
+                                isDark ? Colors.white54 : AppColors.textSecondary,
+                            height: 1.35),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Text(
+                          '₹${product.price.toStringAsFixed(0)}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color:
+                                isDark ? Colors.white : AppColors.primary,
+                          ),
+                        ),
+                        if (hasDiscount) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            '₹${product.originalPrice!.toStringAsFixed(0)}',
+                            style: GoogleFonts.outfit(
+                              color:
+                                  isDark ? Colors.white38 : AppColors.textLight,
+                              fontSize: 12,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text(
-                        '₹${product.price.toStringAsFixed(0)}',
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color:
-                              isDark ? Colors.white : AppColors.primary,
-                        ),
-                      ),
-                      if (hasDiscount) ...[
-                        const SizedBox(width: 6),
-                        Text(
-                          '₹${product.originalPrice!.toStringAsFixed(0)}',
-                          style: GoogleFonts.outfit(
-                            color:
-                                isDark ? Colors.white38 : AppColors.textLight,
-                            fontSize: 12,
-                            decoration: TextDecoration.lineThrough,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            // ── Image + Add button ────────────────────────────────────
-            Column(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: product.displayImage.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: product.displayImage,
-                          width: 100,
-                          height: 90,
-                          memCacheWidth: 250,
-                          memCacheHeight: 225,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) =>
-                              _foodImgPlaceholder(isDark),
-                        )
-                      : _foodImgPlaceholder(isDark),
                 ),
-                const SizedBox(height: 8),
-                // ADD / Stepper
-                product.variants.isNotEmpty
-                    ? (totalQuantity > 0
-                        ? Builder(builder: (ctx) {
-                            final productItems =
-                                cart.getItemsForProduct(product.id);
-                            final hasSingleVariant = productItems.length == 1;
-                            final singleItem =
-                                hasSingleVariant ? productItems.first : null;
-                            return Container(
+              ),
+              const SizedBox(width: 14),
+              // ── Image + Add button ────────────────────────────────────
+              Column(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      showProductDetailSheet(context, product.id);
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: product.displayImage.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: product.displayImage,
+                              width: 100,
+                              height: 90,
+                              memCacheWidth: 250,
+                              memCacheHeight: 225,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) =>
+                                  _foodImgPlaceholder(isDark),
+                            )
+                          : _foodImgPlaceholder(isDark),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // ADD / Stepper
+                  product.variants.isNotEmpty
+                      ? (totalQuantity > 0
+                          ? Builder(builder: (ctx) {
+                              final productItems =
+                                  cart.getItemsForProduct(product.id);
+                              final hasSingleVariant = productItems.length == 1;
+                              final singleItem =
+                                  hasSingleVariant ? productItems.first : null;
+                              return Container(
+                                width: 100,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.ctaGradient,
+                                  borderRadius: BorderRadius.circular(11),
+                                  boxShadow: [
+                                    BoxShadow(
+                                        color: AppColors.secondary
+                                            .withValues(alpha: 0.35),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4)),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        if (hasSingleVariant &&
+                                            singleItem != null) {
+                                          cart.updateQuantity(
+                                            product.id,
+                                            singleItem.quantity - 1,
+                                            variantName: singleItem
+                                                .selectedVariant?.name,
+                                          );
+                                        } else {
+                                          showProductDetailSheet(
+                                              context, product.id,
+                                              highlightVariants: true);
+                                        }
+                                      },
+                                      child: const Icon(Icons.remove_rounded,
+                                          color: Colors.white, size: 18),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        showProductDetailSheet(
+                                            context, product.id,
+                                            highlightVariants: true);
+                                      },
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('$totalQuantity',
+                                              style: GoogleFonts.outfit(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 13.5)),
+                                          const SizedBox(width: 2),
+                                          const Icon(
+                                              Icons.keyboard_arrow_down_rounded,
+                                              color: Colors.white,
+                                              size: 13),
+                                        ],
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        if (_shop != null) {
+                                          if (hasSingleVariant &&
+                                              singleItem != null) {
+                                            cart.addItemWithFeedback(
+                                              context,
+                                              product,
+                                              _shop!,
+                                              selectedVariant:
+                                                  singleItem.selectedVariant,
+                                            );
+                                          } else {
+                                            showProductDetailSheet(
+                                                context, product.id,
+                                                highlightVariants: true);
+                                          }
+                                        }
+                                      },
+                                      child: const Icon(Icons.add_rounded,
+                                          color: Colors.white, size: 18),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            })
+                          : GestureDetector(
+                              onTap: () {
+                                showProductDetailSheet(context, product.id,
+                                    highlightVariants: true);
+                              },
+                              child: Container(
+                                width: 100,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.secondary.withValues(alpha: 0.07),
+                                      AppColors.secondary.withValues(alpha: 0.12),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(11),
+                                  border: Border.all(
+                                      color:
+                                          AppColors.secondary.withValues(alpha: 0.5),
+                                      width: 1.3),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'ADD',
+                                      style: GoogleFonts.outfit(
+                                          color: AppColors.secondary,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 12),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    const Icon(Icons.keyboard_arrow_down_rounded,
+                                        size: 14, color: AppColors.secondary),
+                                  ],
+                                ),
+                              ),
+                            ))
+                      : totalQuantity == 0
+                          ? GestureDetector(
+                              onTap: () {
+                                cart.addItemWithFeedback(
+                                    context, product, _shop!);
+                              },
+                              child: Container(
+                                width: 100,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.secondary.withValues(alpha: 0.07),
+                                      AppColors.secondary.withValues(alpha: 0.12),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(11),
+                                  border: Border.all(
+                                      color: AppColors.secondary
+                                          .withValues(alpha: 0.5),
+                                      width: 1.3),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.add_rounded,
+                                        size: 14, color: AppColors.secondary),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'ADD',
+                                      style: GoogleFonts.outfit(
+                                          color: AppColors.secondary,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : Container(
                               width: 100,
                               height: 38,
                               decoration: BoxDecoration(
@@ -912,198 +1088,32 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                 children: [
                                   GestureDetector(
                                     onTap: () {
-                                      HapticFeedback.lightImpact();
-                                      if (hasSingleVariant &&
-                                          singleItem != null) {
-                                        cart.updateQuantity(
-                                          product.id,
-                                          singleItem.quantity - 1,
-                                          variantName: singleItem
-                                              .selectedVariant?.name,
-                                        );
-                                      } else {
-                                        Navigator.pop(context);
-                                        showProductDetailSheet(
-                                            context, product.id,
-                                            highlightVariants: true);
-                                      }
+                                      cart.updateQuantity(
+                                          product.id, totalQuantity - 1);
                                     },
                                     child: const Icon(Icons.remove_rounded,
                                         color: Colors.white, size: 18),
                                   ),
+                                  Text('$totalQuantity',
+                                      style: GoogleFonts.outfit(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 14)),
                                   GestureDetector(
                                     onTap: () {
-                                      Navigator.pop(context);
-                                      showProductDetailSheet(
-                                          context, product.id,
-                                          highlightVariants: true);
-                                    },
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text('$totalQuantity',
-                                            style: GoogleFonts.outfit(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 13.5)),
-                                        const SizedBox(width: 2),
-                                        const Icon(
-                                            Icons.keyboard_arrow_down_rounded,
-                                            color: Colors.white,
-                                            size: 13),
-                                      ],
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () {
-                                      HapticFeedback.lightImpact();
-                                      if (_shop != null) {
-                                        if (hasSingleVariant &&
-                                            singleItem != null) {
-                                          cart.addItemWithFeedback(
-                                            context,
-                                            product,
-                                            _shop!,
-                                            selectedVariant:
-                                                singleItem.selectedVariant,
-                                          );
-                                        } else {
-                                          Navigator.pop(context);
-                                          showProductDetailSheet(
-                                              context, product.id,
-                                              highlightVariants: true);
-                                        }
-                                      }
+                                      cart.addItemWithFeedback(
+                                          context, product, _shop!);
                                     },
                                     child: const Icon(Icons.add_rounded,
                                         color: Colors.white, size: 18),
                                   ),
                                 ],
                               ),
-                            );
-                          })
-                        : GestureDetector(
-                            onTap: () {
-                              Navigator.pop(context);
-                              showProductDetailSheet(context, product.id,
-                                  highlightVariants: true);
-                            },
-                            child: Container(
-                              width: 100,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    AppColors.secondary.withValues(alpha: 0.07),
-                                    AppColors.secondary.withValues(alpha: 0.12),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(11),
-                                border: Border.all(
-                                    color:
-                                        AppColors.secondary.withValues(alpha: 0.5),
-                                    width: 1.3),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'ADD',
-                                    style: GoogleFonts.outfit(
-                                        color: AppColors.secondary,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 12),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  const Icon(Icons.keyboard_arrow_down_rounded,
-                                      size: 14, color: AppColors.secondary),
-                                ],
-                              ),
                             ),
-                          ))
-                    : totalQuantity == 0
-                        ? GestureDetector(
-                            onTap: () {
-                              cart.addItemWithFeedback(
-                                  context, product, _shop!);
-                            },
-                            child: Container(
-                              width: 100,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    AppColors.secondary.withValues(alpha: 0.07),
-                                    AppColors.secondary.withValues(alpha: 0.12),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(11),
-                                border: Border.all(
-                                    color: AppColors.secondary
-                                        .withValues(alpha: 0.5),
-                                    width: 1.3),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.add_rounded,
-                                      size: 14, color: AppColors.secondary),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    'ADD',
-                                    style: GoogleFonts.outfit(
-                                        color: AppColors.secondary,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 13),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : Container(
-                            width: 100,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              gradient: AppColors.ctaGradient,
-                              borderRadius: BorderRadius.circular(11),
-                              boxShadow: [
-                                BoxShadow(
-                                    color: AppColors.secondary
-                                        .withValues(alpha: 0.35),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4)),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                GestureDetector(
-                                  onTap: () {
-                                    cart.updateQuantity(
-                                        product.id, totalQuantity - 1);
-                                  },
-                                  child: const Icon(Icons.remove_rounded,
-                                      color: Colors.white, size: 18),
-                                ),
-                                Text('$totalQuantity',
-                                    style: GoogleFonts.outfit(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 14)),
-                                GestureDetector(
-                                  onTap: () {
-                                    cart.addItemWithFeedback(
-                                        context, product, _shop!);
-                                  },
-                                  child: const Icon(Icons.add_rounded,
-                                      color: Colors.white, size: 18),
-                                ),
-                              ],
-                            ),
-                          ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

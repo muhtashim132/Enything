@@ -62,6 +62,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       _comingSoonSubMessage = null;
       _selectedFilterCategories.clear();
       _selectedSizes.clear();
+      _selectedFeedDemographic = 'All';
       _searchQuery = '';
       _searchController.clear();
     });
@@ -88,6 +89,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   Map<String, ShopModel> _productShops = {};
   String _searchQuery = '';
   String _selectedSearchDemographic = 'All';
+  String _selectedFeedDemographic = 'All'; // 'All', 'Men/Boys', 'Women/Girls'
   _SortMode _sortMode = _SortMode.relevant;
   VegFilterMode _vegFilterMode = VegFilterMode.all;
   final _searchController = TextEditingController();
@@ -184,8 +186,29 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     return 0;
   }
 
+  // ── Frame-Memoized Sorted Getters ──────────────────────────────────────────
+  List<ProductModel>? _memoizedSortedProductResults;
+  List<ProductModel>? _memoizedSortedNormalProducts;
+  List<ShopModel>? _memoizedSortedShopResults;
+  List<ShopModel>? _memoizedSortedNormalShops;
+
+  void _invalidateSortMemo() {
+    _memoizedSortedProductResults = null;
+    _memoizedSortedNormalProducts = null;
+    _memoizedSortedShopResults = null;
+    _memoizedSortedNormalShops = null;
+  }
+
   /// Returns search product results sorted by the current _sortMode and filtered by _vegFilterMode.
   List<ProductModel> get _sortedProductResults {
+    if (_memoizedSortedProductResults != null) {
+      return _memoizedSortedProductResults!;
+    }
+    _memoizedSortedProductResults = _computeSortedProductResults();
+    return _memoizedSortedProductResults!;
+  }
+
+  List<ProductModel> _computeSortedProductResults() {
     var list = List<ProductModel>.from(_searchProductResults);
 
     // 100x Dietary Filter: Veg / Non-Veg
@@ -220,9 +243,83 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     return list;
   }
 
+  /// 100x Demographic matcher for feed items (Men/Boys & Women/Girls)
+  bool _matchesDemographic(ProductModel product, String demographic) {
+    if (demographic == 'All') return true;
+
+    final tags = product.specialTags
+        .map((t) => t.trim().toLowerCase().replaceAll('#', ''))
+        .toList();
+
+    if (demographic == 'Men/Boys') {
+      // 1. Direct positive tag matches
+      final hasMenTag = tags.any((t) =>
+          t == 'men' ||
+          t == 'boys' ||
+          t == 'boy' ||
+          t == 'kids' ||
+          t == 'unisex');
+      if (hasMenTag) return true;
+
+      // 2. Strict negative tag matches: if explicitly tagged for Women/Girls, reject
+      final hasWomenTag = tags.any((t) =>
+          t == 'women' ||
+          t == 'girls' ||
+          t == 'girl');
+      if (hasWomenTag) return false;
+
+      // 3. Fallback to name & description keyword analysis for untagged items
+      final text = '${product.name} ${product.description}'.toLowerCase();
+      // Block if text clearly mentions women/girls
+      if (RegExp(r"\b(women|womens|women's|girls|girl's|ladies|lady|female|kurti|saree|lehenga|bra|makeup)\b").hasMatch(text)) {
+        return false;
+      }
+      return RegExp(r"\b(men|mens|men's|boy|boys|boy's|gent|gents|gent's|male)\b").hasMatch(text);
+    } else if (demographic == 'Women/Girls') {
+      // 1. Direct positive tag matches
+      final hasWomenTag = tags.any((t) =>
+          t == 'women' ||
+          t == 'girls' ||
+          t == 'girl' ||
+          t == 'kids' ||
+          t == 'unisex');
+      if (hasWomenTag) return true;
+
+      // 2. Strict negative tag matches: if explicitly tagged for Men/Boys, reject
+      final hasMenTag = tags.any((t) =>
+          t == 'men' ||
+          t == 'boys' ||
+          t == 'boy');
+      if (hasMenTag) return false;
+
+      // 3. Fallback to name & description keyword analysis for untagged items
+      final text = '${product.name} ${product.description}'.toLowerCase();
+      // Block if text clearly mentions men/boys
+      if (RegExp(r"\b(men|mens|men's|boys|boy's|gents|gent's|male)\b").hasMatch(text)) {
+        return false;
+      }
+      return RegExp(r"\b(women|womens|women's|girl|girls|girl's|ladies|lady|female|kurti|saree|lehenga|dress|beauty|cosmetics)\b").hasMatch(text);
+    }
+
+    return true;
+  }
+
   /// Returns normal product results sorted by the current _sortMode.
   List<ProductModel> get _sortedNormalProducts {
+    if (_memoizedSortedNormalProducts != null) {
+      return _memoizedSortedNormalProducts!;
+    }
+    _memoizedSortedNormalProducts = _computeSortedNormalProducts();
+    return _memoizedSortedNormalProducts!;
+  }
+
+  List<ProductModel> _computeSortedNormalProducts() {
     var list = List<ProductModel>.from(_products);
+    if (_selectedFeedDemographic != 'All') {
+      list = list
+          .where((p) => _matchesDemographic(p, _selectedFeedDemographic))
+          .toList();
+    }
     list.sort((a, b) {
       final availCmp = _compareAvailability(a, b, _productShops);
       if (availCmp != 0) return availCmp;
@@ -251,6 +348,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   /// Returns search shop results sorted by the current _sortMode and filtered by dietary preference.
   List<ShopModel> get _sortedShopResults {
+    if (_memoizedSortedShopResults != null) {
+      return _memoizedSortedShopResults!;
+    }
+    _memoizedSortedShopResults = _computeSortedShopResults();
+    return _memoizedSortedShopResults!;
+  }
+
+  List<ShopModel> _computeSortedShopResults() {
     var list = List<ShopModel>.from(_searchResults);
 
     // 100x Dietary Filter: Coherence for food shops & restaurants
@@ -281,14 +386,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }).toList();
     }
 
-    switch (_sortMode) {
-      case _SortMode.bestRating:
-        list.sort((a, b) => b.rating.compareTo(a.rating));
-      default:
-        list.sort((a, b) => (a.distanceKm ?? double.infinity)
-            .compareTo(b.distanceKm ?? double.infinity));
-        break;
-    }
+    list.sort((a, b) {
+      final openA = a.isOpenRightNow ? 1 : 0;
+      final openB = b.isOpenRightNow ? 1 : 0;
+      if (openA != openB) return openB.compareTo(openA);
+
+      switch (_sortMode) {
+        case _SortMode.bestRating:
+          return b.rating.compareTo(a.rating);
+        default:
+          return (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity);
+      }
+    });
     return list;
   }
 
@@ -309,19 +419,45 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   /// Returns normal shop results sorted by the current _sortMode.
   List<ShopModel> get _sortedNormalShops {
-    final list = List<ShopModel>.from(_shops);
-    switch (_sortMode) {
-      case _SortMode.bestRating:
-        list.sort((a, b) => b.rating.compareTo(a.rating));
-      case _SortMode.nearest:
-      case _SortMode.priceLow:
-      case _SortMode.priceHigh:
-      case _SortMode.discount:
-      case _SortMode.relevant:
-        list.sort((a, b) => (a.distanceKm ?? double.infinity)
-            .compareTo(b.distanceKm ?? double.infinity));
-        break;
+    if (_memoizedSortedNormalShops != null) {
+      return _memoizedSortedNormalShops!;
     }
+    _memoizedSortedNormalShops = _computeSortedNormalShops();
+    return _memoizedSortedNormalShops!;
+  }
+
+  List<ShopModel> _computeSortedNormalShops() {
+    final list = List<ShopModel>.from(_shops);
+    final matchingShopIds = (_selectedFeedDemographic != 'All')
+        ? _products
+            .where((p) => _matchesDemographic(p, _selectedFeedDemographic))
+            .map((p) => p.shopId)
+            .toSet()
+        : const <String>{};
+
+    list.sort((a, b) {
+      final openA = a.isOpenRightNow ? 1 : 0;
+      final openB = b.isOpenRightNow ? 1 : 0;
+      if (openA != openB) return openB.compareTo(openA);
+
+      if (_selectedFeedDemographic != 'All' && matchingShopIds.isNotEmpty) {
+        final hasProdsA = matchingShopIds.contains(a.id) ? 1 : 0;
+        final hasProdsB = matchingShopIds.contains(b.id) ? 1 : 0;
+        if (hasProdsA != hasProdsB) return hasProdsB.compareTo(hasProdsA);
+      }
+
+      switch (_sortMode) {
+        case _SortMode.bestRating:
+          return b.rating.compareTo(a.rating);
+        case _SortMode.nearest:
+        case _SortMode.priceLow:
+        case _SortMode.priceHigh:
+        case _SortMode.discount:
+        case _SortMode.relevant:
+          return (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity);
+      }
+    });
     return list;
   }
 
@@ -339,6 +475,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   Timer? _retryTimer;
 
   // Banner carousel
+  static const int _featuredSlidesCount = 6;
   final PageController _bannerController = PageController();
   final ValueNotifier<int> _bannerIndex = ValueNotifier<int>(0);
   Timer? _bannerTimer;
@@ -536,7 +673,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     // Auto-scroll banner every 4 seconds (pauses on hover/touch)
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || !_bannerController.hasClients || _isBannerHovered) return;
-      final next = (_bannerIndex.value + 1) % 3;
+      final next = (_bannerIndex.value + 1) % _featuredSlidesCount;
       _bannerController.animateToPage(
         next,
         duration: const Duration(milliseconds: 450),
@@ -1489,6 +1626,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 DeliveryCalculator.isWithinRange(s.distanceKm!))
             .toList()
           ..sort((a, b) {
+            // Priority 0: Open shops first!
+            final openA = a.isOpenRightNow ? 1 : 0;
+            final openB = b.isOpenRightNow ? 1 : 0;
+            if (openA != openB) return openB.compareTo(openA);
             // Primary sort: higher rating first
             final ratingCmp = (b.rating).compareTo(a.rating);
             if (ratingCmp != 0) return ratingCmp;
@@ -1497,8 +1638,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 .compareTo(b.distanceKm ?? double.infinity);
           });
       } else {
-        // No GPS yet — show all active shops sorted by rating
-        nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
+        // No GPS yet — show all active shops sorted by open first, then rating
+        nearby = allShops
+          ..sort((a, b) {
+            final openA = a.isOpenRightNow ? 1 : 0;
+            final openB = b.isOpenRightNow ? 1 : 0;
+            if (openA != openB) return openB.compareTo(openA);
+            return b.rating.compareTo(a.rating);
+          });
       }
 
       // Phase 21 Fix: Prevent Pixel Overloading by using RPC to fetch a diverse per-shop limit
@@ -1538,7 +1685,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           prods.add(product);
           prodShops[product.id] = shop;
         }
-        prods.sort((a, b) => b.rating.compareTo(a.rating));
+        prods.sort((a, b) {
+          final sA = prodShops[a.id];
+          final sB = prodShops[b.id];
+          final availA = a.isAvailable && (sA?.isOpenRightNow ?? false);
+          final availB = b.isAvailable && (sB?.isOpenRightNow ?? false);
+          if (availA && !availB) return -1;
+          if (!availA && availB) return 1;
+          return b.rating.compareTo(a.rating);
+        });
 
         if (_fetchId != currentFetchId) return; // Prevent async tab desync
 
@@ -1741,10 +1896,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 s.distanceKm != null &&
                 DeliveryCalculator.isWithinRange(s.distanceKm!))
             .toList()
-          ..sort((a, b) => (a.distanceKm ?? double.infinity)
-              .compareTo(b.distanceKm ?? double.infinity));
+          ..sort((a, b) {
+            final openA = a.isOpenRightNow ? 1 : 0;
+            final openB = b.isOpenRightNow ? 1 : 0;
+            if (openA != openB) return openB.compareTo(openA);
+            return (a.distanceKm ?? double.infinity)
+                .compareTo(b.distanceKm ?? double.infinity);
+          });
       } else {
-        nearby = allShops..sort((a, b) => b.rating.compareTo(a.rating));
+        nearby = allShops
+          ..sort((a, b) {
+            final openA = a.isOpenRightNow ? 1 : 0;
+            final openB = b.isOpenRightNow ? 1 : 0;
+            if (openA != openB) return openB.compareTo(openA);
+            return b.rating.compareTo(a.rating);
+          });
       }
 
       // If no shops in delivery radius, show Coming Soon state
@@ -1801,7 +1967,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           prods.add(product);
           prodShops[product.id] = shop;
         }
-        prods.sort((a, b) => b.rating.compareTo(a.rating));
+        prods.sort((a, b) {
+          final sA = prodShops[a.id];
+          final sB = prodShops[b.id];
+          final availA = a.isAvailable && (sA?.isOpenRightNow ?? false);
+          final availB = b.isAvailable && (sB?.isOpenRightNow ?? false);
+          if (availA && !availB) return -1;
+          if (!availA && availB) return 1;
+          return b.rating.compareTo(a.rating);
+        });
 
         if (_fetchId != currentFetchId) return; // Prevent async tab desync
 
@@ -1902,6 +2076,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   @override
   Widget build(BuildContext context) {
+    _invalidateSortMemo();
     final currentFiltering = _selectedTabIndex >= 0 ||
         _selectedFilterCategories.isNotEmpty ||
         _searchQuery.isNotEmpty;
@@ -2598,8 +2773,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   if (shop == null) {
                                     return const SizedBox.shrink();
                                   }
-                                  return ProductSearchCard(
-                                      product: product, shop: shop);
+                                  return RepaintBoundary(
+                                    key: ValueKey('search_p_${product.id}'),
+                                    child: ProductSearchCard(
+                                        product: product, shop: shop),
+                                  );
                                 },
                               ),
                               if (_sortedProductResults.length >
@@ -2695,16 +2873,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     padding: const EdgeInsets.only(bottom: 16),
                                     child: SizedBox(
                                       height: 280,
-                                      child: isFood
-                                          ? RestaurantShopCard(
-                                              shop: shop,
-                                              onTap: () =>
-                                                  showRestaurantDashboardSheet(
-                                                      context, shop.id))
-                                          : ShopCard(
-                                              shop: shop,
-                                              onTap: () => showShopDetailSheet(
-                                                  context, shop.id)),
+                                      child: RepaintBoundary(
+                                        key: ValueKey('search_s_${shop.id}'),
+                                        child: isFood
+                                            ? RestaurantShopCard(
+                                                shop: shop,
+                                                onTap: () =>
+                                                    showRestaurantDashboardSheet(
+                                                        context, shop.id))
+                                            : ShopCard(
+                                                shop: shop,
+                                                onTap: () => showShopDetailSheet(
+                                                    context, shop.id)),
+                                      ),
                                     ),
                                   );
                                 },
@@ -2843,7 +3024,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ? 'Stores near you'
                                     : _isFoodTab
                                         ? 'Restaurants near you'
-                                        : 'Shops near you',
+                                        : _selectedFeedDemographic == 'Men/Boys'
+                                            ? 'Men & Boys Stores'
+                                            : (_selectedFeedDemographic == 'Women/Girls'
+                                                ? 'Women & Girls Stores'
+                                                : 'Shops near you'),
                                 subtitle:
                                     '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
                                 count: _shops.length,
@@ -2880,18 +3065,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     final isFood =
                                         AppCategories.groupFor(shop.category) ==
                                             CategoryGroup.food;
-                                    return isFood
-                                        ? RestaurantShopCard(
-                                            shop: shop,
-                                            onTap: () =>
-                                                showRestaurantDashboardSheet(
-                                                    context, shop.id),
-                                          )
-                                        : ShopCard(
-                                            shop: shop,
-                                            onTap: () => showShopDetailSheet(
-                                                context, shop.id),
-                                          );
+                                    return RepaintBoundary(
+                                      key: ValueKey('home_s_${shop.id}'),
+                                      child: isFood
+                                          ? RestaurantShopCard(
+                                              shop: shop,
+                                              onTap: () =>
+                                                  showRestaurantDashboardSheet(
+                                                      context, shop.id),
+                                            )
+                                          : ShopCard(
+                                              shop: shop,
+                                              onTap: () => showShopDetailSheet(
+                                                  context, shop.id),
+                                            ),
+                                    );
                                   },
                                 );
                               },
@@ -2942,47 +3130,73 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           if (_products.isNotEmpty) ...[
                             const SliverToBoxAdapter(
                                 child: SizedBox(height: 8)),
+                            if ((_selectedTabIndex >= 0 &&
+                                    _categories.isNotEmpty &&
+                                    _selectedTabIndex < _categories.length &&
+                                    _categories[_selectedTabIndex]['name'] ==
+                                        'Clothing') ||
+                                _selectedFeedDemographic != 'All') ...[
+                              SliverToBoxAdapter(
+                                child: _buildFeedDemographicSelector(isDark),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 8)),
+                            ],
                             SliverToBoxAdapter(
-                              child: _buildSectionTitle('Popular in your area'),
+                              child: _buildSectionTitle(
+                                _selectedFeedDemographic == 'Men/Boys'
+                                    ? 'Popular for Men & Boys'
+                                    : (_selectedFeedDemographic == 'Women/Girls'
+                                        ? 'Popular for Women & Girls'
+                                        : 'Popular in your area'),
+                              ),
                             ),
                             const SliverToBoxAdapter(
                                 child: SizedBox(height: 16)),
-                            SliverLayoutBuilder(
-                              builder: (context, constraints) {
-                                final crossAxisCount =
-                                    Responsive.getGridCrossAxisCount(context,
-                                        mobile: 2, tablet: 4, desktop: 5);
-                                const crossAxisSpacing = 16.0;
-                                final availableWidth =
-                                    constraints.crossAxisExtent;
-                                final itemWidth = (availableWidth -
-                                        (crossAxisSpacing *
-                                            (crossAxisCount - 1))) /
-                                    crossAxisCount;
-                                final itemHeight = itemWidth + 120;
-                                final childAspectRatio = itemWidth / itemHeight;
-                                final displayProducts = _sortedNormalProducts
-                                    .take(_productsDisplayLimit)
-                                    .toList();
+                            if (_sortedNormalProducts.isEmpty)
+                              SliverToBoxAdapter(
+                                child: _buildDemographicEmptyState(isDark),
+                              )
+                            else
+                              SliverLayoutBuilder(
+                                builder: (context, constraints) {
+                                  final crossAxisCount =
+                                      Responsive.getGridCrossAxisCount(context,
+                                          mobile: 2, tablet: 4, desktop: 5);
+                                  const crossAxisSpacing = 16.0;
+                                  final availableWidth =
+                                      constraints.crossAxisExtent;
+                                  final itemWidth = (availableWidth -
+                                          (crossAxisSpacing *
+                                              (crossAxisCount - 1))) /
+                                      crossAxisCount;
+                                  final itemHeight = itemWidth + 120;
+                                  final childAspectRatio = itemWidth / itemHeight;
+                                  final displayProducts = _sortedNormalProducts
+                                      .take(_productsDisplayLimit)
+                                      .toList();
 
-                                return SliverGrid.builder(
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: crossAxisCount,
-                                    childAspectRatio: childAspectRatio,
-                                    mainAxisSpacing: 16,
-                                    crossAxisSpacing: crossAxisSpacing,
-                                  ),
-                                  itemCount: displayProducts.length,
-                                  itemBuilder: (context, index) {
-                                    final product = displayProducts[index];
-                                    final shop = _productShops[product.id];
-                                    return ProductCard(
-                                        product: product, shop: shop);
-                                  },
-                                );
-                              },
-                            ),
+                                  return SliverGrid.builder(
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      childAspectRatio: childAspectRatio,
+                                      mainAxisSpacing: 16,
+                                      crossAxisSpacing: crossAxisSpacing,
+                                    ),
+                                    itemCount: displayProducts.length,
+                                    itemBuilder: (context, index) {
+                                      final product = displayProducts[index];
+                                      final shop = _productShops[product.id];
+                                      return RepaintBoundary(
+                                        key: ValueKey('home_p_${product.id}'),
+                                        child: ProductCard(
+                                            product: product, shop: shop),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
                             if (_sortedNormalProducts.isNotEmpty) ...[
                               const SliverToBoxAdapter(
                                   child: SizedBox(height: 8)),
@@ -3001,7 +3215,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           Map<String, ShopModel>.from(
                                               _productShops),
                                       'shops': List<ShopModel>.from(_shops),
-                                      'sectionTitle': 'Popular in Your Area',
+                                      'sectionTitle':
+                                          _selectedFeedDemographic == 'Men/Boys'
+                                              ? 'Popular for Men & Boys'
+                                              : (_selectedFeedDemographic ==
+                                                      'Women/Girls'
+                                                  ? 'Popular for Women & Girls'
+                                                  : 'Popular in Your Area'),
                                     },
                                   ),
                                   isDark: isDark,
@@ -3200,6 +3420,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           setState(() {
                                             _selectedTabIndex = -1;
                                             _selectedFilterCategories.clear();
+                                            _selectedFeedDemographic = 'All';
                                             _comingSoonMessage = null;
                                             _comingSoonSubMessage = null;
                                           });
@@ -4154,6 +4375,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             setState(() {
               _selectedTabIndex = -1;
               _selectedFilterCategories.clear();
+              _selectedFeedDemographic = 'All';
               _comingSoonMessage = 'Food Delivery Coming Soon!';
               _comingSoonSubMessage =
                   'We are partnering with the best local restaurants. Stay tuned!';
@@ -4166,14 +4388,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           setState(() {
             _selectedTabIndex = idx;
             _selectedFilterCategories.clear();
+            _selectedFeedDemographic = 'All';
           });
           _loadData('Food');
         },
       },
       {
-        'tag': '🛒 DAILY ESSENTIALS',
-        'title': 'Grocery & Medicines\nAt your doorstep',
-        'sub': 'Supermarkets and local pharmacies',
+        'tag': '🛒 DAILY GROCERIES',
+        'title': 'Fresh Groceries\nAt your doorstep',
+        'sub': 'Supermarkets, fruits & daily essentials',
         'icon': Icons.shopping_basket_rounded,
         'colors': <Color>[
           const Color(0xFF11998E),
@@ -4181,20 +4404,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           const Color(0xFF00B09B)
         ],
         'accent': const Color(0xFFB9F6CA),
-        'emoji': '🥦💊',
+        'emoji': '🥦🥕',
         'action': () {
           if (!context.read<LocationProvider>().hasLocation) {
             _promptEnableLocation();
             return;
           }
-          final hasGrocery =
-              _categories.any((c) => c['name'] == 'Supermarket / Hypermarket');
-          final hasPharmacy = _categories.any((c) => c['name'] == 'Pharmacy');
-          if (!hasGrocery && !hasPharmacy) {
+          final idx = _categories
+              .indexWhere((c) => c['name'] == 'Supermarket / Hypermarket');
+          if (idx == -1) {
             setState(() {
               _selectedTabIndex = -1;
               _selectedFilterCategories.clear();
-              _comingSoonMessage = 'Groceries & Medicines Coming Soon!';
+              _selectedFeedDemographic = 'All';
+              _comingSoonMessage = 'Groceries & Supermarket Coming Soon!';
               _comingSoonSubMessage =
                   'Daily essentials delivered to your doorstep, launching soon.';
               _shops = [];
@@ -4204,24 +4427,65 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             return;
           }
           setState(() {
-            _selectedTabIndex = -1;
+            _selectedTabIndex = idx;
             _selectedFilterCategories.clear();
+            _selectedFeedDemographic = 'All';
           });
-          _loadData('GroceryAndMed');
+          _loadData('Grocery');
         },
       },
       {
-        'tag': '👗 FASHION & MORE',
-        'title': 'Clothing, Shoes\nAnd everything else!',
-        'sub': 'Local fashion and apparel stores',
-        'icon': Icons.checkroom_rounded,
+        'tag': '💊 MEDICINES & HEALTH',
+        'title': 'Medicines & Pharmacy\nDelivered in minutes',
+        'sub': 'Local licensed pharmacies & wellness essentials',
+        'icon': Icons.local_pharmacy_rounded,
         'colors': <Color>[
-          const Color(0xFF0A1260),
-          const Color(0xFF142999),
-          const Color(0xFF1E3FD8)
+          const Color(0xFF004D40),
+          const Color(0xFF00796B),
+          const Color(0xFF00BFA5),
         ],
-        'accent': const Color(0xFF00E5FF),
-        'emoji': '👠👗',
+        'accent': const Color(0xFFA7FFEB),
+        'emoji': '💊🏥',
+        'action': () {
+          if (!context.read<LocationProvider>().hasLocation) {
+            _promptEnableLocation();
+            return;
+          }
+          final idx = _categories.indexWhere((c) => c['name'] == 'Pharmacy');
+          if (idx == -1) {
+            setState(() {
+              _selectedTabIndex = -1;
+              _selectedFilterCategories.clear();
+              _selectedFeedDemographic = 'All';
+              _comingSoonMessage = 'Pharmacy & Medicines Coming Soon!';
+              _comingSoonSubMessage =
+                  'We are partnering with licensed local pharmacies. Stay tuned!';
+              _shops = [];
+              _products = [];
+              _isLoading = false;
+            });
+            return;
+          }
+          setState(() {
+            _selectedTabIndex = idx;
+            _selectedFilterCategories.clear();
+            _selectedFeedDemographic = 'All';
+          });
+          _loadData('Pharmacy');
+        },
+      },
+      {
+        'tag': '👔 MEN & BOYS',
+        'title': 'Trending Styles\nFor Men & Boys',
+        'sub': 'Apparel, shoes, grooming & essentials',
+        'icon': Icons.man_rounded,
+        'colors': <Color>[
+          const Color(0xFF0D1B2A),
+          const Color(0xFF1B263B),
+          const Color(0xFF2E5BFF),
+        ],
+        'accent': const Color(0xFF4DEEEA),
+        'emoji': '👟👕',
         'action': () {
           if (!context.read<LocationProvider>().hasLocation) {
             _promptEnableLocation();
@@ -4232,7 +4496,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             setState(() {
               _selectedTabIndex = -1;
               _selectedFilterCategories.clear();
-              _comingSoonMessage = 'Fashion & Clothing Coming Soon!';
+              _selectedFeedDemographic = 'All';
+              _comingSoonMessage = 'Men\'s Fashion Coming Soon!';
               _comingSoonSubMessage =
                   'Your favorite local apparel stores will be here shortly.';
               _shops = [];
@@ -4244,6 +4509,47 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           setState(() {
             _selectedTabIndex = idx;
             _selectedFilterCategories.clear();
+            _selectedFeedDemographic = 'Men/Boys';
+          });
+          _loadData('Clothing');
+        },
+      },
+      {
+        'tag': '👗 WOMEN & GIRLS',
+        'title': 'Chic Fashion\nFor Women & Girls',
+        'sub': 'Trending apparel, footwear & beauty',
+        'icon': Icons.woman_rounded,
+        'colors': <Color>[
+          const Color(0xFF5E0B4B),
+          const Color(0xFF9C27B0),
+          const Color(0xFFE040FB),
+        ],
+        'accent': const Color(0xFFFF80AB),
+        'emoji': '👠💄',
+        'action': () {
+          if (!context.read<LocationProvider>().hasLocation) {
+            _promptEnableLocation();
+            return;
+          }
+          final idx = _categories.indexWhere((c) => c['name'] == 'Clothing');
+          if (idx == -1) {
+            setState(() {
+              _selectedTabIndex = -1;
+              _selectedFilterCategories.clear();
+              _selectedFeedDemographic = 'All';
+              _comingSoonMessage = 'Women\'s Fashion Coming Soon!';
+              _comingSoonSubMessage =
+                  'Your favorite local apparel stores will be here shortly.';
+              _shops = [];
+              _products = [];
+              _isLoading = false;
+            });
+            return;
+          }
+          setState(() {
+            _selectedTabIndex = idx;
+            _selectedFilterCategories.clear();
+            _selectedFeedDemographic = 'Women/Girls';
           });
           _loadData('Clothing');
         },
@@ -4427,6 +4733,157 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildFeedDemographicSelector(bool isDark) {
+    const demos = [
+      {'key': 'All', 'label': 'All Fashion', 'emoji': '🛍️'},
+      {'key': 'Men/Boys', 'label': 'Men & Boys', 'emoji': '👔'},
+      {'key': 'Women/Girls', 'label': 'Women & Girls', 'emoji': '👗'},
+    ];
+
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: demos.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final d = demos[i];
+          final isSelected = _selectedFeedDemographic == d['key'];
+          return GestureDetector(
+            onTap: () {
+              SensoryHaptics.light();
+              setState(() {
+                _selectedFeedDemographic = d['key']!;
+                _invalidateSortMemo();
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: isSelected
+                    ? const LinearGradient(
+                        colors: [Color(0xFF1E3FD8), Color(0xFF3D6BFF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isSelected
+                    ? null
+                    : (isDark
+                        ? const Color(0xFF1E1E2E)
+                        : Colors.grey.shade100),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? Colors.transparent
+                      : (isDark
+                          ? Colors.white10
+                          : Colors.grey.shade300),
+                  width: 1,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        )
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(d['emoji']!, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 6),
+                  Text(
+                    d['label']!,
+                    style: GoogleFonts.outfit(
+                      fontSize: 12.5,
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark
+                              ? Colors.white.withValues(alpha: 0.85)
+                              : AppColors.textPrimary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDemographicEmptyState(bool isDark) {
+    final isMen = _selectedFeedDemographic == 'Men/Boys';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.1),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Center(
+                child: Text(isMen ? '👔' : '👗', style: const TextStyle(fontSize: 28)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isMen
+                  ? 'No Men & Boys items found nearby'
+                  : 'No Women & Girls items found nearby',
+              style: GoogleFonts.outfit(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Showing all other available items in your area',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                color: isDark ? Colors.white60 : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            ElevatedButton.icon(
+              onPressed: () {
+                SensoryHaptics.light();
+                setState(() {
+                  _selectedFeedDemographic = 'All';
+                  _invalidateSortMemo();
+                });
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Show All Fashion Items'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -5467,11 +5924,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   }
                   if (_selectedTabIndex == index) {
                     // Toggle off: already selected → reset to all
-                    setState(() => _selectedTabIndex = -1);
+                    setState(() {
+                      _selectedTabIndex = -1;
+                      _selectedFeedDemographic = 'All';
+                    });
                     _loadAllData();
                   } else {
                     // Select: filter by this category
-                    setState(() => _selectedTabIndex = index);
+                    setState(() {
+                      _selectedTabIndex = index;
+                      _selectedFeedDemographic = 'All';
+                    });
                     _loadData(catName);
                   }
                 },

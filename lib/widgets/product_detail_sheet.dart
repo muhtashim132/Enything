@@ -21,6 +21,7 @@ import '../config/routes.dart';
 import '../widgets/shop_detail_sheet.dart';
 import '../widgets/restaurant_dashboard_sheet.dart';
 import 'common/premium_product_image.dart';
+import '../utils/closed_store_feedback.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public helper — call this instead of Navigator.pushNamed for productDetails
@@ -1300,24 +1301,63 @@ class _SheetContent extends StatelessWidget {
           ),
         ],
       ),
-      child: (shop != null && !shop!.isActive)
-          ? Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: PremiumRadius.smallBorder,
+      child: (shop != null && (!shop!.isActive || !shop!.isOpenRightNow))
+          ? GestureDetector(
+              onTap: () => ClosedStoreFeedback.showClosedStoreNotice(
+                context,
+                shopName: shop!.name,
+                openTime: shop!.openTime,
               ),
-              child: Center(
-                child: Text(
-                  'Shop Currently Closed',
-                  style: GoogleFonts.outfit(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade600,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color:
+                      isDark ? const Color(0xFF242438) : Colors.grey.shade300,
+                  borderRadius: PremiumRadius.smallBorder,
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_clock_outlined,
+                        size: 16,
+                        color: isDark ? Colors.white54 : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Shop Currently Closed',
+                        style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white54 : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             )
+          : (!product.isAvailable ||
+                  (product.totalQuantity != null &&
+                      product.totalQuantity! <= 0))
+              ? Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF242438) : Colors.grey.shade300,
+                    borderRadius: PremiumRadius.smallBorder,
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Item Out of Stock',
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white54 : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                )
           : quantity > 0
               ? Row(
                   mainAxisAlignment: MainAxisAlignment.center,

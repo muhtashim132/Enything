@@ -513,6 +513,8 @@ class OrderModel {
         return 'Prescription Rejected';
       case 'awaiting_acceptance':
         if (isExpired) return 'Order Expired';
+        if (sellerAccepted && !partnerAccepted) return 'Awaiting Rider';
+        if (!sellerAccepted && partnerAccepted) return 'Awaiting Shop';
         return 'Waiting for Confirmation';
       case 'awaiting_payment':
         return 'Pay Now';
