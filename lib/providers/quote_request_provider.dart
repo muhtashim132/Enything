@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/quote_request_model.dart';
 
@@ -52,6 +53,35 @@ class QuoteRequestProvider extends ChangeNotifier {
 
   Map<String, dynamic>? _activeCateringOrder;
   Map<String, dynamic>? get activeCateringOrder => _activeCateringOrder;
+
+  Map<String, dynamic>? _deliveredCateringOrderToCelebrate;
+  Map<String, dynamic>? get deliveredCateringOrderToCelebrate => _deliveredCateringOrderToCelebrate;
+
+  /// Dismisses the single-view delivery celebration banner for a delivered catering order.
+  /// Persists in SharedPreferences so it never reappears on subsequent dashboard visits.
+  Future<void> dismissDeliveredCateringCelebration(String orderId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('seen_catering_delivered_$orderId', true);
+    } catch (e) {
+      debugPrint('Error saving seen catering delivery celebration: $e');
+    }
+    if (_deliveredCateringOrderToCelebrate?['id'] == orderId) {
+      _deliveredCateringOrderToCelebrate = null;
+      notifyListeners();
+    }
+  }
+
+  /// Marks the delivery celebration as seen so that once the user leaves or finishes
+  /// this dashboard session, it will not be shown again.
+  Future<void> markDeliveredCateringCelebrationSeen(String orderId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('seen_catering_delivered_$orderId', true);
+    } catch (e) {
+      debugPrint('Error marking catering delivery celebration seen: $e');
+    }
+  }
 
   StreamSubscription? _customerStreamSub;
   StreamSubscription? _adminStreamSub;
@@ -107,6 +137,7 @@ class QuoteRequestProvider extends ChangeNotifier {
     if (uid == null) {
       _customerQuotes = [];
       _activeCateringOrder = null;
+      _deliveredCateringOrderToCelebrate = null;
       notifyListeners();
       return;
     }
@@ -162,6 +193,62 @@ class QuoteRequestProvider extends ChangeNotifier {
               }
             } catch (_) {}
           }
+        }
+        _deliveredCateringOrderToCelebrate = null;
+      } else {
+        // No live in-flight active order. Check for recently delivered catering order eligible for single-view celebration.
+        try {
+          final deliveredRes = await _supabase
+              .from('orders')
+              .select('id, status, address_label, total_amount, delivery_otp, created_at, updated_at, order_type')
+              .eq('customer_id', uid)
+              .inFilter('order_type', ['bulk', 'manual_quote'])
+              .eq('status', 'delivered')
+              .order('updated_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+
+          if (deliveredRes != null) {
+            final orderId = deliveredRes['id']?.toString() ?? '';
+            final updatedStr = deliveredRes['updated_at']?.toString() ?? deliveredRes['created_at']?.toString();
+            final updatedTime = updatedStr != null ? DateTime.tryParse(updatedStr) : null;
+            final isRecent = updatedTime != null && DateTime.now().difference(updatedTime).inHours < 48;
+
+            if (isRecent) {
+              final prefs = await SharedPreferences.getInstance();
+              final hasSeen = prefs.getBool('seen_catering_delivered_$orderId') ?? false;
+              if (!hasSeen) {
+                final map = Map<String, dynamic>.from(deliveredRes);
+                final matchedQuote = _customerQuotes.where((q) => q.resultingOrderId == orderId).firstOrNull;
+                if (matchedQuote != null) {
+                  map['event_name'] = matchedQuote.eventName;
+                  map['guest_count'] = matchedQuote.estimatedGuestCount;
+                } else {
+                  try {
+                    final bq = await _supabase
+                        .from('bulk_quote_requests')
+                        .select('event_name, estimated_guest_count')
+                        .eq('resulting_order_id', orderId)
+                        .maybeSingle();
+                    if (bq != null) {
+                      map['event_name'] = bq['event_name'];
+                      map['guest_count'] = bq['estimated_guest_count'];
+                    }
+                  } catch (_) {}
+                }
+                _deliveredCateringOrderToCelebrate = map;
+              } else {
+                _deliveredCateringOrderToCelebrate = null;
+              }
+            } else {
+              _deliveredCateringOrderToCelebrate = null;
+            }
+          } else {
+            _deliveredCateringOrderToCelebrate = null;
+          }
+        } catch (e) {
+          debugPrint('Error checking recently delivered catering order: $e');
+          _deliveredCateringOrderToCelebrate = null;
         }
       }
       notifyListeners();
@@ -236,9 +323,37 @@ class QuoteRequestProvider extends ChangeNotifier {
                   map['guest_count'] = _activeCateringOrder!['guest_count'];
                 }
                 _activeCateringOrder = map;
-              } else if (status == 'delivered' || status == 'cancelled' || status == 'seller_rejected') {
+                _deliveredCateringOrderToCelebrate = null;
+              } else if (status == 'delivered') {
+                final orderId = row['id']?.toString() ?? '';
+                if (_activeCateringOrder?['id'] == orderId) {
+                  _activeCateringOrder = null;
+                }
+                // Handle single-view delivery celebration
+                SharedPreferences.getInstance().then((prefs) {
+                  final hasSeen = prefs.getBool('seen_catering_delivered_$orderId') ?? false;
+                  if (!hasSeen) {
+                    final map = Map<String, dynamic>.from(row);
+                    final matchedQuote = _customerQuotes.where((q) => q.resultingOrderId == orderId).firstOrNull;
+                    if (matchedQuote != null) {
+                      map['event_name'] = matchedQuote.eventName;
+                      map['guest_count'] = matchedQuote.estimatedGuestCount;
+                    } else if (_deliveredCateringOrderToCelebrate?['id'] == orderId && _deliveredCateringOrderToCelebrate?['event_name'] != null) {
+                      map['event_name'] = _deliveredCateringOrderToCelebrate!['event_name'];
+                      map['guest_count'] = _deliveredCateringOrderToCelebrate!['guest_count'];
+                    }
+                    _deliveredCateringOrderToCelebrate = map;
+                    notifyListeners();
+                  }
+                }).catchError((e) {
+                  debugPrint('Error handling realtime catering delivery celebration: $e');
+                });
+              } else if (status == 'cancelled' || status == 'seller_rejected') {
                 if (_activeCateringOrder?['id'] == row['id']) {
                   _activeCateringOrder = null;
+                }
+                if (_deliveredCateringOrderToCelebrate?['id'] == row['id']) {
+                  _deliveredCateringOrderToCelebrate = null;
                 }
               }
               notifyListeners();

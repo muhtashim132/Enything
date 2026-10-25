@@ -120,6 +120,9 @@ class OrderGroup {
       if (orders.every((o) => o.status == 'shop_dispute_cancel')) {
         return 'shop_dispute_cancel';
       }
+      if (orders.every((o) => o.status == 'payment_failed')) {
+        return 'payment_failed';
+      }
       if (orders.every((o) =>
           o.status == 'rejected' ||
           o.status == 'seller_rejected' ||

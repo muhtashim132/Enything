@@ -752,6 +752,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   double _computeGroupPlatformFee() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.platformFee);
 
+  // ignore: unused_element
   double _computeGroupGstPlatform() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstPlatform);
 
@@ -3274,7 +3275,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                             if (_computeGroupPlatformFee() > 0) ...[
                               const SizedBox(height: 8),
                               _billRow('Handling Fee',
-                                  '₹${(_computeGroupPlatformFee() - _computeGroupGstPlatform()).toStringAsFixed(2)}',
+                                  '₹${_computeGroupPlatformFee().toStringAsFixed(2)}',
                                   isDark: isDark),
                             ],
                             if (_computeGroupWaitTimePenalty() > 0) ...[
@@ -3292,12 +3293,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                   valueColor: AppColors.success),
                             ],
                             if ((_computeGroupGstItemTotal() +
-                                    _computeGroupGstDelivery() +
-                                    _computeGroupGstPlatform()) >
+                                    _computeGroupGstDelivery()) >
                                 0) ...[
                               const SizedBox(height: 8),
-                              _billRow('TOTAL GST',
-                                  '₹${(_computeGroupGstItemTotal() + _computeGroupGstDelivery() + _computeGroupGstPlatform()).toStringAsFixed(2)}',
+                              _billRow('Taxes & GST',
+                                  '₹${(_computeGroupGstItemTotal() + _computeGroupGstDelivery()).toStringAsFixed(2)}',
                                   isDark: isDark),
                             ],
                             Divider(

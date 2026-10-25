@@ -103,3 +103,9 @@ test_mockup.png
 *.xcuserdatad
 
 /test_cleanup_leftovers.dart
+
+# Local shelf scan input photos & temp images
+/shelf*.jpeg
+/Shelf*.jpeg
+scripts/auto_upload/data/product_images/
+web_public/app

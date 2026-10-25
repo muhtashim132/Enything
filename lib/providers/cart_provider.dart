@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:latlong2/latlong.dart';
@@ -346,8 +347,11 @@ class CartProvider extends ChangeNotifier {
     final feePerKg = PlatformConfigProvider.instance?.heavyOrderFee ??
         PaymentConfig.heavyOrderFee;
 
-    if (totalWeight > threshold) {
-      final extraWeight = (totalWeight - threshold).ceil();
+    final sanitizedWeight = totalWeight.isNaN || totalWeight.isInfinite
+        ? 0.0
+        : totalWeight.clamp(0.0, 100.0);
+    if (sanitizedWeight > threshold) {
+      final extraWeight = math.max(0, (sanitizedWeight - threshold).ceil());
       return feePerKg * extraWeight;
     }
     return 0.0;

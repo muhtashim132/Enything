@@ -30,6 +30,7 @@ class _FavoritesPageState extends State<FavoritesPage>
 
   List<ProductModel> _favoriteProducts = [];
   List<ShopModel> _favoriteShops = [];
+  final Map<String, ShopModel> _productShops = {};
   bool _isLoading = true;
 
   @override
@@ -51,26 +52,39 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     try {
       if (favs.favoriteProductIds.isNotEmpty) {
-        final productIds =
-            favs.favoriteProductIds.map((id) => '"$id"').join(',');
         final productRes = await _supabase
             .from('products')
             .select()
             .eq('is_deleted', false)
-            .filter('id', 'in', '($productIds)')
+            .inFilter('id', favs.favoriteProductIds.toList())
             .limit(100);
         _favoriteProducts =
             (productRes as List).map((p) => ProductModel.fromMap(p)).toList();
+
+        final missingShopIds = _favoriteProducts
+            .map((p) => p.shopId)
+            .where((id) => id.isNotEmpty && !_productShops.containsKey(id))
+            .toSet()
+            .toList();
+        if (missingShopIds.isNotEmpty) {
+          final shopsRes = await _supabase
+              .from('shops')
+              .select()
+              .inFilter('id', missingShopIds);
+          for (final s in (shopsRes as List)) {
+            final sm = ShopModel.fromMap(s);
+            _productShops[sm.id] = sm;
+          }
+        }
       } else {
         _favoriteProducts = [];
       }
 
       if (favs.favoriteShopIds.isNotEmpty) {
-        final shopIds = favs.favoriteShopIds.map((id) => '"$id"').join(',');
         final shopRes = await _supabase
             .from('shops')
             .select()
-            .filter('id', 'in', '($shopIds)')
+            .inFilter('id', favs.favoriteShopIds.toList())
             .limit(100);
         _favoriteShops =
             (shopRes as List).map((s) => ShopModel.fromMap(s)).toList();
@@ -271,7 +285,7 @@ class _FavoritesPageState extends State<FavoritesPage>
                                       (crossAxisSpacing *
                                           (crossAxisCount - 1))) /
                                   crossAxisCount;
-                              final itemHeight = itemWidth + 120;
+                              final itemHeight = itemWidth + 134;
                               final childAspectRatio = itemWidth / itemHeight;
 
                               return GridView.builder(
@@ -286,8 +300,11 @@ class _FavoritesPageState extends State<FavoritesPage>
                                 ),
                                 itemCount: _favoriteProducts.length,
                                 itemBuilder: (context, index) {
+                                  final prod = _favoriteProducts[index];
                                   return ProductCard(
-                                      product: _favoriteProducts[index]);
+                                    product: prod,
+                                    shop: _productShops[prod.shopId],
+                                  );
                                 },
                               );
                             },

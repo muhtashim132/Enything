@@ -11,6 +11,7 @@ import '../theme/premium_effects.dart';
 import '../widgets/product_detail_sheet.dart';
 import 'common/premium_product_image.dart';
 import '../utils/closed_store_feedback.dart';
+import '../config/app_categories.dart';
 
 class ProductSearchCard extends StatefulWidget {
   final ProductModel product;
@@ -389,6 +390,41 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                             ),
                           ],
                         ),
+
+                        // Salt / Composition for medicines
+                        if ((product.category == 'Pharmacy' ||
+                                AppCategories.isPharmacyCategory(product.category)) &&
+                            product.description != null &&
+                            product.description!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.science_outlined,
+                                size: 10,
+                                color: isDark
+                                    ? const Color(0xFF6EE7B7)
+                                    : const Color(0xFF059669),
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  product.description!.trim(),
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 9.5,
+                                    color: isDark
+                                        ? const Color(0xFF6EE7B7)
+                                        : const Color(0xFF059669),
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
 
                         const SizedBox(height: 3),
 

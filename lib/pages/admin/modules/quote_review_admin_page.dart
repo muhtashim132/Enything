@@ -313,10 +313,13 @@ class _QuoteReviewAdminPageState extends State<QuoteReviewAdminPage>
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           indicatorColor: AdminColors.primary,
           indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white54,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 14),
           labelStyle: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
           tabs: [
             _buildTab(
@@ -1478,11 +1481,11 @@ class _MarkPaidModalContentState extends State<_MarkPaidModalContent> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _buildMethodChip('upi', 'UPI (GPay/PhonePe)'),
+              _buildMethodButton('upi', 'UPI (GPay)', Icons.qr_code_2_rounded),
               const SizedBox(width: 8),
-              _buildMethodChip('bank_transfer', 'Bank Transfer'),
+              _buildMethodButton('bank_transfer', 'Bank Transfer', Icons.account_balance_rounded),
               const SizedBox(width: 8),
-              _buildMethodChip('cash', 'Cash'),
+              _buildMethodButton('cash', 'Cash', Icons.payments_rounded),
             ],
           ),
           const SizedBox(height: 16),
@@ -1500,14 +1503,23 @@ class _MarkPaidModalContentState extends State<_MarkPaidModalContent> {
               filled: true,
               fillColor: Colors.white.withValues(alpha: 0.06),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AdminColors.primary, width: 1.5),
+              ),
             ),
           ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.1),
+              color: Colors.amber.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.25)),
             ),
             child: Row(
               children: [
@@ -1516,7 +1528,7 @@ class _MarkPaidModalContentState extends State<_MarkPaidModalContent> {
                 Expanded(
                   child: Text(
                     'This creates the catering order in the system with payment marked captured, and notifies the customer.',
-                    style: GoogleFonts.outfit(color: Colors.amberAccent, fontSize: 11),
+                    style: GoogleFonts.outfit(color: Colors.amberAccent.shade100, fontSize: 11.5),
                   ),
                 ),
               ],
@@ -1558,22 +1570,63 @@ class _MarkPaidModalContentState extends State<_MarkPaidModalContent> {
     );
   }
 
-  Widget _buildMethodChip(String method, String label) {
+  Widget _buildMethodButton(String method, String label, IconData icon) {
     final isSel = _paymentMethod == method;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSel,
-      selectedColor: AdminColors.primary.withValues(alpha: 0.3),
-      backgroundColor: Colors.white.withValues(alpha: 0.06),
-      labelStyle: TextStyle(
-        color: isSel ? Colors.white : Colors.white60,
-        fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-        fontSize: 12,
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _paymentMethod = method),
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSel
+                  ? AdminColors.primary.withValues(alpha: 0.28)
+                  : const Color(0xFF1E2138),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSel ? AdminColors.primary : Colors.white.withValues(alpha: 0.18),
+                width: isSel ? 1.5 : 1.0,
+              ),
+              boxShadow: isSel
+                  ? [
+                      BoxShadow(
+                        color: AdminColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isSel ? Icons.check_circle_rounded : icon,
+                  size: 14,
+                  color: isSel ? Colors.white : Colors.white70,
+                ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      color: isSel ? Colors.white : Colors.white70,
+                      fontWeight: isSel ? FontWeight.bold : FontWeight.w600,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      side: BorderSide(color: isSel ? AdminColors.primary : Colors.transparent),
-      onSelected: (val) {
-        if (val) setState(() => _paymentMethod = method);
-      },
     );
   }
 }

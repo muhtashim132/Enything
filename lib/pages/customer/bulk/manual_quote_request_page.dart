@@ -544,6 +544,13 @@ class _ManualQuoteRequestPageState extends State<ManualQuoteRequestPage> {
                     return ChoiceChip(
                       label: Text(et['label']!),
                       selected: isSelected,
+                      showCheckmark: false,
+                      color: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return primary.withValues(alpha: 0.2);
+                        }
+                        return isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04);
+                      }),
                       selectedColor: primary.withValues(alpha: 0.2),
                       backgroundColor: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04),
                       labelStyle: TextStyle(
@@ -552,8 +559,8 @@ class _ManualQuoteRequestPageState extends State<ManualQuoteRequestPage> {
                         fontSize: 12,
                       ),
                       side: BorderSide(
-                        color: isSelected ? primary : Colors.transparent,
-                        width: 1.5,
+                        color: isSelected ? primary : (isDark ? Colors.white12 : Colors.black12),
+                        width: isSelected ? 1.5 : 1.0,
                       ),
                       onSelected: (val) {
                         if (val) setState(() => _selectedEventType = et['type']!);
@@ -635,8 +642,14 @@ class _ManualQuoteRequestPageState extends State<ManualQuoteRequestPage> {
                       child: ActionChip(
                         padding: EdgeInsets.zero,
                         label: Text('$count'),
-                        labelStyle: const TextStyle(fontSize: 11),
+                        labelStyle: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
                         backgroundColor: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                        color: WidgetStateProperty.all(isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+                        side: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
                         onPressed: () {
                           setState(() => _guestsController.text = '$count');
                         },
@@ -690,12 +703,23 @@ class _ManualQuoteRequestPageState extends State<ManualQuoteRequestPage> {
                     return FilterChip(
                       label: Text(opt),
                       selected: isSel,
+                      showCheckmark: false,
+                      color: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return primary.withValues(alpha: 0.2);
+                        }
+                        return isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.04);
+                      }),
                       selectedColor: primary.withValues(alpha: 0.2),
                       backgroundColor: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.04),
                       labelStyle: TextStyle(
                         color: isSel ? primary : (isDark ? Colors.white70 : Colors.black87),
                         fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                         fontSize: 12,
+                      ),
+                      side: BorderSide(
+                        color: isSel ? primary : (isDark ? Colors.white12 : Colors.black12),
+                        width: isSel ? 1.5 : 1.0,
                       ),
                       onSelected: (val) {
                         if (val) setState(() => _selectedDietary = opt);

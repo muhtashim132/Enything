@@ -17,8 +17,29 @@ import '../../models/product_model.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
+import 'dart:ui' show lerpDouble;
 import '../../services/gst_recommendation_engine.dart';
+import '../../services/master_catalog_service.dart';
 import '../../utils/haptic_utils.dart';
+
+/// 100x Unified Image Item for Product Gallery
+/// Preserves exact drag-and-drop repositioning sequence across remote CDN URLs and local files.
+class ProductImageItem {
+  final String id;
+  final String? remoteUrl;
+  final XFile? localFile;
+
+  ProductImageItem.remote(this.remoteUrl, {String? customId})
+      : id = customId ?? 'remote_${remoteUrl}_${DateTime.now().microsecondsSinceEpoch}',
+        localFile = null;
+
+  ProductImageItem.local(this.localFile, {String? customId})
+      : id = customId ?? 'local_${localFile?.path}_${DateTime.now().microsecondsSinceEpoch}',
+        remoteUrl = null;
+
+  bool get isRemote => remoteUrl != null && remoteUrl!.isNotEmpty;
+  bool get isLocal => localFile != null;
+}
 
 class AddProductPage extends StatefulWidget {
   final ProductModel? existingProduct;
@@ -61,6 +82,7 @@ class _AddProductPageState extends State<AddProductPage> {
   ]; // secure fallback until shop loads
   List<XFile> _images = [];
   List<String> _existingImageUrls = [];
+  List<ProductImageItem> _productImages = [];
   List<ProductVariant> _variants = [];
   final Map<String, File> _variantImageFiles = {};
 
@@ -79,6 +101,17 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _gstUserOverridden = false;
   Timer? _gstDebounce;
   String _selectedDemographic = 'Unisex';
+
+  // ── Master Catalog Dropdown & 1-Tap Autofill ───────────────────────────────
+  final _brandController = TextEditingController();
+  final FocusNode _nameFocusNode = FocusNode();
+  List<ProductModel> _catalogSuggestions = [];
+  bool _isSearchingCatalog = false;
+  bool _showCatalogSuggestions = false;
+  Timer? _catalogDebounce;
+  int _catalogSearchSeq = 0;
+  Map<String, dynamic>? _lastAutofillSnapshot;
+  String? _autofilledFromProductName;
 
   List<String> get _availableUnitTypes {
     if (_productCategory == 'Clothing' ||
@@ -103,6 +136,9 @@ class _AddProductPageState extends State<AddProductPage> {
     // Debounced listener: re-run GST recommendation when product name changes
     _nameController.addListener(_scheduleGstUpdate);
     _nameController.addListener(_markDirty);
+    _nameController.addListener(_onNameChanged);
+    _nameFocusNode.addListener(_onNameFocusChanged);
+    _brandController.addListener(_markDirty);
     _priceController.addListener(_markDirty);
     _originalPriceController.addListener(_markDirty);
     _descriptionController.addListener(_markDirty);
@@ -113,6 +149,9 @@ class _AddProductPageState extends State<AddProductPage> {
     if (widget.existingProduct != null) {
       final p = widget.existingProduct!;
       _nameController.text = p.name;
+      if (p.brand != null) {
+        _brandController.text = p.brand!;
+      }
       _priceController.text = p.price.toString();
       if (p.originalPrice != null && p.originalPrice! > 0) {
         _hasDiscount = true;
@@ -126,13 +165,20 @@ class _AddProductPageState extends State<AddProductPage> {
       if (p.weightPerUnit != null) {
         _weightController.text = p.weightPerUnit.toString();
       }
-      _unitType = p.unitType;
+      final normalizedUnit = (p.unitType.toLowerCase() == 'piece' || p.unitType.isEmpty)
+          ? 'pieces'
+          : p.unitType.toLowerCase();
+      _unitType = _availableUnitTypes.contains(normalizedUnit)
+          ? normalizedUnit
+          : _availableUnitTypes.first;
       if (p.totalQuantity != null) {
         _inventoryController.text = p.totalQuantity.toString();
       }
       _requiresPrescription = p.requiresPrescription;
       _medicineType = p.medicineType;
       _existingImageUrls = List.from(p.images);
+      _productImages =
+          p.images.map((url) => ProductImageItem.remote(url)).toList();
       _variants = List.from(p.variants);
 
       // Bulk catering restoration
@@ -746,8 +792,43 @@ class _AddProductPageState extends State<AddProductPage> {
     return _variants.every((v) => dimensionalPattern.hasMatch(v.name.trim()));
   }
 
+  void _syncLegacyLists() {
+    _existingImageUrls = _productImages
+        .where((item) => item.isRemote)
+        .map((item) => item.remoteUrl!)
+        .toList();
+    _images = _productImages
+        .where((item) => item.isLocal)
+        .map((item) => item.localFile!)
+        .toList();
+  }
+
+  void _removeProductImage(int index) {
+    if (index < 0 || index >= _productImages.length) return;
+    setState(() {
+      _productImages.removeAt(index);
+      _syncLegacyLists();
+      _isDirty = true;
+    });
+    HapticUtils.selection();
+  }
+
+  void _moveProductImage(int fromIndex, int toIndex) {
+    if (fromIndex < 0 || fromIndex >= _productImages.length) return;
+    if (toIndex < 0 || toIndex >= _productImages.length) return;
+    if (fromIndex == toIndex) return;
+
+    setState(() {
+      final item = _productImages.removeAt(fromIndex);
+      _productImages.insert(toIndex, item);
+      _syncLegacyLists();
+      _isDirty = true;
+    });
+    HapticUtils.selection();
+  }
+
   Future<void> _pickImage() async {
-    if (_images.length + _existingImageUrls.length >= 3) return;
+    if (_productImages.length >= 3) return;
     final source = await showImageSourceSheet(context);
     if (source == null) return;
     final picker = ImagePicker();
@@ -759,7 +840,7 @@ class _AddProductPageState extends State<AddProductPage> {
         : const CropAspectRatio(ratioX: 1, ratioY: 1);
 
     if (source == ImageSource.camera) {
-      while (_images.length + _existingImageUrls.length < 3) {
+      while (_productImages.length < 3) {
         final XFile? picked = await picker.pickImage(
           source: ImageSource.camera,
           imageQuality: 70,
@@ -773,13 +854,16 @@ class _AddProductPageState extends State<AddProductPage> {
             aspectRatio: defaultCropRatio);
         if (cropped != null) {
           setState(() {
-            _images.add(XFile(cropped.path));
-            if (_images.length > 3) _images = _images.sublist(0, 3);
+            _productImages.add(ProductImageItem.local(XFile(cropped.path)));
+            if (_productImages.length > 3) {
+              _productImages = _productImages.sublist(0, 3);
+            }
+            _syncLegacyLists();
             _isDirty = true;
           });
         }
 
-        if (_images.length + _existingImageUrls.length >= 3) break;
+        if (_productImages.length >= 3) break;
 
         if (!mounted) break;
         final bool? takeAnother = await showDialog<bool>(
@@ -812,11 +896,14 @@ class _AddProductPageState extends State<AddProductPage> {
               title: 'Crop Product Image',
               aspectRatio: defaultCropRatio);
           if (cropped != null) {
-            _images.add(XFile(cropped.path));
+            _productImages.add(ProductImageItem.local(XFile(cropped.path)));
           }
-          if (_images.length + _existingImageUrls.length >= 3) break;
+          if (_productImages.length >= 3) break;
         }
-        setState(() => _isDirty = true);
+        setState(() {
+          _syncLegacyLists();
+          _isDirty = true;
+        });
       }
     }
   }
@@ -855,20 +942,6 @@ class _AddProductPageState extends State<AddProductPage> {
         ),
       ),
     );
-  }
-
-  void _removeImage(int index) {
-    setState(() {
-      _images.removeAt(index);
-      _isDirty = true;
-    });
-  }
-
-  void _removeExistingImage(int index) {
-    setState(() {
-      _existingImageUrls.removeAt(index);
-      _isDirty = true;
-    });
   }
 
   // ── Variant Image Picker (with Camera + Gallery parity) ──────────────────
@@ -1555,7 +1628,7 @@ class _AddProductPageState extends State<AddProductPage> {
     }
 
     // C1: Require at least 1 product image
-    if (_images.isEmpty && _existingImageUrls.isEmpty) {
+    if (_productImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please add at least one product image.'),
@@ -1617,17 +1690,23 @@ class _AddProductPageState extends State<AddProductPage> {
       List<String> uploadedUrls = [];
       const uploadBucket = 'products';
 
-      for (int i = 0; i < _images.length; i++) {
-        final file = _images[i];
-        Uint8List bytes =
-            await ImageCompressionService.compressFile(File(file.path)) ??
-                await file.readAsBytes();
-        const ext = 'jpg'; // Format is jpeg
-        final path =
-            '$_shopId/${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
-        await _supabase.storage.from(uploadBucket).uploadBinary(path, bytes);
-        uploadedUrls
-            .add(_supabase.storage.from(uploadBucket).getPublicUrl(path));
+      // 100x Unified Image Upload: Preserves exact drag-and-drop repositioning sequence
+      for (int i = 0; i < _productImages.length; i++) {
+        final item = _productImages[i];
+        if (item.isRemote) {
+          uploadedUrls.add(item.remoteUrl!);
+        } else if (item.isLocal) {
+          final file = item.localFile!;
+          final Uint8List bytes =
+              await ImageCompressionService.compressFile(File(file.path)) ??
+                  await file.readAsBytes();
+          const ext = 'jpg'; // Format is jpeg
+          final path =
+              '$_shopId/${DateTime.now().millisecondsSinceEpoch}_$i.$ext';
+          await _supabase.storage.from(uploadBucket).uploadBinary(path, bytes);
+          uploadedUrls
+              .add(_supabase.storage.from(uploadBucket).getPublicUrl(path));
+        }
       }
 
       // Upload variant images & handle removed variant images (I6)
@@ -1660,13 +1739,14 @@ class _AddProductPageState extends State<AddProductPage> {
         }
       }
 
-      uploadedUrls.addAll(_existingImageUrls);
-
       final data = {
         'shop_id': _shopId,
         'name': _nameController.text.trim(),
         'price': finalPrice,
         'original_price': finalOriginalPrice,
+        'brand': _brandController.text.trim().isEmpty
+            ? null
+            : _brandController.text.trim(),
         // P3: Save null instead of empty string for description
         'description': _descriptionController.text.trim().isEmpty
             ? null
@@ -1791,8 +1871,14 @@ class _AddProductPageState extends State<AddProductPage> {
   @override
   void dispose() {
     _gstDebounce?.cancel();
+    _catalogDebounce?.cancel();
+    _nameFocusNode.removeListener(_onNameFocusChanged);
+    _nameFocusNode.dispose();
+    _nameController.removeListener(_onNameChanged);
     _nameController.removeListener(_scheduleGstUpdate);
     _nameController.removeListener(_markDirty);
+    _brandController.removeListener(_markDirty);
+    _brandController.dispose();
     _priceController.removeListener(_markDirty);
     _originalPriceController.removeListener(_markDirty);
     _descriptionController.removeListener(_markDirty);
@@ -1809,6 +1895,627 @@ class _AddProductPageState extends State<AddProductPage> {
     _inventoryController.dispose();
     _minBulkQuantityController.dispose();
     super.dispose();
+  }
+
+  // ── 100x Master Catalog Autocomplete & 1-Tap Autofill ──────────────────────
+
+  void _onNameChanged() {
+    _markDirty();
+    // Do not trigger catalog dropdown while in edit mode unless user cleared and re-typed
+    if (widget.existingProduct != null &&
+        _nameController.text.trim() == widget.existingProduct!.name.trim()) {
+      return;
+    }
+
+    final query = _nameController.text.trim();
+    if (query.length < 2) {
+      _catalogDebounce?.cancel();
+      if (_catalogSuggestions.isNotEmpty || _showCatalogSuggestions) {
+        setState(() {
+          _catalogSuggestions = [];
+          _showCatalogSuggestions = false;
+          _isSearchingCatalog = false;
+        });
+      }
+      return;
+    }
+
+    _catalogDebounce?.cancel();
+    _catalogDebounce = Timer(const Duration(milliseconds: 350), () {
+      _triggerCatalogSearch(query: query);
+    });
+  }
+
+  void _onNameFocusChanged() {
+    if (!_nameFocusNode.hasFocus) {
+      // Small delay allows tap on suggestion button to register before hiding
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted && !_nameFocusNode.hasFocus) {
+          setState(() => _showCatalogSuggestions = false);
+        }
+      });
+    }
+  }
+
+  Future<void> _triggerCatalogSearch({String? query, bool force = false}) async {
+    final cleanQuery = (query ?? _nameController.text).trim();
+    if (cleanQuery.length < 2 && !force) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Type at least 2 letters of product name to search catalog.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final seq = ++_catalogSearchSeq;
+    if (mounted) {
+      setState(() {
+        _isSearchingCatalog = true;
+        _showCatalogSuggestions = true;
+      });
+    }
+
+    try {
+      final results = await MasterCatalogService.instance.searchCatalog(
+        query: cleanQuery,
+        shopCategory: _productCategory,
+        limit: 10,
+      );
+
+      if (!mounted || seq != _catalogSearchSeq) return;
+
+      setState(() {
+        _catalogSuggestions = results;
+        _isSearchingCatalog = false;
+        _showCatalogSuggestions = results.isNotEmpty;
+      });
+    } catch (e) {
+      debugPrint('Catalog search error: $e');
+      if (mounted && seq == _catalogSearchSeq) {
+        setState(() => _isSearchingCatalog = false);
+      }
+    }
+  }
+
+  void _autofillFromCatalog(ProductModel template) {
+    HapticUtils.selection();
+
+    // 1. Capture snapshot for Undo capability
+    _lastAutofillSnapshot = {
+      'name': _nameController.text,
+      'brand': _brandController.text,
+      'description': _descriptionController.text,
+      'price': _priceController.text,
+      'originalPrice': _originalPriceController.text,
+      'hasDiscount': _hasDiscount,
+      'category': _productCategory,
+      'menuCategory': _menuCategoryController.text,
+      'weight': _weightController.text,
+      'unitType': _unitType,
+      'inventory': _inventoryController.text,
+      'isVeg': _isVeg,
+      'requiresPrescription': _requiresPrescription,
+      'medicineType': _medicineType,
+      'productImages': List<ProductImageItem>.from(_productImages),
+      'images': List<String>.from(_existingImageUrls),
+      'localImages': List<XFile>.from(_images),
+      'variants': _variants.map((v) => v.copyWith()).toList(),
+      'gstRateOverride': _gstRateOverride,
+    };
+
+    setState(() {
+      // 2. Name & Brand
+      _nameController.text = template.name;
+      if (template.brand != null && template.brand!.trim().isNotEmpty) {
+        _brandController.text = template.brand!.trim();
+      }
+
+      // 3. Description (Chemical salts/composition for medicines)
+      if (template.description != null && template.description!.trim().isNotEmpty) {
+        _descriptionController.text = template.description!.trim();
+      }
+
+      // 4. Price & MRP
+      if (template.price > 0) {
+        _priceController.text = template.price.truncateToDouble() == template.price
+            ? template.price.toInt().toString()
+            : template.price.toStringAsFixed(2);
+      }
+      if (template.originalPrice != null && template.originalPrice! > template.price) {
+        _hasDiscount = true;
+        _originalPriceController.text =
+            template.originalPrice!.truncateToDouble() == template.originalPrice!
+                ? template.originalPrice!.toInt().toString()
+                : template.originalPrice!.toStringAsFixed(2);
+      } else {
+        _hasDiscount = false;
+        _originalPriceController.clear();
+      }
+
+      // 5. Category Alignment
+      if (_allowedCategories.contains(template.category)) {
+        _productCategory = template.category;
+      } else if (_allowedCategories.isNotEmpty) {
+        final matching = _allowedCategories.firstWhere(
+          (c) => c.toLowerCase() == template.category.toLowerCase(),
+          orElse: () => _allowedCategories.first,
+        );
+        _productCategory = matching;
+      }
+
+      // 6. Menu Category
+      if (template.menuCategory != null && template.menuCategory!.trim().isNotEmpty) {
+        final menuCat = template.menuCategory!.trim();
+        _menuCategoryController.text = menuCat;
+        if (!_existingMenuCategories.any((c) => c.toLowerCase() == menuCat.toLowerCase())) {
+          _existingMenuCategories.insert(0, menuCat);
+        }
+      }
+
+      // 7. Unit Type & Weight
+      final normalizedUnit = (template.unitType.toLowerCase() == 'piece' || template.unitType.isEmpty)
+          ? 'pieces'
+          : template.unitType.toLowerCase();
+      _unitType = _availableUnitTypes.contains(normalizedUnit)
+          ? normalizedUnit
+          : _availableUnitTypes.first;
+
+      if (template.weightPerUnit != null && template.weightPerUnit! > 0) {
+        _weightController.text = template.weightPerUnit! % 1 == 0
+            ? template.weightPerUnit!.toInt().toString()
+            : template.weightPerUnit!.toString();
+      }
+
+      // 8. Inventory Stock
+      if (template.totalQuantity != null && template.totalQuantity! > 0) {
+        _inventoryController.text = template.totalQuantity.toString();
+      } else if (_inventoryController.text.trim().isEmpty) {
+        _inventoryController.text = '50';
+      }
+
+      // 9. Dietary & Regulations
+      if (template.isVeg != null) {
+        _isVeg = template.isVeg;
+      }
+      _requiresPrescription = template.requiresPrescription;
+      if (template.medicineType.isNotEmpty) {
+        _medicineType = template.medicineType;
+      }
+
+      // 10. Images (Inherit CDN URLs directly, clear local picker queue)
+      final validCdnUrls = template.images
+          .where((url) => url.startsWith('http://') || url.startsWith('https://'))
+          .toList();
+      if (validCdnUrls.isNotEmpty) {
+        _productImages = validCdnUrls
+            .map((url) => ProductImageItem.remote(url))
+            .toList();
+        _syncLegacyLists();
+      }
+
+      // 11. Variants (Deep clone with clean IDs)
+      if (template.variants.isNotEmpty) {
+        _variants = template.variants.map((v) {
+          final uniqueId =
+              'variant_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
+          return v.copyWith(id: uniqueId);
+        }).toList();
+      }
+
+      // 12. GST Recommendation & Rate Override
+      if (template.gstRateOverride != null) {
+        _gstRateOverride = template.gstRateOverride;
+        _gstUserOverridden = true;
+      }
+
+      // 13. UI Flags
+      _showCatalogSuggestions = false;
+      _autofilledFromProductName = template.name;
+      _isDirty = true;
+    });
+
+    _scheduleGstUpdate();
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Autofilled from catalog: ${template.name}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1E293B),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: Colors.amberAccent,
+          onPressed: _undoAutofill,
+        ),
+      ),
+    );
+  }
+
+  void _undoAutofill() {
+    if (_lastAutofillSnapshot == null) return;
+    final snap = _lastAutofillSnapshot!;
+    setState(() {
+      _nameController.text = snap['name'] as String? ?? '';
+      _brandController.text = snap['brand'] as String? ?? '';
+      _descriptionController.text = snap['description'] as String? ?? '';
+      _priceController.text = snap['price'] as String? ?? '';
+      _originalPriceController.text = snap['originalPrice'] as String? ?? '';
+      _hasDiscount = snap['hasDiscount'] as bool? ?? false;
+      _productCategory = snap['category'] as String? ?? _productCategory;
+      _menuCategoryController.text = snap['menuCategory'] as String? ?? '';
+      _weightController.text = snap['weight'] as String? ?? '';
+      _unitType = snap['unitType'] as String? ?? 'pieces';
+      _inventoryController.text = snap['inventory'] as String? ?? '';
+      _isVeg = snap['isVeg'] as bool?;
+      _requiresPrescription = snap['requiresPrescription'] as bool? ?? false;
+      _medicineType = snap['medicineType'] as String? ?? 'General';
+      _existingImageUrls = List<String>.from(snap['images'] as List? ?? []);
+      _images = List<XFile>.from(snap['localImages'] as List? ?? []);
+      if (snap['productImages'] is List) {
+        _productImages =
+            List<ProductImageItem>.from(snap['productImages'] as List);
+      } else {
+        _productImages = [
+          ..._existingImageUrls.map((url) => ProductImageItem.remote(url)),
+          ..._images.map((f) => ProductImageItem.local(f)),
+        ];
+      }
+      _syncLegacyLists();
+      _variants = List<ProductVariant>.from(snap['variants'] as List? ?? []);
+      _gstRateOverride = snap['gstRateOverride'] as double?;
+      _autofilledFromProductName = null;
+    });
+    _lastAutofillSnapshot = null;
+    HapticUtils.selection();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Autofill reverted.'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildCatalogSuggestionsDropdown() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.35),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.10),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded,
+                    color: AppColors.primary, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Master Catalog Match ⚡',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      Text(
+                        'Select an item to autofill details, salts & photos in 1-tap',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => setState(() => _showCatalogSuggestions = false),
+                  tooltip: 'Dismiss',
+                ),
+              ],
+            ),
+          ),
+
+          // Suggestion list
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 280),
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              itemCount: _catalogSuggestions.length,
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                thickness: 0.8,
+                color: Colors.grey.withValues(alpha: 0.15),
+              ),
+              itemBuilder: (context, index) {
+                final item = _catalogSuggestions[index];
+                final isMedicine = item.category == 'Pharmacy' ||
+                    item.category == 'Medical Store' ||
+                    AppCategories.isPharmacyCategory(item.category);
+                final hasSalt = isMedicine &&
+                    item.description != null &&
+                    item.description!.trim().isNotEmpty;
+                final hasDiscount = item.originalPrice != null &&
+                    item.originalPrice! > item.price;
+
+                return InkWell(
+                  onTap: () => _autofillFromCatalog(item),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Thumbnail
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            color: Colors.grey.shade100,
+                            child: item.images.isNotEmpty
+                                ? Image.network(
+                                    item.images.first,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.image_not_supported_outlined,
+                                      size: 20,
+                                      color: Colors.grey,
+                                    ),
+                                  )
+                                : Icon(
+                                    isMedicine
+                                        ? Icons.medication_outlined
+                                        : Icons.shopping_bag_outlined,
+                                    size: 24,
+                                    color: AppColors.primary,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+
+                        // Details
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              if (hasSalt) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  '🧪 ${item.description!.trim()}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF059669),
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ] else if (item.brand != null &&
+                                  item.brand!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  '🏷️ ${item.brand!.trim()} • ${item.category}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ] else ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.category,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  Text(
+                                    '₹${item.price.toStringAsFixed(item.price.truncateToDouble() == item.price ? 0 : 2)}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  if (hasDiscount) ...[
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'MRP ₹${item.originalPrice!.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        color: Colors.grey.shade500,
+                                        decoration: TextDecoration.lineThrough,
+                                      ),
+                                    ),
+                                  ],
+                                  if (item.images.isNotEmpty) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 4, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.photo_library_outlined,
+                                              size: 10, color: Colors.blue),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            '${item.images.length}',
+                                            style: const TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.blue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        // Action button
+                        FilledButton.icon(
+                          onPressed: () => _autofillFromCatalog(item),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          icon: const Icon(Icons.bolt_rounded, size: 13),
+                          label: const Text(
+                            'Autofill',
+                            style: TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAutofillSuccessBanner() {
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF059669).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: const Color(0xFF059669).withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_rounded,
+              color: Color(0xFF059669), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Autofilled from Master Catalog! ✨',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF059669),
+                  ),
+                ),
+                Text(
+                  _autofilledFromProductName ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _undoAutofill,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            icon: const Icon(Icons.undo_rounded, size: 14, color: AppColors.danger),
+            label: const Text(
+              'Undo',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.danger,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── GST Card Widget ───────────────────────────────────────────────────────
@@ -2093,9 +2800,239 @@ class _AddProductPageState extends State<AddProductPage> {
   // ── Bulk Catering & Event Pricing Card (Custom quotes used instead) ─────────
   Widget _buildBulkCateringCard() => const SizedBox.shrink();
 
+  Widget _buildReorderableImageCard(int index) {
+    final item = _productImages[index];
+    final isCover = index == 0;
+
+    ImageProvider provider;
+    if (item.isRemote) {
+      provider = NetworkImage(item.remoteUrl!);
+    } else {
+      provider = FileImage(File(item.localFile!.path));
+    }
+
+    return Container(
+      key: ValueKey(item.id),
+      width: 120,
+      height: 120,
+      margin: const EdgeInsets.only(right: 12, top: 4, bottom: 16),
+      child: ReorderableDelayedDragStartListener(
+        index: index,
+        child: Stack(
+          children: [
+            // Thumbnail container
+            GestureDetector(
+              onTap: () => _showImagePreview(provider),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isCover
+                        ? const Color(0xFF059669)
+                        : Colors.black.withValues(alpha: 0.12),
+                    width: isCover ? 2.5 : 1.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isCover
+                          ? const Color(0xFF059669).withValues(alpha: 0.20)
+                          : Colors.black.withValues(alpha: 0.05),
+                      blurRadius: isCover ? 8 : 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                  image: DecorationImage(
+                    image: provider,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+
+            // Top Left: Cover badge or 1-tap "Make Cover"
+            Positioned(
+              top: 6,
+              left: 6,
+              child: isCover
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF059669),
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 3,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.star_rounded,
+                              size: 12, color: Colors.white),
+                          SizedBox(width: 3),
+                          Text(
+                            'Cover',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GestureDetector(
+                      onTap: () => _moveProductImage(index, 0),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.70),
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 3,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.star_border_rounded,
+                                size: 12, color: Colors.amber),
+                            SizedBox(width: 3),
+                            Text(
+                              'Make Cover',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+            ),
+
+            // Top Right: Remove button
+            Positioned(
+              top: 6,
+              right: 6,
+              child: GestureDetector(
+                onTap: () => _removeProductImage(index),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 14),
+                ),
+              ),
+            ),
+
+            // Bottom Bar: Reorder quick controls & Drag Handle
+            Positioned(
+              bottom: 6,
+              left: 6,
+              right: 6,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Swap Arrows
+                  if (_productImages.length > 1)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (index > 0)
+                          GestureDetector(
+                            onTap: () =>
+                                _moveProductImage(index, index - 1),
+                            child: Container(
+                              padding: const EdgeInsets.all(3.5),
+                              margin: const EdgeInsets.only(right: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: 10,
+                                  color: Colors.white),
+                            ),
+                          ),
+                        if (index < _productImages.length - 1)
+                          GestureDetector(
+                            onTap: () =>
+                                _moveProductImage(index, index + 1),
+                            child: Container(
+                              padding: const EdgeInsets.all(3.5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  size: 10,
+                                  color: Colors.white),
+                            ),
+                          ),
+                      ],
+                    )
+                  else
+                    const SizedBox.shrink(),
+
+                  // Immediate Drag Handle with Position Pill (#1, #2, #3)
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.drag_indicator_rounded,
+                              size: 12, color: Colors.white70),
+                          const SizedBox(width: 1.5),
+                          Text(
+                            '#${index + 1}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final int totalImageCount = _images.length + _existingImageUrls.length;
+    final int totalImageCount = _productImages.length;
 
     return PopScope(
       canPop: !_isDirty || _isSaving,
@@ -2192,7 +3129,7 @@ class _AddProductPageState extends State<AddProductPage> {
                       ),
                     ),
                   // Image Picker
-                  if (_images.isEmpty && _existingImageUrls.isEmpty)
+                  if (_productImages.isEmpty)
                     GestureDetector(
                       onTap: _pickImage,
                       child: Container(
@@ -2246,96 +3183,115 @@ class _AddProductPageState extends State<AddProductPage> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (_productImages.length > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.swap_horiz_rounded,
+                                  size: 16, color: AppColors.primary),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Hold & drag to reorder photos · 1st photo is the primary cover',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.9),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       SizedBox(
-                        height: 120,
-                        child: ListView.builder(
+                        height: 140,
+                        child: ReorderableListView(
                           scrollDirection: Axis.horizontal,
-                          itemCount:
-                              _images.length + _existingImageUrls.length < 3
-                                  ? _images.length +
-                                      _existingImageUrls.length +
-                                      1
-                                  : _images.length + _existingImageUrls.length,
-                          itemBuilder: (context, index) {
-                            if (index ==
-                                _images.length + _existingImageUrls.length) {
-                              return GestureDetector(
-                                onTap: _pickImage,
-                                child: Container(
-                                  width: 120,
-                                  margin: const EdgeInsets.only(right: 12),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                        color: const Color(0xFF93C5FD),
-                                        width: 1.8),
+                          buildDefaultDragHandles: false,
+                          proxyDecorator: (child, index, animation) {
+                            return AnimatedBuilder(
+                              animation: animation,
+                              builder: (context, child) {
+                                final double animValue = Curves.easeInOut
+                                    .transform(animation.value);
+                                final double elevation =
+                                    lerpDouble(0, 10, animValue)!;
+                                final double scale =
+                                    lerpDouble(1.0, 1.05, animValue)!;
+                                return Transform.scale(
+                                  scale: scale,
+                                  child: Material(
+                                    elevation: elevation,
+                                    color: Colors.transparent,
+                                    shadowColor: AppColors.primary
+                                        .withValues(alpha: 0.35),
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: child,
                                   ),
-                                  child: const Center(
-                                    child: Icon(Icons.add_photo_alternate_rounded,
-                                        size: 32,
-                                        color: AppColors.primary),
-                                  ),
-                                ),
-                              );
-                            }
-                            final isExisting =
-                                index < _existingImageUrls.length;
-                            final imagePath = isExisting
-                                ? null
-                                : _images[index - _existingImageUrls.length]
-                                    .path;
-
-                            ImageProvider provider;
-                            if (isExisting) {
-                              provider =
-                                  NetworkImage(_existingImageUrls[index]);
-                            } else {
-                              provider = FileImage(File(imagePath!));
-                            }
-
-                            return Stack(
-                              children: [
-                                GestureDetector(
-                                  onTap: () => _showImagePreview(provider),
-                                  child: Container(
-                                    width: 120,
-                                    margin: const EdgeInsets.only(right: 12),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      image: DecorationImage(
-                                        image: provider,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 4,
-                                  right: 16,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      if (index < _existingImageUrls.length) {
-                                        _removeExistingImage(index);
-                                      } else {
-                                        _removeImage(
-                                            index - _existingImageUrls.length);
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.black54,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.close,
-                                          color: Colors.white, size: 16),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                                );
+                              },
+                              child: child,
                             );
                           },
+                          onReorderItem: (oldIndex, newIndex) {
+                            setState(() {
+                              final item = _productImages.removeAt(oldIndex);
+                              _productImages.insert(newIndex, item);
+                              _syncLegacyLists();
+                              _isDirty = true;
+                            });
+                            HapticUtils.selection();
+                          },
+                          footer: _productImages.length < 3
+                              ? Container(
+                                  key: const ValueKey('add_photo_footer'),
+                                  child: GestureDetector(
+                                    onTap: _pickImage,
+                                    child: Container(
+                                      width: 120,
+                                      height: 120,
+                                      margin: const EdgeInsets.only(
+                                          right: 12, top: 4, bottom: 16),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: const Color(0xFF93C5FD),
+                                          width: 1.8,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(
+                                              Icons
+                                                  .add_photo_alternate_rounded,
+                                              size: 32,
+                                              color: AppColors.primary),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Add Photo\n(${_productImages.length}/3)',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : null,
+                          children: [
+                            for (int i = 0; i < _productImages.length; i++)
+                              _buildReorderableImageCard(i),
+                          ],
                         ),
                       ),
                     ],
@@ -2344,16 +3300,95 @@ class _AddProductPageState extends State<AddProductPage> {
 
                 _card(
                   children: [
-                    TextFormField(
-                      controller: _nameController,
-                      maxLength: 150,
-                      validator: (v) =>
-                          AppValidators.required(v, field: 'Product name'),
-                      decoration: const InputDecoration(
-                        labelText: 'Product Name',
-                        hintText: 'e.g., Chicken Biryani',
-                        prefixIcon: Icon(Icons.fastfood_outlined),
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final isPharmacy = _productCategory == 'Pharmacy' ||
+                            AppCategories.isPharmacyCategory(_productCategory);
+                        final isGrocery = _productCategory == 'Grocery' ||
+                            _productCategory == 'Supermarket' ||
+                            _productCategory == 'Hypermarket';
+
+                        final String hintText;
+                        final IconData prefixIcon;
+                        if (isPharmacy) {
+                          hintText = 'e.g., Dolo 650, Rosuvas 20, Augmentin';
+                          prefixIcon = Icons.medication_liquid_outlined;
+                        } else if (isGrocery) {
+                          hintText = 'e.g., Fortune Sunflower Oil 1L, Tata Salt';
+                          prefixIcon = Icons.local_grocery_store_outlined;
+                        } else {
+                          hintText = 'e.g., Chicken Biryani, Chocolate Cake';
+                          prefixIcon = Icons.fastfood_outlined;
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextFormField(
+                              controller: _nameController,
+                              focusNode: _nameFocusNode,
+                              maxLength: 150,
+                              validator: (v) =>
+                                  AppValidators.required(v, field: 'Product name'),
+                              decoration: InputDecoration(
+                                labelText: 'Product Name',
+                                hintText: hintText,
+                                prefixIcon: Icon(prefixIcon),
+                                suffixIcon: _isSearchingCatalog
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                                AppColors.primary),
+                                          ),
+                                        ),
+                                      )
+                                    : Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(
+                                              Icons.auto_awesome_rounded,
+                                              color: _nameController.text.trim().length >= 2
+                                                  ? AppColors.primary
+                                                  : Colors.grey.shade400,
+                                              size: 20,
+                                            ),
+                                            tooltip: 'Search platform catalog & autofill',
+                                            onPressed: () {
+                                              _triggerCatalogSearch(
+                                                  query: _nameController.text,
+                                                  force: true);
+                                            },
+                                          ),
+                                          if (_nameController.text.isNotEmpty)
+                                            IconButton(
+                                              icon: const Icon(Icons.clear_rounded,
+                                                  size: 18),
+                                              tooltip: 'Clear',
+                                              onPressed: () {
+                                                _nameController.clear();
+                                                setState(() {
+                                                  _catalogSuggestions = [];
+                                                  _showCatalogSuggestions = false;
+                                                });
+                                              },
+                                            ),
+                                        ],
+                                      ),
+                              ),
+                            ),
+                            if (_autofilledFromProductName != null)
+                              _buildAutofillSuccessBanner(),
+                            if (_showCatalogSuggestions && _catalogSuggestions.isNotEmpty)
+                              _buildCatalogSuggestionsDropdown(),
+                          ],
+                        );
+                      },
                     ),
                     if (_variants.isEmpty &&
                         !AppCategories.requiresVariant(_productCategory)) ...[
@@ -2443,14 +3478,39 @@ class _AddProductPageState extends State<AddProductPage> {
                     ],
                     const SizedBox(height: 16),
                     TextFormField(
-                      controller: _descriptionController,
-                      maxLines: 3,
-                      maxLength: 1000,
+                      controller: _brandController,
+                      maxLength: 100,
                       decoration: const InputDecoration(
-                        labelText: 'Description (Optional)',
-                        hintText: 'Describe your product...',
-                        prefixIcon: Icon(Icons.description_outlined),
+                        labelText: 'Brand / Manufacturer (Optional)',
+                        hintText: 'e.g., Sun Pharma, Cipla, Amul, Nestlé',
+                        prefixIcon: Icon(Icons.business_outlined),
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    Builder(
+                      builder: (context) {
+                        final isPharmacy = _productCategory == 'Pharmacy' ||
+                            AppCategories.isPharmacyCategory(_productCategory);
+                        return TextFormField(
+                          controller: _descriptionController,
+                          maxLines: 3,
+                          maxLength: 1000,
+                          decoration: InputDecoration(
+                            labelText: isPharmacy
+                                ? 'Composition / Salts (Description)'
+                                : 'Description (Optional)',
+                            hintText: isPharmacy
+                                ? 'Enter active salts & composition (e.g. Paracetamol 650mg, Rosuvastatin 20mg)...'
+                                : 'Describe your product...',
+                            helperText: isPharmacy
+                                ? 'Customers can search medicines directly by salt/composition'
+                                : null,
+                            prefixIcon: Icon(isPharmacy
+                                ? Icons.medication_outlined
+                                : Icons.description_outlined),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -2872,7 +3932,9 @@ class _AddProductPageState extends State<AddProductPage> {
                         Expanded(
                           flex: 2,
                           child: DropdownButtonFormField<String>(
-                            initialValue: _unitType,
+                            initialValue: _availableUnitTypes.contains(_unitType)
+                                ? _unitType
+                                : _availableUnitTypes.first,
                             decoration: const InputDecoration(
                               labelText: 'Unit',
                             ),

@@ -363,13 +363,18 @@
                 if (window.supabaseInitError) throw window.supabaseInitError;
 
                 // Search products (respecting is_deleted=false as per rules)
-                const { data: products, error } = await supabaseClient
+                let prodQuery = supabaseClient
                     .from('products')
                     .select('*')
                     .eq('is_deleted', false)
-                    .eq('is_available', true)
-                    .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
-                    .limit(50);
+                    .eq('is_available', true);
+
+                const terms = query.trim().split(/\s+/).filter(Boolean);
+                for (const t of terms) {
+                    prodQuery = prodQuery.or(`name.ilike.%${t}%,description.ilike.%${t}%,brand.ilike.%${t}%,category.ilike.%${t}%,menu_category.ilike.%${t}%`);
+                }
+
+                const { data: products, error } = await prodQuery.limit(50);
                     
                 if (error) throw error;
                 

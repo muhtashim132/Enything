@@ -24,7 +24,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   // ── Defaults (MUST match live `platform_config` DB values) ──────────
   // These are used if load() hasn't completed yet (cold start race).
   double _commissionPercent = 5.0;
-  double _platformFee = 15.0;
+  double _platformFee = 2.0;
   double _deliveryBaseFee = 20.0;
   double _smallCartFee = 25.0;
   double _smallCartThreshold = 199.0;
@@ -1022,6 +1022,7 @@ class PlatformConfigProvider extends ChangeNotifier {
         _platformFeeGstRate = val;
         break;
     }
+    safeNotifyListeners();
   }
 
   void _removeValue(String key) {
@@ -1048,7 +1049,7 @@ class PlatformConfigProvider extends ChangeNotifier {
         _waitPenaltyPerMin = 2.0;
         break;
       case 'platform_fee':
-        _platformFee = 20.0;
+        _platformFee = 2.0;
         break;
       case 'delivery_base_fee':
       case 'delivery_fee':

@@ -249,6 +249,8 @@ Deno.serve(async (req: Request) => {
                            String(title).toLowerCase().includes('payment done') ||
                            String(title).toLowerCase().includes('quote') ||
                            String(title).toLowerCase().includes('catering') ||
+                           String(title).toLowerCase().includes('feast') ||
+                           String(title).toLowerCase().includes('delivered') ||
                            String(title).toLowerCase().includes('kyc');
                                        
           const channelId = 'enything_urgent_order_v1';

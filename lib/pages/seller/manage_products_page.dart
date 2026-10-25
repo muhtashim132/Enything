@@ -117,11 +117,15 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
     return _allProducts.where((p) {
       // Search filter
       if (_searchQuery.isNotEmpty) {
-        final q = _searchQuery.toLowerCase();
-        final nameMatch = p.name.toLowerCase().contains(q);
-        final descMatch = (p.description ?? '').toLowerCase().contains(q);
-        final catMatch = p.category.toLowerCase().contains(q);
-        if (!nameMatch && !descMatch && !catMatch) return false;
+        final clean =
+            _searchQuery.replaceAll(RegExp(r'[,()"\x27]'), ' ').toLowerCase();
+        final terms =
+            clean.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+        final variantNames = p.variants.map((v) => v.name).join(' ');
+        final searchable =
+            '${p.name} ${p.description ?? ''} ${p.brand ?? ''} ${p.category} ${p.menuCategory ?? ''} ${p.subCategory ?? ''} ${p.medicineType} $variantNames ${p.specialTags.join(' ')}'
+                .toLowerCase();
+        if (!terms.every((t) => searchable.contains(t))) return false;
       }
 
       // Category filter
@@ -487,7 +491,8 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
                                 onChanged: (val) => setState(() => _searchQuery = val.trim()),
                                 style: GoogleFonts.outfit(color: isDark ? Colors.white : Colors.black87),
                                 decoration: InputDecoration(
-                                  hintText: 'Search by product name or category...',
+                                  hintText:
+                                      'Search by product name, salt/composition, or category...',
                                   hintStyle: GoogleFonts.outfit(color: Colors.grey, fontSize: 13),
                                   prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary),
                                   suffixIcon: _searchQuery.isNotEmpty
@@ -758,6 +763,20 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
                     color: isDark ? Colors.white : AppColors.textPrimary,
                   ),
                 ),
+                if (product.description != null &&
+                    product.description!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    product.description!.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                      color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF059669),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
 
                 // Price & Badges

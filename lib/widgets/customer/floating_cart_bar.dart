@@ -37,10 +37,18 @@ class FloatingCartBar extends StatelessWidget {
         .take(3)
         .toList();
 
+    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final padding = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = viewPadding > padding ? viewPadding : padding;
+    final effectiveBottom = bottomOffset +
+        (bottomInset >= 36.0
+            ? bottomInset + 4.0
+            : (bottomInset > 0 ? bottomInset : 0.0));
+
     return Positioned(
       left: 16,
       right: 16,
-      bottom: bottomOffset,
+      bottom: effectiveBottom,
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
         duration: const Duration(milliseconds: 300),

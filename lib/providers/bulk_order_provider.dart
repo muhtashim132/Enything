@@ -11,6 +11,8 @@ import '../models/bulk_order_model.dart';
 import '../models/order_model.dart';
 import '../models/product_model.dart';
 import '../models/shop_model.dart';
+import '../providers/platform_config_provider.dart';
+import '../config/payment_config.dart';
 
 class BulkCartItem {
   final ProductModel product;
@@ -43,7 +45,7 @@ class BulkCartItem {
 }
 
 class BulkOrderProvider with ChangeNotifier {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   ShopModel? _selectedShop;
   ShopModel? get selectedShop => _selectedShop;
@@ -242,7 +244,9 @@ class BulkOrderProvider with ChangeNotifier {
     return baseFee + extraPackageFee;
   }
 
-  double get platformFee => 25.0;
+  double get platformFee =>
+      PlatformConfigProvider.instance?.platformFee ??
+      PaymentConfig.platformFee;
 
   double get heavyOrderFee {
     if (totalWeightKg > 15.0) {

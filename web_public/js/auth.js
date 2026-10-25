@@ -136,12 +136,39 @@ class Auth {
                         this.activeAddress = { label: 'Location', address: 'Set your delivery location' };
                     }
                 }
+
+                // 100x Realtime Single-Device Session Listener for Web Portal
+                if (session && !this._sessionChannelSubscribed) {
+                    this._sessionChannelSubscribed = true;
+                    try {
+                        supabaseClient
+                            .channel(`web-profile-session-${session.user.id}`)
+                            .on('postgres_changes', {
+                                event: 'UPDATE',
+                                schema: 'public',
+                                table: 'profiles',
+                                filter: `id=eq.${session.user.id}`
+                            }, (payload) => {
+                                const newSessionId = payload.new?.current_session_id;
+                                const localSessionId = localStorage.getItem('local_session_id');
+                                if (newSessionId && localSessionId && newSessionId !== localSessionId) {
+                                    console.warn('[SingleDeviceAuth] Remote login detected on another device!');
+                                    alert('You have been logged out because your account was logged in on another device.');
+                                    this.logout();
+                                }
+                            })
+                            .subscribe();
+                    } catch (chanErr) {
+                        console.warn('[SingleDeviceAuth] Failed to subscribe to session realtime:', chanErr);
+                    }
+                }
             } else {
                 this.user = null;
                 this.role = null;
                 this.profileName = null;
                 this.activeAddress = null;
                 localStorage.removeItem('user_role');
+                localStorage.removeItem('local_session_id');
             }
         } catch (err) {
             console.error("Error in handleSessionState:", err);
@@ -159,6 +186,12 @@ class Auth {
     async sendOtp(phone) {
         if (!phone || phone.length < 10) throw new Error("Invalid phone number");
         
+        const isMagicNumber = phone.endsWith('9999999996') || phone.endsWith('9999999997') || phone.endsWith('9999999998');
+        if (isMagicNumber) {
+            console.log("[Auth] Magic reviewer number detected. Bypassing SMS send.");
+            return { success: true, message: "OTP sent (Reviewer bypass)" };
+        }
+
         // Match the Flutter app logic: call the send-otp edge function
         const { data, error } = await supabaseClient.functions.invoke('send-otp', {
             body: { phone: phone }
@@ -262,6 +295,19 @@ class Auth {
             this.showDebugError("Saving credentials to sessionStorage");
             this._saveCredentials(email, password);
         }
+
+        // 100x Strict Single-Device Session Enforcement for Web Portal
+        try {
+            const webSessionId = 'web_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+            localStorage.setItem('local_session_id', webSessionId);
+            await supabaseClient.rpc('enforce_single_device_login', {
+                p_user_id: finalUserId,
+                p_session_id: webSessionId,
+                p_device_id: 'web_portal'
+            });
+        } catch (sessErr) {
+            console.warn('[SingleDeviceAuth] enforce_single_device_login fallback:', sessErr);
+        }
             
         this.role = role;
         localStorage.setItem('user_role', role);
@@ -305,11 +351,120 @@ class Auth {
         this.updateUI();
     }
 
+    async checkAdminStatus(userId, phone = null) {
+        try {
+            let admin = null;
+            if (userId) {
+                const { data, error } = await supabaseClient
+                    .from('admin_users')
+                    .select('id, full_name, phone, admin_level, is_active, is_suspended, role_id, roles(id, name, slug, description, color, icon)')
+                    .eq('id', userId)
+                    .maybeSingle();
+                if (!error && data) {
+                    admin = data;
+                }
+            }
+
+            if (!admin && phone) {
+                const digits = phone.replace(/\D/g, '').slice(-10);
+                const { data, error } = await supabaseClient
+                    .from('admin_users')
+                    .select('id, full_name, phone, admin_level, is_active, is_suspended, role_id, roles(id, name, slug, description, color, icon)')
+                    .ilike('phone', `%${digits}%`)
+                    .maybeSingle();
+                if (!error && data) {
+                    admin = data;
+                }
+            }
+
+            if (!admin) {
+                return { isAdmin: false, error: "Not found in admin_users" };
+            }
+
+            if (admin.is_suspended) {
+                return { isAdmin: false, isSuspended: true, error: "Admin account is suspended." };
+            }
+
+            if (!admin.is_active) {
+                return { isAdmin: false, isInactive: true, error: "Admin account is inactive." };
+            }
+
+            return { isAdmin: true, adminData: admin };
+        } catch (err) {
+            console.error("checkAdminStatus exception:", err);
+            return { isAdmin: false, error: err.message };
+        }
+    }
+
+    async verifyAdminPassword(userId, password) {
+        if (!password || password.trim() === '') {
+            throw new Error("Password cannot be empty.");
+        }
+        const { data, error } = await supabaseClient.rpc('verify_admin_password', {
+            p_admin_id: userId,
+            p_password: password.trim()
+        });
+
+        if (error) {
+            console.error("verify_admin_password RPC error:", error);
+            throw new Error("Admin password verification failed: " + error.message);
+        }
+
+        if (data === true) {
+            // Log to admin_sessions to maintain mobile-web cross-platform parity
+            try {
+                await supabaseClient.from('admin_sessions').insert({
+                    admin_id: userId,
+                    device_info: 'Enything Web Admin Portal'
+                });
+            } catch (sessErr) {
+                console.warn("Could not insert admin session:", sessErr);
+            }
+        }
+
+        return data === true;
+    }
+
+    async getAdminPermissions(roleId) {
+        if (!roleId) return [];
+        try {
+            const { data, error } = await supabaseClient
+                .from('role_permissions')
+                .select('permissions(code)')
+                .eq('role_id', roleId);
+
+            if (error || !data) return [];
+            return data.map(rp => rp.permissions?.code).filter(Boolean);
+        } catch (e) {
+            console.warn("Could not fetch permissions:", e);
+            return [];
+        }
+    }
+
+    async recordAdminAudit(userId, action, metadata = {}) {
+        try {
+            await supabaseClient.from('audit_logs').insert({
+                actor_id: userId,
+                actor_role: 'admin',
+                action: action,
+                entity_type: 'system',
+                metadata: { ...metadata, platform: 'web', timestamp: new Date().toISOString() }
+            });
+        } catch (e) {
+            console.warn("Could not record audit log:", e);
+        }
+    }
+
     async logout() {
         const { error } = await supabaseClient.auth.signOut();
         try {
             sessionStorage.removeItem('enything_fallback_email');
             sessionStorage.removeItem('enything_fallback_password');
+            localStorage.removeItem('local_session_id');
+            localStorage.removeItem('admin_user');
+            localStorage.removeItem('admin_verified');
+            localStorage.removeItem('admin_permissions');
+            localStorage.removeItem('user_role');
         } catch(e) {}
         if (error) throw error;
         window.location.reload();
@@ -320,6 +475,11 @@ class Auth {
         const authContainer = document.getElementById('auth-container');
         if (authContainer) {
             if (this.user) {
+                const isAdmin = localStorage.getItem('admin_verified') === 'true' || this.role === 'admin';
+                const adminLink = isAdmin ? `
+                    <a href="admin_dashboard.html" style="padding: 10px 16px; display: flex; align-items: center; gap: 10px; color: #818CF8; font-weight: 600; border-top: 1px solid var(--glass-border);"><i class="fas fa-shield-alt" style="width: 20px;"></i> Admin Portal</a>
+                ` : '';
+
                 authContainer.innerHTML = `
                     <div style="position: relative; display: inline-block;" class="dropdown">
                         <span style="cursor:pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
@@ -336,6 +496,7 @@ class Auth {
                             <a href="addresses.html" style="padding: 10px 16px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-map-marker-alt" style="width: 20px;"></i> Addresses</a>
                             <a href="settings.html" style="padding: 10px 16px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-cog" style="width: 20px;"></i> Settings</a>
                             <a href="contact.html" style="padding: 10px 16px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-headset" style="width: 20px;"></i> Support</a>
+                            ${adminLink}
                             <a href="#" onclick="auth.logout(); return false;" style="color: #ef4444; padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--glass-border); margin-top: 5px;"><i class="fas fa-sign-out-alt" style="width: 20px;"></i> Logout</a>
                         </div>
                     </div>

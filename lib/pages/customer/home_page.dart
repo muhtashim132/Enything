@@ -111,7 +111,26 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'chicken',
       'mutton',
       'kebab',
-      'fries'
+      'fries',
+      'noodles',
+      'noodle',
+      'maggi',
+      'pasta',
+      'chowmein',
+      'roll',
+      'sandwich',
+      'momos',
+      'shawarma',
+      'tea',
+      'coffee',
+      'dessert',
+      'ice cream',
+      'bakery',
+      'cake',
+      'pastry',
+      'roti',
+      'naan',
+      'curry',
     ],
     'Grocery': [
       'grocery',
@@ -127,36 +146,192 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'meat',
       'beef',
       'dal',
-      'rice'
+      'rice',
+      'noodle',
+      'noodles',
+      'maggi',
+      'pasta',
+      'macaroni',
+      'ramen',
+      'spaghetti',
+      'vermicelli',
+      'snack',
+      'snacks',
+      'biscuit',
+      'biscuits',
+      'oil',
+      'ghee',
+      'atta',
+      'flour',
+      'sugar',
+      'salt',
+      'spices',
+      'masala',
+      'soap',
+      'detergent',
+      'toothpaste',
     ],
     'Pharmacy': [
       'pharmacy',
       'medicine',
+      'medicines',
+      'med',
+      'meds',
       'pill',
+      'pills',
       'tablet',
+      'tablets',
+      'tabs',
       'syrup',
+      'suspension',
+      'drops',
+      'ointment',
+      'cream',
+      'gel',
+      'capsule',
+      'capsules',
+      'injection',
+      'inhaler',
       'medical',
       'health',
+      'healthcare',
       'drug',
+      'drugs',
       'panadol',
       'paracetamol',
+      'dolo',
+      'calpol',
+      'rosuvastatin',
+      'atorvastatin',
+      'fenofibrate',
+      'salts',
+      'salt',
+      'composition',
+      'active ingredient',
       'clinic',
-      'doctor'
+      'doctor',
+      'chemist',
+      'prescription',
+      'rx',
+      'antibiotic',
+      'antacid',
+      'painkiller',
+      'analgesic',
+      'vitamin',
+      'vitamins',
+      'multivitamin',
+      'calcium',
+      'iron',
+      'fever',
+      'cough',
+      'cold',
+      'headache',
+      'flu',
+      'infection',
+      'allergy',
+      'asthma',
+      'bp',
+      'blood pressure',
+      'hypertension',
+      'diabetes',
+      'insulin',
+      'thyroid',
+      'cholesterol',
+      'cardiac',
+      'heart',
+      'acidity',
+      'gas',
+      'digestion',
+      'ayurvedic',
+      'homeopathy',
+      'first aid',
+      'bandage',
+      'dettol',
+      'savlon',
+      'antiseptic',
+      'cotton',
+      'thermometer',
+      'oximeter',
+      'bp monitor',
+      'strip',
+      'strips',
     ],
     'Clothing': [
       'clothing',
       'clothes',
       'shirt',
+      'shirts',
+      'tshirt',
+      't-shirt',
+      't-shirts',
       'pant',
+      'pants',
+      'trousers',
+      'jeans',
+      'denim',
       'shoes',
+      'sneakers',
+      'sandals',
+      'slippers',
+      'footwear',
       'fashion',
       'apparel',
       'wear',
       'dress',
-      'tshirt',
-      'jeans',
+      'dresses',
+      'kurta',
+      'salwar',
+      'shawl',
+      'pashmina',
+      'pheran',
       'jacket',
-      'sneakers'
+      'jackets',
+      'coat',
+      'hoodie',
+      'sweater',
+      'sweatshirt',
+      'socks',
+      'suit',
+      'top',
+      'garments',
+      'outfit',
+      'jewellery',
+    ],
+    'More': [
+      'cosmetics',
+      'cosmetic',
+      'makeup',
+      'beauty',
+      'skincare',
+      'skin care',
+      'lipstick',
+      'lip balm',
+      'eyeliner',
+      'kajal',
+      'mascara',
+      'foundation',
+      'compact',
+      'face wash',
+      'facewash',
+      'lotion',
+      'moisturizer',
+      'sunscreen',
+      'serum',
+      'shampoo',
+      'conditioner',
+      'perfume',
+      'deodorant',
+      'body spray',
+      'nail polish',
+      'stationery',
+      'notebook',
+      'pen',
+      'pencil',
+      'toys',
+      'games',
+      'sports',
+      'pet supplies',
+      'flowers',
     ],
     'Electronics': [
       'electronics',
@@ -168,8 +343,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'device',
       'computer',
       'earbuds',
+      'earphones',
       'headphones',
-      'cable'
+      'headset',
+      'cable',
+      'smartwatch',
+      'watch',
+      'powerbank',
+      'speaker',
+      'bluetooth',
+      'cover',
+      'tempered glass',
+      'screen guard',
+      'mouse',
+      'keyboard',
     ],
   };
   // Debounce timer for GPS listener to prevent race conditions
@@ -189,12 +376,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   // ── Frame-Memoized Sorted Getters ──────────────────────────────────────────
   List<ProductModel>? _memoizedSortedProductResults;
   List<ProductModel>? _memoizedSortedNormalProducts;
+  List<ProductModel>? _memoizedSortedGroceryProducts;
+  List<ProductModel>? _memoizedSortedPharmacyProducts;
+  List<ProductModel>? _memoizedSortedClothingProducts;
   List<ShopModel>? _memoizedSortedShopResults;
   List<ShopModel>? _memoizedSortedNormalShops;
 
   void _invalidateSortMemo() {
     _memoizedSortedProductResults = null;
     _memoizedSortedNormalProducts = null;
+    _memoizedSortedGroceryProducts = null;
+    _memoizedSortedPharmacyProducts = null;
+    _memoizedSortedClothingProducts = null;
     _memoizedSortedShopResults = null;
     _memoizedSortedNormalShops = null;
   }
@@ -344,6 +537,84 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }
     });
     return list;
+  }
+
+  List<ProductModel> _computeSortedCategoryProducts(
+    List<String> targetCategories, {
+    bool applyDemographic = false,
+  }) {
+    final lowerTargets =
+        targetCategories.map((c) => c.trim().toLowerCase()).toSet();
+    var list = _products.where((p) {
+      return lowerTargets.contains(p.category.trim().toLowerCase());
+    }).toList();
+
+    if (applyDemographic && _selectedFeedDemographic != 'All') {
+      list = list
+          .where((p) => _matchesDemographic(p, _selectedFeedDemographic))
+          .toList();
+    }
+
+    list.sort((a, b) {
+      final availCmp = _compareAvailability(a, b, _productShops);
+      if (availCmp != 0) return availCmp;
+
+      switch (_sortMode) {
+        case _SortMode.bestRating:
+          return b.rating.compareTo(a.rating);
+        case _SortMode.priceLow:
+          return a.price.compareTo(b.price);
+        case _SortMode.priceHigh:
+          return b.price.compareTo(a.price);
+        case _SortMode.discount:
+          return (b.discountPercent ?? 0).compareTo(a.discountPercent ?? 0);
+        case _SortMode.nearest:
+          final sA = _productShops[a.id];
+          final sB = _productShops[b.id];
+          return (sA?.distanceKm ?? double.infinity)
+              .compareTo(sB?.distanceKm ?? double.infinity);
+        case _SortMode.relevant:
+          return b.rating.compareTo(a.rating);
+      }
+    });
+
+    return list;
+  }
+
+  /// Returns normal products filtered for Grocery & Daily Essentials (immune to clothing demographic filter)
+  List<ProductModel> get _sortedGroceryProducts {
+    if (_memoizedSortedGroceryProducts != null) {
+      return _memoizedSortedGroceryProducts!;
+    }
+    _memoizedSortedGroceryProducts = _computeSortedCategoryProducts(
+      _tabCategories['Grocery'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedGroceryProducts!;
+  }
+
+  /// Returns normal products filtered for Medicines & Healthcare (immune to clothing demographic filter)
+  List<ProductModel> get _sortedPharmacyProducts {
+    if (_memoizedSortedPharmacyProducts != null) {
+      return _memoizedSortedPharmacyProducts!;
+    }
+    _memoizedSortedPharmacyProducts = _computeSortedCategoryProducts(
+      _tabCategories['Pharmacy'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedPharmacyProducts!;
+  }
+
+  /// Returns normal products filtered for Clothing & Fashion (respects demographic filter if active)
+  List<ProductModel> get _sortedClothingProducts {
+    if (_memoizedSortedClothingProducts != null) {
+      return _memoizedSortedClothingProducts!;
+    }
+    _memoizedSortedClothingProducts = _computeSortedCategoryProducts(
+      _tabCategories['Clothing'] ?? [],
+      applyDemographic: true,
+    );
+    return _memoizedSortedClothingProducts!;
   }
 
   /// Returns search shop results sorted by the current _sortMode and filtered by dietary preference.
@@ -958,6 +1229,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   @override
   void dispose() {
+    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
     _locationGlowCtrl.dispose();
     _bannerTimer?.cancel();
     _locationDebounceTimer?.cancel();
@@ -1011,6 +1283,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _selectedSearchDemographic = 'All'; // reset demographic on clear
         _selectedSizes.clear(); // reset sizes on clear
         _vegFilterMode = VegFilterMode.all; // reset dietary filter on clear
+        _invalidateSortMemo();
       });
       return;
     }
@@ -1028,22 +1301,33 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _selectedSearchDemographic = 'All';
         _selectedSizes.clear();
       }
+      _invalidateSortMemo();
     });
 
     try {
       final locationProvider = context.read<LocationProvider>();
       final config = context.read<PlatformConfigProvider>();
       final String lowerQuery = query.toLowerCase().trim();
+      final String cleanQuery =
+          query.replaceAll(RegExp(r'[,()"\x27]'), ' ').trim();
+      final List<String> terms = cleanQuery
+          .toLowerCase()
+          .split(RegExp(r'\s+'))
+          .where((t) => t.isNotEmpty)
+          .toList();
       List<String> matchedSubcategories = [];
 
       if (!skipNLP) {
         _searchKeywords.forEach((catName, keywords) {
           bool match = keywords.any((k) {
-            return lowerQuery.contains(k) || k.contains(lowerQuery);
+            return lowerQuery.contains(k) ||
+                k.contains(lowerQuery) ||
+                terms.contains(k);
           });
           if (match) {
             final subs = _tabCategories[catName] ?? [catName];
-            matchedSubcategories.addAll(subs.where((c) => config.isActiveCategory(c)));
+            matchedSubcategories
+                .addAll(subs.where((c) => config.isActiveCategory(c)));
           }
         });
       }
@@ -1118,16 +1402,22 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 .eq('is_available', true)
                 .inFilter('shop_id', shopIds);
 
-            final terms =
-                query.trim().split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
             for (final term in terms) {
-              q = q.ilike('name', '%$term%');
+              q = q.or(
+                'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,category.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%',
+              );
             }
 
             final allProducts = await q;
 
             // Pre-truncation Local Size & Demographic Filter (Avoids PostgREST JSONB operator mismatch)
             final filteredProducts = allProducts.where((p) {
+              if (terms.isNotEmpty) {
+                final searchable =
+                    '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
+                        .toLowerCase();
+                if (!terms.every((t) => searchable.contains(t))) return false;
+              }
               if (_selectedSizes.isNotEmpty) {
                 final variants = p['variants'] as List<dynamic>? ?? [];
                 final matchesSize = variants.any((v) {
@@ -1227,6 +1517,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
               // Pre-truncation Local Size & Demographic Filter (Avoids PostgREST JSONB operator mismatch)
               final filteredProducts = allProducts.where((p) {
+                if (terms.isNotEmpty) {
+                  final searchable =
+                      '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
+                          .toLowerCase();
+                  if (!terms.every((t) => searchable.contains(t))) return false;
+                }
                 if (_selectedSizes.isNotEmpty) {
                   final variants = p['variants'] as List<dynamic>? ?? [];
                   final matchesSize = variants.any((v) {
@@ -1595,20 +1891,24 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }
 
       // Phase 16 Fix: Additive Geospatial fetch to prevent Pixel Blindness
-      final shopsResponse = (locationProvider.hasLocation && effectiveCategories.isNotEmpty)
+      final shopsResponse = locationProvider.hasLocation
           ? await _supabase.rpc('get_nearby_shops', params: {
               'p_lat': locationProvider.currentLocation!.latitude,
               'p_lng': locationProvider.currentLocation!.longitude,
               'p_radius_km': DeliveryCalculator.maxRadiusKm,
               'p_limit':
                   500, // Fetch up to 500 nearby shops to prevent category starving
-              'p_categories': effectiveCategories,
+              if (effectiveCategories.isNotEmpty)
+                'p_categories': effectiveCategories,
             })
           : [];
 
       final allShops = (shopsResponse as List)
           .map((s) => ShopModel.fromMap(s))
-          .where((s) => s.isActive && config.isActiveCategory(s.category))
+          .where((s) =>
+              s.isActive &&
+              (config.activeCategoryNames.isEmpty ||
+                  config.isActiveCategory(s.category)))
           .toList();
 
       List<ShopModel> nearby;
@@ -1648,13 +1948,55 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           });
       }
 
-      // Phase 21 Fix: Prevent Pixel Overloading by using RPC to fetch a diverse per-shop limit
-      final nearbyShopIds = nearby.map((s) => s.id).take(50).toList();
+      // Stratified Diverse Category Selection: Sample across Pharmacy, Grocery, Clothing, Food & other
+      // to ensure all dedicated dashboard sections have rich product discovery without starving any category.
+      bool isShopInCategories(ShopModel s, List<String> targetCats) {
+        final lowerTargets =
+            targetCats.map((c) => c.trim().toLowerCase()).toSet();
+        if (lowerTargets.contains(s.category.trim().toLowerCase())) return true;
+        return s.categories
+            .any((c) => lowerTargets.contains(c.trim().toLowerCase()));
+      }
 
-      final productsResponse = nearbyShopIds.isEmpty
+      final pharmacyShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Pharmacy'] ?? []))
+          .take(15);
+      final groceryShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Grocery'] ?? []))
+          .take(15);
+      final clothingShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Clothing'] ?? []))
+          .take(15);
+      final otherShops = nearby
+          .where((s) =>
+              !isShopInCategories(s, _tabCategories['Pharmacy'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['Grocery'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['Clothing'] ?? []))
+          .take(25);
+
+      final diverseShopIds = <String>{};
+      for (final s in pharmacyShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in groceryShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in clothingShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in otherShops) {
+        diverseShopIds.add(s.id);
+      }
+
+      for (final s in nearby) {
+        if (diverseShopIds.length >= 70) break;
+        diverseShopIds.add(s.id);
+      }
+
+      final productsResponse = diverseShopIds.isEmpty
           ? []
           : await _supabase.rpc('get_feed_products', params: {
-              'p_shop_ids': nearbyShopIds,
+              'p_shop_ids': diverseShopIds.toList(),
               'p_limit_per_shop': 5,
               'p_categories': effectiveCategories,
             }).select('*, shops(*)');
@@ -1697,6 +2039,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         if (_fetchId != currentFetchId) return; // Prevent async tab desync
 
+        _invalidateSortMemo();
         // Atomic update: swap data and clear loading in a single setState
         setState(() {
           _shopsDisplayLimit = 3;
@@ -1737,6 +2080,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         // Show silent inline status — no alarming red banner for network blips
         if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(children: [
@@ -1763,12 +2107,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // Permanent error or retries exhausted — show friendly actionable message
         _loadRetryCount = 0;
         if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text(
                   'Couldn\'t load shops. Check your connection and pull down to refresh.'),
               backgroundColor: const Color(0xFF1A1A1A),
-              duration: const Duration(seconds: 6),
+              duration: const Duration(seconds: 4),
               behavior: SnackBarBehavior.floating,
               action: SnackBarAction(
                 label: 'Retry',
@@ -1879,7 +2224,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       final allShops = (shopsResponse as List)
           .map((s) => ShopModel.fromMap(s))
-          .where((s) => s.isActive && config.isActiveCategory(s.category))
+          .where((s) =>
+              s.isActive &&
+              (config.activeCategoryNames.isEmpty ||
+                  config.isActiveCategory(s.category)))
           .toList();
 
       List<ShopModel> nearby;
@@ -1979,6 +2327,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         if (_fetchId != currentFetchId) return; // Prevent async tab desync
 
+        _invalidateSortMemo();
         // Atomic update: swap data in a single setState
         setState(() {
           _shopsDisplayLimit = 3;
@@ -2019,6 +2368,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         debugPrint(
             '_loadData: transient error, retry $_loadRetryCount/$_maxLoadRetries in ${delay.inSeconds}s');
         if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(children: [
@@ -2044,12 +2394,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       } else {
         _loadRetryCount = 0;
         if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text(
                   'Couldn\'t load shops. Check your connection and pull down to refresh.'),
               backgroundColor: const Color(0xFF1A1A1A),
-              duration: const Duration(seconds: 6),
+              duration: const Duration(seconds: 4),
               behavior: SnackBarBehavior.floating,
               action: SnackBarAction(
                 label: 'Retry',
@@ -2991,7 +3342,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
-                                      height: 260,
+                                      height: 280,
                                       child: ListView.builder(
                                         scrollDirection: Axis.horizontal,
                                         itemCount: availableRecent.length,
@@ -3170,7 +3521,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           (crossAxisSpacing *
                                               (crossAxisCount - 1))) /
                                       crossAxisCount;
-                                  final itemHeight = itemWidth + 120;
+                                  final itemHeight = itemWidth + 134;
                                   final childAspectRatio = itemWidth / itemHeight;
                                   final displayProducts = _sortedNormalProducts
                                       .take(_productsDisplayLimit)
@@ -3227,6 +3578,132 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   isDark: isDark,
                                 ),
                               ),
+                            ],
+
+                            // ── Dedicated Department Category Showcases ────
+                            if (_selectedTabIndex < 0) ...[
+                              // 1. Daily Grocery & Essentials
+                              if (_sortedGroceryProducts.isNotEmpty) ...[
+                                const SliverToBoxAdapter(
+                                    child: SizedBox(height: 24)),
+                                SliverToBoxAdapter(
+                                  child: _buildDepartmentSectionHeader(
+                                    title: 'Daily Grocery & Essentials',
+                                    subtitle:
+                                        'Fresh staples, veggies & daily needs near you',
+                                    emoji: '🛒',
+                                    count: _sortedGroceryProducts.length,
+                                    accentGradient: const [
+                                      Color(0xFF00B074),
+                                      Color(0xFF10B981),
+                                    ],
+                                    onSeeAllTap: () => _openCategoryListing(
+                                      title: 'Daily Grocery & Essentials',
+                                      products: _sortedGroceryProducts,
+                                      categories:
+                                          _tabCategories['Grocery'] ?? [],
+                                    ),
+                                    isDark: isDark,
+                                  ),
+                                ),
+                                const SliverToBoxAdapter(
+                                    child: SizedBox(height: 14)),
+                                SliverToBoxAdapter(
+                                  child: _buildCategoryHorizontalCarousel(
+                                    products: _sortedGroceryProducts,
+                                    sectionTitle: 'Grocery',
+                                    onViewAllTap: () => _openCategoryListing(
+                                      title: 'Daily Grocery & Essentials',
+                                      products: _sortedGroceryProducts,
+                                      categories:
+                                          _tabCategories['Grocery'] ?? [],
+                                    ),
+                                    isDark: isDark,
+                                  ),
+                                ),
+                              ],
+
+                              // 2. Medicines & Healthcare
+                              if (_sortedPharmacyProducts.isNotEmpty) ...[
+                                const SliverToBoxAdapter(
+                                    child: SizedBox(height: 24)),
+                                SliverToBoxAdapter(
+                                  child: _buildDepartmentSectionHeader(
+                                    title: 'Medicines & Healthcare',
+                                    subtitle:
+                                        'Prescription drugs, vitamins & wellness',
+                                    emoji: '💊',
+                                    count: _sortedPharmacyProducts.length,
+                                    accentGradient: const [
+                                      Color(0xFF0284C7),
+                                      Color(0xFF06B6D4),
+                                    ],
+                                    onSeeAllTap: () => _openCategoryListing(
+                                      title: 'Medicines & Healthcare',
+                                      products: _sortedPharmacyProducts,
+                                      categories:
+                                          _tabCategories['Pharmacy'] ?? [],
+                                    ),
+                                    isDark: isDark,
+                                  ),
+                                ),
+                                const SliverToBoxAdapter(
+                                    child: SizedBox(height: 14)),
+                                SliverToBoxAdapter(
+                                  child: _buildCategoryHorizontalCarousel(
+                                    products: _sortedPharmacyProducts,
+                                    sectionTitle: 'Medicines',
+                                    onViewAllTap: () => _openCategoryListing(
+                                      title: 'Medicines & Healthcare',
+                                      products: _sortedPharmacyProducts,
+                                      categories:
+                                          _tabCategories['Pharmacy'] ?? [],
+                                    ),
+                                    isDark: isDark,
+                                  ),
+                                ),
+                              ],
+
+                              // 3. Clothing & Fashion
+                              if (_sortedClothingProducts.isNotEmpty) ...[
+                                const SliverToBoxAdapter(
+                                    child: SizedBox(height: 24)),
+                                SliverToBoxAdapter(
+                                  child: _buildDepartmentSectionHeader(
+                                    title: 'Clothing & Fashion',
+                                    subtitle:
+                                        'Trending styles, apparel & accessories',
+                                    emoji: '👕',
+                                    count: _sortedClothingProducts.length,
+                                    accentGradient: const [
+                                      Color(0xFF8B5CF6),
+                                      Color(0xFFEC4899),
+                                    ],
+                                    onSeeAllTap: () => _openCategoryListing(
+                                      title: 'Clothing & Fashion',
+                                      products: _sortedClothingProducts,
+                                      categories:
+                                          _tabCategories['Clothing'] ?? [],
+                                    ),
+                                    isDark: isDark,
+                                  ),
+                                ),
+                                const SliverToBoxAdapter(
+                                    child: SizedBox(height: 14)),
+                                SliverToBoxAdapter(
+                                  child: _buildCategoryHorizontalCarousel(
+                                    products: _sortedClothingProducts,
+                                    sectionTitle: 'Fashion',
+                                    onViewAllTap: () => _openCategoryListing(
+                                      title: 'Clothing & Fashion',
+                                      products: _sortedClothingProducts,
+                                      categories:
+                                          _tabCategories['Clothing'] ?? [],
+                                    ),
+                                    isDark: isDark,
+                                  ),
+                                ),
+                              ],
                             ],
                           ] else if (_shops.isNotEmpty && !_isLoading) ...[
                             // ── "Popular in your area" empty state ──────────────
@@ -3447,8 +3924,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               ),
                             ),
                           ],
-                          const SliverToBoxAdapter(
-                              child: SizedBox(height: 120)),
+                          SliverToBoxAdapter(
+                            child: SizedBox(
+                              height: 120 + MediaQuery.paddingOf(context).bottom,
+                            ),
+                          ),
                         ],
                       ],
                     ),
@@ -3512,7 +3992,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               final isSelected = _sortMode == mode;
 
               return GestureDetector(
-                onTap: () => setState(() => _sortMode = mode),
+                onTap: () => setState(() {
+                  _sortMode = mode;
+                  _invalidateSortMemo();
+                }),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
@@ -3855,7 +4338,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   Widget _buildBulkCateringCard(bool isDark) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      margin: const EdgeInsets.only(top: 16, bottom: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
@@ -4012,7 +4495,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }
 
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+        padding: const EdgeInsets.only(bottom: 14),
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -4176,7 +4659,188 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       );
     }
 
-    // ── 2. Fallback: Pre-Order Custom Event Quotes ───────────────────────────
+    // ── 2. Priority: Delivered Catering Order Celebration (Single-View Dismissal) ─
+    final deliveredCelebration = quoteProv.deliveredCateringOrderToCelebrate;
+    if (deliveredCelebration != null) {
+      final orderId = deliveredCelebration['id']?.toString() ?? '';
+      final deliveryOtp = deliveredCelebration['delivery_otp']?.toString() ?? '';
+      final eventName = deliveredCelebration['event_name']?.toString() ??
+          quoteProv.customerQuotes.where((q) => q.resultingOrderId == orderId).firstOrNull?.eventName ??
+          'Event Catering';
+
+      const primaryColor = Color(0xFF10B981); // Emerald Green Celebration
+
+      // Mark as seen in background so it won't resurrect on subsequent app sessions
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        quoteProv.markDeliveredCateringCelebrationSeen(orderId);
+      });
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [
+                      primaryColor.withValues(alpha: 0.35),
+                      const Color(0xFF064E3B).withValues(alpha: 0.6),
+                      const Color(0xFF16192E),
+                    ]
+                  : [
+                      const Color(0xFFD1FAE5),
+                      Colors.white,
+                    ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: primaryColor,
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.25),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () async {
+                // Tapping card opens tracking and automatically dismisses so it disappears on return
+                await quoteProv.dismissDeliveredCateringCelebration(orderId);
+                if (mounted) {
+                  Navigator.pushNamed(
+                    context,
+                    AppRoutes.bulkOrderTracking,
+                    arguments: {'order_id': orderId},
+                  );
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.25),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Text('🎉', style: TextStyle(fontSize: 24)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Feast Delivered & Handover Verified! 🎉',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark ? Colors.white : AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '$eventName · Delivered with OTP${deliveryOtp.isNotEmpty ? ' ($deliveryOtp)' : ''}. Have a wonderful celebration! Enjoy your feast.',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12.5,
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // 1-Tap Dismiss "X" Button
+                        InkWell(
+                          onTap: () => quoteProv.dismissDeliveredCateringCelebration(orderId),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: isDark ? Colors.white70 : Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: primaryColor, width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.check_circle_rounded, size: 14, color: primaryColor),
+                              const SizedBox(width: 6),
+                              Text(
+                                'DELIVERED · OTP VERIFIED ✅',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: primaryColor,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          onPressed: () => quoteProv.dismissDeliveredCateringCelebration(orderId),
+                          child: Text(
+                            'Got it! 🎉',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── 3. Fallback: Pre-Order Custom Event Quotes ───────────────────────────
     final activeQuotes = quoteProv.customerQuotes.where((q) {
       return q.quoteStatus == 'quoted' ||
           q.quoteStatus == 'pending_review' ||
@@ -4218,7 +4882,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         : 'View Details →';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -5142,6 +5806,350 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     );
   }
 
+  void _openCategoryListing({
+    required String title,
+    required List<ProductModel> products,
+    required List<String> categories,
+  }) {
+    HapticFeedback.lightImpact();
+    final lowerCats = categories.map((c) => c.trim().toLowerCase()).toSet();
+    final matchingShops = _shops.where((s) {
+      if (lowerCats.contains(s.category.trim().toLowerCase())) return true;
+      return s.categories
+          .any((c) => lowerCats.contains(c.trim().toLowerCase()));
+    }).toList();
+    Navigator.pushNamed(
+      context,
+      AppRoutes.allListings,
+      arguments: {
+        'type': ListingType.products,
+        'products': List<ProductModel>.from(products),
+        'productShops': Map<String, ShopModel>.from(_productShops),
+        'shops': matchingShops,
+        'sectionTitle': title,
+        'categoryFilter': List<String>.from(categories),
+      },
+    );
+  }
+
+  Widget _buildDepartmentSectionHeader({
+    required String title,
+    required String subtitle,
+    required String emoji,
+    required int count,
+    required List<Color> accentGradient,
+    required VoidCallback onSeeAllTap,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Department Emoji / Gradient Pill
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        accentGradient.first
+                            .withValues(alpha: isDark ? 0.25 : 0.14),
+                        accentGradient.last
+                            .withValues(alpha: isDark ? 0.15 : 0.07),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: accentGradient.first
+                          .withValues(alpha: isDark ? 0.35 : 0.20),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      emoji,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              style: GoogleFonts.outfit(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1A1A2E),
+                                letterSpacing: -0.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  accentGradient.first.withValues(alpha: 0.12),
+                                  accentGradient.last.withValues(alpha: 0.06),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: accentGradient.first
+                                    .withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Text(
+                              '$count',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: accentGradient.first,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: isDark
+                              ? Colors.white54
+                              : AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onSeeAllTap,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : AppColors.primary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white10
+                      : AppColors.primary.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'See all',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white70 : AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 14,
+                    color: isDark ? Colors.white70 : AppColors.primary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryHorizontalCarousel({
+    required List<ProductModel> products,
+    required String sectionTitle,
+    required VoidCallback onViewAllTap,
+    required bool isDark,
+  }) {
+    final carouselItems = products.take(10).toList();
+
+    return SizedBox(
+      height: 285,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: carouselItems.length + 1,
+        itemBuilder: (context, index) {
+          if (index < carouselItems.length) {
+            final product = carouselItems[index];
+            final shop = _productShops[product.id] ??
+                _shops.cast<ShopModel?>().firstWhere(
+                      (s) => s?.id == product.shopId,
+                      orElse: () => null,
+                    );
+            return SizedBox(
+              width: 156,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: RepaintBoundary(
+                  key: ValueKey('sec_p_${product.id}'),
+                  child: ProductCard(
+                    product: product,
+                    shop: shop,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          // ── Sleek "View All" End-Card ──────────────────────────────
+          return SizedBox(
+            width: 140,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 4, top: 4, bottom: 4),
+              child: RepaintBoundary(
+                key: ValueKey('sec_end_$sectionTitle'),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onViewAllTap,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF1E1E2E)
+                            : const Color(0xFFF7F8FC),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white12
+                              : Colors.black.withValues(alpha: 0.07),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                                alpha: isDark ? 0.25 : 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  AppColors.primary,
+                                  AppColors.primaryLight,
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary
+                                      .withValues(alpha: 0.35),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.arrow_forward_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'View All',
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$sectionTitle Items',
+                            style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? Colors.white60
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary
+                                  .withValues(alpha: isDark ? 0.20 : 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${products.length}+ items',
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? AppColors.primaryLight
+                                    : AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildNoShopsNearby() {
     return Center(
       child: Padding(
@@ -5604,6 +6612,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       onSelected: (selected) {
         if (selected) {
           setSheetState(() => _sortMode = mode);
+          setState(() {
+            _sortMode = mode;
+            _invalidateSortMemo();
+          });
         }
       },
       selectedColor: AppColors.primary,

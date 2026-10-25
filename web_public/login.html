@@ -8,6 +8,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="referrer" content="no-referrer">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <script>
+        // Anti-clickjacking framebusting
+        if (window.top !== window.self) {
+            window.top.location = window.self.location;
+        }
+    </script>
     <link rel="stylesheet" href="styles.css?v=2">
     <style>
         body {
@@ -281,7 +290,7 @@
         <div id="step-phone" class="step">
             <button class="back-btn" onclick="showStep('step-role')"><i class="fas fa-arrow-left"></i> Back</button>
             <h1 id="phone-title">Welcome Back</h1>
-            <p class="subtitle">Enter your phone number to continue</p>
+            <p class="subtitle" id="phone-subtitle">Enter your phone number to continue</p>
 
             <div class="input-group">
                 <label>Phone Number</label>
@@ -323,32 +332,80 @@
 
             <button id="save-name-btn" class="btn-primary" onclick="handleSaveName()">Continue</button>
         </div>
+
+        <!-- Step 5: Admin Password Gate (2FA) -->
+        <div id="step-admin-password" class="step">
+            <div class="logo-box" style="background: linear-gradient(135deg, #312E81, #1E1B4B); border-color: rgba(129, 140, 248, 0.4); color: #818CF8; width: 70px; height: 70px; font-size: 2rem; margin-bottom: 1rem;">
+                <i class="fas fa-lock"></i>
+            </div>
+            <h1>Admin Security Gate</h1>
+            <p class="subtitle" style="margin-bottom: 1.5rem;">
+                Welcome back, <strong id="admin-user-name" style="color: #818CF8;"></strong>!<br>
+                <span id="admin-role-badge" style="display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 999px; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(129, 140, 248, 0.4); font-size: 0.8rem; font-weight: 600; color: #A5B4FC;">Staff</span><br>
+                <span style="font-size: 0.85rem; color: rgba(255,255,255,0.6); display: inline-block; margin-top: 6px;">Enter your admin password to access the portal.</span>
+            </p>
+
+            <div class="input-group">
+                <label>Admin Password</label>
+                <div style="position: relative;">
+                    <input type="password" id="admin-password-input" class="input-field" placeholder="Enter admin password" autocomplete="current-password">
+                    <button type="button" onclick="togglePasswordVisibility()" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; color: rgba(255,255,255,0.6); cursor: pointer; font-size: 1.1rem;">
+                        <i class="fas fa-eye" id="toggle-eye-icon"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button id="verify-admin-pw-btn" class="btn-primary" style="background: linear-gradient(135deg, #4F46E5, #7C3AED);" onclick="handleVerifyAdminPassword()">Unlock Admin Portal</button>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js?v=2"></script>
-    <script src="js/supabase-client.js?v=2"></script>
-    <script src="js/auth.js?v=15"></script>
+    <script src="js/supabase-client.js?v=3"></script>
+    <script src="js/auth.js?v=16"></script>
 
     <script>
         let selectedRole = null;
         let currentPhone = null;
+        let currentUserId = null;
+        let pendingAdminData = null;
 
         function showStep(stepId) {
             document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
             document.getElementById(stepId).classList.add('active');
         }
 
+        window.addEventListener('DOMContentLoaded', () => {
+            const bindEnter = (id, handler) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handler();
+                        }
+                    });
+                }
+            };
+            bindEnter('phone-input', handleSendOtp);
+            bindEnter('otp-input', handleVerifyOtp);
+            bindEnter('admin-password-input', handleVerifyAdminPassword);
+            bindEnter('name-input', handleSaveName);
+
+            // Clean expired lockout
+            const lockoutUntil = parseInt(sessionStorage.getItem('enything_pw_lockout') || '0', 10);
+            if (lockoutUntil && Date.now() >= lockoutUntil) {
+                sessionStorage.removeItem('enything_pw_lockout');
+                sessionStorage.removeItem('enything_pw_attempts');
+            }
+        });
+
         function selectRole(role) {
             selectedRole = role;
-            if (role === 'customer') {
-                document.getElementById('phone-title').textContent = 'Welcome to Enything';
-                showStep('step-phone');
-                setTimeout(() => document.getElementById('phone-input').focus(), 100);
-            } else {
-                localStorage.setItem('user_role', role);
-                window.location.href = 'download_app.html';
-            }
+            document.getElementById('phone-title').textContent = 'Welcome to Enything';
+            document.getElementById('phone-subtitle').textContent = 'Enter your phone number to continue';
+            showStep('step-phone');
+            setTimeout(() => document.getElementById('phone-input').focus(), 100);
         }
 
         async function handleSendOtp() {
@@ -364,7 +421,6 @@
             btn.disabled = true;
 
             try {
-                // In India format
                 const formattedPhone = '+91' + phone;
                 await auth.sendOtp(formattedPhone);
                 currentPhone = formattedPhone;
@@ -378,8 +434,6 @@
                 btn.disabled = false;
             }
         }
-
-        let currentUserId = null;
 
         async function handleVerifyOtp() {
             const otp = document.getElementById('otp-input').value;
@@ -395,35 +449,131 @@
 
             try {
                 if (auth.showDebugError) auth.showDebugError("Calling verifyOtp...");
-                const result = await auth.verifyOtp(currentPhone, otp, selectedRole);
+                const result = await auth.verifyOtp(currentPhone, otp, selectedRole || 'customer');
                 if (auth.showDebugError) auth.showDebugError("verifyOtp completed: isNewUser = " + result.isNewUser);
 
+                currentUserId = result.userId;
+
+                // ── AUTOMATIC ADMIN & STAFF SILENT DETECTION (100% Mobile App Parity) ──
+                // Check if this authenticated user is provisioned in public.admin_users
+                const adminCheck = await auth.checkAdminStatus(result.userId, currentPhone);
+                
+                if (adminCheck && adminCheck.isAdmin && !adminCheck.isSuspended) {
+                    // SILENTLY DETECTED AS ADMIN/STAFF!
+                    // Seamlessly transition to 2nd-factor Admin Password Gate (matches mobile app AdminPasswordPage)
+                    pendingAdminData = adminCheck.adminData;
+                    document.getElementById('admin-user-name').textContent = pendingAdminData.full_name || 'Staff';
+                    document.getElementById('admin-role-badge').textContent = pendingAdminData.roles?.name || pendingAdminData.admin_level || 'Staff';
+                    showStep('step-admin-password');
+                    setTimeout(() => document.getElementById('admin-password-input').focus(), 100);
+                    return;
+                }
+
+                // If not an admin, proceed normally according to their requested role
                 if (result.isNewUser) {
-                    currentUserId = result.userId;
                     showStep('step-name');
                     setTimeout(() => document.getElementById('name-input').focus(), 100);
                 } else {
-                    btn.innerHTML = `<i class="fas fa-check-circle"></i> Welcome back, ${result.profile.full_name.split(' ')[0]}!`;
-                    btn.style.background = '#10B981'; // Green success color
-                    
-                    if (auth.showDebugError) auth.showDebugError(`Redirecting to index.html in 2 seconds...`);
-                    
+                    const welcomeName = result.profile && result.profile.full_name ? result.profile.full_name.split(' ')[0] : 'User';
+                    btn.innerHTML = `<i class="fas fa-check-circle"></i> Welcome back, ${welcomeName}!`;
+                    btn.style.background = '#10B981';
+
                     setTimeout(() => {
-                        if (auth.showDebugError) auth.showDebugError(`Executing redirect NOW.`);
-                        if (selectedRole === 'customer') {
-                            window.location.href = 'index.html?t=' + Date.now();
-                        } else if (selectedRole === 'admin') {
-                            window.location.href = 'admin_dashboard.html?t=' + Date.now();
+                        if (selectedRole === 'seller' || selectedRole === 'delivery_partner') {
+                            window.location.href = 'download_app.html';
                         } else {
-                            window.location.href = 'reviewer_dashboard.html?t=' + Date.now();
+                            window.location.href = 'index.html?t=' + Date.now();
                         }
-                    }, 2000); // Wait 2s to allow user to read the debug output
+                    }, 1200);
                 }
             } catch (err) {
                 if (auth.showDebugError) auth.showDebugError("verifyOtp threw error: " + err.message);
                 alert(err.message);
                 btn.innerHTML = originalText;
                 btn.disabled = false;
+            }
+        }
+
+        async function handleVerifyAdminPassword() {
+            // Anti-Brute-Force Lockout Guard
+            const lockoutUntil = parseInt(sessionStorage.getItem('enything_pw_lockout') || '0', 10);
+            if (Date.now() < lockoutUntil) {
+                const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
+                alert(`Security Lockout: Too many failed password attempts. Please wait ${remaining} seconds before retrying.`);
+                return;
+            }
+
+            const password = document.getElementById('admin-password-input').value.trim();
+            if (!password) {
+                alert("Please enter your admin password.");
+                return;
+            }
+
+            const btn = document.getElementById('verify-admin-pw-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+            btn.disabled = true;
+
+            try {
+                const adminId = (pendingAdminData && pendingAdminData.id) ? pendingAdminData.id : currentUserId;
+                const isValid = await auth.verifyAdminPassword(adminId, password);
+                if (!isValid) {
+                    let attempts = parseInt(sessionStorage.getItem('enything_pw_attempts') || '0', 10) + 1;
+                    sessionStorage.setItem('enything_pw_attempts', attempts);
+
+                    if (attempts >= 5) {
+                        sessionStorage.setItem('enything_pw_lockout', Date.now() + (5 * 60 * 1000)); // 5 min lockout
+                        alert("Security Alert: 5 incorrect password attempts. Your access is temporarily locked for 5 minutes.");
+                        await auth.logout();
+                        window.location.href = 'index.html';
+                        return;
+                    }
+
+                    alert(`Incorrect admin password. (${5 - attempts} attempt(s) remaining)`);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+
+                // Password verified! Clear failed attempts
+                sessionStorage.removeItem('enything_pw_attempts');
+                sessionStorage.removeItem('enything_pw_lockout');
+
+                // Cache session tokens and record immutable audit trail
+                const permissions = await auth.getAdminPermissions(pendingAdminData.role_id);
+                localStorage.setItem('admin_verified', 'true');
+                localStorage.setItem('admin_user', JSON.stringify(pendingAdminData));
+                localStorage.setItem('admin_permissions', JSON.stringify(permissions));
+                localStorage.setItem('user_role', 'admin');
+
+                await auth.recordAdminAudit(currentUserId, 'admin_login_web', {
+                    role: pendingAdminData.roles?.name || pendingAdminData.admin_level
+                });
+
+                btn.innerHTML = '<i class="fas fa-check-circle"></i> Access Granted! Entering Portal...';
+                btn.style.background = '#10B981';
+
+                setTimeout(() => {
+                    window.location.href = 'admin_dashboard.html?t=' + Date.now();
+                }, 800);
+            } catch (err) {
+                alert(err.message || "Failed to verify admin password.");
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function togglePasswordVisibility() {
+            const input = document.getElementById('admin-password-input');
+            const icon = document.getElementById('toggle-eye-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
             }
         }
 

@@ -379,8 +379,15 @@ class NotificationProvider extends ChangeNotifier {
 
             var (title, body) = _customerStatusMessage(newStatus, orderId);
             final otp = payload.newRecord['delivery_otp'] as String?;
+            final orderType = payload.newRecord['order_type'] as String?;
             if (newStatus == 'bulk_dispatched' && otp != null && otp.isNotEmpty) {
               body = 'Your event feast is en route with our in-house delivery team! Handover OTP: $otp';
+            } else if (newStatus == 'delivered' && (orderType == 'bulk' || orderType == 'manual_quote')) {
+              final eventLabel = payload.newRecord['address_label'] as String? ?? 'Event Catering';
+              title = '🎉 Catering Feast Delivered!';
+              body = (otp != null && otp.isNotEmpty)
+                  ? 'Delivery handover verified with OTP for "$eventLabel". Have a wonderful event celebration! 🎉'
+                  : 'Your catering feast for "$eventLabel" has been delivered. Enjoy your celebration! 🎉';
             }
             if (title != null) {
               // For statuses that happen to the whole group at once, deduplicate using cart_group_id
@@ -388,9 +395,11 @@ class NotificationProvider extends ChangeNotifier {
                   newStatus == 'out_for_delivery' ||
                   newStatus == 'delivered' ||
                   newStatus == 'cancelled';
-              final notifId = (isGroupStatus && cartGroupId != null)
-                  ? '${cartGroupId}_$newStatus'
-                  : '${orderId}_$newStatus';
+              final notifId = (orderType == 'bulk' || orderType == 'manual_quote')
+                  ? 'bulk_delivered_$orderId'
+                  : ((isGroupStatus && cartGroupId != null)
+                      ? '${cartGroupId}_$newStatus'
+                      : '${orderId}_$newStatus');
 
               _add(AppNotification(
                 id: notifId,

@@ -197,5 +197,82 @@ All AI models and developers working on this project MUST adhere to the architec
 5. **Shop Prioritization & Demographic Empty State**: `_computeSortedNormalShops` ranks shops carrying matching demographic products first. If nearby stores have no matching items for the chosen demographic, `_buildDemographicEmptyState(isDark)` renders a polite empty card with a 1-tap "Show All Fashion Items" button rather than a blank sliver.
 6. **Graceful Admin Category Deactivation & Coming Soon**: Tapping Medicine or Demographic banners evaluates `PlatformConfigProvider.isActiveCategory()`. If disabled or if 0 shops exist within delivery radius, display the standardized Coming Soon state without exceptions or crashes.
 
+## 100x Forensic Edge-Case Audit & Remediation (Automated Product Shelf Scan & Ingestion Engine)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols specified in `.agents/rules/auto_product_upload_engine.md`:
 
+1. **Trigger Recognition**: When user says `"Upload products from [image] to [shop]"`, `"Scan shelf [image] and upload medicines"`, or similar, invoke `scripts/auto_upload/engine.py` or execute the verified 5-stage automated ingestion pipeline.
+2. **Target Shop Default**: Default medical store is **Noor Medicate** (`ID: 56883899-c115-42d9-82a9-90a9e59d21ec`). If another store name is given, resolve `shop_id` from `public.shops WHERE is_deleted = false`.
+3. **100% Free Native Vision OCR**: Use native Apple Silicon Vision Neural OCR (`scripts/auto_upload/native_ocr`) via `scripts/auto_upload/vision.py` with 2D spatial clustering and batch noise filtering.
+4. **Clinical & Price Research**: Query PharmEasy public catalog search API via `scripts/auto_upload/scraper.py` for exact MRP in ₹, active salt composition, therapeutic menu category, Rx schedule flag, and variant packing.
+5. **Zero-503 Supabase Storage Hosting**: NEVER hotlink external CDNs (`cdn01.pharmeasy.in` gives 503 errors in mobile apps). Download and pad packaging images to a **1:1 square canvas (800x800)** with white border padding (`#FFFFFF`) using Lanczos resampling. Upload directly to Supabase Storage bucket `products/{shop_id}/` and save the public Supabase URL in `public.products.images`.
+6. **Unit Type Normalization**: `unit_type` must strictly be `'pieces'` (plural) to prevent Flutter `DropdownButtonFormField` assertion crashes in `add_product_page.dart`.
+7. **100% Prepaid Model & Soft Deletes**: Pure MRP (`original_price = null`), zero COD markers, and strictly enforce `is_deleted = false`.
 
+## 100x Forensic Edge-Case Audit & Remediation (Customer Section Search & Dynamic Catalog Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Section Search & Dynamic Catalog Streaming:
+
+1. **Section Search Full-Catalog Parity**: In `AllListingsPage` (`lib/pages/customer/all_listings_page.dart`), searching within any section (Medicines & Healthcare, Daily Grocery, Clothing, Popular Items, Restaurants) MUST search the full database of nearby shops via live multi-column remote search, matching the parity of the main dashboard search bar.
+2. **Department Query Fast-Path**: If a user enters broad department keywords (e.g. `"medicine"`, `"medicines"`, `"healthcare"`, `"pharma"` in Medicines & Healthcare; `"grocery"`, `"supermarket"` in Grocery; `"clothing"`, `"fashion"` in Clothing), the system MUST recognize this as a department-wide match and display all products of that section instead of returning empty results.
+3. **Background Catalog Streaming**: Upon opening a section, `_initializeAndFetchProductCatalog` streams successive batches in the background until the full catalog of active nearby shops is loaded in memory (up to 500 items), ensuring instant 0ms in-memory filtering.
+4. **Punctuation & Syntax Sanitization**: All search queries must be sanitized (`replaceAll(RegExp(r'[,()"\x27]'), ' ')`) prior to passing into PostgREST `.or(...)` clauses to prevent PostgREST delimiter syntax exceptions.
+5. **Multi-Shop & Category Scope Immunity**: Products must not be dropped in `_computeSortedProducts` if their category string has minor case or subcategory variances, provided their shop belongs to the section's active shop scope.
+6. **Uncapped Search Results Display**: When a search query is active (`_searchQuery.isNotEmpty`), `displayProducts` must show all matching results immediately without being capped by the default initial pagination limit.
+
+## 100x Forensic Edge-Case Audit & Remediation (Master Product Catalog Autocomplete & 1-Tap Autofill Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Master Product Catalog Autocomplete and 1-Tap Autofill:
+
+1. **Global Multi-Store Catalog Search**: When a seller or admin types a product name in `AddProductPage` (`lib/pages/seller/add_product_page.dart`), the system queries `search_global_product_catalog` RPC across all stores on the platform (pharmacy, supermarket, grocery, retail), ranking items by trigram similarity, presence of images, presence of clinical salts/descriptions, and shop category match.
+2. **Comprehensive 1-Tap Autofill**: Tapping an item from the autocomplete dropdown MUST autofill all available attributes: product name, brand/manufacturer, active salts & composition (in description for pharmacy), unit type, weight per unit, selling price, MRP original price (with discount toggle enabled if MRP > Price), category, menu category, veg/non-veg status, Rx prescription requirement, medicine type, variants, and product images.
+3. **Zero-Byte Image Re-hosting**: Product photos from existing templates are referenced directly via their high-resolution Supabase Storage CDN URLs in `_existingImageUrls`, eliminating duplicate image uploads, reducing storage costs, and saving 100% of seller time.
+4. **Instant Snapshot & 1-Tap Undo**: Upon autofilling, the previous form state (including all controllers, switches, local images, and existing URLs) is captured in `_lastAutofillSnapshot`. An unobtrusive success banner displays `"Autofilled from [Product Name]"` with an immediate `[Undo]` button to revert any unwanted changes with zero data loss.
+5. **Cross-Store Deduplication & Outlier Immunity**: Identical items across stores are deduplicated by `(LOWER(name), LOWER(brand), LOWER(unit_type))` in the RPC and in memory, choosing the template with highest image count and richest descriptions.
+6. **Query Sanitization & Debounce**: Minimum 2-character requirement and 350ms debounce protect Supabase resources from keystroke flooding. Manual magic wand icon allows 1-tap on-demand search. Special characters and apostrophes are sanitized to prevent PostgREST syntax errors.
+
+## 100x Forensic Edge-Case Audit & Remediation (Product Image Drag-and-Drop Repositioning & Order Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Product Gallery Image Repositioning:
+
+1. **Unified Image Model Ordering**: In `AddProductPage` (`lib/pages/seller/add_product_page.dart`), images are stored as unified `ProductImageItem` entries in `_productImages: List<ProductImageItem>`. When saving in `_submit()`, the system iterates strictly through `_productImages` in order (`0, 1, 2`), uploading local files and inserting remote CDN URLs at their exact user-specified slots so the final array in `products.images` is 100% faithful to the visual sequence.
+2. **Primary Cover Photo Parity**: The image at index `0` is visually marked with a prominent `[ ⭐ Cover ]` badge and green border. Customers across the app see `product.images[0]` as the primary thumbnail.
+3. **Fluid Drag-and-Drop & 1-Tap Quick Moves**:
+   - Long-press or drag via the position pill (`ReorderableDragStartListener`) triggers smooth horizontal reordering with scale (1.05) and elevation feedback via `proxyDecorator`.
+   - Non-cover images (index > 0) feature a 1-tap `[ Make Cover ]` button to immediately elevate any image into position 0.
+   - 1-tap `◀` and `▶` swap arrow buttons allow instantaneous adjacent shifting for touch accessibility.
+4. **Fixed Add Photo Tile**: The "+ Add Photo" tile resides in the footer of `ReorderableListView` and is strictly non-reorderable.
+5. **Autofill Snapshot & Undo Integrity**: `_lastAutofillSnapshot` preserves `_productImages` so that tapping Undo after an autofill operation completely restores previous images in their exact prior positions.
+
+## 100x Forensic Edge-Case Audit & Remediation (Catering OTP Delivery Notification & Single-View Dashboard Dismissal Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Catering & Bulk Order OTP Delivery Handover and Single-View Dashboard Reflection:
+
+1. **Guaranteed Delivery Notifications (In-App & Push)**: When a catering or manual quote order (`order_type IN ('bulk', 'manual_quote')`) is marked `delivered` with OTP, the customer MUST receive:
+   - Push notification via `NotificationProvider.sendBackgroundPush` with title `'🎉 Catering Feast Delivered!'` and body `'Your catering feast has been successfully delivered and verified with OTP. Enjoy your event celebration!'`.
+   - Realtime in-app notification with alert sound/buzz in `NotificationProvider.listenAsCustomer` with key `'bulk_delivered_$orderId'`.
+   - Persistent notification in `public.notifications` table for Notification Bell history.
+2. **Dashboard Reflection on Delivery**: When an order transitions to `delivered`:
+   - `QuoteRequestProvider` sets `_deliveredCateringOrderToCelebrate = map` and nullifies `_activeCateringOrder`.
+   - The Customer Dashboard (`HomePage` -> `_buildActiveQuoteBanner`) MUST display the Delivered Celebration Card with emerald gradient, `[ DELIVERED · OTP VERIFIED ✅ ]` status badge, event name, and `[ Got it! 🎉 ]` action button.
+3. **Single-View Dismissal Guarantee**:
+   - The delivery celebration card is displayed on the customer dashboard **only once**.
+   - When the user taps `[ Got it! 🎉 ]` or the `[ X ]` dismiss button, it calls `quoteProv.dismissDeliveredCateringCelebration(orderId)` which records `seen_catering_delivered_$orderId = true` in `SharedPreferences` and dismisses the card immediately.
+   - When the user taps the card to view tracking (`AppRoutes.bulkOrderTracking`), it automatically marks it dismissed so the card disappears upon returning to the dashboard.
+   - In the background, `markDeliveredCateringCelebrationSeen(orderId)` records the seen state so that even if the user closes the app or switches tabs without explicitly tapping dismiss, the celebration will never reappear on subsequent visits or app launches.
+4. **Stale Order Reappearance Guard**: `loadCustomerQuotes()` checks `updated_at > now() - 48h` so historical catering orders from weeks ago never resurrect on the dashboard. In-flight active cooking/transit orders always take precedence over celebration cards.
+
+## 100x Forensic Edge-Case Audit & Remediation (Closed Shops Operating Hours Discovery & Manual Toggle Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Store Discovery across Operating Hours and Manual Closure Toggles:
+
+1. **Zero JSONB Operator Crashes (Postgres 42883)**: In `get_nearby_shops`, `search_shops_geospatial`, and `search_products_geospatial`, the `categories` column on `shops` is a `JSONB` array. NEVER use native PostgreSQL text array overlap operators (`s.categories && p_categories::text[]`), which crashes PostgREST with 42883. Safely test with `jsonb_typeof(s.categories) = 'array' AND (s.categories ?| p_categories::text[] OR EXISTS (...))`.
+2. **Operating Hours Shop & Product Discovery Guarantee**: When a store is closed simply because the current time is outside its configured operating hours (`open_time` - `close_time`), the shop and its products **MUST REMAIN DISCOVERABLE** on the customer dashboard, explore category listings, and search. In `ShopCard` and `RestaurantShopCard`, closed stores render the prominent `[ CLOSED · Opens at HH:MM ]` overlay with soft glassmorphism. Open stores are strictly prioritized and sorted first (`(s.is_active AND s.is_accepting_orders) DESC`).
+3. **Manual Closure Platform Suppression**: When a merchant or admin explicitly toggles a store OFF (`is_manually_closed = true` or `is_active = false`), the store and its products **MUST BE COMPLETELY HIDDEN** across all customer-facing discovery endpoints (`get_nearby_shops`, `search_shops_geospatial`, `search_products_geospatial`, `get_feed_products`).
+4. **Zero Cross-Dashboard SnackBar Leakage**: In `HomePage.dispose()`, `RoleSwitcherCard`, and `AdminDashboardPage._switchRole`, active SnackBars must be immediately dismissed via `ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar()` so loading/connection snackbars never leak or persist across role switches or page transitions.
+
+## 100x Forensic Edge-Case Audit & Remediation (Device-Responsive Bottom Navigation Bar & System Inset Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for device-responsive bottom navigation across all Android and iOS hardware profiles:
+
+1. **Zero System Navigation Bar Overlap (Android 3-Button & 2-Button Navigation)**: In `CustomerMainPage` (`lib/pages/customer/main_page.dart`), the floating bottom navigation bar must NEVER be positioned using fractional multipliers of system insets (e.g. `bottomPadding * 0.4`), which submerges 60% of the bar beneath the Android system navigation buttons (`|||`, `O`, `<`). When `bottomInset >= 36.0` (Android 3-button or 2-button navigation), bottom margin MUST dynamically evaluate to `bottomInset + 4.0`, placing the bar cleanly 4 logical pixels above the buttons with 0% overlap and 0% touch conflicts.
+2. **Zero Floating Void Inflation (iOS & Gesture Navigation)**: On iOS devices (`Theme.of(context).platform == TargetPlatform.iOS`), bottom margin MUST sit flush at `bottomInset` (the 34.0dp safe area boundary) without inflating artificial spacing, preventing an awkward empty void beneath the floating pill. On modern Android gesture navigation (`bottomInset < 36.0 && > 0`), bottom margin sits at `bottomInset + 4.0` (typically 20-24dp), floating gracefully above the thin gesture line.
+3. **Adaptive Horizontal Screen Width & Font Scaling**:
+   - The 4 navigation items (`Home`, `Favs`, `Orders`, `Profile`) MUST be wrapped in `Expanded` with centered content and adaptive horizontal padding (`isNarrow ? 6 : 8`), ensuring symmetric spacing and zero overflow across small phones (320-359dp) and large displays (400dp+).
+   - The central Cart button dynamically sizes to `54dp` on narrow screens (`< 360dp`) and `58dp` on standard screens, fitting proportionately within the 68dp pill.
+   - Text scaling MUST be clamped with `MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: MediaQuery.textScalerOf(context).clamp(minScaleFactor: 0.85, maxScaleFactor: 1.15)))` and text styled with `maxLines: 1` and `overflow: TextOverflow.ellipsis` to prevent high OS font zoom levels from distorting or breaking the bar.
+4. **Dynamic Content Scroll Clearance**: In `CustomerHomeView` (`lib/pages/customer/home_page.dart`), the bottom scroll spacer MUST dynamically scale with `SizedBox(height: 120 + MediaQuery.paddingOf(context).bottom)`, ensuring that bottom buttons (e.g. "See all stores ->", "See all popular items ->") and product cards can be scrolled completely clear of the floating navigation bar on all devices.
+5. **Universal Floating Element Parity**: In `FloatingCartBar` (`lib/widgets/customer/floating_cart_bar.dart`), bottom positioning must dynamically evaluate `effectiveBottom = bottomOffset + (bottomInset >= 36.0 ? bottomInset + 4.0 : (bottomInset > 0 ? bottomInset : 0.0))` so that mini-cart bars float cleanly above Android 3-button navigation on every catalog and restaurant screen.

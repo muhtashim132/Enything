@@ -1132,9 +1132,14 @@ class _CateringOrderAdminCardState extends State<CateringOrderAdminCard> {
                       if (customerId != null && customerId.isNotEmpty && mounted) {
                         context.read<NotificationProvider>().sendBackgroundPush(
                           targetUserId: customerId,
-                          title: '🎉 Event Feast Delivered!',
+                          title: '🎉 Catering Feast Delivered!',
                           body: 'Your catering feast has been successfully delivered and verified with OTP. Enjoy your event celebration!',
-                          data: {'order_id': o['id'].toString(), 'type': 'bulk_order'},
+                          data: {
+                            'order_id': o['id'].toString(),
+                            'type': 'bulk_order',
+                            'role': 'customer',
+                            'action': 'order_delivered',
+                          },
                         );
                       }
                       widget.onRefresh();

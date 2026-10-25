@@ -69,7 +69,14 @@ class AdminUserModel {
   factory AdminUserModel.fromMap(Map<String, dynamic> map) {
     RoleModel? role;
     if (map['roles'] != null) {
-      role = RoleModel.fromMap(map['roles'] as Map<String, dynamic>);
+      if (map['roles'] is Map<String, dynamic>) {
+        role = RoleModel.fromMap(map['roles'] as Map<String, dynamic>);
+      } else if (map['roles'] is List && (map['roles'] as List).isNotEmpty) {
+        final first = (map['roles'] as List).first;
+        if (first is Map<String, dynamic>) {
+          role = RoleModel.fromMap(first);
+        }
+      }
     } else if (map['admin_level'] == 'superadmin') {
       role = RoleModel(
         id: 'super-admin-sys',

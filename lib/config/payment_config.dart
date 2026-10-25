@@ -22,7 +22,7 @@ class PaymentConfig {
   /// 18% GST is embedded in this amount (extracted for accounting).
   /// MUST match live `platform_config.platform_fee` DB value to prevent
   /// checkout spoofing exceptions during config load race.
-  static const double platformFee = 15.0;
+  static const double platformFee = 2.0;
 
   /// Flat delivery fee per cart/order (covers 1, 2, or 3 shops in cart).
   static const double deliveryFee = 20.0;
@@ -48,7 +48,7 @@ class PaymentConfig {
 
   // ── Weight & Item Limits ──────────────────────────────────────────────────
 
-  static const double maxDeliveryRadiusKm = 9.0;
+  static const double maxDeliveryRadiusKm = 15.0;
   static const int maxItemsPerOrder = 50;
 
   /// Absolute weight cap per order.

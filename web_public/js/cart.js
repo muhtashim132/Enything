@@ -195,13 +195,55 @@ class Cart {
             const maxRadiusKm = 15;
             if (distanceKm > maxRadiusKm) return -1; // Out of range
             
-            const ratePerKm = 10.0;
+            const ratePerKm = await this.getDeliveryRatePerKm();
             const km = Math.max(1, Math.ceil(distanceKm));
             return km * ratePerKm;
         } catch (err) {
             console.error("Error calculating delivery fee:", err);
             return 30.00;
         }
+    }
+
+    async getHandlingFee() {
+        if (this._handlingFee !== undefined) return this._handlingFee;
+        try {
+            if (window.supabaseClient) {
+                const { data, error } = await supabaseClient
+                    .from('platform_config')
+                    .select('value')
+                    .eq('key', 'platform_fee')
+                    .maybeSingle();
+                if (!error && data && data.value !== null && data.value !== undefined) {
+                    this._handlingFee = parseFloat(data.value);
+                    return this._handlingFee;
+                }
+            }
+        } catch (e) {
+            console.warn('Error fetching platform_fee:', e);
+        }
+        this._handlingFee = 2.00;
+        return this._handlingFee;
+    }
+
+    async getDeliveryRatePerKm() {
+        if (this._deliveryRatePerKm !== undefined) return this._deliveryRatePerKm;
+        try {
+            if (window.supabaseClient) {
+                const { data, error } = await supabaseClient
+                    .from('platform_config')
+                    .select('value')
+                    .eq('key', 'delivery_rate_per_km')
+                    .maybeSingle();
+                if (!error && data && data.value !== null && data.value !== undefined) {
+                    this._deliveryRatePerKm = parseFloat(data.value);
+                    return this._deliveryRatePerKm;
+                }
+            }
+        } catch (e) {
+            console.warn('Error fetching delivery_rate_per_km:', e);
+        }
+        this._deliveryRatePerKm = 20.00;
+        return this._deliveryRatePerKm;
     }
 
     async calculateDeliveryTime() {
@@ -308,7 +350,7 @@ class Cart {
                     
                     const gst = this.getGSTTotal();
                     const deliveryFee = await this.calculateDeliveryFee();
-                    const handlingFee = 20.00;
+                    const handlingFee = await this.getHandlingFee();
                     
                     let grandTotal = 0;
                     let deliveryHtml = '';
@@ -369,7 +411,7 @@ class Cart {
                     const itemTotal = this.getTotal();
                     const gst = this.getGSTTotal();
                     const deliveryFee = await this.calculateDeliveryFee();
-                    const handlingFee = 20.00;
+                    const handlingFee = await this.getHandlingFee();
                     
                     if (deliveryFee === -1) {
                          document.getElementById('mobile-cart-total-text').textContent = `Out of range`;

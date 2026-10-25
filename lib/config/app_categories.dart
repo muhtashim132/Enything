@@ -110,6 +110,23 @@ class AppCategories {
     return group == CategoryGroup.food || group == CategoryGroup.perishable;
   }
 
+  /// Returns whether a category is considered Pharmacy / Medical (e.g. Pharmacy, Medical Store, Medicines).
+  static bool isPharmacyCategory(String? categoryName) {
+    if (categoryName == null || categoryName.trim().isEmpty) return false;
+    final cat = categoryName.trim().toLowerCase();
+    if (cat == 'pharmacy' ||
+        cat == 'medical store' ||
+        cat == 'medical' ||
+        cat == 'medicines' ||
+        cat == 'medicine' ||
+        cat == 'pharma' ||
+        cat == 'chemist' ||
+        cat == 'healthcare') {
+      return true;
+    }
+    return groupFor(categoryName) == CategoryGroup.pharmacy;
+  }
+
   /// Returns whether a category is considered Fashion/Apparel (e.g. Clothing, Footwear).
   /// These categories naturally benefit from a 3:4 portrait aspect ratio.
   static bool isFashionCategory(String? categoryName) {

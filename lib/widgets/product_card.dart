@@ -16,6 +16,7 @@ import '../widgets/3d/perspective_card.dart';
 import '../utils/share_utils.dart';
 import '../widgets/common/premium_product_image.dart';
 import '../utils/closed_store_feedback.dart';
+import '../config/app_categories.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -33,28 +34,9 @@ class ProductCard extends StatefulWidget {
   State<ProductCard> createState() => _ProductCardState();
 }
 
-class _ProductCardState extends State<ProductCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _addController;
-
+class _ProductCardState extends State<ProductCard> {
   ProductModel get product => widget.product;
   ShopModel? get shop => widget.shop;
-
-  @override
-  void initState() {
-    super.initState();
-    _addController = AnimationController(
-      vsync: this,
-      duration: PremiumAnimations.normal,
-    );
-    _addController.forward();
-  }
-
-  @override
-  void dispose() {
-    _addController.dispose();
-    super.dispose();
-  }
 
   String _formatWeightUnit() {
     if (product.weightPerUnit != null && product.weightPerUnit! > 0) {
@@ -426,16 +408,19 @@ class _ProductCardState extends State<ProductCard>
               // ── Info ─────────────────────────────────────────────────────
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                  padding: const EdgeInsets.fromLTRB(8, 3, 8, 4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       // Top Info Stack: Brand/Weight, Name, Rating
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
+                      Flexible(
+                        child: SingleChildScrollView(
+                          physics: const NeverScrollableScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                           // Brand & Unit/Weight row
                           if (hasBrand || weightLabel.isNotEmpty)
                             Padding(
@@ -498,20 +483,50 @@ class _ProductCardState extends State<ProductCard>
                             ),
 
                           // Product name
-                          Text(
-                            product.name,
-                            style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                              color: isDark
-                                  ? Colors.white
-                                  : const Color(0xFF1A1A2E),
-                              letterSpacing: -0.2,
-                              height: 1.1,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                          Builder(
+                            builder: (context) {
+                              final hasPharmacySalt = (product.category == 'Pharmacy' ||
+                                      AppCategories.isPharmacyCategory(product.category)) &&
+                                  product.description != null &&
+                                  product.description!.trim().isNotEmpty;
+                              return Text(
+                                product.name,
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF1A1A2E),
+                                  letterSpacing: -0.2,
+                                  height: 1.1,
+                                ),
+                                maxLines: hasPharmacySalt ? 1 : 2,
+                                overflow: TextOverflow.ellipsis,
+                              );
+                            },
                           ),
+
+                          // Salt / Composition for pharmacy medicines
+                          if ((product.category == 'Pharmacy' ||
+                                  AppCategories.isPharmacyCategory(product.category)) &&
+                              product.description != null &&
+                              product.description!.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1),
+                              child: Text(
+                                product.description!.trim(),
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 8.5,
+                                  color: isDark
+                                      ? const Color(0xFF6EE7B7)
+                                      : const Color(0xFF059669),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
 
                           // Rating & Shop Distance row
                           Padding(
@@ -575,6 +590,8 @@ class _ProductCardState extends State<ProductCard>
                           ),
                         ],
                       ),
+                    ),
+                  ),
 
                       // Bottom Action Stack: Price, ADD / Stepper Button
                       Column(
@@ -777,7 +794,7 @@ class _ProductCardState extends State<ProductCard>
       },
       child: Container(
         width: double.infinity,
-        height: 30,
+        height: 28,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -850,7 +867,7 @@ class _ProductCardState extends State<ProductCard>
 
     return Container(
       key: const ValueKey('variant_stepper'),
-      height: 30,
+      height: 28,
       decoration: BoxDecoration(
         gradient: AppColors.ctaGradient,
         borderRadius: BorderRadius.circular(100),
@@ -985,13 +1002,19 @@ class _ProductCardState extends State<ProductCard>
       key: const ValueKey('add'),
       onTap: () {
         SensoryHaptics.medium();
+        if (product.variants.isNotEmpty) {
+          showProductDetailSheet(context, product.id, highlightVariants: true);
+          return;
+        }
         if (shop != null) {
           cart.addItemWithFeedback(context, product, shop!);
+        } else {
+          showProductDetailSheet(context, product.id);
         }
       },
       child: Container(
         width: double.infinity,
-        height: 30,
+        height: 28,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -1048,7 +1071,7 @@ class _ProductCardState extends State<ProductCard>
   Widget _buildStepper(CartProvider cart, int quantity, bool isDark) {
     return Container(
       key: const ValueKey('stepper'),
-      height: 30,
+      height: 28,
       decoration: BoxDecoration(
         gradient: AppColors.ctaGradient,
         borderRadius: BorderRadius.circular(100),
@@ -1139,7 +1162,7 @@ class _ProductCardState extends State<ProductCard>
       },
       child: Container(
         width: double.infinity,
-        height: 30,
+        height: 28,
         decoration: BoxDecoration(
           color: isShopClosed
               ? (isDark ? const Color(0xFF2D2418) : const Color(0xFFFFFBEB))

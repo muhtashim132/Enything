@@ -20,6 +20,7 @@ class CartPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+    final config = context.watch<PlatformConfigProvider>();
     final location = context.watch<LocationProvider>();
     final isDark = context.watch<ThemeProvider>().isDarkMode;
 
@@ -94,7 +95,7 @@ class CartPage extends StatelessWidget {
                       },
                     ),
                   ),
-                  _buildSummary(context, cart, location, isDark),
+                  _buildSummary(context, cart, config, location, isDark),
                 ],
               ),
       ),
@@ -353,7 +354,7 @@ class CartPage extends StatelessWidget {
   }
 
   Widget _buildSummary(BuildContext context, CartProvider cart,
-      LocationProvider location, bool isDark) {
+      PlatformConfigProvider config, LocationProvider location, bool isDark) {
     double distanceKm = 3.0;
     if (location.currentLocation != null && cart.shops.isNotEmpty) {
       distanceKm = location.distanceTo(cart.shops.first.location);
@@ -367,8 +368,7 @@ class CartPage extends StatelessWidget {
     // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
     // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
     final riderPayoutRatio =
-        (PlatformConfigProvider.instance?.riderCommissionPercent ?? 80.0) /
-            100.0;
+        (config.riderCommissionPercent) / 100.0;
     final riderEarnings = riderBase * riderPayoutRatio;
 
     final gstBreakdown = OrderTaxBreakdown.calculate(
@@ -379,7 +379,6 @@ class CartPage extends StatelessWidget {
       paymentMethod: 'upi',
     );
     final total = gstBreakdown.grandTotal;
-    final config = context.watch<PlatformConfigProvider>();
     final canCheckout = cart.meetsMinimumOrder && baseCharge >= 0 && !config.isMaintenanceMode;
 
     return SafeArea(
@@ -470,17 +469,17 @@ class CartPage extends StatelessWidget {
             ],
             const SizedBox(height: 6),
             _summaryRow(
-              'Handling/Platform Fee',
-              '+₹${(cart.platformFee - gstBreakdown.platformFeeGst).toStringAsFixed(2)}',
-              hint: 'Supports app operations',
+              'Handling Fee',
+              '+₹${cart.platformFee.toStringAsFixed(2)}',
+              hint: 'Covers payment gateway & app operations (incl. GST)',
               isDark: isDark,
             ),
-            if (gstBreakdown.totalGst > 0) ...[
+            if ((gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst) > 0) ...[
               const SizedBox(height: 6),
               _summaryRow(
-                'TOTAL GST',
-                '+₹${gstBreakdown.totalGst.toStringAsFixed(2)}',
-                hint: 'Govt. taxes on items & services',
+                'Taxes & GST',
+                '+₹${(gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst).toStringAsFixed(2)}',
+                hint: 'Govt. taxes on items & delivery services',
                 valueColor: const Color(0xFF1565C0), // Consistent with checkout
                 isDark: isDark,
               ),

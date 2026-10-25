@@ -208,6 +208,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     context.read<NotificationProvider>().stopListening();
     await context.read<AuthProvider>().switchFromAdminToRole(role);
     if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
     // Navigate to the correct dashboard for the chosen role
     if (role == 'seller') {
       Navigator.pushNamedAndRemoveUntil(

@@ -1816,15 +1816,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       const SizedBox(height: 8),
                       _billRow(
                         'Handling Fee',
-                        '+₹${(cart.platformFee - gstBreakdown.platformFeeGst).toStringAsFixed(2)}',
-                        hint: 'Covers payment gateway & app operations',
+                        '+₹${cart.platformFee.toStringAsFixed(2)}',
+                        hint: 'Covers payment gateway & app operations (incl. GST)',
                       ),
-                      if (gstBreakdown.totalGst > 0) ...[
+                      if ((gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst) > 0) ...[
                         const SizedBox(height: 8),
                         _billRow(
-                          'TOTAL GST',
-                          '+₹${gstBreakdown.totalGst.toStringAsFixed(2)}',
-                          hint: 'Govt. taxes on items & services',
+                          'Taxes & GST',
+                          '+₹${(gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst).toStringAsFixed(2)}',
+                          hint: 'Govt. taxes on items & delivery services',
                           valueColor: const Color(0xFF1565C0),
                         ),
                       ],

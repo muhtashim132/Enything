@@ -199,20 +199,20 @@ void main() {
       expect(manualQuoteOrder.isBulkOrder, true);
       expect(manualQuoteOrder.isInstantOrder, false);
       expect(manualQuoteOrder.isManualQuote, true);
-      expect(manualQuoteOrder.statusDisplay, 'Awaiting Shop Confirmation');
+      expect(manualQuoteOrder.statusDisplay, 'Feast Booked · Scheduling Kitchen');
 
       // Test lifecycle progression of the manual quote order
       final confirmedOrder = manualQuoteOrder.copyWith(status: 'bulk_confirmed');
-      expect(confirmedOrder.statusDisplay, 'Confirmed');
+      expect(confirmedOrder.statusDisplay, 'Kitchen Confirmed & Cooking');
 
       final preparingOrder = manualQuoteOrder.copyWith(status: 'bulk_preparing');
-      expect(preparingOrder.statusDisplay, 'Preparing');
+      expect(preparingOrder.statusDisplay, 'Kitchen Cooking');
 
       final readyOrder = manualQuoteOrder.copyWith(status: 'bulk_ready');
-      expect(readyOrder.statusDisplay, 'Ready for Pickup');
+      expect(readyOrder.statusDisplay, 'Feast Prepared & Packed');
 
       final dispatchedOrder = manualQuoteOrder.copyWith(status: 'bulk_dispatched');
-      expect(dispatchedOrder.statusDisplay, 'Out for Delivery (Fleet)');
+      expect(dispatchedOrder.statusDisplay, 'Out for Delivery 🚗');
 
       final deliveredOrder = manualQuoteOrder.copyWith(status: 'delivered');
       expect(deliveredOrder.statusDisplay, 'Delivered');

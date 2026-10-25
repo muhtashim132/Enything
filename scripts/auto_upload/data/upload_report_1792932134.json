@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-10-25 18:12:14",
+  "mode": "pharmacy",
+  "shop_id": "56883899-c115-42d9-82a9-90a9e59d21ec",
+  "dry_run": false,
+  "total_detected": 49,
+  "enriched_count": 48,
+  "skipped_duplicates": [],
+  "failed_items": [
+    {
+      "name": "Duphalac Solution 100Ml",
+      "reason": "No verified Indian MRP found"
+    }
+  ]
+}

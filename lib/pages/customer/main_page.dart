@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -180,7 +181,13 @@ class _CustomerMainPageState extends State<CustomerMainPage>
 
           DateTime? rejectionTime;
           for (var s in siblings) {
-            if ({'seller_rejected', 'partner_rejected', 'rider_rejected', 'verification_failed', 'cancelled'}.contains(s['status'])) {
+            if ({
+              'seller_rejected',
+              'partner_rejected',
+              'rider_rejected',
+              'verification_failed',
+              'cancelled'
+            }.contains(s['status'])) {
               isPartialRejection = true;
               final u = s['updated_at'] != null
                   ? DateTime.tryParse(s['updated_at'])
@@ -231,15 +238,27 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                 final cartProvider = context.read<CartProvider>();
                 cartProvider.setPendingCartGroupId(cartGroupId);
                 final firstRejected = siblings.firstWhere(
-                  (s) => {'seller_rejected', 'partner_rejected', 'rider_rejected', 'verification_failed', 'cancelled'}.contains(s['status']),
+                  (s) => {
+                    'seller_rejected',
+                    'partner_rejected',
+                    'rider_rejected',
+                    'verification_failed',
+                    'cancelled'
+                  }.contains(s['status']),
                   orElse: () => siblings.first,
                 );
                 if (firstRejected['id'] != null) {
-                  cartProvider.setPendingOrderIdToCancel(
-                      firstRejected['id'] as String);
+                  cartProvider
+                      .setPendingOrderIdToCancel(firstRejected['id'] as String);
                 }
                 final activeShopIds = siblings
-                    .where((s) => !{'seller_rejected', 'partner_rejected', 'rider_rejected', 'verification_failed', 'cancelled'}.contains(s['status']))
+                    .where((s) => !{
+                          'seller_rejected',
+                          'partner_rejected',
+                          'rider_rejected',
+                          'verification_failed',
+                          'cancelled'
+                        }.contains(s['status']))
                     .map((s) => s['shop_id'] as String?)
                     .whereType<String>()
                     .where((id) => id.isNotEmpty)
@@ -251,8 +270,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                       .select()
                       .inFilter('id', activeShopIds);
                   final activeShops = (shopsResp as List)
-                      .map((m) =>
-                          ShopModel.fromMap(m as Map<String, dynamic>))
+                      .map((m) => ShopModel.fromMap(m as Map<String, dynamic>))
                       .toList();
                   if (mounted) {
                     cartProvider.setActivePendingShops(activeShops);
@@ -581,7 +599,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
       case 'bulk_dispatched':
         statusColor = const Color(0xFF10B981);
         emoji = '🚗';
-        label = 'Out for Delivery${deliveryOtp.isNotEmpty ? ' (OTP: $deliveryOtp)' : ''}';
+        label =
+            'Out for Delivery${deliveryOtp.isNotEmpty ? ' (OTP: $deliveryOtp)' : ''}';
         break;
       case 'bulk_pending':
       default:
@@ -638,7 +657,8 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
@@ -659,17 +679,45 @@ class _CustomerMainPageState extends State<CustomerMainPage>
     );
   }
 
+  double _getResponsiveBottomMargin(BuildContext context) {
+    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final padding = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = math.max(viewPadding, padding);
+
+    if (bottomInset <= 0) {
+      // Hardware buttons / Web / Desktop / older iPhone
+      return 10.0;
+    } else if (bottomInset >= 36.0) {
+      // Android 3-button or 2-button navigation bar (typically 40.0 to 54.0 dp).
+      // Sits cleanly 4.0 logical pixels above the software buttons.
+      // 0% overlap, 100% visible, no huge gap.
+      return bottomInset + 4.0;
+    } else if (Theme.of(context).platform == TargetPlatform.iOS) {
+      // iOS Home Indicator (typically 34.0 dp). Sits flush at safe area boundary without inflating an awkward void.
+      return bottomInset;
+    } else {
+      // Android Gesture Navigation (typically 16.0 to 24.0 dp).
+      // Sits 4.0 logical pixels above the gesture line.
+      return bottomInset + 4.0;
+    }
+  }
+
   Widget _buildFloatingBottomNav(BuildContext context, CartProvider cart) {
-    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isNarrow = screenWidth < 360;
+    final horizontalMargin =
+        isNarrow ? 12.0 : (screenWidth < 400 ? 16.0 : 20.0);
+    final bottomMargin = _getResponsiveBottomMargin(context);
+
     return Container(
       padding: EdgeInsets.fromLTRB(
-          20, 0, 20, bottomPadding > 0 ? bottomPadding * 0.4 : 10.0),
+          horizontalMargin, 0, horizontalMargin, bottomMargin),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(34),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            height: 70,
+            height: 68,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [
@@ -681,115 +729,160 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               ),
               boxShadow: [
                 BoxShadow(
-                    color: const Color(0xFF1E3FD8).withValues(alpha: 0.5),
-                    blurRadius: 28,
-                    offset: const Offset(0, 8)),
+                  color: const Color(0xFF1E3FD8).withValues(alpha: 0.45),
+                  blurRadius: 24,
+                  offset: const Offset(0, 6),
+                ),
               ],
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              switchInCurve: Curves.easeOutBack,
-              switchOutCurve: Curves.easeInBack,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.9, end: 1.0).animate(animation),
-                  child: child,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: MediaQuery.textScalerOf(context).clamp(
+                  minScaleFactor: 0.85,
+                  maxScaleFactor: 1.15,
                 ),
               ),
-              child: cart.recentNotification != null
-                  ? _buildNotificationView(context, cart.recentNotification!)
-                  : Row(
-                      key: const ValueKey('nav_row'),
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        ValueListenableBuilder<bool>(
-                          valueListenable:
-                              CustomerHomeViewState.globalIsFiltering,
-                          builder: (context, isFiltering, _) {
-                            return _buildNavItem(0, Icons.home_rounded,
-                                Icons.home_outlined, 'Home',
-                                overrideSelected: isFiltering ? false : null);
-                          },
-                        ),
-                        _buildNavItem(1, Icons.favorite_rounded,
-                            Icons.favorite_border_rounded, 'Favs'),
-
-                        // Prominent Cart inside the pill
-                        GestureDetector(
-                          onTap: () =>
-                              Navigator.pushNamed(context, AppRoutes.cart),
-                          child: Container(
-                            height: 64, // Increased size
-                            width: 64, // Increased size
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.secondary,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.secondary
-                                      .withValues(alpha: 0.5),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                )
-                              ],
-                            ),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              clipBehavior: Clip.none,
-                              children: [
-                                const Icon(Icons.shopping_cart_outlined,
-                                    color: Colors.white,
-                                    size: 28), // Increased icon size
-                                if (cart.totalItemCount > 0)
-                                  Positioned(
-                                    right: -2,
-                                    top: -2,
-                                    child: Container(
-                                      constraints: const BoxConstraints(
-                                        minWidth: 18,
-                                        minHeight: 18,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 4, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.danger,
-                                        borderRadius: BorderRadius.circular(9),
-                                      ),
-                                      child: Text(
-                                        cart.totalItemCount > 99
-                                            ? '99+'
-                                            : '${cart.totalItemCount}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ),
-                              ],
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOutBack,
+                switchOutCurve: Curves.easeInBack,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale:
+                        Tween<double>(begin: 0.9, end: 1.0).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: cart.recentNotification != null
+                    ? _buildNotificationView(context, cart.recentNotification!)
+                    : Row(
+                        key: const ValueKey('nav_row'),
+                        children: [
+                          Expanded(
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable:
+                                  CustomerHomeViewState.globalIsFiltering,
+                              builder: (context, isFiltering, _) {
+                                return _buildNavItem(
+                                  0,
+                                  Icons.home_rounded,
+                                  Icons.home_outlined,
+                                  'Home',
+                                  overrideSelected: isFiltering ? false : null,
+                                  isNarrow: isNarrow,
+                                );
+                              },
                             ),
                           ),
-                        ),
+                          Expanded(
+                            child: _buildNavItem(
+                              1,
+                              Icons.favorite_rounded,
+                              Icons.favorite_border_rounded,
+                              'Favs',
+                              isNarrow: isNarrow,
+                            ),
+                          ),
 
-                        Builder(
-                          builder: (context) {
-                            final quoteProv = context.watch<QuoteRequestProvider>();
-                            final pendingQuotesCount = quoteProv.customerQuotes
-                                .where((q) => q.quoteStatus == 'quoted')
-                                .length;
-                            return _buildNavItem(2, Icons.receipt_long_rounded,
-                                Icons.receipt_long_outlined, 'Orders',
-                                badgeCount: pendingQuotesCount);
-                          },
-                        ),
-                        _buildNavItem(3, Icons.person_rounded,
-                            Icons.person_outline_rounded, 'Profile'),
-                      ],
-                    ),
+                          // Prominent Cart inside the pill
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: GestureDetector(
+                              onTap: () =>
+                                  Navigator.pushNamed(context, AppRoutes.cart),
+                              child: Container(
+                                height: isNarrow ? 54 : 58,
+                                width: isNarrow ? 54 : 58,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.secondary,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.secondary
+                                          .withValues(alpha: 0.5),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    )
+                                  ],
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Icon(
+                                      Icons.shopping_cart_outlined,
+                                      color: Colors.white,
+                                      size: isNarrow ? 24 : 26,
+                                    ),
+                                    if (cart.totalItemCount > 0)
+                                      Positioned(
+                                        right: -2,
+                                        top: -2,
+                                        child: Container(
+                                          constraints: const BoxConstraints(
+                                            minWidth: 18,
+                                            minHeight: 18,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.danger,
+                                            borderRadius:
+                                                BorderRadius.circular(9),
+                                          ),
+                                          child: Text(
+                                            cart.totalItemCount > 99
+                                                ? '99+'
+                                                : '${cart.totalItemCount}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          Expanded(
+                            child: Builder(
+                              builder: (context) {
+                                final quoteProv =
+                                    context.watch<QuoteRequestProvider>();
+                                final pendingQuotesCount = quoteProv
+                                    .customerQuotes
+                                    .where((q) => q.quoteStatus == 'quoted')
+                                    .length;
+                                return _buildNavItem(
+                                  2,
+                                  Icons.receipt_long_rounded,
+                                  Icons.receipt_long_outlined,
+                                  'Orders',
+                                  badgeCount: pendingQuotesCount,
+                                  isNarrow: isNarrow,
+                                );
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: _buildNavItem(
+                              3,
+                              Icons.person_rounded,
+                              Icons.person_outline_rounded,
+                              'Profile',
+                              isNarrow: isNarrow,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
             ),
           ),
         ),
@@ -860,7 +953,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
 
   Widget _buildNavItem(
       int index, IconData activeIcon, IconData inactiveIcon, String label,
-      {bool? overrideSelected, int badgeCount = 0}) {
+      {bool? overrideSelected, int badgeCount = 0, bool isNarrow = false}) {
     final isSelected = overrideSelected ?? _navIndex == index;
     return GestureDetector(
       onTap: () {
@@ -870,60 +963,75 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         }
         setState(() => _navIndex = index);
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withValues(alpha: 0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
-          border: isSelected
-              ? Border.all(color: Colors.white.withValues(alpha: 0.2))
-              : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                AnimatedScale(
-                  scale: isSelected ? 1.0 : 0.95,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(isSelected ? activeIcon : inactiveIcon,
-                      color: isSelected ? Colors.white : Colors.white54, size: 22),
-                ),
-                if (badgeCount > 0)
-                  Positioned(
-                    top: -2,
-                    right: -4,
-                    child: Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF10B981).withValues(alpha: 0.8),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: EdgeInsets.symmetric(
+            horizontal: isNarrow ? 6 : 8,
+            vertical: 5,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Colors.white.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: isSelected
+                ? Border.all(color: Colors.white.withValues(alpha: 0.2))
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AnimatedScale(
+                    scale: isSelected ? 1.0 : 0.95,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      isSelected ? activeIcon : inactiveIcon,
+                      color: isSelected ? Colors.white : Colors.white54,
+                      size: isNarrow ? 20 : 22,
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(label,
+                  if (badgeCount > 0)
+                    Positioned(
+                      top: -2,
+                      right: -4,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF10B981)
+                                  .withValues(alpha: 0.8),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.outfit(
-                    color: isSelected ? Colors.white : Colors.white54,
-                    fontSize: 10,
-                    fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w500)),
-          ],
+                  color: isSelected ? Colors.white : Colors.white54,
+                  fontSize: isNarrow ? 9.5 : 10,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

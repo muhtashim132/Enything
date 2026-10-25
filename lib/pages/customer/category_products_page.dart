@@ -46,6 +46,195 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   String _selectedSize = 'All';
   VegFilterMode _vegFilterMode = VegFilterMode.all;
   List<String> _availableSizes = [];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  Timer? _searchDebounce;
+  bool _isSearchingRemote = false;
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  static const Map<String, List<String>> _departmentKeywords = {
+    'Pharmacy': [
+      'medicine',
+      'medicines',
+      'med',
+      'meds',
+      'pharmacy',
+      'medical',
+      'medical store',
+      'healthcare',
+      'health',
+      'pharma',
+      'drugs',
+      'drug',
+      'clinic',
+      'wellness',
+      'chemist',
+      'doctor',
+      'all medicines',
+    ],
+    'Grocery': [
+      'grocery',
+      'groceries',
+      'essentials',
+      'supermarket',
+      'hypermarket',
+      'ration',
+      'daily essentials',
+      'daily needs',
+      'provisions',
+      'staples',
+      'all groceries',
+    ],
+    'Clothing': [
+      'clothing',
+      'clothes',
+      'fashion',
+      'apparel',
+      'wear',
+      'garments',
+      'outfit',
+      'all clothes',
+    ],
+    'Food': [
+      'food',
+      'restaurant',
+      'restaurants',
+      'eat',
+      'meal',
+      'cafe',
+      'dishes',
+      'all food',
+    ],
+  };
+
+  static String _getCategorySynonyms(String category, [ShopModel? shop]) {
+    final catName = category.trim();
+    final shopCat = shop?.category.trim() ?? '';
+    final shopCats = shop?.categories ?? [];
+
+    final buffer = StringBuffer();
+
+    void addCategoryWords(String cat) {
+      if (cat.isEmpty) return;
+      final collection = AppCategories.getCustomerCollection(cat).toLowerCase();
+      final subtitle = AppCategories.getCustomerSubtitle(cat).toLowerCase();
+      final catLower = cat.toLowerCase();
+
+      buffer.write(' $catLower $collection $subtitle ');
+
+      if (collection.contains('pharmacy') ||
+          collection.contains('health') ||
+          catLower.contains('pharmacy') ||
+          catLower.contains('medical')) {
+        buffer.write(
+            ' medicine medicines med meds medical pharmacy healthcare health pharma drugs clinic wellness chemist doctor tablet syrup cream pill drops ointment injection salts salt composition active chemical formula paracetamol rosuvastatin atorvastatin fenofibrate capsule tabs strip ');
+      }
+      if (collection.contains('grocery') ||
+          collection.contains('fresh') ||
+          catLower.contains('grocery') ||
+          catLower.contains('supermarket') ||
+          catLower.contains('butcher') ||
+          catLower.contains('fish') ||
+          catLower.contains('dairy')) {
+        buffer.write(
+            ' grocery groceries supermarket hypermarket essentials daily essentials provisions staples ration food meat chicken fish mutton veggies vegetables milk noodle noodles maggi pasta macaroni snack snacks biscuits oil ghee ');
+      }
+      if (collection.contains('fashion') ||
+          collection.contains('lifestyle') ||
+          catLower.contains('clothing') ||
+          catLower.contains('footwear')) {
+        buffer.write(
+            ' clothing clothes fashion apparel wear garments outfit shoes footwear shirt pant dress jeans denim trousers jacket sneakers ');
+      }
+      if (collection.contains('food') ||
+          collection.contains('dining') ||
+          catLower.contains('restaurant') ||
+          catLower.contains('fast food') ||
+          catLower.contains('bakery')) {
+        buffer.write(
+            ' food restaurant fast food meal dishes eat bakery cafe sweets snacks burger pizza biryani noodle noodles maggi chowmein pasta ');
+      }
+      if (collection.contains('cosmetics') ||
+          collection.contains('beauty') ||
+          catLower.contains('cosmetics') ||
+          catLower.contains('salon')) {
+        buffer.write(
+            ' cosmetics cosmetic makeup beauty skincare lipstick lip balm eyeliner mascara foundation cream lotion serum perfume ');
+      }
+      if (collection.contains('electronics') ||
+          collection.contains('utilities') ||
+          catLower.contains('electronics') ||
+          catLower.contains('mobile')) {
+        buffer.write(
+            ' electronics mobile phone gadget device computer laptop charger cable repair ');
+      }
+    }
+
+    addCategoryWords(catName);
+    if (shopCat.isNotEmpty && shopCat != catName) {
+      addCategoryWords(shopCat);
+    }
+    for (final c in shopCats) {
+      if (c != catName && c != shopCat) {
+        addCategoryWords(c);
+      }
+    }
+
+    return buffer.toString();
+  }
+
+  bool _isDepartmentQuery(String query) {
+    final lower = query.trim().toLowerCase();
+    if (lower.isEmpty) return false;
+
+    final cat = widget.categoryName.toLowerCase();
+    if (cat == lower || (lower.length >= 4 && cat.contains(lower))) return true;
+
+    for (final s in _productShops.values) {
+      final sName = s.name.trim().toLowerCase();
+      if (sName.isNotEmpty && (sName == lower || lower.contains(sName))) {
+        final remainder = lower.replaceAll(sName, '').trim();
+        if (remainder.isEmpty) return true;
+      }
+    }
+
+    final terms = lower.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (terms.isEmpty) return false;
+
+    for (final entry in _departmentKeywords.entries) {
+      final deptKey = entry.key.toLowerCase();
+      final inCategory = cat.contains(deptKey) ||
+          deptKey.contains(cat) ||
+          entry.value.any((k) => cat.contains(k)) ||
+          (_tabCategories[entry.key]?.any((c) {
+                final cLower = c.toLowerCase();
+                return cat.contains(cLower) || cLower.contains(cat);
+              }) ??
+              false);
+      if (inCategory) {
+        if (entry.value.contains(lower)) return true;
+
+        final allTermsAreDeptWords = terms.every((t) =>
+            entry.value.contains(t) ||
+            t == deptKey ||
+            t == 'all' ||
+            t == 'item' ||
+            t == 'items' ||
+            t == 'store' ||
+            t == 'shop' ||
+            t == 'products' ||
+            t == 'product');
+        if (allTermsAreDeptWords) return true;
+      }
+    }
+    return false;
+  }
 
   static const Map<String, List<String>> _tabCategories = {
     'Food': [
@@ -333,6 +522,114 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _performLiveProductSearch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty || !mounted) return;
+    setState(() => _isSearchingRemote = true);
+    try {
+      final loc = context.read<LocationProvider>();
+      final config = context.read<PlatformConfigProvider>();
+      final lat = loc.currentLocation?.latitude;
+      final lng = loc.currentLocation?.longitude;
+      if (lat == null || lng == null) {
+        if (mounted) setState(() => _isSearchingRemote = false);
+        return;
+      }
+
+      final rawSubcategories =
+          _tabCategories[widget.categoryName] ?? [widget.categoryName];
+      final subcategories =
+          rawSubcategories.where((c) => config.isActiveCategory(c)).toList();
+
+      final nearbyShops =
+          await _supabase.rpc('search_shops_geospatial', params: {
+        'p_lat': lat,
+        'p_lng': lng,
+        'p_query': null,
+        'p_categories': subcategories,
+        'p_radius_km': DeliveryCalculator.maxRadiusKm,
+        'p_limit': 150,
+      });
+
+      final shopIds =
+          (nearbyShops as List).map((s) => s['id'] as String).toList();
+      if (shopIds.isEmpty || !mounted || _searchQuery != trimmed) {
+        if (mounted) setState(() => _isSearchingRemote = false);
+        return;
+      }
+
+      var q = _supabase
+          .from('products')
+          .select()
+          .inFilter('shop_id', shopIds)
+          .eq('is_deleted', false)
+          .eq('is_available', true);
+
+      final cleanQuery = trimmed.replaceAll(RegExp(r'[,()"\x27]'), ' ');
+      final terms = cleanQuery
+          .toLowerCase()
+          .split(RegExp(r'\s+'))
+          .where((t) => t.isNotEmpty)
+          .toList();
+
+      for (final term in terms) {
+        q = q.or(
+          'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,category.ilike.%$term%,medicine_type.ilike.%$term%',
+        );
+      }
+
+      final rows = await q.order('rating', ascending: false).limit(300);
+      if (!mounted || _searchQuery != trimmed) return;
+
+      final existingIds = _products.map((p) => p.id).toSet();
+      final newProducts = <ProductModel>[];
+      final missingShopIds = <String>{};
+
+      for (final r in (rows as List)) {
+        final p = ProductModel.fromMap(r as Map<String, dynamic>);
+        if (!existingIds.contains(p.id) && config.isActiveCategory(p.category)) {
+          newProducts.add(p);
+          existingIds.add(p.id);
+          if (!_productShops.containsKey(p.id)) {
+            missingShopIds.add(p.shopId);
+          }
+        }
+      }
+
+      if (missingShopIds.isNotEmpty) {
+        try {
+          final shopRows = await _supabase
+              .from('shops')
+              .select('*')
+              .inFilter('id', missingShopIds.toList());
+          for (final sr in (shopRows as List)) {
+            final sm = ShopModel.fromMap(sr);
+            if (loc.hasLocation &&
+                sm.location.latitude != 0 &&
+                sm.location.longitude != 0) {
+              sm.distanceKm = loc.distanceTo(sm.location);
+            }
+            for (final p in newProducts) {
+              if (p.shopId == sm.id) {
+                _productShops[p.id] = sm;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (mounted && _searchQuery == trimmed) {
+        setState(() {
+          _products.addAll(newProducts);
+          _isSearchingRemote = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[CategoryProductsPage] Remote search error: $e');
+      if (mounted) setState(() => _isSearchingRemote = false);
     }
   }
 
@@ -650,7 +947,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                             AppCategories.isFashionCategory(widget.categoryName);
                         final double imageRatio = isFashion ? (3.0 / 4.0) : 1.0;
                         final double imageHeight = itemWidth / imageRatio;
-                        final double itemHeight = imageHeight + 120;
+                        final double itemHeight = imageHeight + 134;
                         final childAspectRatio = itemWidth / itemHeight;
 
                         var filteredProducts = _products;
@@ -682,109 +979,265 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                               .toList();
                         }
 
-                        if (filteredProducts.isEmpty && _products.isNotEmpty) {
-                          return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 32, vertical: 40),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 72,
-                                    height: 72,
-                                    decoration: BoxDecoration(
-                                      color: (_vegFilterMode ==
-                                                  VegFilterMode.vegOnly
-                                              ? const Color(0xFF2E7D32)
-                                              : const Color(0xFFC62828))
-                                          .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(22),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        _vegFilterMode == VegFilterMode.vegOnly
-                                            ? '🥦'
-                                            : '🍗',
-                                        style: const TextStyle(fontSize: 32),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    _vegFilterMode == VegFilterMode.vegOnly
-                                        ? 'No Pure Veg items found'
-                                        : 'No Non-Veg items found',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark
-                                          ? Colors.white
-                                          : AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  OutlinedButton.icon(
-                                    onPressed: () {
-                                      HapticFeedback.lightImpact();
-                                      setState(() =>
-                                          _vegFilterMode = VegFilterMode.all);
-                                    },
-                                    icon: const Icon(Icons.refresh_rounded,
-                                        size: 16),
-                                    label: Text(
-                                      'Show All (${_products.length})',
-                                      style: GoogleFonts.outfit(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.primary,
-                                      side: const BorderSide(
-                                          color: AppColors.primary),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(20)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
+                        if (_searchQuery.isNotEmpty) {
+                          if (!_isDepartmentQuery(_searchQuery)) {
+                            final clean = _searchQuery
+                                .replaceAll(RegExp(r'[,()"\x27]'), ' ')
+                                .toLowerCase();
+                            final terms = clean
+                                .split(RegExp(r'\s+'))
+                                .where((t) => t.isNotEmpty)
+                                .toList();
+                            filteredProducts = filteredProducts.where((p) {
+                              final pShop = _productShops[p.id];
+                              final syn = _getCategorySynonyms(p.category, pShop);
+                              final variantNames = p.variants.map((v) => v.name).join(' ');
+                              final searchable =
+                                  '${p.name} ${p.description ?? ''} ${p.brand ?? ''} ${p.category} ${p.subCategory ?? ''} ${p.menuCategory ?? ''} ${p.medicineType} ${p.unitType} $variantNames ${p.specialTags.join(' ')} ${pShop?.name ?? ''} ${pShop?.category ?? ''} $syn'
+                                      .toLowerCase();
+                              return terms.every((t) => searchable.contains(t));
+                            }).toList();
+                          }
                         }
 
-                        final displayProducts =
-                            filteredProducts.take(_displayLimit).toList();
+                        final displayProducts = _searchQuery.isNotEmpty
+                            ? filteredProducts
+                            : filteredProducts.take(_displayLimit).toList();
 
                         return Stack(
-                        children: [
-                          CustomScrollView(
-                            slivers: [
-                              SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                                sliver: SliverGrid.builder(
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: crossAxisCount,
-                                    childAspectRatio: childAspectRatio,
-                                    mainAxisSpacing: 16,
-                                    crossAxisSpacing: crossAxisSpacing,
-                                  ),
-                                  itemCount: displayProducts.length,
-                                  itemBuilder: (context, index) {
-                                    final product = displayProducts[index];
-                                    final shop = _productShops[product.id];
-                                    return RepaintBoundary(
-                                      key: ValueKey('cat_p_${product.id}'),
-                                      child: ProductCard(
-                                        product: product,
-                                        shop: shop,
-                                        imageAspectRatio: imageRatio,
+                          children: [
+                            CustomScrollView(
+                              slivers: [
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        16, 12, 16, 4),
+                                    child: TextField(
+                                      controller: _searchController,
+                                      onChanged: (v) {
+                                        final trimmed = v.trim();
+                                        setState(() => _searchQuery = trimmed);
+                                        _searchDebounce?.cancel();
+                                        if (trimmed.isNotEmpty) {
+                                          _searchDebounce = Timer(
+                                            const Duration(milliseconds: 350),
+                                            () => _performLiveProductSearch(trimmed),
+                                          );
+                                        }
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: AppCategories.isPharmacyCategory(
+                                                widget.categoryName)
+                                            ? 'Search medicines by name or salt/composition...'
+                                            : 'Search within ${widget.categoryName}...',
+                                        hintStyle: GoogleFonts.outfit(
+                                          fontSize: 13,
+                                          color: isDark
+                                              ? Colors.grey.shade500
+                                              : Colors.grey.shade400,
+                                        ),
+                                        prefixIcon: const Icon(
+                                            Icons.search_rounded,
+                                            color: AppColors.primary,
+                                            size: 20),
+                                        suffixIcon: _isSearchingRemote
+                                            ? const Padding(
+                                                padding: EdgeInsets.all(12),
+                                                child: SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    color: AppColors.primary,
+                                                  ),
+                                                ),
+                                              )
+                                            : (_searchQuery.isNotEmpty
+                                                ? IconButton(
+                                                    icon: const Icon(
+                                                        Icons.close_rounded,
+                                                        size: 18),
+                                                    onPressed: () {
+                                                      _searchDebounce?.cancel();
+                                                      _searchController.clear();
+                                                      setState(() {
+                                                        _searchQuery = '';
+                                                        _isSearchingRemote =
+                                                            false;
+                                                      });
+                                                    },
+                                                  )
+                                                : null),
+                                        filled: true,
+                                        fillColor: isDark
+                                            ? const Color(0xFF1A1D30)
+                                            : Colors.grey.shade100,
+                                        border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            borderSide: BorderSide.none),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 12),
                                       ),
-                                    );
-                                  },
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                if (filteredProducts.isNotEmpty)
+                                  SliverPadding(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                                    sliver: SliverGrid.builder(
+                                      gridDelegate:
+                                          SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: crossAxisCount,
+                                        childAspectRatio: childAspectRatio,
+                                        mainAxisSpacing: 16,
+                                        crossAxisSpacing: crossAxisSpacing,
+                                      ),
+                                      itemCount: displayProducts.length,
+                                      itemBuilder: (context, index) {
+                                        final product = displayProducts[index];
+                                        final shop = _productShops[product.id];
+                                        return RepaintBoundary(
+                                          key: ValueKey('cat_p_${product.id}'),
+                                          child: ProductCard(
+                                            product: product,
+                                            shop: shop,
+                                            imageAspectRatio: imageRatio,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                else if (_searchQuery.isNotEmpty)
+                                  SliverFillRemaining(
+                                    hasScrollBody: false,
+                                    child: Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 32, vertical: 40),
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.search_off_rounded,
+                                                size: 48,
+                                                color: isDark
+                                                    ? AppColors.primaryLight
+                                                    : AppColors.primary),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              'No results for "$_searchQuery"',
+                                              style: GoogleFonts.outfit(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : AppColors.textPrimary),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Try a different search term or check spelling.',
+                                              style: GoogleFonts.outfit(
+                                                  fontSize: 14,
+                                                  color: AppColors.textSecondary),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            OutlinedButton.icon(
+                                              onPressed: () {
+                                                _searchController.clear();
+                                                setState(() => _searchQuery = '');
+                                              },
+                                              icon: const Icon(Icons.clear_rounded,
+                                                  size: 16),
+                                              label: const Text('Clear Search'),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: AppColors.primary,
+                                                side: const BorderSide(
+                                                    color: AppColors.primary),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(20)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  SliverFillRemaining(
+                                    hasScrollBody: false,
+                                    child: Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 32, vertical: 40),
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              width: 72,
+                                              height: 72,
+                                              decoration: BoxDecoration(
+                                                color: (_vegFilterMode ==
+                                                            VegFilterMode.vegOnly
+                                                        ? const Color(0xFF2E7D32)
+                                                        : const Color(0xFFC62828))
+                                                    .withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(22),
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  _vegFilterMode == VegFilterMode.vegOnly
+                                                      ? '🥦'
+                                                      : '🍗',
+                                                  style: const TextStyle(fontSize: 32),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              _vegFilterMode == VegFilterMode.vegOnly
+                                                  ? 'No Pure Veg items found'
+                                                  : 'No Non-Veg items found',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w700,
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : AppColors.textPrimary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            OutlinedButton.icon(
+                                              onPressed: () {
+                                                HapticFeedback.lightImpact();
+                                                setState(() =>
+                                                    _vegFilterMode = VegFilterMode.all);
+                                              },
+                                              icon: const Icon(Icons.refresh_rounded,
+                                                  size: 16),
+                                              label: Text(
+                                                'Show All (${_products.length})',
+                                                style: GoogleFonts.outfit(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 13),
+                                              ),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: AppColors.primary,
+                                                side: const BorderSide(
+                                                    color: AppColors.primary),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(20)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                               if (filteredProducts.length > _displayLimit)
                                 SliverToBoxAdapter(
                                   child: Padding(

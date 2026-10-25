@@ -195,9 +195,16 @@ class AppRoutes {
       case adminQuoteReview:
         return _build(const QuoteReviewAdminPage(), routeSettings);
       case trackOrder:
-        final a = routeSettings.arguments as Map<String, dynamic>?;
+        final a = routeSettings.arguments;
+        String resolvedOrderId = '';
+        if (a is String) {
+          resolvedOrderId = a;
+        } else if (a is Map) {
+          resolvedOrderId =
+              (a['orderId'] ?? a['order_id']) as String? ?? '';
+        }
         return _build(
-            TrackOrderPage(orderId: a?['orderId'] ?? ''), routeSettings);
+            TrackOrderPage(orderId: resolvedOrderId), routeSettings);
       case orderHistory:
         return _build(const OrderHistoryPage(), routeSettings);
       case favorites:
@@ -301,6 +308,8 @@ class AppRoutes {
             productShops:
                 (a?['productShops'] as Map<String, ShopModel>?) ?? const {},
             sectionTitle: a?['sectionTitle'] as String?,
+            categoryFilter: (a?['categoryFilter'] as List<String>?) ??
+                (a?['categoryFilter'] as List<dynamic>?)?.cast<String>(),
           ),
           routeSettings,
         );

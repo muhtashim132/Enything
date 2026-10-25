@@ -44,6 +44,7 @@ class AllListingsPage extends StatefulWidget {
   final List<ProductModel> products;
   final Map<String, ShopModel> productShops;
   final String? sectionTitle;
+  final List<String>? categoryFilter;
 
   const AllListingsPage({
     super.key,
@@ -52,6 +53,7 @@ class AllListingsPage extends StatefulWidget {
     this.products = const [],
     this.productShops = const {},
     this.sectionTitle,
+    this.categoryFilter,
   });
 
   @override
@@ -71,11 +73,13 @@ class _AllListingsPageState extends State<AllListingsPage> {
   late List<ProductModel> _allProducts;
   late Map<String, ShopModel> _allProductShops;
   final Map<String, ShopModel> _shopsMap = {};
+  final ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
+  bool _isSearchingRemote = false;
   bool _hasMore = true;
   int _totalAvailableProducts = 0;
   int _currentOffset = 0;
-  static const int _batchSize = 50;
+  static const int _batchSize = 75;
 
   @override
   void initState() {
@@ -93,60 +97,291 @@ class _AllListingsPageState extends State<AllListingsPage> {
     if (widget.type == ListingType.products) {
       _totalAvailableProducts = widget.products.length;
       _currentOffset = widget.products.length;
+      _scrollController.addListener(_onScroll);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _initializeAndFetchProductCatalog();
       });
     }
   }
 
+  // ── Department Keywords for Broad Section Searches ───────────────────────
+  static const Map<String, List<String>> _departmentKeywords = {
+    'Pharmacy': [
+      'medicine',
+      'medicines',
+      'med',
+      'meds',
+      'pharmacy',
+      'medical',
+      'medical store',
+      'healthcare',
+      'health',
+      'pharma',
+      'drugs',
+      'drug',
+      'clinic',
+      'wellness',
+      'chemist',
+      'doctor',
+      'all medicines',
+    ],
+    'Grocery': [
+      'grocery',
+      'groceries',
+      'essentials',
+      'supermarket',
+      'hypermarket',
+      'ration',
+      'daily essentials',
+      'daily needs',
+      'provisions',
+      'staples',
+      'all groceries',
+    ],
+    'Clothing': [
+      'clothing',
+      'clothes',
+      'fashion',
+      'apparel',
+      'wear',
+      'garments',
+      'outfit',
+      'all clothes',
+    ],
+    'Food': [
+      'food',
+      'restaurant',
+      'restaurants',
+      'eat',
+      'meal',
+      'cafe',
+      'dishes',
+      'all food',
+    ],
+    'Popular': [
+      'popular',
+      'popular items',
+      'all items',
+      'all products',
+      'everything',
+      'items',
+      'products',
+    ],
+  };
+
+  static Set<String> get _allDepartmentWords {
+    final words = <String>{};
+    for (final list in _departmentKeywords.values) {
+      for (final w in list) {
+        words.add(w.toLowerCase());
+      }
+    }
+    return words;
+  }
+
+  static String _getCategorySynonyms(String category, [ShopModel? shop]) {
+    final catName = category.trim();
+    final shopCat = shop?.category.trim() ?? '';
+    final shopCats = shop?.categories ?? [];
+
+    final buffer = StringBuffer();
+
+    void addCategoryWords(String cat) {
+      if (cat.isEmpty) return;
+      final collection = AppCategories.getCustomerCollection(cat).toLowerCase();
+      final subtitle = AppCategories.getCustomerSubtitle(cat).toLowerCase();
+      final catLower = cat.toLowerCase();
+
+      buffer.write(' $catLower $collection $subtitle ');
+
+      if (collection.contains('pharmacy') ||
+          collection.contains('health') ||
+          catLower.contains('pharmacy') ||
+          catLower.contains('medical')) {
+        buffer.write(
+            ' medicine medicines med meds medical pharmacy healthcare health pharma drugs clinic wellness chemist doctor tablet syrup cream pill drops ointment injection salts salt composition active chemical formula paracetamol rosuvastatin atorvastatin fenofibrate capsule tabs strip ');
+      }
+      if (collection.contains('grocery') ||
+          collection.contains('fresh') ||
+          catLower.contains('grocery') ||
+          catLower.contains('supermarket') ||
+          catLower.contains('butcher') ||
+          catLower.contains('fish') ||
+          catLower.contains('dairy')) {
+        buffer.write(
+            ' grocery groceries supermarket hypermarket essentials daily essentials provisions staples ration food meat chicken fish mutton veggies vegetables milk noodle noodles maggi pasta macaroni snack snacks biscuits oil ghee ');
+      }
+      if (collection.contains('fashion') ||
+          collection.contains('lifestyle') ||
+          catLower.contains('clothing') ||
+          catLower.contains('footwear')) {
+        buffer.write(
+            ' clothing clothes fashion apparel wear garments outfit shoes footwear shirt pant dress jeans denim trousers jacket sneakers ');
+      }
+      if (collection.contains('food') ||
+          collection.contains('dining') ||
+          catLower.contains('restaurant') ||
+          catLower.contains('fast food') ||
+          catLower.contains('bakery')) {
+        buffer.write(
+            ' food restaurant fast food meal dishes eat bakery cafe sweets snacks burger pizza biryani noodle noodles maggi chowmein pasta ');
+      }
+      if (collection.contains('cosmetics') ||
+          collection.contains('beauty') ||
+          catLower.contains('cosmetics') ||
+          catLower.contains('salon')) {
+        buffer.write(
+            ' cosmetics cosmetic makeup beauty skincare lipstick lip balm eyeliner mascara foundation cream lotion serum perfume ');
+      }
+      if (collection.contains('electronics') ||
+          collection.contains('utilities') ||
+          catLower.contains('electronics') ||
+          catLower.contains('mobile')) {
+        buffer.write(
+            ' electronics mobile phone gadget device computer laptop charger cable repair ');
+      }
+    }
+
+    addCategoryWords(catName);
+    if (shopCat.isNotEmpty && shopCat != catName) {
+      addCategoryWords(shopCat);
+    }
+    for (final c in shopCats) {
+      if (c != catName && c != shopCat) {
+        addCategoryWords(c);
+      }
+    }
+
+    return buffer.toString();
+  }
+
+  bool _isDepartmentQuery(String query) {
+    final lower = query.trim().toLowerCase();
+    if (lower.isEmpty) return false;
+
+    final title = _pageTitle.toLowerCase();
+    if (title == lower || (lower.length >= 4 && title.contains(lower))) return true;
+
+    // Check if query directly references an entire shop name alone
+    for (final s in widget.shops) {
+      final sName = s.name.trim().toLowerCase();
+      if (sName.isNotEmpty && (sName == lower || lower.contains(sName))) {
+        final remainder = lower.replaceAll(sName, '').trim();
+        if (remainder.isEmpty) return true;
+      }
+    }
+    for (final s in _shopsMap.values) {
+      final sName = s.name.trim().toLowerCase();
+      if (sName.isNotEmpty && (sName == lower || lower.contains(sName))) {
+        final remainder = lower.replaceAll(sName, '').trim();
+        if (remainder.isEmpty) return true;
+      }
+    }
+
+    final terms = lower.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (terms.isEmpty) return false;
+
+    for (final entry in _departmentKeywords.entries) {
+      final deptKey = entry.key.toLowerCase();
+      final inFilter = widget.categoryFilter?.any((c) {
+            final cLower = c.toLowerCase();
+            return cLower.contains(deptKey) ||
+                deptKey.contains(cLower) ||
+                entry.value.any((k) => cLower.contains(k));
+          }) ??
+          false;
+      final inTitle = title.contains(deptKey) ||
+          entry.value.any((k) => title.contains(k));
+      if (inFilter || inTitle || entry.key == 'Popular') {
+        if (entry.value.contains(lower)) return true;
+
+        // Query is a department query ONLY if all terms are department words
+        // (if a specific product term like "dolo" is present, it must NOT suppress product filtering)
+        final allTermsAreDeptWords = terms.every((t) =>
+            entry.value.contains(t) ||
+            t == deptKey ||
+            t == 'all' ||
+            t == 'item' ||
+            t == 'items' ||
+            t == 'store' ||
+            t == 'shop' ||
+            t == 'products' ||
+            t == 'product');
+        if (allTermsAreDeptWords) return true;
+      }
+    }
+    return false;
+  }
+
   Future<List<String>> _resolveNearbyShopIds() async {
     final loc = context.read<LocationProvider>();
+    final resolvedIds = <String>{};
+
+    // 0. Include shops already provided from the caller
+    for (final s in widget.shops) {
+      resolvedIds.add(s.id);
+      _shopsMap[s.id] = s;
+    }
 
     // 1. Dynamic geospatial query using LocationProvider + DeliveryCalculator.maxRadiusKm
     try {
       if (loc.hasLocation && loc.currentLocation != null) {
-        final resp = await Supabase.instance.client.rpc('get_nearby_shops', params: {
+        final params = <String, dynamic>{
           'p_lat': loc.currentLocation!.latitude,
           'p_lng': loc.currentLocation!.longitude,
           'p_radius_km': DeliveryCalculator.maxRadiusKm,
           'p_limit': 500,
-        });
-        final fetched =
-            (resp as List).map((s) => ShopModel.fromMap(s)).toList();
-        final validIds = <String>[];
-        for (final s in fetched) {
-          if (s.location.latitude != 0 && s.location.longitude != 0) {
-            final dist = loc.distanceTo(s.location);
-            if (DeliveryCalculator.isWithinRange(dist)) {
-              s.distanceKm = dist;
-              _shopsMap[s.id] = s;
-              validIds.add(s.id);
+          'p_categories': widget.categoryFilter,
+        };
+        dynamic resp;
+        try {
+          resp = await Supabase.instance.client.rpc('get_nearby_shops', params: params);
+        } catch (_) {
+          // Resilient fallback to search_shops_geospatial (single canonical signature)
+          resp = await Supabase.instance.client.rpc('search_shops_geospatial', params: {
+            'p_lat': loc.currentLocation!.latitude,
+            'p_lng': loc.currentLocation!.longitude,
+            'p_query': null,
+            'p_categories': widget.categoryFilter,
+            'p_radius_km': DeliveryCalculator.maxRadiusKm,
+            'p_limit': 500,
+          });
+        }
+
+        if (resp != null) {
+          final fetched =
+              (resp as List).map((s) => ShopModel.fromMap(s)).toList();
+          for (final s in fetched) {
+            if (s.location.latitude != 0 && s.location.longitude != 0) {
+              final dist = loc.distanceTo(s.location);
+              if (DeliveryCalculator.isWithinRange(dist)) {
+                s.distanceKm = dist;
+                _shopsMap[s.id] = s;
+                resolvedIds.add(s.id);
+              }
             }
           }
         }
-        if (validIds.isNotEmpty) return validIds;
       }
     } catch (e) {
       debugPrint('[AllListingsPage] _resolveNearbyShopIds error: $e');
     }
 
-    // 2. From widget.shops if already provided, filtering strictly by delivery radius
-    if (widget.shops.isNotEmpty) {
-      return widget.shops
-          .where((s) {
-            if (!loc.hasLocation) return true;
-            if (s.location.latitude == 0 || s.location.longitude == 0) return false;
-            final d = s.distanceKm ?? loc.distanceTo(s.location);
-            return DeliveryCalculator.isWithinRange(d);
-          })
-          .map((s) => s.id)
-          .toList();
-    }
+    if (resolvedIds.isNotEmpty) return resolvedIds.toList();
 
-    // 3. From shops already cached in _shopsMap, filtering strictly by delivery radius
+    // 2. From shops already cached in _shopsMap, filtering strictly by delivery radius & category
     if (_shopsMap.isNotEmpty) {
+      final lowerFilters = widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty
+          ? widget.categoryFilter!.map((c) => c.trim().toLowerCase()).toSet()
+          : null;
+
       return _shopsMap.values
           .where((s) {
+            if (lowerFilters != null) {
+              final matches = lowerFilters.contains(s.category.trim().toLowerCase()) ||
+                  s.categories.any((c) => lowerFilters.contains(c.trim().toLowerCase()));
+              if (!matches) return false;
+            }
             if (!loc.hasLocation) return true;
             if (s.location.latitude == 0 || s.location.longitude == 0) return false;
             final d = s.distanceKm ?? loc.distanceTo(s.location);
@@ -164,35 +399,119 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
     try {
       final config = context.read<PlatformConfigProvider>();
+      final loc = context.read<LocationProvider>();
+
+      // 0. Resolve missing shops for initial products if any
+      final missingInitialShopIds = _allProducts
+          .map((p) => p.shopId)
+          .where((id) => !_shopsMap.containsKey(id))
+          .toSet();
+      if (missingInitialShopIds.isNotEmpty) {
+        try {
+          final initialShopRows = await Supabase.instance.client
+              .from('shops')
+              .select('*')
+              .inFilter('id', missingInitialShopIds.toList());
+          for (final sr in (initialShopRows as List)) {
+            final sm = ShopModel.fromMap(sr);
+            if (loc.hasLocation &&
+                sm.location.latitude != 0 &&
+                sm.location.longitude != 0) {
+              sm.distanceKm = loc.distanceTo(sm.location);
+            }
+            _shopsMap[sm.id] = sm;
+          }
+          for (final p in _allProducts) {
+            if (_shopsMap.containsKey(p.shopId)) {
+              _allProductShops[p.id] = _shopsMap[p.shopId]!;
+            }
+          }
+        } catch (_) {}
+      }
+
       final shopIds = await _resolveNearbyShopIds();
-      if (!mounted || shopIds.isEmpty) return;
+      if (!mounted) return;
+      if (shopIds.isEmpty) {
+        setState(() {
+          _hasMore = false;
+          _isLoadingMore = false;
+        });
+        return;
+      }
 
       // 1. Query exact total product count in database for nearby shops (excluding soft deletes)
-      final countResp = await Supabase.instance.client
+      final countQuery = Supabase.instance.client
           .from('products')
           .select('id')
           .inFilter('shop_id', shopIds)
           .eq('is_deleted', false)
           .eq('is_available', true);
 
+      final countResp = await countQuery;
       final totalInDb = (countResp as List).length;
+
+      // 2. High-speed single-shot catalog fetch (up to 500 items)
+      final fetchQuery = Supabase.instance.client
+          .from('products')
+          .select()
+          .inFilter('shop_id', shopIds)
+          .eq('is_deleted', false)
+          .eq('is_available', true);
+
+      final response = await fetchQuery
+          .order('rating', ascending: false)
+          .order('created_at', ascending: false)
+          .limit(500);
+
+      final rows = response as List<dynamic>;
+      final existingIds = _allProducts.map((p) => p.id).toSet();
+      final newProducts = <ProductModel>[];
+      final missingShopIds = <String>{};
+
+      for (final r in rows) {
+        final p = ProductModel.fromMap(r as Map<String, dynamic>);
+        if (!existingIds.contains(p.id) && config.isActiveCategory(p.category)) {
+          newProducts.add(p);
+          existingIds.add(p.id);
+          if (!_shopsMap.containsKey(p.shopId)) {
+            missingShopIds.add(p.shopId);
+          }
+        }
+      }
+
+      if (missingShopIds.isNotEmpty) {
+        try {
+          final shopRows = await Supabase.instance.client
+              .from('shops')
+              .select('*')
+              .inFilter('id', missingShopIds.toList());
+          for (final sr in (shopRows as List)) {
+            final sm = ShopModel.fromMap(sr);
+            if (loc.hasLocation &&
+                sm.location.latitude != 0 &&
+                sm.location.longitude != 0) {
+              sm.distanceKm = loc.distanceTo(sm.location);
+            }
+            _shopsMap[sm.id] = sm;
+          }
+        } catch (_) {}
+      }
+
+      for (final p in newProducts) {
+        if (_shopsMap.containsKey(p.shopId)) {
+          _allProductShops[p.id] = _shopsMap[p.shopId]!;
+        }
+      }
 
       if (mounted) {
         setState(() {
-          _totalAvailableProducts =
-              math.max(totalInDb, _allProducts.length);
+          _allProducts.addAll(newProducts);
+          _currentOffset = _allProducts.length;
+          _hasMore = totalInDb > _allProducts.length;
+          _totalAvailableProducts = math.max(totalInDb, _allProducts.length);
+          _isLoadingMore = false;
+          _invalidateSortMemo();
         });
-      }
-
-      // If database has more products than the initial preview sample, load next batch immediately
-      if (_allProducts.length < totalInDb) {
-        await _fetchMoreProductsFromDb(shopIds, config);
-      } else {
-        if (mounted) {
-          setState(() {
-            _hasMore = false;
-          });
-        }
       }
     } catch (e) {
       debugPrint('[AllListingsPage] Catalog init error: $e');
@@ -220,12 +539,14 @@ class _AllListingsPageState extends State<AllListingsPage> {
         return;
       }
 
-      final response = await Supabase.instance.client
+      final fetchQuery = Supabase.instance.client
           .from('products')
           .select()
           .inFilter('shop_id', shopIds)
           .eq('is_deleted', false)
-          .eq('is_available', true)
+          .eq('is_available', true);
+
+      final response = await fetchQuery
           .order('rating', ascending: false)
           .order('created_at', ascending: false)
           .range(_currentOffset, _currentOffset + _batchSize - 1);
@@ -289,6 +610,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
           _allProducts.addAll(newProducts);
           _currentOffset += rows.length;
           _isLoadingMore = false;
+          _invalidateSortMemo();
           if (rows.length < _batchSize ||
               _allProducts.length >= _totalAvailableProducts) {
             _hasMore = false;
@@ -306,8 +628,191 @@ class _AllListingsPageState extends State<AllListingsPage> {
     }
   }
 
+  void _onScroll() {
+    if (_scrollController.hasClients &&
+        _scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 400) {
+      if (_hasMore && !_isLoadingMore && _searchQuery.isEmpty) {
+        setState(() {
+          _displayLimit += 20;
+        });
+        _fetchMoreProductsFromDb();
+      }
+    }
+  }
+
+  Future<void> _performLiveProductSearch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty || !mounted || widget.type != ListingType.products) {
+      return;
+    }
+
+    setState(() => _isSearchingRemote = true);
+
+    try {
+      final loc = context.read<LocationProvider>();
+      final config = context.read<PlatformConfigProvider>();
+      final shopIds = await _resolveNearbyShopIds();
+      if (shopIds.isEmpty || !mounted) {
+        if (mounted) setState(() => _isSearchingRemote = false);
+        return;
+      }
+
+      // 1. Department query fast-path (e.g. typing "medicine", "grocery", "clothing", or store name)
+      if (_isDepartmentQuery(trimmed)) {
+        final catalogRows = await Supabase.instance.client
+            .from('products')
+            .select()
+            .inFilter('shop_id', shopIds)
+            .eq('is_deleted', false)
+            .eq('is_available', true)
+            .order('rating', ascending: false)
+            .order('created_at', ascending: false)
+            .limit(500);
+
+        if (!mounted || _searchQuery != trimmed) return;
+
+        final rows = catalogRows as List<dynamic>;
+        final existingIds = _allProducts.map((p) => p.id).toSet();
+        final newProducts = <ProductModel>[];
+        final missingShopIds = <String>{};
+
+        for (final r in rows) {
+          final p = ProductModel.fromMap(r as Map<String, dynamic>);
+          if (!existingIds.contains(p.id) && config.isActiveCategory(p.category)) {
+            newProducts.add(p);
+            existingIds.add(p.id);
+            if (!_shopsMap.containsKey(p.shopId)) {
+              missingShopIds.add(p.shopId);
+            }
+          }
+        }
+
+        if (missingShopIds.isNotEmpty) {
+          try {
+            final shopRows = await Supabase.instance.client
+                .from('shops')
+                .select('*')
+                .inFilter('id', missingShopIds.toList());
+            for (final sr in (shopRows as List)) {
+              final sm = ShopModel.fromMap(sr);
+              if (loc.hasLocation &&
+                  sm.location.latitude != 0 &&
+                  sm.location.longitude != 0) {
+                sm.distanceKm = loc.distanceTo(sm.location);
+              }
+              _shopsMap[sm.id] = sm;
+            }
+          } catch (_) {}
+        }
+
+        for (final p in newProducts) {
+          if (_shopsMap.containsKey(p.shopId)) {
+            _allProductShops[p.id] = _shopsMap[p.shopId]!;
+          }
+        }
+
+        if (mounted && _searchQuery == trimmed) {
+          setState(() {
+            _allProducts.addAll(newProducts);
+            _totalAvailableProducts = math.max(_totalAvailableProducts, _allProducts.length);
+            _isSearchingRemote = false;
+            _invalidateSortMemo();
+          });
+        }
+        return;
+      }
+
+      // 2. Multi-column remote live search across all products of nearby shops
+      var q = Supabase.instance.client
+          .from('products')
+          .select()
+          .inFilter('shop_id', shopIds)
+          .eq('is_deleted', false)
+          .eq('is_available', true);
+
+      final cleanQuery = trimmed.replaceAll(RegExp(r'[,()"\x27]'), ' ');
+      final rawTerms =
+          cleanQuery.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+      final deptWords = _allDepartmentWords;
+      final specificTerms = rawTerms.length > 1
+          ? rawTerms.where((t) => !deptWords.contains(t.toLowerCase())).toList()
+          : rawTerms;
+      final terms = specificTerms.isNotEmpty ? specificTerms : rawTerms;
+
+      for (final term in terms) {
+        q = q.or(
+          'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,category.ilike.%$term%,medicine_type.ilike.%$term%',
+        );
+      }
+
+      final response =
+          await q.order('rating', ascending: false).limit(500);
+
+      if (!mounted || _searchQuery != trimmed) return;
+
+      final rows = response as List<dynamic>;
+      final existingIds = _allProducts.map((p) => p.id).toSet();
+      final newProducts = <ProductModel>[];
+      final missingShopIds = <String>{};
+
+      for (final r in rows) {
+        final p = ProductModel.fromMap(r as Map<String, dynamic>);
+        if (!existingIds.contains(p.id) &&
+            config.isActiveCategory(p.category)) {
+          newProducts.add(p);
+          existingIds.add(p.id);
+          if (!_shopsMap.containsKey(p.shopId)) {
+            missingShopIds.add(p.shopId);
+          }
+        }
+      }
+
+      // Batch-fetch missing shop details if any
+      if (missingShopIds.isNotEmpty) {
+        try {
+          final shopRows = await Supabase.instance.client
+              .from('shops')
+              .select('*')
+              .inFilter('id', missingShopIds.toList());
+          for (final sr in (shopRows as List)) {
+            final sm = ShopModel.fromMap(sr);
+            if (loc.hasLocation &&
+                sm.location.latitude != 0 &&
+                sm.location.longitude != 0) {
+              sm.distanceKm = loc.distanceTo(sm.location);
+            }
+            _shopsMap[sm.id] = sm;
+          }
+        } catch (e) {
+          debugPrint('[AllListingsPage] Error fetching search missing shops: $e');
+        }
+      }
+
+      for (final p in newProducts) {
+        if (_shopsMap.containsKey(p.shopId)) {
+          _allProductShops[p.id] = _shopsMap[p.shopId]!;
+        }
+      }
+
+      if (mounted && _searchQuery == trimmed) {
+        setState(() {
+          _allProducts.addAll(newProducts);
+          _isSearchingRemote = false;
+          _invalidateSortMemo();
+        });
+      }
+    } catch (e) {
+      debugPrint('[AllListingsPage] Remote product search error: $e');
+      if (mounted) {
+        setState(() => _isSearchingRemote = false);
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _scrollController.dispose();
     _searchController.dispose();
     _searchDebounce?.cancel();
     super.dispose();
@@ -364,13 +869,19 @@ class _AllListingsPageState extends State<AllListingsPage> {
     }).toList();
 
     if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      list = list
-          .where((s) =>
-              s.name.toLowerCase().contains(q) ||
-              (s.cuisineType ?? '').toLowerCase().contains(q) ||
-              s.category.toLowerCase().contains(q))
+      final cleanQuery = _searchQuery.replaceAll(RegExp(r'[,()"\x27]'), ' ');
+      final terms = cleanQuery
+          .toLowerCase()
+          .split(RegExp(r'\s+'))
+          .where((t) => t.isNotEmpty)
           .toList();
+      list = list.where((s) {
+        final syn = _getCategorySynonyms(s.category, s);
+        final searchable =
+            '${s.name} ${s.cuisineType ?? ''} ${s.category} ${s.categories.join(' ')} $syn'
+                .toLowerCase();
+        return terms.every((t) => searchable.contains(t));
+      }).toList();
     }
 
     if (_vegFilterMode == VegFilterMode.vegOnly) {
@@ -396,7 +907,6 @@ class _AllListingsPageState extends State<AllListingsPage> {
         case _AllListingsSortMode.priceLow:
         case _AllListingsSortMode.priceHigh:
         case _AllListingsSortMode.discount:
-          // For shops, these fall back to rating sort
           return b.rating.compareTo(a.rating);
       }
     });
@@ -411,7 +921,23 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
   List<ProductModel> _computeSortedProducts() {
     final loc = context.read<LocationProvider>();
+    final lowerFilters = widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty
+        ? widget.categoryFilter!.map((c) => c.trim().toLowerCase()).toSet()
+        : null;
+
     var list = _allProducts.where((p) {
+      if (lowerFilters != null) {
+        final pCat = p.category.trim().toLowerCase();
+        final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
+        final sCat = shop?.category.trim().toLowerCase() ?? '';
+        final matchesProdCat = lowerFilters.contains(pCat);
+        final matchesShopCat = sCat.isNotEmpty && lowerFilters.contains(sCat);
+        final matchesShopMultiCat = shop?.categories.any((c) => lowerFilters.contains(c.trim().toLowerCase())) ?? false;
+        final matchesShopScope = widget.shops.any((s) => s.id == p.shopId);
+        if (!matchesProdCat && !matchesShopCat && !matchesShopMultiCat && !matchesShopScope) {
+          return false;
+        }
+      }
       final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
       if (loc.hasLocation && shop != null) {
         if (shop.location.latitude == 0 || shop.location.longitude == 0) {
@@ -424,13 +950,23 @@ class _AllListingsPageState extends State<AllListingsPage> {
     }).toList();
 
     if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      list = list
-          .where((p) =>
-              p.name.toLowerCase().contains(q) ||
-              (p.description ?? '').toLowerCase().contains(q) ||
-              p.category.toLowerCase().contains(q))
-          .toList();
+      if (!_isDepartmentQuery(_searchQuery)) {
+        final cleanQuery = _searchQuery.replaceAll(RegExp(r'[,()"\x27]'), ' ');
+        final terms = cleanQuery
+            .toLowerCase()
+            .split(RegExp(r'\s+'))
+            .where((t) => t.isNotEmpty)
+            .toList();
+        list = list.where((p) {
+          final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
+          final syn = _getCategorySynonyms(p.category, shop);
+          final variantNames = p.variants.map((v) => v.name).join(' ');
+          final searchable =
+              '${p.name} ${p.description ?? ''} ${p.brand ?? ''} ${p.category} ${p.subCategory ?? ''} ${p.menuCategory ?? ''} ${p.medicineType} ${p.unitType} $variantNames ${p.specialTags.join(' ')} ${shop?.name ?? ''} ${shop?.category ?? ''} $syn'
+                  .toLowerCase();
+          return terms.every((t) => searchable.contains(t));
+        }).toList();
+      }
     }
 
     if (_vegFilterMode == VegFilterMode.vegOnly) {
@@ -468,6 +1004,11 @@ class _AllListingsPageState extends State<AllListingsPage> {
   bool get _isProducts => widget.type == ListingType.products;
 
   bool get _hasFoodItems {
+    if (widget.categoryFilter != null &&
+        widget.categoryFilter!.isNotEmpty &&
+        !widget.categoryFilter!.any((c) => AppCategories.isFoodCategory(c))) {
+      return false;
+    }
     if (widget.type == ListingType.restaurants) return true;
     return _allProducts.any((p) => p.isFood || p.isVeg != null);
   }
@@ -505,7 +1046,6 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    _invalidateSortMemo();
     final themeProvider = context.watch<ThemeProvider>();
     final cart = context.watch<CartProvider>();
     final isDark = themeProvider.isDarkMode;
@@ -589,20 +1129,28 @@ class _AllListingsPageState extends State<AllListingsPage> {
                       controller: _searchController,
                       onChanged: (v) {
                         _searchDebounce?.cancel();
-                        _searchDebounce = Timer(
-                          const Duration(milliseconds: 250),
-                          () {
-                            if (mounted) {
-                              setState(() {
-                                _searchQuery = v.trim();
-                                _displayLimit = 20;
-                              });
-                            }
-                          },
-                        );
+                        final trimmed = v.trim();
+                        setState(() {
+                          _searchQuery = trimmed;
+                          _displayLimit = 20;
+                          _invalidateSortMemo();
+                        });
+                        if (trimmed.isNotEmpty &&
+                            widget.type == ListingType.products) {
+                          _searchDebounce = Timer(
+                            const Duration(milliseconds: 250),
+                            () => _performLiveProductSearch(trimmed),
+                          );
+                        } else {
+                          setState(() => _isSearchingRemote = false);
+                        }
                       },
                       decoration: InputDecoration(
-                        hintText: 'Search within $_pageTitle...',
+                        hintText: widget.categoryFilter != null &&
+                                widget.categoryFilter!.any(
+                                    (c) => AppCategories.isPharmacyCategory(c))
+                            ? 'Search medicines by name or salt/composition...'
+                            : 'Search within $_pageTitle...',
                         hintStyle: GoogleFonts.outfit(
                           color: isDark
                               ? Colors.grey.shade500
@@ -611,19 +1159,35 @@ class _AllListingsPageState extends State<AllListingsPage> {
                         ),
                         prefixIcon: const Icon(Icons.search_rounded,
                             color: AppColors.primary, size: 20),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.close_rounded, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _searchQuery = '';
-                                    _displayLimit = 20;
-                                    _vegFilterMode = VegFilterMode.all;
-                                  });
-                                },
+                        suffixIcon: _isSearchingRemote
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
                               )
-                            : null,
+                            : (_searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.close_rounded,
+                                        size: 18),
+                                    onPressed: () {
+                                      _searchDebounce?.cancel();
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchQuery = '';
+                                        _isSearchingRemote = false;
+                                        _displayLimit = 20;
+                                        _vegFilterMode = VegFilterMode.all;
+                                        _invalidateSortMemo();
+                                      });
+                                    },
+                                  )
+                                : null),
                         filled: true,
                         fillColor:
                             Theme.of(context).inputDecorationTheme.fillColor ??
@@ -667,6 +1231,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
                                     ? VegFilterMode.all
                                     : VegFilterMode.vegOnly;
                                 _displayLimit = 20;
+                                _invalidateSortMemo();
                               });
                             },
                             child: AnimatedContainer(
@@ -740,6 +1305,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
                                     ? VegFilterMode.all
                                     : VegFilterMode.nonVegOnly;
                                 _displayLimit = 20;
+                                _invalidateSortMemo();
                               });
                             },
                             child: AnimatedContainer(
@@ -807,7 +1373,10 @@ class _AllListingsPageState extends State<AllListingsPage> {
                         final mode = f['mode'] as _AllListingsSortMode;
                         final isSelected = _sortMode == mode;
                         return GestureDetector(
-                          onTap: () => setState(() => _sortMode = mode),
+                          onTap: () => setState(() {
+                            _sortMode = mode;
+                            _invalidateSortMemo();
+                          }),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
                             margin: const EdgeInsets.only(right: 8),
@@ -897,15 +1466,66 @@ class _AllListingsPageState extends State<AllListingsPage> {
     );
   }
 
+  Future<void> _onRefresh() async {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _currentOffset = 0;
+      _displayLimit = 20;
+      _hasMore = true;
+      _isLoadingMore = false;
+      _allProducts.clear();
+      _allProductShops.clear();
+      _invalidateSortMemo();
+    });
+    await _initializeAndFetchProductCatalog();
+  }
+
   // ── Products grid ─────────────────────────────────────────────────────────
   Widget _buildProductsBody(bool isDark) {
     final sorted = _sortedProducts;
-    if (sorted.isEmpty) return _buildEmptyState(isDark);
+    if (sorted.isEmpty) {
+      if (_isSearchingRemote) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Searching full store catalog for "$_searchQuery"...',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white70 : AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+      return _buildEmptyState(isDark);
+    }
 
-    final displayProducts = sorted.take(_displayLimit).toList();
+    final displayProducts = _searchQuery.isNotEmpty
+        ? sorted
+        : sorted.take(_displayLimit).toList();
 
-    return CustomScrollView(
-      slivers: [
+    return RefreshIndicator(
+      onRefresh: _onRefresh,
+      color: AppColors.primary,
+      child: CustomScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           sliver: SliverLayoutBuilder(
@@ -916,9 +1536,12 @@ class _AllListingsPageState extends State<AllListingsPage> {
               final itemWidth = (constraints.crossAxisExtent -
                       crossAxisSpacing * (crossAxisCount - 1)) /
                   crossAxisCount;
-              final childAspectRatio = itemWidth / (itemWidth + 120);
+              final itemHeight = itemWidth + 134;
+              final childAspectRatio = itemWidth / itemHeight;
 
               return SliverGrid.builder(
+                addAutomaticKeepAlives: false,
+                addRepaintBoundaries: true,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   childAspectRatio: childAspectRatio,
@@ -1035,7 +1658,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        'You\'ve reached the end of popular items in your area 🛍️',
+                        _searchQuery.isNotEmpty
+                            ? 'End of results for "$_searchQuery" 🛍️'
+                            : 'You\'ve reached the end of ${_pageTitle.toLowerCase()} 🛍️',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 12,
@@ -1056,8 +1681,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
             ),
           ),
       ],
-    );
-  }
+    ),
+  );
+}
 
   // ── Shops/Restaurants grid ────────────────────────────────────────────────
   Widget _buildShopsBody(bool isDark) {
@@ -1206,7 +1832,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
             const SizedBox(height: 8),
             Text(
               hasSearch
-                  ? 'Try a different search term.'
+                  ? 'No matching items found in $_pageTitle. Try searching with a different brand or generic keyword.'
                   : 'Check back soon — more $_itemLabel are being added.',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
@@ -1222,7 +1848,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
                   _searchController.clear();
                   setState(() {
                     _searchQuery = '';
+                    _isSearchingRemote = false;
                     _displayLimit = 20;
+                    _invalidateSortMemo();
                   });
                 },
                 icon: const Icon(Icons.clear_rounded,

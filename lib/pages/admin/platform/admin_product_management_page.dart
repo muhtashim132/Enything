@@ -2522,7 +2522,7 @@ class _AdminProductManagementPageState
   }
 
   List<ProductModel> get _filteredProducts {
-    final query = _productSearchCtrl.text.toLowerCase().trim();
+    final rawQuery = _productSearchCtrl.text.toLowerCase().trim();
     return _products.where((p) {
       if (_productAvailabilityFilter == 'Available' && !p.isAvailable) {
         return false;
@@ -2534,13 +2534,32 @@ class _AdminProductManagementPageState
           p.category.toLowerCase() != _productCategoryFilter.toLowerCase()) {
         return false;
       }
-      if (query.isNotEmpty) {
-        final matchesName = p.name.toLowerCase().contains(query);
-        final matchesCat = p.category.toLowerCase().contains(query);
-        final matchesBrand = (p.brand ?? '').toLowerCase().contains(query);
-        final matchesDesc =
-            (p.description ?? '').toLowerCase().contains(query);
-        return matchesName || matchesCat || matchesBrand || matchesDesc;
+      if (rawQuery.isNotEmpty) {
+        final terms = rawQuery
+            .split(RegExp(r'\s+'))
+            .where((t) => t.isNotEmpty)
+            .toList();
+        if (terms.isEmpty) return true;
+
+        final name = p.name.toLowerCase();
+        final cat = p.category.toLowerCase();
+        final menuCat = (p.menuCategory ?? '').toLowerCase();
+        final subCat = (p.subCategory ?? '').toLowerCase();
+        final brand = (p.brand ?? '').toLowerCase();
+        final desc = (p.description ?? '').toLowerCase();
+        final medType = p.medicineType.toLowerCase();
+        final variantNames =
+            p.variants.map((v) => v.name.toLowerCase()).join(' ');
+
+        return terms.every((t) =>
+            name.contains(t) ||
+            desc.contains(t) ||
+            brand.contains(t) ||
+            cat.contains(t) ||
+            menuCat.contains(t) ||
+            subCat.contains(t) ||
+            medType.contains(t) ||
+            variantNames.contains(t));
       }
       return true;
     }).toList();
@@ -3485,7 +3504,7 @@ class _AdminProductManagementPageState
             controller: _productSearchCtrl,
             style: AdminStyles.body(size: 14),
             decoration: InputDecoration(
-              hintText: 'Search products in ${shop.name}...',
+              hintText: 'Search products by name, salt/composition in ${shop.name}...',
               hintStyle:
                   AdminStyles.caption(color: AdminColors.textMuted, size: 13),
               prefixIcon:
@@ -3922,6 +3941,21 @@ class _AdminProductManagementPageState
                         ),
                     ],
                   ),
+
+                  if (product.description != null &&
+                      product.description!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      product.description!.trim(),
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: AdminColors.textSecondary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
 
                   const SizedBox(height: 6),
 

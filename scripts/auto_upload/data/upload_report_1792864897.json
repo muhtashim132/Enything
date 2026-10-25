@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-10-24 23:31:37",
+  "mode": "pharmacy",
+  "shop_id": "00000000-0000-0000-0000-000000000001",
+  "dry_run": true,
+  "total_detected": 4,
+  "enriched_count": 4,
+  "skipped_duplicates": [],
+  "failed_items": []
+}

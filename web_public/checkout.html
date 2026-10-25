@@ -198,7 +198,7 @@
                 </div>
                 <div class="summary-item">
                     <span>Handling Fee</span>
-                    <span>₹20.00</span>
+                    <span id="summary-handling">₹2.00</span>
                 </div>
                 <div class="summary-item">
                     <span>Taxes (GST)</span>
@@ -325,12 +325,14 @@
 
             const subtotal = cart.getTotal();
             const gst = cart.getGSTTotal();
-            const deliveryFee = 30.00;
-            const handlingFee = 20.00;
-            const total = subtotal + gst + deliveryFee + handlingFee;
+            const deliveryFee = await cart.calculateDeliveryFee();
+            const handlingFee = await cart.getHandlingFee();
+            const total = subtotal + gst + (deliveryFee > 0 ? deliveryFee : 30.00) + handlingFee;
 
             document.getElementById('summary-subtotal').textContent = `₹${subtotal.toFixed(2)}`;
             document.getElementById('summary-taxes').textContent = `₹${gst.toFixed(2)}`;
+            const handlingEl = document.getElementById('summary-handling');
+            if (handlingEl) handlingEl.textContent = `₹${handlingFee.toFixed(2)}`;
             document.getElementById('summary-total').textContent = `₹${total.toFixed(2)}`;
 
             document.getElementById('pay-button').addEventListener('click', (e) => {

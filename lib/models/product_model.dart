@@ -171,7 +171,11 @@ class ProductModel {
       originalPrice: _parseDoubleNullable(map['original_price']),
       totalQuantity: _parseIntNullable(map['total_quantity']),
       weightPerUnit: _parseDoubleNullable(map['weight_per_unit']),
-      unitType: map['unit_type'] ?? 'pieces',
+      unitType: () {
+        final u = map['unit_type']?.toString().trim().toLowerCase();
+        if (u == null || u.isEmpty || u == 'piece' || u == 'pc' || u == 'pcs') return 'pieces';
+        return u;
+      }(),
       description: map['description'],
       images: imageList,
       isVeg: AppCategories.isFoodCategory(map['category']?.toString())

@@ -829,7 +829,7 @@ BEGIN
       ) VALUES (
         v_order.customer_id,
         'bulk_delivered_' || p_order_id::text,
-        '🎉 Event Feast Delivered!',
+        '🎉 Catering Feast Delivered!',
         'Delivery handover verified with OTP for "' || COALESCE(v_order.address_label, 'Catering') || '". Have a wonderful celebration!',
         p_order_id,
         now()

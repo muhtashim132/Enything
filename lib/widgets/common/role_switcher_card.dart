@@ -123,6 +123,7 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
         dest = AppRoutes.customerHome;
     }
 
+    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
     navigator.pushNamedAndRemoveUntil(dest, (_) => false);
   }
 
