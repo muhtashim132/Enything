@@ -11,6 +11,7 @@ import '../../providers/favorites_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
+import '../../config/app_categories.dart';
 import '../../widgets/product_detail_sheet.dart';
 
 /// Full-screen premium restaurant page — Swiggy/Zomato-style layout.
@@ -94,10 +95,13 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
   List<String> get _menuCategories {
     final Map<String, String> catsMap = {'all': 'All'};
     for (final p in _products) {
-      if (p.menuCategory != null && p.menuCategory!.trim().isNotEmpty) {
-        final lower = p.menuCategory!.trim().toLowerCase();
+      final cat = (p.menuCategory != null && p.menuCategory!.trim().isNotEmpty)
+          ? p.menuCategory!.trim()
+          : p.category.trim();
+      if (cat.isNotEmpty) {
+        final lower = cat.toLowerCase();
         if (!catsMap.containsKey(lower)) {
-          catsMap[lower] = p.menuCategory!.trim();
+          catsMap[lower] = cat;
         }
       }
     }
@@ -106,12 +110,12 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
 
   List<ProductModel> get _filteredProducts => _selectedCategory == 'All'
       ? _products
-      : _products
-          .where((p) =>
-              p.menuCategory != null &&
-              p.menuCategory!.trim().toLowerCase() ==
-                  _selectedCategory.toLowerCase())
-          .toList();
+      : _products.where((p) {
+          final cat = (p.menuCategory != null && p.menuCategory!.trim().isNotEmpty)
+              ? p.menuCategory!.trim()
+              : p.category.trim();
+          return cat.toLowerCase() == _selectedCategory.toLowerCase();
+        }).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -308,8 +312,11 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
 
   Widget _heroBannerPlaceholder() => Container(
         color: const Color(0xFF2D0B6B),
-        child: const Center(
-          child: Text('🍽️', style: TextStyle(fontSize: 72)),
+        child: Center(
+          child: Text(
+            AppCategories.getCategoryEmoji(_shop?.category),
+            style: const TextStyle(fontSize: 72),
+          ),
         ),
       );
 
@@ -464,7 +471,11 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                 child: Text(
-                  'Menu',
+                  AppCategories.isOmnibusStoreCategory(_shop?.category)
+                      ? 'Aisles & Departments'
+                      : (AppCategories.isFoodCategory(_shop?.category)
+                          ? 'Menu'
+                          : 'Products & Catalog'),
                   style: GoogleFonts.outfit(
                       fontSize: 20, fontWeight: FontWeight.w800),
                 ),
@@ -522,15 +533,21 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
     final items = _filteredProducts;
 
     if (items.isEmpty) {
-      return const SliverToBoxAdapter(
+      final emoji = _selectedCategory == 'All'
+          ? AppCategories.getCategoryEmoji(_shop?.category)
+          : AppCategories.getCategoryEmoji(_selectedCategory);
+      return SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.all(48),
+          padding: const EdgeInsets.all(48),
           child: Center(
             child: Column(
               children: [
-                Text('🍽️', style: TextStyle(fontSize: 56)),
-                SizedBox(height: 12),
-                Text('No items in this category',
+                Text(
+                  emoji,
+                  style: const TextStyle(fontSize: 56),
+                ),
+                const SizedBox(height: 12),
+                const Text('No items in this category',
                     style: TextStyle(
                         color: AppColors.textSecondary, fontSize: 15)),
               ],
@@ -633,10 +650,10 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                           height: 90,
                           fit: BoxFit.cover,
                           memCacheWidth: 300,
-                          errorWidget: (_, __, ___) => _foodImgPlaceholder(),
-                          placeholder: (_, __) => _foodImgPlaceholder(),
+                          errorWidget: (_, __, ___) => _foodImgPlaceholder(product.category),
+                          placeholder: (_, __) => _foodImgPlaceholder(product.category),
                         )
-                      : _foodImgPlaceholder(),
+                      : _foodImgPlaceholder(product.category),
                 ),
               ),
               const SizedBox(height: 8),
@@ -728,6 +745,7 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                           );
                         })
                       : GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () {
                             showProductDetailSheet(context, product.id,
                                 highlightVariants: true);
@@ -750,19 +768,24 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                             child: Center(
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
                                     'ADD',
                                     style: GoogleFonts.outfit(
                                         color: AppColors.primary,
                                         fontWeight: FontWeight.w800,
-                                        fontSize: 12),
+                                        fontSize: 12,
+                                        height: 1.0),
                                   ),
                                   const SizedBox(width: 2),
-                                  const Icon(
-                                      Icons.keyboard_arrow_down_rounded,
-                                      size: 14,
-                                      color: AppColors.primary),
+                                  Transform.translate(
+                                    offset: const Offset(0, 0.5),
+                                    child: const Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        size: 14,
+                                        color: AppColors.primary),
+                                  ),
                                 ],
                               ),
                             ),
@@ -770,6 +793,7 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                         ))
                   : totalQuantity == 0
                       ? GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () {
                             cart.addItemWithFeedback(context, product, _shop!);
                           },
@@ -794,7 +818,8 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                                 style: GoogleFonts.outfit(
                                     color: AppColors.primary,
                                     fontWeight: FontWeight.w800,
-                                    fontSize: 13),
+                                    fontSize: 13,
+                                    height: 1.0),
                               ),
                             ),
                           ),
@@ -806,31 +831,51 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                             color: AppColors.primary,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              GestureDetector(
-                                onTap: () {
-                                  cart.updateQuantity(
-                                      product.id, totalQuantity - 1);
-                                },
-                                child: const Icon(Icons.remove,
-                                    color: Colors.white, size: 18),
-                              ),
-                              Text('$totalQuantity',
-                                  style: GoogleFonts.outfit(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 14)),
-                              GestureDetector(
-                                onTap: () {
-                                  cart.addItemWithFeedback(
-                                      context, product, _shop!);
-                                },
-                                child: const Icon(Icons.add,
-                                    color: Colors.white, size: 18),
-                              ),
-                            ],
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {
+                                      cart.updateQuantity(
+                                          product.id, totalQuantity - 1);
+                                    },
+                                    child: Container(
+                                      height: double.infinity,
+                                      alignment: Alignment.center,
+                                      child: const Icon(Icons.remove,
+                                          color: Colors.white, size: 18),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: Text('$totalQuantity',
+                                      style: GoogleFonts.outfit(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 14,
+                                          height: 1.0)),
+                                ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {
+                                      cart.addItemWithFeedback(
+                                          context, product, _shop!);
+                                    },
+                                    child: Container(
+                                      height: double.infinity,
+                                      alignment: Alignment.center,
+                                      child: const Icon(Icons.add,
+                                          color: Colors.white, size: 18),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
             ],
@@ -841,15 +886,18 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
   );
 }
 
-  Widget _foodImgPlaceholder() => Container(
+  Widget _foodImgPlaceholder([String? category]) => Container(
         width: 100,
         height: 90,
         decoration: BoxDecoration(
           color: const Color(0xFFFFF3EE),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: const Center(
-          child: Text('🍴', style: TextStyle(fontSize: 30)),
+        child: Center(
+          child: Text(
+            AppCategories.getCategoryEmoji(category ?? _shop?.category),
+            style: const TextStyle(fontSize: 30),
+          ),
         ),
       );
 

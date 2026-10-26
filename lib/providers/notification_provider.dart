@@ -7,6 +7,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
 import '../services/bell_alert_service.dart';
+import '../services/live_activity_service.dart';
+import '../models/order_model.dart';
 
 /// A single in-app notification entry.
 class AppNotification {
@@ -381,13 +383,21 @@ class NotificationProvider extends ChangeNotifier {
             final otp = payload.newRecord['delivery_otp'] as String?;
             final orderType = payload.newRecord['order_type'] as String?;
             if (newStatus == 'bulk_dispatched' && otp != null && otp.isNotEmpty) {
-              body = 'Your event feast is en route with our in-house delivery team! Handover OTP: $otp';
+              final isSupplies = (payload.newRecord['address_label']?.toString().toLowerCase().contains('supplies') ?? false) ||
+                  (payload.newRecord['address_label']?.toString().toLowerCase().contains('rental') ?? false) ||
+                  (payload.newRecord['address_label']?.toString().toLowerCase().contains('equipment') ?? false);
+              body = isSupplies
+                  ? 'Your event supplies are en route with our in-house delivery team! Handover OTP: $otp'
+                  : 'Your event order is en route with our in-house delivery team! Handover OTP: $otp';
             } else if (newStatus == 'delivered' && (orderType == 'bulk' || orderType == 'manual_quote')) {
               final eventLabel = payload.newRecord['address_label'] as String? ?? 'Event Catering';
-              title = '🎉 Catering Feast Delivered!';
+              final isSupplies = eventLabel.toLowerCase().contains('supplies') ||
+                  eventLabel.toLowerCase().contains('rental') ||
+                  eventLabel.toLowerCase().contains('equipment');
+              title = isSupplies ? '🎉 Event Supplies Delivered!' : '🎉 Catering Order Delivered!';
               body = (otp != null && otp.isNotEmpty)
                   ? 'Delivery handover verified with OTP for "$eventLabel". Have a wonderful event celebration! 🎉'
-                  : 'Your catering feast for "$eventLabel" has been delivered. Enjoy your celebration! 🎉';
+                  : 'Your order for "$eventLabel" has been delivered. Enjoy your celebration! 🎉';
             }
             if (title != null) {
               // For statuses that happen to the whole group at once, deduplicate using cart_group_id
@@ -412,6 +422,26 @@ class NotificationProvider extends ChangeNotifier {
               if (newStatus == 'cancelled' || newStatus == 'seller_rejected') {
                 _orderCancelledStreamController.add(orderId);
               }
+            }
+
+            // Real-time synchronization with Live Activities, Dynamic Island, and Android Ongoing Notification
+            if (newStatus == 'confirmed' ||
+                newStatus == 'preparing' ||
+                newStatus == 'ready_for_pickup' ||
+                newStatus == 'picked_up' ||
+                newStatus == 'out_for_delivery') {
+              try {
+                final orderObj = OrderModel.fromMap(payload.newRecord);
+                LiveActivityService().syncOrderStatus(order: orderObj);
+              } catch (_) {}
+            } else if (newStatus == 'delivered' ||
+                newStatus == 'cancelled' ||
+                newStatus == 'seller_rejected' ||
+                newStatus == 'partner_rejected') {
+              try {
+                LiveActivityService().endLiveActivity(orderId);
+                NotificationService().cancelOrderProgressNotification(orderId);
+              } catch (_) {}
             }
           },
         )

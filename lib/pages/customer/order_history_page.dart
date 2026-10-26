@@ -1146,7 +1146,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                           Text(
                             isQuoted
                                 ? 'Review Quote'
-                                : (isPaid ? 'Track Feast 🚚' : 'View Details'),
+                                : (isPaid ? 'Track Order 🚚' : 'View Details'),
                             style: GoogleFonts.outfit(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,

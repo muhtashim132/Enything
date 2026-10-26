@@ -265,14 +265,21 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   final role = message.data['role'] as String?;
   final action = message.data['action'] as String?;
   final orderId = message.data['order_id'] as String?;
+  final orderStatus = (message.data['status'] as String? ?? action ?? '').toLowerCase();
 
   final plugin = FlutterLocalNotificationsPlugin();
 
-  // Additive: Kill ghost notifications if order cancelled or reassigned
-  if ((action == 'cancel_order' || action == 'order_reassigned') &&
+  // Additive: Kill ghost/ongoing notifications if order cancelled, delivered, or reassigned
+  if ((action == 'cancel_order' ||
+          action == 'order_reassigned' ||
+          orderStatus == 'delivered' ||
+          orderStatus == 'cancelled' ||
+          orderStatus == 'seller_rejected') &&
       orderId != null) {
-    await plugin.cancel(orderId.hashCode);
-    return;
+    // Dismiss ongoing progress bar notifications so they don't linger on lockscreen
+    await plugin.cancel(((orderId.hashCode.abs() % 100000) + 10000));
+    await plugin.cancel(888);
+    // Note: Do NOT return here — allow the completion/cancellation notice to be displayed below!
   }
 
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -314,12 +321,77 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   final androidPlugin = plugin.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
 
+  // Background Ongoing Order Tracking Notification for Android
+  if (orderId != null &&
+      (role == 'customer' ||
+          orderStatus == 'confirmed' ||
+          orderStatus == 'preparing' ||
+          orderStatus == 'ready_for_pickup' ||
+          orderStatus == 'picked_up' ||
+          orderStatus == 'out_for_delivery')) {
+    int progress = 25;
+    if (orderStatus == 'preparing' || orderStatus == 'ready_for_pickup') {
+      progress = 50;
+    } else if (orderStatus == 'picked_up') {
+      progress = 75;
+    } else if (orderStatus == 'out_for_delivery') {
+      progress = 90;
+    }
+
+    final notifId = ((orderId.hashCode.abs() % 100000) + 10000);
+    final otp = message.data['delivery_otp'] as String?;
+    final summaryText = (otp != null && otp.isNotEmpty && orderStatus == 'out_for_delivery')
+        ? '🔑 Delivery OTP: $otp'
+        : '$progress% completed';
+
+    final bigTextStyle = BigTextStyleInformation(
+      body,
+      contentTitle: title,
+      summaryText: summaryText,
+    );
+    final androidTrackingDetails = AndroidNotificationDetails(
+      'order_tracking_channel',
+      'Order Tracking',
+      channelDescription: 'Shows real-time order progress',
+      importance: Importance.max,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.progress,
+      visibility: NotificationVisibility.public,
+      onlyAlertOnce: true,
+      showProgress: true,
+      maxProgress: 100,
+      progress: progress,
+      ongoing: true,
+      autoCancel: false,
+      color: const Color(0xFFFF5200),
+      icon: '@mipmap/ic_launcher',
+      styleInformation: bigTextStyle,
+      actions: const <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          'track_order',
+          'Track Order 🛵',
+          showsUserInterface: true,
+        ),
+      ],
+    );
+
+    await plugin.show(
+      notifId,
+      title,
+      body,
+      NotificationDetails(android: androidTrackingDetails),
+      payload: jsonEncode({'role': 'customer', 'order_id': orderId}),
+    );
+  }
+
   // SAMSUNG FIX: Samsung ignores RawResourceAndroidNotificationSound on channels
   // and always plays the default system notification sound. The solution:
   // 1. Use a SILENT channel (playSound: false) so Samsung doesn't play its bell
   // 2. Play enything_bell.wav via AudioPlayer — same approach as BellAlertService
   // To revert: switch back to enything_bell_channel_v4 with playSound: true
-  final bool isUrgent = (role == 'rider' ||
+  final bool isCustomer = role == 'customer';
+  final bool isUrgent = !isCustomer && (
+      role == 'rider' ||
       role == 'delivery' ||
       role == 'seller' ||
       role == 'delivery_partner' ||

@@ -22,6 +22,11 @@ import '../../providers/quote_request_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import '../../utils/order_messaging_helper.dart';
+import '../../models/order_model.dart';
+import '../../services/live_activity_service.dart';
+import '../../services/notification_service.dart';
+import '../../widgets/customer/in_app_live_activity_pill.dart';
 
 class CustomerMainPage extends StatefulWidget {
   const CustomerMainPage({super.key});
@@ -48,6 +53,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
   void _onRouteChanged() {
     if (currentRouteNotifier.value == AppRoutes.customerHome) {
       _checkPendingOrdersTimer();
+      _checkActiveInFlightOrders();
     }
   }
 
@@ -56,8 +62,10 @@ class _CustomerMainPageState extends State<CustomerMainPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     currentRouteNotifier.addListener(_onRouteChanged);
+    LiveActivityService().init();
     _checkMissedCancellations();
     _checkPendingOrdersTimer();
+    _checkActiveInFlightOrders();
 
     // Listen to order cancellation to auto-readd items to cart
     _orderCancelledSub = context
@@ -364,6 +372,71 @@ class _CustomerMainPageState extends State<CustomerMainPage>
     }
   }
 
+  Future<void> _checkActiveInFlightOrders() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final resp = await supabase
+          .from('orders')
+          .select('''
+            *,
+            shops (
+              name
+            )
+          ''')
+          .eq('customer_id', userId)
+          .inFilter('status', [
+            'confirmed',
+            'preparing',
+            'ready_for_pickup',
+            'picked_up',
+            'out_for_delivery'
+          ])
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if (!mounted) return;
+      if (resp.isNotEmpty) {
+        final orderData = Map<String, dynamic>.from(resp.first);
+        String shopName = 'Enything Store';
+        final shopsRaw = orderData['shops'];
+        if (shopsRaw is Map) {
+          shopName = shopsRaw['name']?.toString() ?? 'Enything Store';
+        } else if (shopsRaw is List && shopsRaw.isNotEmpty && shopsRaw.first is Map) {
+          shopName = shopsRaw.first['name']?.toString() ?? 'Enything Store';
+        }
+        final order = OrderModel.fromMap(orderData);
+
+        List<OrderModel> groupOrders = [];
+        if (order.cartGroupId != null) {
+          final sibResp = await supabase
+              .from('orders')
+              .select('*')
+              .eq('cart_group_id', order.cartGroupId!);
+          groupOrders = (sibResp as List).map((s) => OrderModel.fromMap(s)).toList();
+        }
+
+        LiveActivityService().syncOrderStatus(
+          order: order,
+          groupOrders: groupOrders,
+          shopName: shopName,
+          riderName: order.riderPhone != null ? 'Delivery Partner' : null,
+        );
+      } else {
+        LiveActivityService().activeStateNotifier.value = null;
+        NotificationService().cancelOrderProgressNotification();
+        final activeId = LiveActivityService().currentOrderId;
+        if (activeId != null) {
+          LiveActivityService().endLiveActivity(activeId);
+        }
+      }
+    } catch (e) {
+      debugPrint('CustomerMainPage: _checkActiveInFlightOrders error: $e');
+    }
+  }
+
   void _showErrorSnackbar(String errorMsg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -484,6 +557,12 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                 const ProfileSettingsPage(),
               ],
             ),
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: InAppLiveActivityPill(),
+            ),
             ValueListenableBuilder<int?>(
               valueListenable: _globalPendingTimer,
               builder: (context, secondsLeft, child) {
@@ -580,33 +659,29 @@ class _CustomerMainPageState extends State<CustomerMainPage>
     final status = activeOrder['status']?.toString() ?? 'bulk_pending';
     final deliveryOtp = activeOrder['delivery_otp']?.toString() ?? '';
 
-    final Color statusColor;
-    final String emoji;
-    final String label;
+    final info = OrderMessagingHelper.getCateringBannerInfo(
+      status: status,
+      deliveryOtp: deliveryOtp,
+      activeOrder: activeOrder,
+    );
+    final String emoji = info.emoji;
+    final String label = info.label;
 
+    final Color statusColor;
     switch (status) {
       case 'bulk_confirmed':
       case 'bulk_preparing':
         statusColor = const Color(0xFF3B82F6);
-        emoji = '👨‍🍳';
-        label = 'Kitchen Cooking Feast';
         break;
       case 'bulk_ready':
         statusColor = const Color(0xFF8B5CF6);
-        emoji = '🍱';
-        label = 'Feast Prepared & Packed';
         break;
       case 'bulk_dispatched':
         statusColor = const Color(0xFF10B981);
-        emoji = '🚗';
-        label =
-            'Out for Delivery${deliveryOtp.isNotEmpty ? ' (OTP: $deliveryOtp)' : ''}';
         break;
       case 'bulk_pending':
       default:
         statusColor = const Color(0xFFF59E0B);
-        emoji = '🎉';
-        label = 'Feast Booked · Scheduling Kitchen';
         break;
     }
 

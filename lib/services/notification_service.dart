@@ -140,30 +140,52 @@ class NotificationService {
     );
   }
 
+  int getNotificationIdForOrder(String? orderId) {
+    if (orderId == null || orderId.isEmpty) return _orderNotificationId;
+    return (orderId.hashCode.abs() % 100000) + 10000;
+  }
+
   Future<void> showOrderProgressNotification({
     required String title,
     required String body,
     required int progress, // 0 to 100
+    String? orderId,
+    String? summaryText,
   }) async {
+    final notifId = getNotificationIdForOrder(orderId);
+    final payload = orderId != null
+        ? jsonEncode({'role': 'customer', 'order_id': orderId})
+        : null;
+
     if (Platform.isIOS) {
       // iOS: Display clean grouped notification for progress milestones
-      const DarwinNotificationDetails iosPlatformSpecifics =
+      final DarwinNotificationDetails iosPlatformSpecifics =
           DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: false,
         presentSound: false,
-        threadIdentifier: 'order_progress_$_orderNotificationId',
+        threadIdentifier: 'order_progress_$notifId',
         interruptionLevel: InterruptionLevel.active,
       );
 
       await _flutterLocalNotificationsPlugin.show(
-        _orderNotificationId,
+        notifId,
         title,
         body,
-        const NotificationDetails(iOS: iosPlatformSpecifics),
+        NotificationDetails(iOS: iosPlatformSpecifics),
+        payload: payload,
       );
       return;
     }
+
+    final bigTextStyle = BigTextStyleInformation(
+      body,
+      contentTitle: title,
+      summaryText: summaryText ?? '$progress% completed',
+      htmlFormatBigText: false,
+      htmlFormatContentTitle: false,
+      htmlFormatSummaryText: false,
+    );
 
     final AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
@@ -172,24 +194,35 @@ class NotificationService {
       channelDescription: 'Shows real-time order progress',
       importance: Importance.max,
       priority: Priority.high,
+      category: AndroidNotificationCategory.progress,
+      visibility: NotificationVisibility.public,
+      onlyAlertOnce: true,
       showProgress: true,
       maxProgress: 100,
       progress: progress,
-      ongoing: true, // This makes it persistent
+      ongoing: true, // This makes it persistent on Lock Screen and Shade
       autoCancel: false,
-      color: const Color(0xFF9C27B0), // Purple color to match theme
-      icon:
-          '@mipmap/ic_launcher', // Fixed: was 'ic_notification' which doesn't exist. To revert: 'ic_notification'
+      color: const Color(0xFFFF5200), // Vibrant orange matching Live Activity theme
+      icon: '@mipmap/ic_launcher',
+      styleInformation: bigTextStyle,
+      actions: <AndroidNotificationAction>[
+        const AndroidNotificationAction(
+          'track_order',
+          'Track Order 🛵',
+          showsUserInterface: true,
+        ),
+      ],
     );
 
     final NotificationDetails platformChannelSpecifics =
         NotificationDetails(android: androidPlatformChannelSpecifics);
 
     await _flutterLocalNotificationsPlugin.show(
-      _orderNotificationId,
+      notifId,
       title,
       body,
       platformChannelSpecifics,
+      payload: payload,
     );
   }
 
@@ -253,11 +286,20 @@ class NotificationService {
     );
   }
 
-  Future<void> cancelOrderProgressNotification() async {
+  Future<void> cancelOrderProgressNotification([String? orderId]) async {
+    if (orderId != null && orderId.isNotEmpty) {
+      await _flutterLocalNotificationsPlugin.cancel(getNotificationIdForOrder(orderId));
+    }
     await _flutterLocalNotificationsPlugin.cancel(_orderNotificationId);
   }
 
-  void updateOrderNotificationFromStatus(String status) {
+  void updateOrderNotificationFromStatus(
+    String status, {
+    String? orderId,
+    String? etaText,
+    String? deliveryOtp,
+    String? shopName,
+  }) {
     int progress = 0;
     String title = 'Order Update';
     String body = 'Checking status...';
@@ -273,41 +315,49 @@ class NotificationService {
       case 'seller_rejected':
       case 'partner_rejected':
       case 'delivered':
-        cancelOrderProgressNotification();
+        cancelOrderProgressNotification(orderId);
         return;
 
       // POST-PAYMENT FULFILLMENT STATES - SHOW/UPDATE NOTIFICATION
       case 'confirmed':
         progress = 25;
-        title = 'Order Confirmed';
+        title = shopName != null ? 'Order Confirmed · $shopName' : 'Order Confirmed';
         body = 'Shop & rider confirmed — preparing soon!';
         break;
       case 'preparing':
       case 'ready_for_pickup':
         progress = 50;
-        title = 'Preparing your order';
-        body = 'Shop is packing your order 📦';
+        title = etaText != null ? 'Preparing your order ($etaText)' : 'Preparing your order';
+        body = shopName != null ? '$shopName is packing your order 📦' : 'Shop is packing your order 📦';
         break;
       case 'picked_up':
         progress = 75;
-        title = 'Order Picked Up';
+        title = etaText != null ? 'Order Picked Up ($etaText)' : 'Order Picked Up';
         body = 'Rider has your order — on the way!';
         break;
       case 'out_for_delivery':
         progress = 90;
-        title = 'Out for Delivery';
-        body = 'Almost there! Rider is en-route 🛵';
+        title = etaText != null ? 'Out for Delivery · $etaText' : 'Out for Delivery';
+        body = (deliveryOtp != null && deliveryOtp.isNotEmpty)
+            ? 'Almost there! 🛵 · Share OTP: $deliveryOtp'
+            : 'Almost there! Rider is en-route 🛵';
         break;
       default:
         // For any unknown edge cases, default to cancelling to prevent leaks
-        cancelOrderProgressNotification();
+        cancelOrderProgressNotification(orderId);
         return;
     }
+
+    final summary = (deliveryOtp != null && deliveryOtp.isNotEmpty && status == 'out_for_delivery')
+        ? '🔑 Delivery OTP: $deliveryOtp'
+        : (etaText != null ? '$progress% completed · $etaText' : '$progress% completed');
 
     showOrderProgressNotification(
       title: title,
       body: body,
       progress: progress,
+      orderId: orderId,
+      summaryText: summary,
     );
   }
 }

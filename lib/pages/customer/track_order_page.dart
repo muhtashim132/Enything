@@ -31,6 +31,8 @@ import 'package:collection/collection.dart';
 import '../../utils/delivery_calculator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/common/animated_moving_marker.dart';
+import '../../utils/order_messaging_helper.dart';
+import '../../services/live_activity_service.dart';
 
 class TrackOrderPage extends StatefulWidget {
   final String orderId;
@@ -193,6 +195,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   @override
   void initState() {
     super.initState();
+    LiveActivityService().setTrackOrderPageOpen(true);
     WidgetsBinding.instance.addObserver(this);
     _razorpay = Razorpay();
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
@@ -215,6 +218,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   @override
   void dispose() {
+    LiveActivityService().setTrackOrderPageOpen(false);
     WidgetsBinding.instance.removeObserver(this);
     _razorpay.clear();
     _pulseController.dispose();
@@ -269,6 +273,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   List<OrderModel> _groupOrders = [];
   bool _fetchError = false;
+  bool _isNetworkError = false;
+  bool _isRetryingFetch = false;
   bool _isStackedDelivery = false;
 
   Future<void> _checkStackedDelivery(String riderId, String myGroupId) async {
@@ -298,6 +304,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   Future<void> _fetchOrder() async {
     try {
+      if (mounted) {
+        setState(() {
+          _fetchError = false;
+          _isNetworkError = false;
+        });
+      }
       final response = await _supabase
           .from('orders')
           .select('*, order_items(*)')
@@ -382,10 +394,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
     } catch (e) {
       debugPrint('Error fetching order: $e');
+      final errStr = e.toString().toLowerCase();
+      final isNetwork = errStr.contains('socketexception') ||
+          errStr.contains('timeoutexception') ||
+          errStr.contains('clientexception') ||
+          errStr.contains('failed host lookup') ||
+          errStr.contains('network is unreachable') ||
+          errStr.contains('connection refused') ||
+          errStr.contains('connection closed') ||
+          errStr.contains('software caused connection abort');
+
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _isRetryingFetch = false;
           _fetchError = true;
+          _isNetworkError = isNetwork;
         });
       }
     }
@@ -517,6 +541,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       Map<String, LatLng>.from(_riderLocationsNotifier.value);
                   currentLocs[updatedOrder.deliveryPartnerId!] = newLoc;
                   _riderLocationsNotifier.value = currentLocs;
+
+                  if (_order != null) {
+                    LiveActivityService().syncOrderStatus(
+                      order: _order!,
+                      groupOrders: _groupOrders,
+                      riderLocations: currentLocs,
+                      shopName: _groupOrders.length > 1 ? '${_groupOrders.length} Stores' : null,
+                      riderName: _order!.riderPhone != null ? 'Delivery Partner' : null,
+                    );
+                  }
                 }
               }
               // Handle Reassignment (Ghost Rider) logic
@@ -560,6 +594,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       if (status == RealtimeSubscribeStatus.subscribed) {
         _realtimeReconnectTimer?.cancel();
         _realtimeReconnectTimer = null;
+        if (mounted) setState(() {});
       } else if (identical(_channel, newChannel) &&
           (status == RealtimeSubscribeStatus.closed ||
               status == RealtimeSubscribeStatus.channelError) &&
@@ -568,6 +603,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             !_realtimeReconnectTimer!.isActive) {
           debugPrint(
               'TrackOrderPage: Realtime channel disconnected. Reconnecting in 5s...');
+          if (mounted) setState(() {});
           _realtimeReconnectTimer = Timer(const Duration(seconds: 5), () {
             if (mounted &&
                 identical(_channel, newChannel) &&
@@ -787,6 +823,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   double _computeGroupGstDelivery() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.gstDelivery);
 
+  double _computeGroupS95Gst() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.s9_5GstAmount);
+
+  double _computeGroupNonFoodGst() =>
+      _activeGroupOrders.fold(0.0, (sum, o) => sum + o.nonFoodGstAmount);
+
   double _computeGroupCouponDiscount() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.couponDiscount);
 
@@ -867,7 +909,21 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     if (aggStatus != _lastAggStatus) {
       _lastAggStatus = aggStatus;
-      NotificationService().updateOrderNotificationFromStatus(aggStatus);
+      NotificationService().updateOrderNotificationFromStatus(
+        aggStatus,
+        orderId: _order?.id,
+        deliveryOtp: _order?.deliveryOtp,
+        shopName: _groupOrders.length > 1 ? '${_groupOrders.length} Stores' : null,
+      );
+      if (_order != null) {
+        LiveActivityService().syncOrderStatus(
+          order: _order!,
+          groupOrders: _groupOrders,
+          riderLocations: _riderLocationsNotifier.value,
+          shopName: _groupOrders.length > 1 ? '${_groupOrders.length} Stores' : null,
+          riderName: _order!.riderPhone != null ? 'Delivery Partner' : null,
+        );
+      }
       if (aggStatus == 'awaiting_payment') {
         if (_isWaitingForRiderAfterProceed) {
           _isWaitingForRiderAfterProceed = false;
@@ -879,12 +935,23 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
       if (aggStatus == 'delivered') {
         SensoryHaptics.success();
+        final notifContent = OrderMessagingHelper.getDeliveredNotification(
+          _order,
+          _groupOrders,
+        );
+        NotificationService().showNotification(
+          title: notifContent.title,
+          body: notifContent.body,
+        );
       }
 
       if (aggStatus == 'delivered' ||
           aggStatus == 'cancelled' ||
           aggStatus == 'seller_rejected') {
         _riderLocationsNotifier.value = {};
+        if (_order != null) {
+          LiveActivityService().endLiveActivity(_order!.id);
+        }
 
         // 100x Edge Case: Cascading Cancellation
         if (aggStatus == 'cancelled' || aggStatus == 'seller_rejected') {
@@ -1149,15 +1216,22 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       final activeOrders =
           _groupOrders.where((o) => o.status == 'awaiting_payment').toList();
       for (final order in activeOrders) {
-        // Notify shop
+        // Notify shop (resolve seller user_id from shops table)
         if (order.shopId != null) {
-          await notifProv.sendBackgroundPush(
-            targetUserId: order.shopId!,
-            title: '⏳ Order on Hold',
-            body:
-                'A shop in the group declined. Waiting 5m for customer decision.',
-            data: {'route': '/seller/orders', 'orderId': order.id},
-          );
+          final shopData = await _supabase
+              .from('shops')
+              .select('seller_id')
+              .eq('id', order.shopId!)
+              .maybeSingle();
+          if (shopData != null && shopData['seller_id'] != null) {
+            await notifProv.sendBackgroundPush(
+              targetUserId: shopData['seller_id'] as String,
+              title: '⏳ Order on Hold',
+              body:
+                  'A shop in the group declined. Waiting 5m for customer decision.',
+              data: {'route': '/seller/orders', 'orderId': order.id},
+            );
+          }
         }
         // Notify rider
         if (order.deliveryPartnerId != null) {
@@ -2002,7 +2076,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           return 'Your order has been cancelled. No payment was taken.';
       }
     }
-    if (isDelivered) return 'Enjoy your order! Thank you 🎉';
+    if (isDelivered) {
+      return OrderMessagingHelper.getDeliveredSubtitle(_order, _groupOrders);
+    }
     switch (_aggregateStatus) {
       case 'awaiting_acceptance':
         if (_acceptanceSecondsLeft <= 0) {
@@ -2554,48 +2630,117 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               ),
             ),
             body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off_rounded,
-                      size: 80,
-                      color: AppColors.textSecondary.withValues(alpha: 0.5)),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Order Not Found',
-                    style: GoogleFonts.outfit(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 84,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        color: (_isNetworkError ? AppColors.warning : AppColors.danger)
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(
+                          color: (_isNetworkError ? AppColors.warning : AppColors.danger)
+                              .withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          _isNetworkError
+                              ? Icons.wifi_off_rounded
+                              : Icons.search_off_rounded,
+                          size: 40,
+                          color: _isNetworkError ? AppColors.warning : AppColors.danger,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'This order might have been deleted\nor you do not have permission to view it.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
+                    const SizedBox(height: 24),
+                    Text(
+                      _isNetworkError ? 'Connection Lost' : 'Order Not Found',
+                      style: GoogleFonts.outfit(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                  ElevatedButton.icon(
-                    onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                        context, AppRoutes.customerHome, (route) => false),
-                    icon: const Icon(Icons.home_rounded,
-                        color: Colors.white, size: 20),
-                    label: Text('Go to Home',
-                        style: GoogleFonts.outfit(
-                            color: Colors.white, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(height: 12),
+                    Text(
+                      _isNetworkError
+                          ? "We're having trouble connecting to track your order. Please check your internet connection or mobile data."
+                          : 'This order might have expired, been cancelled, or you do not have permission to view it.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 32),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _isRetryingFetch
+                              ? null
+                              : () {
+                                  setState(() => _isRetryingFetch = true);
+                                  _fetchOrder();
+                                },
+                          icon: _isRetryingFetch
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                          label: Text(
+                            _isRetryingFetch ? 'Reconnecting...' : 'Retry Connection',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                              context, AppRoutes.customerHome, (route) => false),
+                          icon: Icon(
+                            Icons.home_rounded,
+                            size: 18,
+                            color: isDark ? Colors.white70 : AppColors.textPrimary,
+                          ),
+                          label: Text(
+                            'Go to Home',
+                            style: GoogleFonts.outfit(
+                              color: isDark ? Colors.white70 : AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            side: BorderSide(
+                              color: isDark ? Colors.white24 : Colors.grey.shade300,
+                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ));
@@ -2716,6 +2861,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + safeBottom),
                 child: Column(
                   children: [
+                    // Ambient Reconnecting Banner
+                    if (_realtimeReconnectTimer != null && !isDelivered && !isCancelled)
+                      _buildReconnectingBanner(isDark),
+
                     // Map Section — tappable route preview
                     _buildMapPreview(),
 
@@ -3296,9 +3445,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                     _computeGroupGstDelivery()) >
                                 0) ...[
                               const SizedBox(height: 8),
-                              _billRow('Taxes & GST',
-                                  '₹${(_computeGroupGstItemTotal() + _computeGroupGstDelivery()).toStringAsFixed(2)}',
-                                  isDark: isDark),
+                              _billRow(
+                                'Taxes & GST',
+                                '₹${(_computeGroupGstItemTotal() + _computeGroupGstDelivery()).toStringAsFixed(2)}',
+                                isDark: isDark,
+                                onTap: () =>
+                                    _showTaxBreakdownSheet(context, isDark),
+                              ),
                             ],
                             Divider(
                               height: 24,
@@ -5015,22 +5168,38 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   Widget _billRow(String label, String value,
-      {bool isBold = false, bool isDark = false, Color? valueColor}) {
-    return Row(
+      {bool isBold = false,
+      bool isDark = false,
+      Color? valueColor,
+      VoidCallback? onTap}) {
+    final rowContent = Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: Text(
-            label,
-            style: GoogleFonts.outfit(
-              color: isBold
-                  ? (isDark ? Colors.white : AppColors.textPrimary)
-                  : (isDark ? Colors.white54 : AppColors.textSecondary),
-              fontSize: isBold ? 15 : 13,
-              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  style: GoogleFonts.outfit(
+                    color: isBold
+                        ? (isDark ? Colors.white : AppColors.textPrimary)
+                        : (isDark ? Colors.white54 : AppColors.textSecondary),
+                    fontSize: isBold ? 15 : 13,
+                    fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.info_outline_rounded,
+                    size: 13,
+                    color: isDark ? Colors.white54 : const Color(0xFF1565C0)),
+              ],
+            ],
           ),
         ),
         const SizedBox(width: 8),
@@ -5044,6 +5213,244 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       : (isDark ? Colors.white70 : AppColors.textPrimary)),
             )),
       ],
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: rowContent,
+        ),
+      );
+    }
+    return rowContent;
+  }
+
+  void _showTaxBreakdownSheet(BuildContext context, bool isDark) {
+    final itemGst = _computeGroupGstItemTotal();
+    final delGst = _computeGroupGstDelivery();
+    final s95Gst = _computeGroupS95Gst();
+    final nonFoodGst = _computeGroupNonFoodGst();
+    final platformGst = _computeGroupGstPlatform();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF16192E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            )
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1565C0).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded,
+                      color: Color(0xFF1565C0), size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Tax & GST Breakdown',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Itemized statutory breakdown for this order',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color:
+                              isDark ? Colors.white54 : AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Item Total GST',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: isDark ? Colors.white70 : AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  '₹${itemGst.toStringAsFixed(2)}',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Delivery Services GST (18%)',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: isDark ? Colors.white70 : AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  '₹${delGst.toStringAsFixed(2)}',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            if (platformGst > 0) ...[
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Handling Fee GST (18%)',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    '₹${platformGst.toStringAsFixed(2)} (included)',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1565C0)
+                    .withValues(alpha: isDark ? 0.15 : 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.25),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.shield_outlined,
+                          size: 15, color: Color(0xFF1565C0)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Statutory Remittance Split',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1565C0),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    s95Gst > 0
+                        ? '• Food/Restaurant GST: ₹${s95Gst.toStringAsFixed(2)} remitted to Govt by Enything under Section 9(5) CGST.\n• Non-Food GST: ₹${nonFoodGst.toStringAsFixed(2)} remitted to store for GSTR-3B compliance.'
+                        : '• Retail/Non-Food GST: ₹${nonFoodGst.toStringAsFixed(2)} remitted to store bank account for GSTR-3B compliance.\n• 100% prepaid online payment with zero doorstep cash collection.',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: isDark ? Colors.white70 : const Color(0xFF2B3A4A),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReconnectingBanner(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppColors.warning.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.warning),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Reconnecting live tracking...',
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.amber.shade200 : AppColors.warning,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -70,6 +70,7 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _requiresPrescription = false;
   String _medicineType = 'General';
   String? _shopId;
+  String? _shopPrimaryCategory;
 
   // ── Bulk Catering & Event Ordering ─────────────────────────────────────────
   bool _bulkEligible = false;
@@ -251,8 +252,9 @@ class _AddProductPageState extends State<AddProductPage> {
           .toList();
 
       // Only app-level categories whose group is within the shop's groups are allowed
-      // Exception: Supermarkets can sell anything.
-      final allowed = shopCatNames.contains('Supermarket / Hypermarket')
+      // Exception: Supermarkets, Hypermarkets, Supermarts, and Departmental stores can sell anything.
+      final isOmnibus = shopCatNames.any(AppCategories.isOmnibusStoreCategory);
+      final allowed = isOmnibus
           ? activeNames
           : activeNames
               .where(
@@ -269,6 +271,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
       setState(() {
         _shopId = resp!['id'];
+        _shopPrimaryCategory = primaryCat;
         _allowedCategories = allowed.isNotEmpty ? allowed : activeNames;
 
         // If editing an existing product whose category is already valid, keep it.
@@ -1763,12 +1766,10 @@ class _AddProductPageState extends State<AddProductPage> {
             ? null
             : int.tryParse(_inventoryController.text.trim()),
         'images': uploadedUrls,
-        'requires_prescription': (_productCategory == 'Pharmacy' ||
-                _productCategory == 'Medical Store')
+        'requires_prescription': AppCategories.isPharmacyCategory(_productCategory)
             ? _requiresPrescription
             : false,
-        'medicine_type': (_productCategory == 'Pharmacy' ||
-                _productCategory == 'Medical Store')
+        'medicine_type': AppCategories.isPharmacyCategory(_productCategory)
             ? _medicineType
             : 'General',
         'variants': _variants.map((v) => v.toMap()).toList(),
@@ -2797,6 +2798,270 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
+  // ── Live Seller Earnings & Payout Breakdown Card ───────────────────────────
+  Widget _buildEarningsPreviewCard() {
+    final config = context.watch<PlatformConfigProvider>();
+    final enteredPrice = double.tryParse(_priceController.text) ??
+        (_variants.isNotEmpty
+            ? _variants.map((v) => v.price).reduce(min)
+            : 0.0);
+
+    final isOmnibus = AppCategories.isOmnibusStoreCategory(_shopPrimaryCategory);
+    final commPercent = config.getCommissionPercentForCategory(_productCategory, fallbackCategory: _shopPrimaryCategory);
+    final gstRate = _gstRateOverride ?? TaxConfig.gstRateForCategory(_productCategory, itemPrice: enteredPrice);
+    final isFood = TaxConfig.isEnythingDeemedSupplier(_productCategory);
+    final isExempt = _productCategory == 'Fruits & Vegs' ||
+        _productCategory == 'Butcher' ||
+        _productCategory == 'Fish & Seafood' ||
+        gstRate == 0.0;
+
+    final customerGstAmount = enteredPrice * gstRate;
+    final totalCustomerPrice = enteredPrice + customerGstAmount;
+    final commAmount = enteredPrice * (commPercent / 100.0);
+    final gwAmount = enteredPrice * TaxConfig.effectiveGatewayDeductionPercent;
+    final tdsAmount = enteredPrice * TaxConfig.itTdsRate;
+    final tcsAmount = isFood || isExempt
+        ? 0.0
+        : enteredPrice * TaxConfig.tcsRateForCategory(_productCategory);
+    final totalDeductions = commAmount + gwAmount + tdsAmount + tcsAmount;
+    final netBasePayout = enteredPrice - totalDeductions;
+    // Section 9(5) Food: Enything remits directly. Non-food: GST passed through to seller bank.
+    final gstPassthroughAmount = isFood ? 0.0 : customerGstAmount;
+    final netBankDeposit = netBasePayout + gstPassthroughAmount;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF2B8A3E).withValues(alpha: 0.35),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2B8A3E).withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2B8A3E).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_rounded,
+                      color: Color(0xFF2B8A3E), size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Seller Earnings & Payout Breakdown',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Live payout calculation for $_productCategory',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8590C).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${commPercent.toStringAsFixed(1)}% Comm',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFE8590C),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (isOmnibus &&
+                _shopPrimaryCategory != null &&
+                _shopPrimaryCategory != _productCategory) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4C6EF5).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF4C6EF5).withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Text('🏬', style: TextStyle(fontSize: 12)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Department Rate: As a $_shopPrimaryCategory, this item applies the ${commPercent.toStringAsFixed(1)}% $_productCategory commission upon sale.',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF1A2E9E),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            _earningsRow('Base Selling Price', '₹${enteredPrice.toStringAsFixed(2)}', isBold: true),
+            _earningsRow(
+              'Customer Add-on GST (${(gstRate * 100).toStringAsFixed(0)}%)',
+              '+₹${customerGstAmount.toStringAsFixed(2)}',
+              color: const Color(0xFF4C6EF5),
+            ),
+            _earningsRow(
+              'Total Paid by Customer',
+              '₹${totalCustomerPrice.toStringAsFixed(2)}',
+              isSubdued: true,
+            ),
+            const Divider(height: 14, thickness: 0.6),
+            _earningsRow(
+              'Platform Commission (${commPercent.toStringAsFixed(1)}%)',
+              '-₹${commAmount.toStringAsFixed(2)}',
+              color: const Color(0xFFFA5252),
+            ),
+            _earningsRow(
+              'Online Gateway Share (2.36%)',
+              '-₹${gwAmount.toStringAsFixed(2)}',
+              color: const Color(0xFFFA5252),
+            ),
+            _earningsRow(
+              'Income Tax TDS §194-O (0.10%)',
+              '-₹${tdsAmount.toStringAsFixed(2)}',
+              color: const Color(0xFFFA5252),
+            ),
+            _earningsRow(
+              'GST TCS §52 (${isFood || isExempt ? '0%' : '0.50%'})',
+              isFood || isExempt ? '₹0.00 (Exempt)' : '-₹${tcsAmount.toStringAsFixed(2)}',
+              color: isFood || isExempt ? null : const Color(0xFFFA5252),
+            ),
+            if (!isFood && gstPassthroughAmount > 0) ...[
+              _earningsRow(
+                'GST Passthrough to Your Bank',
+                '+₹${gstPassthroughAmount.toStringAsFixed(2)}',
+                color: const Color(0xFF2B8A3E),
+              ),
+            ],
+            const Divider(height: 16, thickness: 1.2),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2B8A3E).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFF2B8A3E).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Estimated Net Bank Payout:',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2B8A3E),
+                        ),
+                      ),
+                      Text(
+                        '₹${netBankDeposit.toStringAsFixed(2)} / unit',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2B8A3E),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isFood
+                        ? '• Food order: Enything remits 5% GST directly to Govt under Section 9(5).'
+                        : (isExempt
+                            ? '• Fresh produce: 0% GST and exempt from TCS.'
+                            : '• Non-food item: GST collected from customer is deposited into your bank for monthly GSTR-3B filing.'),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: AppColors.textSecondary.withValues(alpha: 0.9),
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _earningsRow(String label, String value,
+      {bool isBold = false, bool isSubdued = false, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+                color: isSubdued
+                    ? AppColors.textSecondary.withValues(alpha: 0.8)
+                    : AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+              color: color ??
+                  (isSubdued ? AppColors.textSecondary : AppColors.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Bulk Catering & Event Pricing Card (Custom quotes used instead) ─────────
   Widget _buildBulkCateringCard() => const SizedBox.shrink();
 
@@ -3306,7 +3571,15 @@ class _AddProductPageState extends State<AddProductPage> {
                             AppCategories.isPharmacyCategory(_productCategory);
                         final isGrocery = _productCategory == 'Grocery' ||
                             _productCategory == 'Supermarket' ||
-                            _productCategory == 'Hypermarket';
+                            _productCategory == 'Hypermarket' ||
+                            _productCategory == 'Supermarket / Hypermarket';
+                        final isCosmetics = _productCategory == 'Cosmetics & Beauty' ||
+                            _productCategory == 'Salon & Beauty';
+                        final isFashion = _productCategory == 'Clothing' ||
+                            _productCategory == 'Footwear' ||
+                            _productCategory == 'Jewellery';
+                        final isElectronics = _productCategory == 'Electronics' ||
+                            _productCategory == 'Mobile & Repair';
 
                         final String hintText;
                         final IconData prefixIcon;
@@ -3316,9 +3589,21 @@ class _AddProductPageState extends State<AddProductPage> {
                         } else if (isGrocery) {
                           hintText = 'e.g., Fortune Sunflower Oil 1L, Tata Salt';
                           prefixIcon = Icons.local_grocery_store_outlined;
-                        } else {
+                        } else if (isCosmetics) {
+                          hintText = 'e.g., Nivea Soft Moisturizer, Lakme Lipstick';
+                          prefixIcon = Icons.face_retouching_natural_outlined;
+                        } else if (isFashion) {
+                          hintText = 'e.g., Cotton Slim Fit Shirt, Running Shoes';
+                          prefixIcon = Icons.checkroom_outlined;
+                        } else if (isElectronics) {
+                          hintText = 'e.g., Fast USB-C Charger, Wireless Earbuds';
+                          prefixIcon = Icons.devices_other_outlined;
+                        } else if (AppCategories.isFoodCategory(_productCategory)) {
                           hintText = 'e.g., Chicken Biryani, Chocolate Cake';
                           prefixIcon = Icons.fastfood_outlined;
+                        } else {
+                          hintText = 'e.g., Product Name / Model';
+                          prefixIcon = Icons.shopping_bag_outlined;
                         }
 
                         return Column(
@@ -3798,10 +4083,12 @@ class _AddProductPageState extends State<AddProductPage> {
                                 ? _productCategory
                                 : _allowedCategories.first,
                         isExpanded: true,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Product Category',
-                          prefixIcon: Icon(Icons.category_outlined),
-                          helperText: 'Limited to your shop\'s category group',
+                          prefixIcon: const Icon(Icons.category_outlined),
+                          helperText: AppCategories.isOmnibusStoreCategory(_shopPrimaryCategory)
+                              ? 'Omnibus store: Select any product department (Cosmetics, Grocery, etc.)'
+                              : 'Limited to your shop\'s category group',
                         ),
                         items: _allowedCategories.map((cat) {
                           final emoji = AppCategories.all.firstWhere(
@@ -3899,6 +4186,11 @@ class _AddProductPageState extends State<AddProductPage> {
 
                 // ── GST Recommendation Card ──────────────────────────────────
                 _buildGstCard(),
+                const SizedBox(height: 16),
+                AnimatedBuilder(
+                  animation: _priceController,
+                  builder: (context, _) => _buildEarningsPreviewCard(),
+                ),
                 const SizedBox(height: 16),
 
                 _card(
@@ -3998,8 +4290,7 @@ class _AddProductPageState extends State<AddProductPage> {
                 ),
                 const SizedBox(height: 16),
                 _buildBulkCateringCard(),
-                if (_productCategory == 'Pharmacy' ||
-                    _productCategory == 'Medical Store') ...[
+                if (AppCategories.isPharmacyCategory(_productCategory)) ...[
                   const SizedBox(height: 16),
                   _card(
                     children: [

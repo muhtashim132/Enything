@@ -661,6 +661,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
   Widget _buildVariantAddButton(BuildContext context, bool isDark) {
     return GestureDetector(
       key: const ValueKey('variant_add'),
+      behavior: HitTestBehavior.opaque,
       onTap: () {
         HapticFeedback.lightImpact();
         showProductDetailSheet(context, product.id, highlightVariants: true);
@@ -681,27 +682,32 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             ],
           ),
         ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'ADD',
-                style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 11,
-                  color: isDark ? AppColors.secondaryLight : AppColors.secondary,
-                ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              'ADD',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w900,
+                fontSize: 11,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
+                letterSpacing: 0.3,
+                height: 1.0,
               ),
-              const SizedBox(width: 3),
-              Icon(
+            ),
+            const SizedBox(width: 3),
+            Transform.translate(
+              offset: const Offset(0, 0.5),
+              child: Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 13,
                 color: isDark ? AppColors.secondaryLight : AppColors.secondary,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -717,6 +723,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     return Container(
       key: const ValueKey('variant_stepper'),
       height: 32,
+      constraints: const BoxConstraints(minWidth: 84),
       decoration: BoxDecoration(
         gradient: AppColors.ctaGradient,
         borderRadius: BorderRadius.circular(10),
@@ -728,115 +735,130 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
           ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              HapticFeedback.lightImpact();
-              if (hasSingleVariant && singleItem != null) {
-                cart.updateQuantity(
-                  product.id,
-                  singleItem.quantity - 1,
-                  variantName: singleItem.selectedVariant?.name,
-                );
-              } else {
-                showProductDetailSheet(context, product.id,
-                    highlightVariants: true);
-              }
-            },
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Icon(Icons.remove_rounded, size: 15, color: Colors.white),
-            ),
-          ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              HapticFeedback.lightImpact();
-              showProductDetailSheet(context, product.id,
-                  highlightVariants: true);
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    transitionBuilder: (child, anim) =>
-                        ScaleTransition(scale: anim, child: child),
-                    child: Text(
-                      '$totalQuantity',
-                      key: ValueKey(totalQuantity),
-                      style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 2.5, vertical: 0.5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text(
-                      'OPT',
-                      style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 6.5,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ),
-                ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Left touch zone: Decrement or open sheet
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                if (hasSingleVariant && singleItem != null) {
+                  cart.updateQuantity(
+                    product.id,
+                    singleItem.quantity - 1,
+                    variantName: singleItem.selectedVariant?.name,
+                  );
+                } else {
+                  showProductDetailSheet(context, product.id,
+                      highlightVariants: true);
+                }
+              },
+              child: Container(
+                width: 28,
+                height: double.infinity,
+                alignment: Alignment.center,
+                child: const Icon(Icons.remove_rounded,
+                    size: 15, color: Colors.white),
               ),
             ),
-          ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (product.totalQuantity != null &&
-                  totalQuantity >= product.totalQuantity!) {
-                HapticFeedback.heavyImpact();
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Only ${product.totalQuantity} items in stock',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                    ),
-                    duration: const Duration(seconds: 2),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-                return;
-              }
-              HapticFeedback.lightImpact();
-              if (hasSingleVariant && singleItem != null) {
-                cart.addItemWithFeedback(
-                  context,
-                  product,
-                  shop,
-                  selectedVariant: singleItem.selectedVariant,
-                );
-              } else {
+            // Center info area
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.lightImpact();
                 showProductDetailSheet(context, product.id,
                     highlightVariants: true);
-              }
-            },
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Icon(Icons.add_rounded, size: 15, color: Colors.white),
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      transitionBuilder: (child, anim) =>
+                          ScaleTransition(scale: anim, child: child),
+                      child: Text(
+                        '$totalQuantity',
+                        key: ValueKey(totalQuantity),
+                        style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          color: Colors.white,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 2.5, vertical: 0.5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        'OPT',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 6.5,
+                          letterSpacing: 0.3,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+            // Right touch zone: Increment or open sheet
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                if (product.totalQuantity != null &&
+                    totalQuantity >= product.totalQuantity!) {
+                  HapticFeedback.heavyImpact();
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Only ${product.totalQuantity} items in stock',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                      ),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+                HapticFeedback.lightImpact();
+                if (hasSingleVariant && singleItem != null) {
+                  cart.addItemWithFeedback(
+                    context,
+                    product,
+                    shop,
+                    selectedVariant: singleItem.selectedVariant,
+                  );
+                } else {
+                  showProductDetailSheet(context, product.id,
+                      highlightVariants: true);
+                }
+              },
+              child: Container(
+                width: 28,
+                height: double.infinity,
+                alignment: Alignment.center,
+                child: const Icon(Icons.add_rounded,
+                    size: 15, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -845,7 +867,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
     return Container(
       key: const ValueKey('stepper'),
       height: 32,
-      width: 84,
+      width: 88,
       decoration: BoxDecoration(
         gradient: AppColors.ctaGradient,
         borderRadius: BorderRadius.circular(10),
@@ -857,59 +879,85 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              context
-                  .read<CartProvider>()
-                  .updateQuantity(product.id, quantity - 1);
-            },
-            child:
-                const Icon(Icons.remove_rounded, size: 15, color: Colors.white),
-          ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            transitionBuilder: (child, anim) =>
-                ScaleTransition(scale: anim, child: child),
-            child: Text(
-              '$quantity',
-              key: ValueKey(quantity),
-              style: GoogleFonts.outfit(
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
-                color: Colors.white,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Row(
+          children: [
+            // Left touch zone: Decrement / Remove
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context
+                      .read<CartProvider>()
+                      .updateQuantity(product.id, quantity - 1);
+                },
+                child: Container(
+                  height: double.infinity,
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.only(left: 2),
+                  child: const Icon(Icons.remove_rounded,
+                      size: 15, color: Colors.white),
+                ),
               ),
             ),
-          ),
-          GestureDetector(
-            onTap: () {
-              if (product.totalQuantity != null &&
-                  quantity >= product.totalQuantity!) {
-                HapticFeedback.heavyImpact();
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Only ${product.totalQuantity} items in stock',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                    ),
-                    duration: const Duration(seconds: 2),
-                    behavior: SnackBarBehavior.floating,
+            // Center quantity
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, anim) =>
+                    ScaleTransition(scale: anim, child: child),
+                child: Text(
+                  '$quantity',
+                  key: ValueKey(quantity),
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    color: Colors.white,
+                    height: 1.0,
                   ),
-                );
-                return;
-              }
-              HapticFeedback.lightImpact();
-              context
-                  .read<CartProvider>()
-                  .addItemWithFeedback(context, product, shop);
-            },
-            child: const Icon(Icons.add_rounded, size: 15, color: Colors.white),
-          ),
-        ],
+                ),
+              ),
+            ),
+            // Right touch zone: Increment / Add
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (product.totalQuantity != null &&
+                      quantity >= product.totalQuantity!) {
+                    HapticFeedback.heavyImpact();
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Only ${product.totalQuantity} items in stock',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                        ),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  HapticFeedback.lightImpact();
+                  context
+                      .read<CartProvider>()
+                      .addItemWithFeedback(context, product, shop);
+                },
+                child: Container(
+                  height: double.infinity,
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.only(right: 2),
+                  child: const Icon(Icons.add_rounded,
+                      size: 15, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -917,6 +965,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
   Widget _buildAddButton(BuildContext context, bool isDark) {
     return GestureDetector(
       key: const ValueKey('add'),
+      behavior: HitTestBehavior.opaque,
       onTap: () {
         HapticFeedback.lightImpact();
         context
@@ -939,25 +988,32 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
             ],
           ),
         ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add_rounded,
-                  size: 13,
-                  color: isDark ? AppColors.secondaryLight : AppColors.secondary),
-              const SizedBox(width: 3),
-              Text(
-                'ADD',
-                style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 11.5,
-                  color: isDark ? AppColors.secondaryLight : AppColors.secondary,
-                ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Transform.translate(
+              offset: const Offset(0, 0.6),
+              child: Icon(
+                Icons.add_rounded,
+                size: 13,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 3.5),
+            Text(
+              'ADD',
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w900,
+                fontSize: 11.5,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
+                letterSpacing: 0.4,
+                height: 1.0,
+              ),
+            ),
+          ],
         ),
       ),
     );

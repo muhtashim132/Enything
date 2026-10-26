@@ -1810,6 +1810,45 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     );
   }
 
+  Widget _buildPayoutDetailRow(String label, String value, bool isDark,
+      {bool isBold = false, bool isPositive = false, bool isNegative = false}) {
+    Color textColor;
+    if (isPositive) {
+      textColor = const Color(0xFF16A34A);
+    } else if (isNegative) {
+      textColor = AppColors.danger;
+    } else if (isBold) {
+      textColor = isDark ? Colors.greenAccent : const Color(0xFF0D9488);
+    } else {
+      textColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+              color: isDark ? Colors.white70 : AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOrderCard(OrderModel order, String tab) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final statusColor = _statusColor(order);
@@ -1986,15 +2025,36 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     // Amount + status badge
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Flexible(
-                          child: Text(
-                            '₹${order.grandTotal.toStringAsFixed(0)}',
-                            style: GoogleFonts.outfit(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primary),
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '₹${order.grandTotal.toStringAsFixed(0)}',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (order.sellerPayout > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'Net Payout: ₹${order.sellerPayout.toStringAsFixed(2)}',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark
+                                          ? Colors.greenAccent
+                                          : const Color(0xFF0D9488),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         order.status == 'awaiting_payment'
@@ -2293,6 +2353,50 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 const SizedBox(height: 10),
                                 ...order.items.map((item) =>
                                     _buildOrderItemRow(context, item, isDark)),
+                                if (order.sellerPayout > 0) ...[
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? const Color(0xFF1E1E2E)
+                                          : Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? Colors.white12
+                                            : Colors.grey.shade200,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '💰 Seller Payout Breakdown',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark
+                                                ? Colors.white
+                                                : AppColors.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        _buildPayoutDetailRow('Item Subtotal (Base)', '₹${order.totalAmount.toStringAsFixed(2)}', isDark),
+                                        if (order.nonFoodGstAmount > 0)
+                                          _buildPayoutDetailRow('Non-Food GST (Passthrough)', '+₹${order.nonFoodGstAmount.toStringAsFixed(2)}', isDark, isPositive: true),
+                                        if (order.enythingCommission > 0)
+                                          _buildPayoutDetailRow('Platform Comm. & Gateway', '-₹${order.enythingCommission.toStringAsFixed(2)}', isDark, isNegative: true),
+                                        if (order.tcsAmount > 0)
+                                          _buildPayoutDetailRow('GST TCS (§52 0.5%)', '-₹${order.tcsAmount.toStringAsFixed(2)}', isDark, isNegative: true),
+                                        if (order.tdsAmount > 0)
+                                          _buildPayoutDetailRow('IT TDS (§194-O 0.1%)', '-₹${order.tdsAmount.toStringAsFixed(2)}', isDark, isNegative: true),
+                                        const Divider(height: 10),
+                                        _buildPayoutDetailRow('Estimated Bank Payout', '₹${order.sellerPayout.toStringAsFixed(2)}', isDark, isBold: true),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ],
                             ],
                           ),
@@ -3296,9 +3400,23 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         ),
                       ],
                     ),
-                    Text(
-                      'Total: ₹${order.totalAmount.toStringAsFixed(0)}',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Total: ₹${order.totalAmount.toStringAsFixed(0)}',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16),
+                        ),
+                        if (order.sellerPayout > 0)
+                          Text(
+                            'Net Bank Payout: ₹${order.sellerPayout.toStringAsFixed(2)}',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),

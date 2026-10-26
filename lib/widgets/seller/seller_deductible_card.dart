@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +21,12 @@ class SellerDeductibleBreakdown {
   final double netPayoutWithGstPercent;
   final bool isFoodDeemedSupplier;
   final bool isExemptProduce;
+  final double minOmnibusCommissionPercent;
+  final double maxOmnibusCommissionPercent;
+  final double minTotalDeductiblePercent;
+  final double maxTotalDeductiblePercent;
+  final double minNetPayoutPercent;
+  final double maxNetPayoutPercent;
 
   const SellerDeductibleBreakdown({
     required this.category,
@@ -34,6 +41,12 @@ class SellerDeductibleBreakdown {
     required this.netPayoutWithGstPercent,
     required this.isFoodDeemedSupplier,
     required this.isExemptProduce,
+    this.minOmnibusCommissionPercent = 5.0,
+    this.maxOmnibusCommissionPercent = 10.0,
+    this.minTotalDeductiblePercent = 7.96,
+    this.maxTotalDeductiblePercent = 12.96,
+    this.minNetPayoutPercent = 87.04,
+    this.maxNetPayoutPercent = 92.04,
   });
 
   factory SellerDeductibleBreakdown.fromCategory(
@@ -56,6 +69,27 @@ class SellerDeductibleBreakdown {
     final gstPassthrough = isFood ? 0.0 : gstRate;
     final netWithGst = net + gstPassthrough;
 
+    // Dynamic calculation across Omnibus Department Schedules:
+    double minOmnibusComm = 5.0;
+    double maxOmnibusComm = 10.0;
+    final comms = SellerDeductibleCard.omnibusDepartmentSchedules.map((dept) {
+      final deptName = dept['name'] as String;
+      final defaultComm = (dept['defaultCommission'] as num).toDouble();
+      if (config != null && config.hasCategoryCommissionOverride(deptName)) {
+        return config.getCommissionPercentForCategory(deptName);
+      }
+      return defaultComm;
+    }).toList();
+    if (comms.isNotEmpty) {
+      minOmnibusComm = comms.reduce(min);
+      maxOmnibusComm = comms.reduce(max);
+    }
+
+    final minDeductible = minOmnibusComm + gw + tds + 0.50;
+    final maxDeductible = maxOmnibusComm + gw + tds + 0.50;
+    final minNet = (100.0 - maxDeductible).clamp(0.0, 100.0);
+    final maxNet = (100.0 - minDeductible).clamp(0.0, 100.0);
+
     return SellerDeductibleBreakdown(
       category: category,
       commissionPercent: comm,
@@ -69,6 +103,12 @@ class SellerDeductibleBreakdown {
       netPayoutWithGstPercent: netWithGst,
       isFoodDeemedSupplier: isFood,
       isExemptProduce: isExempt,
+      minOmnibusCommissionPercent: minOmnibusComm,
+      maxOmnibusCommissionPercent: maxOmnibusComm,
+      minTotalDeductiblePercent: minDeductible,
+      maxTotalDeductiblePercent: maxDeductible,
+      minNetPayoutPercent: minNet,
+      maxNetPayoutPercent: maxNet,
     );
   }
 }
@@ -84,6 +124,65 @@ class SellerDeductibleCard extends StatelessWidget {
   final bool isCompact;
   final VoidCallback? onTap;
 
+  static const List<Map<String, dynamic>> omnibusDepartmentSchedules = [
+    {
+      'name': 'Grocery',
+      'emoji': '🛒',
+      'defaultCommission': 6.0,
+      'gstRate': 0.05,
+      'description': 'Staples, packaged snacks, pantry & grains',
+    },
+    {
+      'name': 'Dairy & Eggs',
+      'emoji': '🥛',
+      'defaultCommission': 5.0,
+      'gstRate': 0.05,
+      'description': 'Milk, cheese, butter, yogurt & eggs',
+    },
+    {
+      'name': 'Fruits & Vegs',
+      'emoji': '🥬',
+      'defaultCommission': 5.0,
+      'gstRate': 0.00,
+      'description': 'Fresh produce (0% GST & TCS exempt)',
+    },
+    {
+      'name': 'Cosmetics & Beauty',
+      'emoji': '💄',
+      'defaultCommission': 10.0,
+      'gstRate': 0.18,
+      'description': 'Skincare, makeup, perfume & grooming',
+    },
+    {
+      'name': 'Electronics',
+      'emoji': '📱',
+      'defaultCommission': 10.0,
+      'gstRate': 0.18,
+      'description': 'Gadgets, accessories & appliances',
+    },
+    {
+      'name': 'Clothing',
+      'emoji': '👕',
+      'defaultCommission': 10.0,
+      'gstRate': 0.12,
+      'description': 'Apparel & fashion goods',
+    },
+    {
+      'name': 'Pharmacy',
+      'emoji': '💊',
+      'defaultCommission': 5.0,
+      'gstRate': 0.12,
+      'description': 'Medicines & healthcare supplies',
+    },
+    {
+      'name': 'Stationery',
+      'emoji': '📚',
+      'defaultCommission': 5.0,
+      'gstRate': 0.12,
+      'description': 'Books, office & school supplies',
+    },
+  ];
+
   const SellerDeductibleCard({
     super.key,
     required this.category,
@@ -98,7 +197,7 @@ class SellerDeductibleCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (isCompact) {
-      return _buildCompactCard(context, breakdown, isDark);
+      return _buildCompactCard(context, breakdown, isDark, config);
     }
     return _buildExpandedCard(context, breakdown, isDark);
   }
@@ -107,13 +206,15 @@ class SellerDeductibleCard extends StatelessWidget {
   Widget _buildCompactCard(
     BuildContext context,
     SellerDeductibleBreakdown b,
-    bool isDark,
-  ) {
+    bool isDark, [
+    PlatformConfigProvider? config,
+  ]) {
     final catMap = AppCategories.all.firstWhere(
       (c) => c['name'] == b.category,
       orElse: () => {'name': b.category, 'emoji': '🏷️'},
     );
     final emoji = catMap['emoji'] ?? '🏷️';
+    final isOmnibus = AppCategories.isOmnibusStoreCategory(b.category);
 
     return InkWell(
       onTap: onTap ?? () => showSellerDeductiblesModal(context, category: b.category),
@@ -190,7 +291,9 @@ class SellerDeductibleCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Net Payout: ${b.netPayoutPercent.toStringAsFixed(2)}%',
+                          isOmnibus
+                              ? 'Net Payout: ${b.minNetPayoutPercent.toStringAsFixed(2)}% – ${b.maxNetPayoutPercent.toStringAsFixed(2)}%'
+                              : 'Net Payout: ${b.netPayoutPercent.toStringAsFixed(2)}%',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.outfit(
@@ -216,7 +319,7 @@ class SellerDeductibleCard extends StatelessWidget {
                     spacing: 8,
                     children: [
                       Text(
-                        'Total Deductible:',
+                        isOmnibus ? 'Total Deductibles:' : 'Total Deductible:',
                         style: GoogleFonts.outfit(
                           fontSize: 13,
                           color: isDark ? Colors.white70 : const Color(0xFF495057),
@@ -224,7 +327,9 @@ class SellerDeductibleCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${b.totalDeductiblePercent.toStringAsFixed(2)}%',
+                        isOmnibus
+                            ? '${b.minTotalDeductiblePercent.toStringAsFixed(2)}% – ${b.maxTotalDeductiblePercent.toStringAsFixed(2)}%'
+                            : '${b.totalDeductiblePercent.toStringAsFixed(2)}%',
                         style: GoogleFonts.outfit(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
@@ -242,6 +347,17 @@ class SellerDeductibleCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (isOmnibus) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Varies by item department (e.g. ${b.minOmnibusCommissionPercent.toStringAsFixed(0)}% Produce to ${b.maxOmnibusCommissionPercent.toStringAsFixed(0)}% Cosmetics)',
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  color: isDark ? const Color(0xFFFFD43B) : const Color(0xFFE8590C),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
 
             // 4 Itemized Mini Badges
@@ -255,7 +371,9 @@ class SellerDeductibleCard extends StatelessWidget {
                     _miniChip(
                       width: itemWidth,
                       title: 'Commission',
-                      value: '${b.commissionPercent.toStringAsFixed(1)}%',
+                      value: isOmnibus
+                          ? '${b.minOmnibusCommissionPercent.toStringAsFixed(1)}% – ${b.maxOmnibusCommissionPercent.toStringAsFixed(1)}%'
+                          : '${b.commissionPercent.toStringAsFixed(1)}%',
                       isDark: isDark,
                     ),
                     _miniChip(
@@ -273,9 +391,11 @@ class SellerDeductibleCard extends StatelessWidget {
                     _miniChip(
                       width: itemWidth,
                       title: 'TCS (§52)',
-                      value: b.tcsPercent == 0.0
-                          ? '0.00% (Exempt)'
-                          : '${b.tcsPercent.toStringAsFixed(2)}%',
+                      value: isOmnibus
+                          ? '0.00% – 0.50%'
+                          : (b.tcsPercent == 0.0
+                              ? '0.00% (Exempt)'
+                              : '${b.tcsPercent.toStringAsFixed(2)}%'),
                       isDark: isDark,
                     ),
                   ],
@@ -283,6 +403,82 @@ class SellerDeductibleCard extends StatelessWidget {
               },
             ),
             const SizedBox(height: 10),
+
+            // ── Omnibus Multi-Department Store Schedule Notice ──
+            if (isOmnibus) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4C6EF5).withValues(alpha: isDark ? 0.16 : 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFF4C6EF5).withValues(alpha: 0.28),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('🏬', style: TextStyle(fontSize: 13)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              style: GoogleFonts.outfit(
+                                fontSize: 10.5,
+                                color: isDark ? Colors.white70 : const Color(0xFF343A40),
+                                height: 1.35,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: 'Multi-Department Store: ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? const Color(0xFF91A7FF) : const Color(0xFF1A2E9E),
+                                  ),
+                                ),
+                                const TextSpan(
+                                  text:
+                                      'Each item applies its own department rate upon sale. Lipsticks apply 10% Cosmetics rate; Rice applies 6% Grocery rate. You never pay 10% on groceries.',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Builder(
+                      builder: (context) {
+                        String getDeptRate(String deptName, double defaultRate) {
+                          if (config != null && config.hasCategoryCommissionOverride(deptName)) {
+                            return '${config.getCommissionPercentForCategory(deptName).toStringAsFixed(1)}%';
+                          }
+                          return '${defaultRate.toStringAsFixed(1)}%';
+                        }
+                        return Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _departmentPill('🛒 Grocery', getDeptRate('Grocery', 6.0), isDark),
+                            _departmentPill('💄 Cosmetics', getDeptRate('Cosmetics & Beauty', 10.0), isDark),
+                            _departmentPill('📱 Electronics', getDeptRate('Electronics', 10.0), isDark),
+                            _departmentPill('🥬 Produce', getDeptRate('Fruits & Vegs', 5.0), isDark),
+                            _departmentPill('🥛 Dairy', getDeptRate('Dairy & Eggs', 5.0), isDark),
+                            _departmentPill('👕 Clothing', getDeptRate('Clothing', 10.0), isDark),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
 
             // ── Payout Summary (Base & With GST) ──
             Container(
@@ -319,7 +515,9 @@ class SellerDeductibleCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${b.netPayoutPercent.toStringAsFixed(2)}%',
+                        isOmnibus
+                            ? '${b.minNetPayoutPercent.toStringAsFixed(2)}% – ${b.maxNetPayoutPercent.toStringAsFixed(2)}%'
+                            : '${b.netPayoutPercent.toStringAsFixed(2)}%',
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -348,7 +546,9 @@ class SellerDeductibleCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${b.netPayoutWithGstPercent.toStringAsFixed(2)}%',
+                        isOmnibus
+                            ? 'Varies with GST'
+                            : '${b.netPayoutWithGstPercent.toStringAsFixed(2)}%',
                         style: GoogleFonts.outfit(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
@@ -361,7 +561,9 @@ class SellerDeductibleCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 3),
                       child: Text(
-                        '*Includes ${b.gstPassthroughPercent.toStringAsFixed(0)}% GST passthrough deposited in your bank for GSTR-3B',
+                        isOmnibus
+                            ? '*Non-food items include GST passthrough deposited in your bank for GSTR-3B'
+                            : '*Includes ${b.gstPassthroughPercent.toStringAsFixed(0)}% GST passthrough deposited in your bank for GSTR-3B',
                         style: GoogleFonts.outfit(
                           fontSize: 9.5,
                           color: AppColors.textSecondary,
@@ -391,6 +593,27 @@ class SellerDeductibleCard extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _departmentPill(String name, String rate, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.12) : const Color(0xFF4C6EF5).withValues(alpha: 0.25),
+        ),
+      ),
+      child: Text(
+        '$name: $rate',
+        style: GoogleFonts.outfit(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: isDark ? Colors.white : const Color(0xFF1A2E9E),
         ),
       ),
     );
@@ -459,13 +682,19 @@ class SellerDeductibleCard extends StatelessWidget {
     SellerDeductibleBreakdown b,
     bool isDark,
   ) {
+    final isOmnibus = AppCategories.isOmnibusStoreCategory(b.category);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 10,
+          runSpacing: 8,
           children: [
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 38,
@@ -510,7 +739,9 @@ class SellerDeductibleCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
-                '${b.netPayoutPercent.toStringAsFixed(2)}% Net Payout',
+                isOmnibus
+                    ? '${b.minNetPayoutPercent.toStringAsFixed(2)}% – ${b.maxNetPayoutPercent.toStringAsFixed(2)}% Net Payout'
+                    : '${b.netPayoutPercent.toStringAsFixed(2)}% Net Payout',
                 style: GoogleFonts.outfit(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -539,43 +770,69 @@ class SellerDeductibleCard extends StatelessWidget {
               color: const Color(0xFF4C6EF5).withValues(alpha: 0.25),
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 420;
+              return Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 10,
                 children: [
-                  Text(
-                    'Total Deductions',
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      color: isDark ? Colors.white70 : const Color(0xFF495057),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isSmall ? constraints.maxWidth : constraints.maxWidth - 140,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isOmnibus ? 'Total Deductions (Aisle-Based)' : 'Total Deductions',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color: isDark ? Colors.white70 : const Color(0xFF495057),
+                          ),
+                        ),
+                        Text(
+                          isOmnibus
+                              ? '${b.minTotalDeductiblePercent.toStringAsFixed(2)}% – ${b.maxTotalDeductiblePercent.toStringAsFixed(2)}%'
+                              : '${b.totalDeductiblePercent.toStringAsFixed(2)}%',
+                          style: GoogleFonts.outfit(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            color: isDark ? const Color(0xFFFFD43B) : const Color(0xFFE8590C),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        if (isOmnibus) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Varies by department (e.g. ${b.minOmnibusCommissionPercent.toStringAsFixed(0)}% Produce to ${b.maxOmnibusCommissionPercent.toStringAsFixed(0)}% Cosmetics)',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: isDark ? const Color(0xFFFFD43B) : const Color(0xFFE8590C),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  Text(
-                    '${b.totalDeductiblePercent.toStringAsFixed(2)}%',
-                    style: GoogleFonts.outfit(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                      color: isDark ? const Color(0xFFFFD43B) : const Color(0xFFE8590C),
-                      letterSpacing: -0.5,
+                  ElevatedButton.icon(
+                    onPressed: onTap ?? () => showSellerDeductiblesModal(context, category: b.category),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4C6EF5),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                    icon: const Icon(Icons.info_outline_rounded, size: 16),
+                    label: Text('View Details', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
                 ],
-              ),
-              ElevatedButton.icon(
-                onPressed: onTap ?? () => showSellerDeductiblesModal(context, category: b.category),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4C6EF5),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.info_outline_rounded, size: 16),
-                label: Text('View Details', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600)),
-              ),
-            ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 14),
@@ -584,8 +841,12 @@ class SellerDeductibleCard extends StatelessWidget {
         _detailRow(
           icon: Icons.store_rounded,
           title: 'Platform Commission',
-          rate: '${b.commissionPercent.toStringAsFixed(1)}%',
-          subtitle: 'Admin-configured commission for ${b.category}',
+          rate: isOmnibus
+              ? '${b.minOmnibusCommissionPercent.toStringAsFixed(1)}% – ${b.maxOmnibusCommissionPercent.toStringAsFixed(1)}%'
+              : '${b.commissionPercent.toStringAsFixed(1)}%',
+          subtitle: isOmnibus
+              ? 'Department schedule (e.g. ${b.minOmnibusCommissionPercent.toStringAsFixed(0)}% Produce to ${b.maxOmnibusCommissionPercent.toStringAsFixed(0)}% Cosmetics)'
+              : 'Admin-configured commission for ${b.category}',
           isDark: isDark,
         ),
         const Divider(height: 16, thickness: 0.5),
@@ -608,22 +869,30 @@ class SellerDeductibleCard extends StatelessWidget {
         _detailRow(
           icon: Icons.receipt_long_rounded,
           title: 'GST TCS (§52)',
-          rate: b.tcsPercent == 0.0
-              ? '0.00% (Exempt)'
-              : '${b.tcsPercent.toStringAsFixed(2)}%',
-          subtitle: b.isFoodDeemedSupplier
-              ? 'Section 9(5) Deemed Supplier (Enything remits GST)'
-              : (b.isExemptProduce
-                  ? 'Exempt 0% GST fresh produce'
-                  : 'Claimable credit in your monthly GSTR-2B'),
+          rate: isOmnibus
+              ? '0.00% – 0.50%'
+              : (b.tcsPercent == 0.0
+                  ? '0.00% (Exempt)'
+                  : '${b.tcsPercent.toStringAsFixed(2)}%'),
+          subtitle: isOmnibus
+              ? '0.00% on fresh produce, 0.50% on taxable goods'
+              : (b.isFoodDeemedSupplier
+                  ? 'Section 9(5) Deemed Supplier (Enything remits GST)'
+                  : (b.isExemptProduce
+                      ? 'Exempt 0% GST fresh produce'
+                      : 'Claimable credit in your monthly GSTR-2B')),
           isDark: isDark,
         ),
         const Divider(height: 16, thickness: 0.5),
         _detailRow(
           icon: Icons.account_balance_wallet_rounded,
           title: 'Estimated Net Payout (Base Only)',
-          rate: '${b.netPayoutPercent.toStringAsFixed(2)}%',
-          subtitle: 'Net product earnings deposited before GST passthrough',
+          rate: isOmnibus
+              ? '${b.minNetPayoutPercent.toStringAsFixed(2)}% – ${b.maxNetPayoutPercent.toStringAsFixed(2)}%'
+              : '${b.netPayoutPercent.toStringAsFixed(2)}%',
+          subtitle: isOmnibus
+              ? 'Varies by department (higher on groceries, standard on cosmetics)'
+              : 'Net product earnings deposited before GST passthrough',
           isDark: isDark,
           color: const Color(0xFF2B8A3E),
         ),
@@ -631,31 +900,43 @@ class SellerDeductibleCard extends StatelessWidget {
         _detailRow(
           icon: Icons.receipt_rounded,
           title: 'GST Passthrough to Seller',
-          rate: b.isFoodDeemedSupplier
-              ? '0.00% (ECO §9(5))'
-              : (b.isExemptProduce
-                  ? '0.00% (Exempt)'
-                  : '+${b.gstPassthroughPercent.toStringAsFixed(2)}%'),
-          subtitle: b.isFoodDeemedSupplier
-              ? 'Enything remits 5% GST directly to Govt under Section 9(5)'
-              : (b.isExemptProduce
-                  ? '0% GST fresh produce'
-                  : 'Collected from customer & deposited to your bank for GSTR-3B'),
+          rate: isOmnibus
+              ? 'Varies (0% – 18%)'
+              : (b.isFoodDeemedSupplier
+                  ? '0.00% (ECO §9(5))'
+                  : (b.isExemptProduce
+                      ? '0.00% (Exempt)'
+                      : '+${b.gstPassthroughPercent.toStringAsFixed(2)}%')),
+          subtitle: isOmnibus
+              ? 'Exempt on produce, 5% on packaged food, 18% on cosmetics'
+              : (b.isFoodDeemedSupplier
+                  ? 'Enything remits 5% GST directly to Govt under Section 9(5)'
+                  : (b.isExemptProduce
+                      ? '0% GST fresh produce'
+                      : 'Collected from customer & deposited to your bank for GSTR-3B')),
           isDark: isDark,
-          color: b.isFoodDeemedSupplier ? null : const Color(0xFF2B8A3E),
+          color: (isOmnibus || !b.isFoodDeemedSupplier) ? const Color(0xFF2B8A3E) : null,
         ),
         const Divider(height: 16, thickness: 0.5),
         _detailRow(
           icon: Icons.payments_rounded,
           title: 'Estimated Net Payout (with GST)',
-          rate: '${b.netPayoutWithGstPercent.toStringAsFixed(2)}%',
-          subtitle: b.isFoodDeemedSupplier
-              ? 'Total net payout to seller (GST handled by Enything)'
-              : 'Total net amount deposited to your bank account',
+          rate: isOmnibus
+              ? 'Varies with GST'
+              : '${b.netPayoutWithGstPercent.toStringAsFixed(2)}%',
+          subtitle: isOmnibus
+              ? 'Total net amount deposited to your bank account across departments'
+              : (b.isFoodDeemedSupplier
+                  ? 'Total net payout to seller (GST handled by Enything)'
+                  : 'Total net amount deposited to your bank account'),
           isDark: isDark,
           isBold: true,
           color: const Color(0xFF2B8A3E),
         ),
+        if (AppCategories.isOmnibusStoreCategory(b.category)) ...[
+          const SizedBox(height: 16),
+          _buildOmnibusDepartmentSchedule(context, isDark),
+        ],
       ],
     );
   }
@@ -704,6 +985,114 @@ class SellerDeductibleCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildOmnibusDepartmentSchedule(BuildContext context, bool isDark) {
+    final config = context.watch<PlatformConfigProvider>();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF141936) : const Color(0xFFF1F5FD),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF4C6EF5).withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.hub_rounded, size: 16, color: Color(0xFF4C6EF5)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Multi-Department Rate Schedule',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0A0A14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Items are settled at item-level precision. When a customer cart contains items from multiple aisles, each item incurs its specific department commission and statutory GST:',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...omnibusDepartmentSchedules.map((dept) {
+            final deptName = dept['name'] as String;
+            final emoji = dept['emoji'] as String;
+            final defaultComm = dept['defaultCommission'] as double;
+            final gstRate = dept['gstRate'] as double;
+            final comm = config.getCommissionPercentForCategory(deptName);
+            final effectiveComm = comm > 0 ? comm : defaultComm;
+            final gstPct = (gstRate * 100).toStringAsFixed(0);
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          deptName,
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          dept['description'] as String,
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${effectiveComm.toStringAsFixed(1)}% Comm',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFFE8590C),
+                        ),
+                      ),
+                      Text(
+                        gstRate == 0.0 ? '0% GST (Exempt)' : '$gstPct% GST',
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 }
@@ -812,7 +1201,9 @@ class _SellerDeductiblesModalSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Total Deductions',
+                              AppCategories.isOmnibusStoreCategory(category)
+                                  ? 'Total Deductions (Aisle Range)'
+                                  : 'Total Deductions',
                               style: GoogleFonts.outfit(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w500,
@@ -823,7 +1214,9 @@ class _SellerDeductiblesModalSheet extends StatelessWidget {
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                '${b.totalDeductiblePercent.toStringAsFixed(2)}%',
+                                AppCategories.isOmnibusStoreCategory(category)
+                                    ? '${b.minTotalDeductiblePercent.toStringAsFixed(2)}% – ${b.maxTotalDeductiblePercent.toStringAsFixed(2)}%'
+                                    : '${b.totalDeductiblePercent.toStringAsFixed(2)}%',
                                 style: GoogleFonts.outfit(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w900,
@@ -850,7 +1243,9 @@ class _SellerDeductiblesModalSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Net Payout (with GST)',
+                              AppCategories.isOmnibusStoreCategory(category)
+                                  ? 'Net Payout (Aisle Range)'
+                                  : 'Net Payout (with GST)',
                               style: GoogleFonts.outfit(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w500,
@@ -861,7 +1256,9 @@ class _SellerDeductiblesModalSheet extends StatelessWidget {
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                '${b.netPayoutWithGstPercent.toStringAsFixed(2)}%',
+                                AppCategories.isOmnibusStoreCategory(category)
+                                    ? '${b.minNetPayoutPercent.toStringAsFixed(2)}% – ${b.maxNetPayoutPercent.toStringAsFixed(2)}%'
+                                    : '${b.netPayoutWithGstPercent.toStringAsFixed(2)}%',
                                 style: GoogleFonts.outfit(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w900,
@@ -876,6 +1273,159 @@ class _SellerDeductiblesModalSheet extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
+
+                // ── Omnibus Multi-Department Schedule in Modal ──
+                if (AppCategories.isOmnibusStoreCategory(category)) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF131A3E)
+                          : const Color(0xFFF1F5FD),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF4C6EF5).withValues(alpha: 0.35),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('🏬', style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Omnibus Multi-Department Policy',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : const Color(0xFF0A0A14),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Because your store carries multiple aisles, your products are not forced into a single flat commission. When customers purchase from different departments in a single cart, each item is calculated and settled with item-level precision:',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ...SellerDeductibleCard.omnibusDepartmentSchedules.map((dept) {
+                          final deptName = dept['name'] as String;
+                          final emoji = dept['emoji'] as String;
+                          final defaultComm = dept['defaultCommission'] as double;
+                          final gstRate = dept['gstRate'] as double;
+                          final effectiveComm = config.hasCategoryCommissionOverride(deptName)
+                              ? config.getCommissionPercentForCategory(deptName)
+                              : defaultComm;
+                          final isFood = TaxConfig.isEnythingDeemedSupplier(deptName);
+                          final gstLabel = gstRate == 0.0
+                              ? '0% GST (Exempt)'
+                              : '${(gstRate * 100).toStringAsFixed(0)}% GST ${isFood ? '(Govt Remitted)' : '(Passthrough)'}';
+
+                          return Container(
+                            margin: const EdgeInsets.symmetric(vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.06)
+                                    : Colors.black.withValues(alpha: 0.05),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(emoji, style: const TextStyle(fontSize: 14)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        deptName,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark ? Colors.white : Colors.black87,
+                                        ),
+                                      ),
+                                      Text(
+                                        dept['description'] as String,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 10.5,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '${effectiveComm.toStringAsFixed(1)}% Comm',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFFE8590C),
+                                      ),
+                                    ),
+                                    Text(
+                                      gstLabel,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 10,
+                                        color: isDark ? const Color(0xFF748FFC) : const Color(0xFF4C6EF5),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2B8A3E).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFF2B8A3E).withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF2B8A3E)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Cross-Department Example: A cart with ₹100 Milk (5% comm = ₹5), ₹500 Lipstick (10% comm = ₹50), and ₹200 Rice (6% comm = ₹12) totals ₹67 commission on an ₹800 cart (8.38% effective rate).',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? const Color(0xFF8CE99A) : const Color(0xFF2B8A3E),
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
 
                 // Order Simulation Box
                 Text(

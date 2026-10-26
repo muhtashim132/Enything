@@ -380,6 +380,32 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
               if (!matchesDemographic) return false;
             }
 
+            // 100x Multi-Category Fortress: For omnibus/multi-department stores (e.g. Supermarkets),
+            // ensure products shown on this category page actually belong to the requested category.
+            final pCat = (p['category'] as String?)?.trim().toLowerCase() ?? '';
+            final shopData = nearbyShops.firstWhere(
+              (s) => s['id'] == p['shop_id'],
+              orElse: () => null,
+            );
+            final sCat = (shopData?['category'] as String?)?.trim().toLowerCase() ?? '';
+            final subcatsLower = subcategories.map((c) => c.trim().toLowerCase()).toSet();
+            final isOmnibus = AppCategories.isOmnibusStoreCategory(sCat);
+
+            if (isOmnibus) {
+              // For omnibus stores, if the customer is not browsing an omnibus category,
+              // enforce strict product category isolation so cross-category products don't leak.
+              final isBrowsingOmnibus = subcatsLower.any(AppCategories.isOmnibusStoreCategory);
+              if (!isBrowsingOmnibus) {
+                if (pCat.isNotEmpty && !subcatsLower.contains(pCat)) {
+                  return false;
+                }
+              }
+            } else if (!subcatsLower.contains(sCat)) {
+              if (pCat.isNotEmpty && !subcatsLower.contains(pCat)) {
+                return false;
+              }
+            }
+
             return true;
           }).toList();
 
@@ -588,9 +614,31 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
       final newProducts = <ProductModel>[];
       final missingShopIds = <String>{};
 
+      final subcatsLower = subcategories.map((c) => c.trim().toLowerCase()).toSet();
       for (final r in (rows as List)) {
         final p = ProductModel.fromMap(r as Map<String, dynamic>);
         if (!existingIds.contains(p.id) && config.isActiveCategory(p.category)) {
+          // 100x Omnibus Store Isolation Guard:
+          // Ensure products from multi-department stores strictly belong to the current category
+          final shopData = nearbyShops.firstWhere(
+            (s) => s['id'] == p.shopId,
+            orElse: () => null,
+          );
+          final sCat = (shopData?['category'] as String?)?.trim().toLowerCase() ?? '';
+          final isOmnibus = AppCategories.isOmnibusStoreCategory(sCat);
+          final pCat = p.category.trim().toLowerCase();
+
+          if (isOmnibus) {
+            final isBrowsingOmnibus = subcatsLower.any(AppCategories.isOmnibusStoreCategory);
+            if (!isBrowsingOmnibus && pCat.isNotEmpty && !subcatsLower.contains(pCat)) {
+              continue;
+            }
+          } else if (!subcatsLower.contains(sCat)) {
+            if (pCat.isNotEmpty && !subcatsLower.contains(pCat)) {
+              continue;
+            }
+          }
+
           newProducts.add(p);
           existingIds.add(p.id);
           if (!_productShops.containsKey(p.id)) {

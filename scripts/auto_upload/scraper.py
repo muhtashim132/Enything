@@ -395,21 +395,72 @@ def _scrape_pharmeasy_api(product_name: str) -> dict:
     Provides verified Indian MRP, exact unwatermarked DAM product images,
     salt composition, prescription status, manufacturer, and packform.
     """
-    clean_query = re.sub(r"\b(?:tablet|capsule|syrup|strip|pack)\b", "", product_name, flags=re.IGNORECASE).strip()
+    clean_query = re.sub(r"\b(?:tablets?|capsules?|syrups?|strips?|packs?)\b", "", product_name, flags=re.IGNORECASE).strip()
     encoded = urllib.parse.quote_plus(clean_query)
     url = f"https://pharmeasy.in/api/search/search/?intent=all&q={encoded}"
 
     try:
         resp = _session.get(url, timeout=12)
-        if resp.status_code != 200:
+        products = []
+        if resp.status_code == 200:
+            products = resp.json().get("data", {}).get("products", [])
+
+        # Brand-aware candidate matching
+        words = product_name.split()
+        brand = words[0].lower().replace("-", "") if words else ""
+        best_p = None
+
+        strength_match = re.search(r"\b(\d+(?:\.\d+)?)\s*(?:mg|ml|gm)?\b", product_name, re.I)
+        target_strength = strength_match.group(1) if strength_match else None
+
+        if products and brand:
+            if target_strength:
+                for item in products:
+                    item_name = (item.get("name") or "").lower().replace("-", "")
+                    if brand in item_name and target_strength in item_name:
+                        best_p = item
+                        break
+            if not best_p:
+                for item in products:
+                    item_name = (item.get("name") or "").lower().replace("-", "")
+                    if brand in item_name:
+                        best_p = item
+                        break
+
+        # Fallback to core brand + strength search if brand wasn't found in initial results
+        if not best_p and brand and len(words) >= 2:
+            core_words = [w for w in words[:3] if not re.match(r"^(?:strip|bottle|tube|pack|of|\d+ml|\d+gm)$", w, re.I)]
+            core_query = " ".join(core_words[:2])
+            if core_query and core_query.lower() != clean_query.lower():
+                core_url = f"https://pharmeasy.in/api/search/search/?intent=all&q={urllib.parse.quote_plus(core_query)}"
+                try:
+                    c_resp = _session.get(core_url, timeout=10)
+                    if c_resp.status_code == 200:
+                        c_prods = c_resp.json().get("data", {}).get("products", [])
+                        if target_strength:
+                            for item in c_prods:
+                                item_name = (item.get("name") or "").lower().replace("-", "")
+                                if brand in item_name and target_strength in item_name:
+                                    best_p = item
+                                    break
+                        if not best_p:
+                            for item in c_prods:
+                                item_name = (item.get("name") or "").lower().replace("-", "")
+                                if brand in item_name:
+                                    best_p = item
+                                    break
+                        if not products and c_prods:
+                            products = c_prods
+                except Exception:
+                    pass
+
+        if not best_p and products:
+            best_p = products[0]
+
+        if not best_p:
             return {}
 
-        data = resp.json()
-        products = data.get("data", {}).get("products", [])
-        if not products:
-            return {}
-
-        p = products[0]
+        p = best_p
 
         # Name
         name = p.get("name") or product_name

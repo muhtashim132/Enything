@@ -135,5 +135,10 @@
 		<!-- (already done in AppDelegate.swift via Messaging.messaging().apnsToken) -->
 		<key>FirebaseAppDelegateProxyEnabled</key>
 		<false/>
+		<!-- ─── iOS Live Activities & Dynamic Island ───────────────────────── -->
+		<key>NSSupportsLiveActivities</key>
+		<true/>
+		<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+		<true/>
 	</dict>
 </plist>

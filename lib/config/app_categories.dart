@@ -48,6 +48,17 @@ class AppCategories {
     {'name': 'Other', 'emoji': '🏪'},
   ];
 
+  /// Returns the emoji for a given category name, falling back to '🏪' (Store) if unknown.
+  static String getCategoryEmoji(String? categoryName) {
+    if (categoryName == null || categoryName.trim().isEmpty) return '🏪';
+    final trimmed = categoryName.trim();
+    final match = all.firstWhere(
+      (c) => c['name']?.toLowerCase() == trimmed.toLowerCase(),
+      orElse: () => const {'emoji': '🏪'},
+    );
+    return match['emoji'] ?? '🏪';
+  }
+
   // ── Group mapping ──────────────────────────────────────────────────────────
 
   static const Map<String, CategoryGroup> _groupMap = {
@@ -139,6 +150,31 @@ class AppCategories {
   /// 3:4 (0.75) for Fashion/Apparel, 1:1 (1.0) for everything else.
   static double getProductAspectRatio(String? categoryName) {
     return isFashionCategory(categoryName) ? (3.0 / 4.0) : 1.0;
+  }
+
+  /// Returns whether a category or shop is an omnibus multi-department store
+  /// (e.g. Supermarket, Hypermarket, Supermart, Departmental Store, General Store)
+  /// that carries all categories across Food, Perishables, Retail, Cosmetics, Stationery, etc.
+  static bool isOmnibusStoreCategory(String? categoryName) {
+    if (categoryName == null || categoryName.trim().isEmpty) return false;
+    final cat = categoryName.trim().toLowerCase();
+    return cat.contains('supermarket') ||
+        cat.contains('hypermarket') ||
+        cat.contains('supermart') ||
+        cat.contains('hypermart') ||
+        cat.contains('super mart') ||
+        cat.contains('hyper mart') ||
+        cat.contains('super market') ||
+        cat.contains('hyper market') ||
+        cat.contains('departmental') ||
+        cat.contains('department store') ||
+        cat.contains('general store') ||
+        cat.contains('convenience store') ||
+        cat.contains('provision store') ||
+        cat.contains('grocery mart') ||
+        cat.contains('mega mart') ||
+        cat.contains('daily mart') ||
+        cat.contains('kirana');
   }
 
   /// Returns the group for [categoryName]. Defaults to [CategoryGroup.retail].

@@ -4450,6 +4450,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           quoteProv.customerQuotes.where((q) => q.resultingOrderId == orderId).firstOrNull?.eventName ??
           'Event Catering';
 
+      final eventNameLower = eventName.toLowerCase();
+      final isSupplies = eventNameLower.contains('rental') ||
+          eventNameLower.contains('equipment') ||
+          eventNameLower.contains('decor') ||
+          eventNameLower.contains('supplies') ||
+          eventNameLower.contains('chair') ||
+          eventNameLower.contains('tent');
+
       final Color primaryColor;
       final String emoji;
       final String title;
@@ -4461,24 +4469,34 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         case 'bulk_confirmed':
         case 'bulk_preparing':
           primaryColor = const Color(0xFF2563EB); // Royal Blue
-          emoji = '👨‍🍳';
-          title = 'Kitchen Confirmed · Cooking in Progress!';
-          subtitle = '$eventName · ₹${totalAmount.toStringAsFixed(0)} · Kitchen chefs are preparing and cooking your feast fresh.';
-          statusTag = 'KITCHEN COOKING';
+          emoji = isSupplies ? '📦' : '👨‍🍳';
+          title = isSupplies
+              ? 'Supplies Confirmed · Preparation in Progress!'
+              : 'Kitchen Confirmed · Cooking in Progress!';
+          subtitle = isSupplies
+              ? '$eventName · ₹${totalAmount.toStringAsFixed(0)} · Catering team is preparing and packing your event supplies.'
+              : '$eventName · ₹${totalAmount.toStringAsFixed(0)} · Kitchen chefs are preparing and cooking your feast fresh.';
+          statusTag = isSupplies ? 'PREPARING SUPPLIES' : 'KITCHEN COOKING';
           buttonText = 'Live Prep Details →';
           break;
         case 'bulk_ready':
           primaryColor = const Color(0xFF8B5CF6); // Purple / Violet
-          emoji = '🍱';
-          title = 'All Food Prepared & Ready!';
-          subtitle = '$eventName · All dishes freshly packed in containers, awaiting dispatch.';
-          statusTag = 'ALL FOOD PACKED & READY';
+          emoji = isSupplies ? '✨' : '🍱';
+          title = isSupplies
+              ? 'All Event Supplies Prepared & Ready!'
+              : 'All Food Prepared & Ready!';
+          subtitle = isSupplies
+              ? '$eventName · All items packed, awaiting dispatch.'
+              : '$eventName · All dishes freshly packed in containers, awaiting dispatch.';
+          statusTag = isSupplies ? 'ALL SUPPLIES PACKED' : 'ALL FOOD PACKED & READY';
           buttonText = 'View Packing Status →';
           break;
         case 'bulk_dispatched':
           primaryColor = const Color(0xFF059669); // Emerald Green
           emoji = '🚗';
-          title = 'Feast Out for Delivery${deliveryOtp.isNotEmpty ? ' · OTP: $deliveryOtp' : ''}';
+          title = isSupplies
+              ? 'Event Supplies Out for Delivery${deliveryOtp.isNotEmpty ? ' · OTP: $deliveryOtp' : ''}'
+              : 'Feast Out for Delivery${deliveryOtp.isNotEmpty ? ' · OTP: $deliveryOtp' : ''}';
           subtitle = '$eventName · In-house delivery team is en route to your venue! Share OTP $deliveryOtp upon arrival.';
           statusTag = 'OUT FOR DELIVERY';
           buttonText = 'Track Fleet Live →';
@@ -4487,10 +4505,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         default:
           primaryColor = const Color(0xFFF59E0B); // Amber / Gold
           emoji = '🎉';
-          title = 'Feast Booked · Scheduling Kitchen';
-          subtitle = '$eventName · ₹${totalAmount.toStringAsFixed(0)} · Catering team is appointing your dedicated kitchen.';
-          statusTag = 'SCHEDULING KITCHEN';
-          buttonText = 'Track Feast →';
+          title = isSupplies
+              ? 'Event Order Booked · Scheduling Dispatch'
+              : 'Feast Booked · Scheduling Kitchen';
+          subtitle = isSupplies
+              ? '$eventName · ₹${totalAmount.toStringAsFixed(0)} · Catering team is appointing dedicated fulfillment staff.'
+              : '$eventName · ₹${totalAmount.toStringAsFixed(0)} · Catering team is appointing your dedicated kitchen.';
+          statusTag = isSupplies ? 'SCHEDULING DISPATCH' : 'SCHEDULING KITCHEN';
+          buttonText = isSupplies ? 'Track Order →' : 'Track Feast →';
           break;
       }
 
@@ -4743,7 +4765,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Feast Delivered & Handover Verified! 🎉',
+                                (eventName.toLowerCase().contains('rental') ||
+                                        eventName.toLowerCase().contains('equipment') ||
+                                        eventName.toLowerCase().contains('decor') ||
+                                        eventName.toLowerCase().contains('supplies'))
+                                    ? 'Event Supplies Delivered & Verified! 🎉'
+                                    : 'Feast Delivered & Handover Verified! 🎉',
                                 style: GoogleFonts.outfit(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
@@ -4752,7 +4779,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '$eventName · Delivered with OTP${deliveryOtp.isNotEmpty ? ' ($deliveryOtp)' : ''}. Have a wonderful celebration! Enjoy your feast.',
+                                (eventName.toLowerCase().contains('rental') ||
+                                        eventName.toLowerCase().contains('equipment') ||
+                                        eventName.toLowerCase().contains('decor') ||
+                                        eventName.toLowerCase().contains('supplies'))
+                                    ? '$eventName · Delivered with OTP${deliveryOtp.isNotEmpty ? ' ($deliveryOtp)' : ''}. Have a wonderful celebration!'
+                                    : '$eventName · Delivered with OTP${deliveryOtp.isNotEmpty ? ' ($deliveryOtp)' : ''}. Have a wonderful celebration! Enjoy your feast.',
                                 style: GoogleFonts.outfit(
                                   fontSize: 12.5,
                                   color: isDark ? Colors.white70 : Colors.black87,

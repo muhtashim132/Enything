@@ -68,15 +68,12 @@ def check_duplicate_product(config: dict, shop_id: str, product_name: str) -> bo
     """
     Check if a product already exists for this shop.
     MANDATORY RULE: Always filters by `is_deleted = false` (soft delete rule).
-    Safely escapes +, %, &, ' in PostgREST queries.
+    Compares exact normalized name so different dosage forms/strengths (e.g. Augmentin 625 Duo Tablets
+    vs Augmentin Duo Dry Suspension) are NEVER falsely skipped.
     """
     try:
-        # Extract core brand/name for matching (first 3-4 words)
-        words = product_name.strip().split()
-        core_search = " ".join(words[:min(4, len(words))])
-
-        # PostgREST URL encoding: replace special characters
-        encoded_name = urllib.parse.quote_plus(f"*{core_search}*")
+        clean_name = product_name.strip()
+        encoded_name = urllib.parse.quote_plus(clean_name)
 
         headers = {
             "apikey": config["key"],
@@ -85,7 +82,7 @@ def check_duplicate_product(config: dict, shop_id: str, product_name: str) -> bo
             "Prefer": "count=exact",
         }
 
-        # URL: /rest/v1/products?shop_id=eq.{shop_id}&is_deleted=eq.false&name=ilike.{encoded_name}&select=id,name
+        # Exact match check
         url = (
             f"{config['url']}/rest/v1/products"
             f"?shop_id=eq.{shop_id}"
@@ -97,7 +94,10 @@ def check_duplicate_product(config: dict, shop_id: str, product_name: str) -> bo
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            return len(data) > 0
+            # Verify exact normalized match
+            for row in data:
+                if row.get("name", "").strip().lower() == clean_name.lower():
+                    return True
 
         return False
     except Exception as e:
@@ -268,3 +268,25 @@ def get_shop_info(config: dict, shop_id: str) -> dict:
     except Exception as e:
         print(f"      ⚠️  Shop info fetch error: {e}")
         return {}
+
+
+def get_shop_by_name(config: dict, shop_name: str) -> dict:
+    """Fetch shop information by shop name."""
+    try:
+        headers = {
+            "apikey": config["key"],
+            "Authorization": f"Bearer {config['key']}",
+            "Content-Type": "application/json",
+        }
+        encoded = urllib.parse.quote_plus(f"*{shop_name}*")
+        url = f"{config['url']}/rest/v1/shops?name=ilike.{encoded}&select=id,name,category,categories,is_active&limit=1"
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data:
+                return data[0]
+        return {}
+    except Exception as e:
+        print(f"      ⚠️  Shop info fetch error: {e}")
+        return {}
+

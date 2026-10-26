@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_categories.dart';
+import '../config/app_version.dart';
 import '../config/tax_config.dart';
 
 class PlatformConfigProvider extends ChangeNotifier {
@@ -52,6 +53,15 @@ class PlatformConfigProvider extends ChangeNotifier {
   /// Custom message shown to customers during maintenance.
   String _maintenanceMessage =
       'We are currently updating our platform to serve you better. Ordering will resume shortly.';
+
+  // ── Remote App Version & Force Update Config ────────────────────────────
+  int _minSupportedBuildNumber = 1;
+  int _latestBuildNumber = 18;
+  String _forceUpdateTitle = 'App Update Required 🚀';
+  String _forceUpdateMessage =
+      'A newer version of Enything is available. Please update your app from the store to continue using our delivery services.';
+  String _appStoreUrl = 'https://apps.apple.com/in/app/enything/id6809016496';
+  String _playStoreUrl = 'https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything';
 
   // ── Category Management (Additive) ──────────────────────────────────────
   /// Set of category names that the admin has disabled.
@@ -135,13 +145,33 @@ class PlatformConfigProvider extends ChangeNotifier {
   /// If base commission is 5% and gateway is 2.36%, this returns 7.36.
   double get unifiedCommissionPercent => _commissionPercent + (0.0236 * 100);
 
-  double getCommissionPercentForCategory(String category) {
-    return _categoryCommissionOverrides[category] ?? _commissionPercent;
+  double getCommissionPercentForCategory(String? category, {String? fallbackCategory}) {
+    if (category != null && category.trim().isNotEmpty) {
+      final trimmed = category.trim();
+      if (_categoryCommissionOverrides.containsKey(trimmed)) {
+        return _categoryCommissionOverrides[trimmed]!;
+      }
+    }
+    if (fallbackCategory != null && fallbackCategory.trim().isNotEmpty) {
+      final trimmedFallback = fallbackCategory.trim();
+      if (_categoryCommissionOverrides.containsKey(trimmedFallback)) {
+        return _categoryCommissionOverrides[trimmedFallback]!;
+      }
+    }
+    return _commissionPercent;
   }
 
-  double getCommissionRateForCategory(String category) {
-    return getCommissionPercentForCategory(category) / 100.0;
+  double getCommissionRateForCategory(String? category, {String? fallbackCategory}) {
+    return getCommissionPercentForCategory(category, fallbackCategory: fallbackCategory) / 100.0;
   }
+
+  bool hasCategoryCommissionOverride(String? category) {
+    if (category == null || category.trim().isEmpty) return false;
+    return _categoryCommissionOverrides.containsKey(category.trim());
+  }
+
+  Map<String, double> get categoryCommissionOverrides =>
+      Map.unmodifiable(_categoryCommissionOverrides);
 
   double get platformFee => _platformFee;
   double get deliveryBaseFee => _deliveryBaseFee;
@@ -169,6 +199,16 @@ class PlatformConfigProvider extends ChangeNotifier {
   // ── Maintenance Mode Getters (Additive) ─────────────────────────────────
   bool get isMaintenanceMode => _maintenanceMode;
   String get maintenanceMessage => _maintenanceMessage;
+
+  // ── Version & App Update Getters ────────────────────────────────────────
+  int get minSupportedBuildNumber => _minSupportedBuildNumber;
+  int get latestBuildNumber => _latestBuildNumber;
+  String get forceUpdateTitle => _forceUpdateTitle;
+  String get forceUpdateMessage => _forceUpdateMessage;
+  String get appStoreUrl => _appStoreUrl;
+  String get playStoreUrl => _playStoreUrl;
+  bool get isForceUpdateRequired => AppVersion.buildNumber < _minSupportedBuildNumber;
+  bool get isUpdateAvailable => AppVersion.buildNumber < _latestBuildNumber;
 
   // ── Load Settings ────────────────────────────────────────────
   Future<void> load({int maxRetries = 3}) async {
@@ -199,6 +239,36 @@ class PlatformConfigProvider extends ChangeNotifier {
             if (msgStr.isNotEmpty && msgStr != 'null') {
               _maintenanceMessage = msgStr;
             }
+            continue;
+          }
+
+          // ── Remote Version & Force Update Config ────────────────────
+          if (key == 'min_supported_build_number') {
+            _minSupportedBuildNumber = int.tryParse(valRaw.toString()) ?? 1;
+            continue;
+          }
+          if (key == 'latest_build_number') {
+            _latestBuildNumber = int.tryParse(valRaw.toString()) ?? 18;
+            continue;
+          }
+          if (key == 'force_update_title') {
+            final t = _cleanMaintenanceMessage(valRaw);
+            if (t.isNotEmpty && t != 'null') _forceUpdateTitle = t;
+            continue;
+          }
+          if (key == 'force_update_message') {
+            final m = _cleanMaintenanceMessage(valRaw);
+            if (m.isNotEmpty && m != 'null') _forceUpdateMessage = m;
+            continue;
+          }
+          if (key == 'app_store_url') {
+            final u = _cleanMaintenanceMessage(valRaw);
+            if (u.isNotEmpty && u != 'null') _appStoreUrl = u;
+            continue;
+          }
+          if (key == 'play_store_url') {
+            final u = _cleanMaintenanceMessage(valRaw);
+            if (u.isNotEmpty && u != 'null') _playStoreUrl = u;
             continue;
           }
 
@@ -259,7 +329,7 @@ class PlatformConfigProvider extends ChangeNotifier {
           }
 
           if (key.startsWith('commission_percent_')) {
-            final category = key.replaceFirst('commission_percent_', '');
+            final category = key.replaceFirst('commission_percent_', '').trim();
             _categoryCommissionOverrides[category] = val;
           }
 
@@ -954,13 +1024,13 @@ class PlatformConfigProvider extends ChangeNotifier {
 
   void _setValue(String key, double val) {
     if (key.startsWith('commission_percent_')) {
-      final cat = key.replaceFirst('commission_percent_', '');
+      final cat = key.replaceFirst('commission_percent_', '').trim();
       _categoryCommissionOverrides[cat] = val;
       safeNotifyListeners();
       return;
     }
     if (key.startsWith('wait_penalty_per_min_')) {
-      final cat = key.replaceFirst('wait_penalty_per_min_', '');
+      final cat = key.replaceFirst('wait_penalty_per_min_', '').trim();
       _categoryWaitPenaltyOverrides[cat] = val;
       safeNotifyListeners();
       return;
@@ -1027,12 +1097,12 @@ class PlatformConfigProvider extends ChangeNotifier {
 
   void _removeValue(String key) {
     if (key.startsWith('commission_percent_')) {
-      final cat = key.replaceFirst('commission_percent_', '');
+      final cat = key.replaceFirst('commission_percent_', '').trim();
       _categoryCommissionOverrides.remove(cat);
       return;
     }
     if (key.startsWith('wait_penalty_per_min_')) {
-      final cat = key.replaceFirst('wait_penalty_per_min_', '');
+      final cat = key.replaceFirst('wait_penalty_per_min_', '').trim();
       _categoryWaitPenaltyOverrides.remove(cat);
       return;
     }

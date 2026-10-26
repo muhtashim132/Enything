@@ -31,6 +31,9 @@ class OrderGroup {
   OrderModel get primaryOrder =>
       activeOrders.isNotEmpty ? activeOrders.first : orders.first;
 
+  /// Delivery handover OTP for this order group.
+  String? get deliveryOtp => primaryOrder.deliveryOtp;
+
   double get totalGrand => (activeOrders.isNotEmpty ? activeOrders : orders)
       .fold(0.0, (sum, o) => sum + o.grandTotal);
 

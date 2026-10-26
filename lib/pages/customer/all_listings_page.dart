@@ -929,13 +929,21 @@ class _AllListingsPageState extends State<AllListingsPage> {
       if (lowerFilters != null) {
         final pCat = p.category.trim().toLowerCase();
         final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
-        final sCat = shop?.category.trim().toLowerCase() ?? '';
+        final isOmnibus = shop != null && AppCategories.isOmnibusStoreCategory(shop.category);
         final matchesProdCat = lowerFilters.contains(pCat);
-        final matchesShopCat = sCat.isNotEmpty && lowerFilters.contains(sCat);
-        final matchesShopMultiCat = shop?.categories.any((c) => lowerFilters.contains(c.trim().toLowerCase())) ?? false;
-        final matchesShopScope = widget.shops.any((s) => s.id == p.shopId);
-        if (!matchesProdCat && !matchesShopCat && !matchesShopMultiCat && !matchesShopScope) {
-          return false;
+
+        if (isOmnibus) {
+          // For omnibus multi-department stores, items MUST strictly match the category filter
+          // so groceries and produce do not leak into specialty category exploration (e.g. Cosmetics)
+          if (!matchesProdCat) return false;
+        } else {
+          final sCat = shop?.category.trim().toLowerCase() ?? '';
+          final matchesShopCat = sCat.isNotEmpty && lowerFilters.contains(sCat);
+          final matchesShopMultiCat = shop?.categories.any((c) => lowerFilters.contains(c.trim().toLowerCase())) ?? false;
+          final matchesShopScope = widget.shops.any((s) => s.id == p.shopId);
+          if (!matchesProdCat && !matchesShopCat && !matchesShopMultiCat && !matchesShopScope) {
+            return false;
+          }
         }
       }
       final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];

@@ -501,6 +501,12 @@ class OrderTaxBreakdown {
   /// This is what the seller actually receives in their bank account.
   double get sellerPayoutNet => sellerPayout - tcsAmount - tdsAmount;
 
+  /// Taxable base subtotal broken down by GST slab rate (e.g. 0.0, 0.05, 0.12, 0.18).
+  final Map<double, double> taxableByRate;
+
+  /// GST amount broken down by GST slab rate (e.g. 0.0, 0.05, 0.12, 0.18).
+  final Map<double, double> gstByRate;
+
   const OrderTaxBreakdown({
     required this.itemBaseSubtotal,
     required this.itemGstTotal,
@@ -522,6 +528,8 @@ class OrderTaxBreakdown {
     required this.riderEarnings,
     required this.tcsAmount,
     required this.tdsAmount,
+    this.taxableByRate = const {},
+    this.gstByRate = const {},
   });
 
   // ---------------------------------------------------------------------------
@@ -535,12 +543,14 @@ class OrderTaxBreakdown {
   /// [riderEarnings] — The amount paid to the rider.
   /// [platformFee] — Platform/handling fee (18% GST inside).
   /// [paymentMethod] — 'upi' / 'card' for gateway deduction, 'cod' for no deduction.
+  /// [shopCategory] — Optional base category of the shop (for fallback on item-level commission/taxes).
   factory OrderTaxBreakdown.calculate({
     required List<Map<String, dynamic>> items,
     required double deliveryCharge,
     required double riderEarnings,
     required double platformFee,
     required String paymentMethod,
+    String? shopCategory,
   }) {
     // ── 1. Item base subtotal + GST addition ─────────────────────────────────
     double baseSubtotal = 0;
@@ -550,9 +560,12 @@ class OrderTaxBreakdown {
     double pureCommission = 0; // total pure commission calculated per item
     double tcsTotal = 0; // GST TCS (§52 CGST Act)
     double tdsTotal = 0; // Income Tax TDS (§194-O)
+    final Map<double, double> taxableByRate = {};
+    final Map<double, double> gstByRate = {};
 
     for (final item in items) {
-      final category = (item['category'] as String?) ?? 'Other';
+      final shopCat = (item['shop_category'] as String?) ?? shopCategory;
+      final category = (item['category'] as String?) ?? shopCat ?? 'Other';
       final price = (item['price'] as num).toDouble(); // BASE price, pre-GST
       final qty = (item['quantity'] as num).toInt();
       final lineBase = price * qty;
@@ -572,9 +585,14 @@ class OrderTaxBreakdown {
       baseSubtotal += lineBase;
       itemGst += lineGst;
 
-      // Category-specific commission
+      // Itemized tax tracking per statutory slab rate
+      taxableByRate[gstRate] = (taxableByRate[gstRate] ?? 0.0) + lineBase;
+      gstByRate[gstRate] = (gstByRate[gstRate] ?? 0.0) + lineGst;
+
+      // Category-specific commission with fallback hierarchy:
+      // Product Category Rate -> Shop Base Rate -> Platform Default Rate
       final commissionRate = PlatformConfigProvider.instance
-              ?.getCommissionRateForCategory(category) ??
+              ?.getCommissionRateForCategory(category, fallbackCategory: shopCat) ??
           0.05;
       pureCommission += lineBase * commissionRate;
 
@@ -653,6 +671,8 @@ class OrderTaxBreakdown {
       riderEarnings: riderEarnings,
       tcsAmount: tcsTotal,
       tdsAmount: tdsTotal,
+      taxableByRate: taxableByRate,
+      gstByRate: gstByRate,
     );
   }
 

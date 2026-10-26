@@ -7,8 +7,8 @@ import '../models/shop_model.dart';
 /// Utility class for sharing product and shop links via the native share sheet.
 class ShareUtils {
   static String get _appStoreUrl => Platform.isIOS
-      ? 'https://apps.apple.com/app/enything/id6470000000'
-      : 'https://play.google.com/store/apps/details?id=com.enything.app';
+      ? 'https://apps.apple.com/in/app/enything/id6809016496'
+      : 'https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything';
 
   // ── Product share ──────────────────────────────────────────────────────────
   static Future<void> shareProduct(ProductModel product,

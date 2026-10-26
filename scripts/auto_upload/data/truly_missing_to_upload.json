@@ -1,0 +1,192 @@
+[
+  {
+    "original_query": "Acepod 50Mg Dry Syrup 30Ml",
+    "resolved_name": "Cepodem 50Mg Bottle Of 30Ml Dry Suspension",
+    "price": 115.0,
+    "salt_composition": "",
+    "pack_info": "30ml Dry Suspension in Bottle",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Aimil Neeri Kft Sugar Free | For Supports Kidney Health| 200 Ml Syrup",
+    "resolved_name": "Aimil Neeri Kft Sugar Free | For Supports Kidney Health| 200 Ml Syrup",
+    "price": 625.0,
+    "salt_composition": "",
+    "pack_info": "200ml Syrup in Bottle",
+    "image_urls": [],
+    "requires_prescription": false,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Azithral Jr Bottle Of 7.5Ml Suspension",
+    "resolved_name": "Azithral Jr Bottle Of 7.5Ml Suspension",
+    "price": 27.48,
+    "salt_composition": "",
+    "pack_info": "7.5ml Suspension in Bottle",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Azithral Xl 100Mg Bottle Of 30Ml Liquid",
+    "resolved_name": "Azithral Xl 100Mg Bottle Of 30Ml Liquid",
+    "price": 125.5,
+    "salt_composition": "",
+    "pack_info": "30ml Oral Liquid in Bottle",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Cetrizine 10Mg (Knoll) Strip Of 10 Tablets",
+    "resolved_name": "Cetrizine 10Mg (Knoll) Strip Of 10 Tablets",
+    "price": 19.5,
+    "salt_composition": "",
+    "pack_info": "10 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Cpod 100Mg Dry Syrup 30Ml",
+    "resolved_name": "Cpod 100Mg Dry Syrup 30Ml",
+    "price": 153.0,
+    "salt_composition": "",
+    "pack_info": "30ml Dry Syrup in Bottle",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Drotin M Strip Of 10 Tablets",
+    "resolved_name": "Drotin M Strip Of 10 Tablets",
+    "price": 265.51,
+    "salt_composition": "",
+    "pack_info": "10 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Elfolin Plus Strip Of 10 Tablets",
+    "resolved_name": "Elfolin Plus Strip Of 10 Tablets",
+    "price": 290.8,
+    "salt_composition": "",
+    "pack_info": "10 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": false,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Esiresp Bottle Of 100Ml Syrup",
+    "resolved_name": "Ketoscalp Bottle Of 100Ml Shampoo + Conditioner",
+    "price": 198.0,
+    "salt_composition": "",
+    "pack_info": "100ml Shampoo & Conditioner in Bottle",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Microlift B6 Raspberry Flavour Suger Free Bottle Of 200Ml Oral Solution",
+    "resolved_name": "Microlift B6 Raspberry Flavour Suger Free Bottle Of 200Ml Oral Solution",
+    "price": 202.5,
+    "salt_composition": "",
+    "pack_info": "200ml Oral Solution in Bottle",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "New Anafortan Strip Of 15 Tablets",
+    "resolved_name": "New Anafortan Strip Of 15 Tablets",
+    "price": 103.34,
+    "salt_composition": "",
+    "pack_info": "15 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Olpress 40 Tablet",
+    "resolved_name": "T Press 40Mg Strip Of 10 Tablets",
+    "price": 70.0,
+    "salt_composition": "",
+    "pack_info": "10 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Ondem Md 4Mg Strip Of 10 Tablets",
+    "resolved_name": "Ondem Md 4Mg Strip Of 10 Tablets",
+    "price": 55.2,
+    "salt_composition": "",
+    "pack_info": "10 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Ossopan D Mango Flavour Bottle Of 200Ml Suspension",
+    "resolved_name": "Ossopan D Mango Flavour Bottle Of 200Ml Suspension",
+    "price": 199.0,
+    "salt_composition": "",
+    "pack_info": "200ml Suspension in Bottle",
+    "image_urls": [],
+    "requires_prescription": false,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Sitaxa Dm 10/100/500Mg Strip Of 10 Tablets",
+    "resolved_name": "Sitaxa Dm 10/100/500Mg Strip Of 10 Tablets",
+    "price": 229.54,
+    "salt_composition": "",
+    "pack_info": "10 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Spinfree Strip Of 15 Tablets",
+    "resolved_name": "Spinfree Strip Of 15 Tablets",
+    "price": 238.2,
+    "salt_composition": "",
+    "pack_info": "15 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Ston 1B6 Delicious Pineapple Flavour Bottle Of 450Ml Oral Solution",
+    "resolved_name": "Ston 1B6 Delicious Pineapple Flavour Bottle Of 450Ml Oral Solution",
+    "price": 445.74,
+    "salt_composition": "",
+    "pack_info": "450ml Oral Solution in Bottle",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "T Press 40Mg Strip Of 10 Tablets",
+    "resolved_name": "T Press Am Strip Of 10 Tablets",
+    "price": 75.0,
+    "salt_composition": "",
+    "pack_info": "10 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  },
+  {
+    "original_query": "Tribest 25Mg Strip Of 10 Tablets",
+    "resolved_name": "Atrest 25Mg Strip Of 10 Tablets",
+    "price": 431.93,
+    "salt_composition": "",
+    "pack_info": "10 Tablet(s) in Strip",
+    "image_urls": [],
+    "requires_prescription": true,
+    "category": "Pharmacy"
+  }
+]

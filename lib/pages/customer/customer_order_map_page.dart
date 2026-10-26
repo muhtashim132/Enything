@@ -22,6 +22,21 @@ const _kShopPickedUpColor = Color(0xFF3498DB); // blue — picked up
 const _kCustomerMarkerColor = Color(0xFF00B4D8); // cyan — customer home
 const _kRiderMarkerColor = Color(0xFF2ECC71); // green — live rider
 
+const Set<String> _kTerminalStatuses = {
+  'seller_rejected',
+  'partner_rejected',
+  'cancelled',
+  'rejected',
+  'shop_dispute_cancel',
+  'timeout',
+  'failed',
+  'returned',
+  'refunded',
+  'verification_failed',
+  'no_rider',
+  'payment_failed',
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CustomerOrderMapPage
 // Full-screen geospatial live tracking map for the customer. Shows:
@@ -268,10 +283,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
             }
 
             final activeOrders = _currentGroupOrders
-                .where((o) =>
-                    o.status != 'rejected' &&
-                    o.status != 'cancelled' &&
-                    o.status != 'seller_rejected')
+                .where((o) => !_kTerminalStatuses.contains(o.status))
                 .toList();
 
             // 2. Handle complete order termination
@@ -292,9 +304,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
             }
 
             // 3. Handle Partial Rejection or Status Change -> Recompute Routes
-            if (newStatus == 'rejected' ||
-                newStatus == 'cancelled' ||
-                newStatus == 'seller_rejected' ||
+            if (_kTerminalStatuses.contains(newStatus) ||
                 newStatus == 'picked_up' ||
                 newStatus == 'out_for_delivery') {
               _fetchRoutes(silent: true);
@@ -419,10 +429,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final custPt = LatLng(custLat, custLng);
 
     final activeShops = _currentGroupOrders
-        .where((s) =>
-            s.status != 'rejected' &&
-            s.status != 'cancelled' &&
-            s.status != 'seller_rejected')
+        .where((s) => !_kTerminalStatuses.contains(s.status))
         .toList();
     final shops =
         activeShops.isNotEmpty ? activeShops : _currentGroupOrders;
@@ -512,12 +519,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
   Future<void> _refreshPickupRoute(LatLng riderPos) async {
     final activeShops = _currentGroupOrders
-        .where((s) =>
-            s.status != 'rejected' &&
-            s.status != 'cancelled' &&
-            s.status != 'seller_rejected' &&
-            s.status != 'partner_rejected' &&
-            s.status != 'shop_dispute_cancel')
+        .where((s) => !_kTerminalStatuses.contains(s.status))
         .toList();
     if (activeShops.isEmpty) return;
 
@@ -558,10 +560,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     ];
 
     final activeShops = _currentGroupOrders
-        .where((s) =>
-            s.status != 'rejected' &&
-            s.status != 'cancelled' &&
-            s.status != 'seller_rejected')
+        .where((s) => !_kTerminalStatuses.contains(s.status))
         .toList();
     final shops =
         activeShops.isNotEmpty ? activeShops : _currentGroupOrders;
@@ -722,20 +721,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
 
     final allShops = _currentGroupOrders;
     final activeShops = allShops
-        .where((s) =>
-            s.status != 'rejected' &&
-            s.status != 'cancelled' &&
-            s.status != 'seller_rejected')
+        .where((s) => !_kTerminalStatuses.contains(s.status))
         .toList();
     final effectiveShops =
         activeShops.isNotEmpty ? activeShops : allShops;
 
     final isMulti = allShops.length > 1;
     final rejectedCount = allShops
-        .where((s) =>
-            s.status == 'rejected' ||
-            s.status == 'cancelled' ||
-            s.status == 'seller_rejected')
+        .where((s) => _kTerminalStatuses.contains(s.status))
         .length;
     final hasPartialRejection =
         isMulti && rejectedCount > 0 && activeShops.isNotEmpty;
@@ -767,9 +760,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
             width: 80,
             height: 70,
             child: _mapMarker(
-              (allShops[i].status == 'rejected' ||
-                      allShops[i].status == 'cancelled' ||
-                      allShops[i].status == 'seller_rejected')
+              _kTerminalStatuses.contains(allShops[i].status)
                   ? _kShopCancelledColor
                   : (allShops[i].status == 'picked_up'
                       ? _kShopPickedUpColor

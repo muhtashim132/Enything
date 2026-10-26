@@ -330,6 +330,7 @@ class CartProvider extends ChangeNotifier {
             'quantity': i.quantity,
             'gst_rate_override':
                 i.product.gstRateOverride, // null = use category
+            'shop_category': i.shop.category,
           })
       .toList();
 

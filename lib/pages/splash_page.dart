@@ -1,11 +1,15 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../config/app_version.dart';
 import '../config/routes.dart';
 import '../providers/auth_provider.dart';
+import '../providers/platform_config_provider.dart';
 import '../providers/referral_provider.dart'; // C1 FIX: init referral code on startup
 import '../main.dart' show pendingNotificationData, handleNotificationClick;
 
@@ -95,6 +99,21 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
 
   Future<void> _navigate() async {
     if (!mounted) return;
+
+    // ── Version & App Update Guard (Platform-wide) ──────────────────────────
+    final config = context.read<PlatformConfigProvider>();
+    if (config.loading) {
+      for (int i = 0; i < 8; i++) {
+        if (!config.loading) break;
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+    }
+    if (config.isForceUpdateRequired && mounted) {
+      _showForceUpdateDialog(config);
+      return;
+    }
+    if (!mounted) return;
+
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
       final auth = context.read<AuthProvider>();
@@ -271,6 +290,115 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
           ),
         ],
       ),
+    );
+  }
+
+  void _showForceUpdateDialog(PlatformConfigProvider config) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        final isDark = Theme.of(dialogCtx).brightness == Brightness.dark;
+        return PopScope(
+          canPop: false,
+          child: Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+            elevation: 16,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.system_update_rounded, color: Colors.white, size: 38),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    config.forceUpdateTitle,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    config.forceUpdateMessage,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Your version: ${AppVersion.displayString}',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: () async {
+                        final storeUrl = Platform.isIOS ? config.appStoreUrl : config.playStoreUrl;
+                        final uri = Uri.parse(storeUrl);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      child: Text(
+                        Platform.isIOS ? 'Update on App Store' : 'Update on Play Store',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

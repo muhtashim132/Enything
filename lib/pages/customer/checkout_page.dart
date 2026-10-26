@@ -785,12 +785,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final isReplacementOrder = widget.existingCartGroupId != null ||
           cart.pendingCartGroupId != null;
+      // 100x FIX: Only treat as replacement if there are actual surviving active shops in the group.
+      // If all previous orders in the group were cancelled/rejected, _activeShopIds is empty.
+      // SQL place_orders_transaction evaluates v_is_replacement = false in that case,
+      // expecting standard base delivery and handling fee. Waiving fees when _activeShopIds is empty
+      // caused a runtime exception: 'Handling fee spoofing detected. Expected: 20, Got: 0'.
+      final bool isEffectiveReplacement =
+          isReplacementOrder && _activeShopIds.isNotEmpty;
 
       double heavyFee = 0.0;
       double smallCartFee = 0.0;
       double effectiveBase = 0.0;
 
-      if (isReplacementOrder) {
+      if (isEffectiveReplacement) {
         // Replacement order fees:
         // • effectiveBase = 0.0 — delivery base fee was already paid in the
         //   original order. We only charge the multi-shop surcharge for the
@@ -960,10 +967,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       } else {
         legSurcharges = DeliveryCalculator.calculateLegSurcharges(cart.shops);
       }
-      final totalPlatformFee = isReplacementOrder
+      final totalPlatformFee = isEffectiveReplacement
           ? 0.0
           : (PlatformConfigProvider.instance?.platformFee ??
               PaymentConfig.platformFee);
+
+      double allocatedCouponSum = 0.0;
 
       for (int shopIndex = 0; shopIndex < cart.shops.length; shopIndex++) {
         final shop = cart.shops[shopIndex];
@@ -982,7 +991,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             : (1.0 / numShops);
 
         // 100x Leg-specific fee attribution
-        final bool isExtraLeg = isReplacementOrder && _activeShopIds.isNotEmpty;
+        final bool isExtraLeg = isEffectiveReplacement;
         final double currentLegSurcharge =
             (shopIndex < legSurcharges.length) ? legSurcharges[shopIndex] : 0.0;
         final double shopSurcharge =
@@ -1002,6 +1011,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             'price': i.selectedVariant?.price ?? i.product.price,
             'quantity': i.quantity,
             'gst_rate_override': i.product.gstRateOverride,
+            'shop_category': shop.category,
           };
         }).toList();
 
@@ -1011,6 +1021,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           riderEarnings: shopRiderEarnings,
           platformFee: shopPlatformFee,
           paymentMethod: paymentMethod,
+          shopCategory: shop.category,
         );
 
         final Map<String, dynamic> rateSnapshot = {};
@@ -1034,6 +1045,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopTcs = shopBreakdown.tcsAmount;
         final shopTds = shopBreakdown.tdsAmount;
         final shopGrandTotal = shopBreakdown.grandTotal;
+
+        // 100x Precision: Assign exact coupon remainder to the final shop to prevent drift
+        final double currentShopCoupon;
+        if (shopIndex == cart.shops.length - 1) {
+          currentShopCoupon = math.max(
+              0.0,
+              ((appliedCouponDiscount - allocatedCouponSum) * 100).round() /
+                  100.0);
+        } else {
+          currentShopCoupon = math.min(
+              shopGrandTotal,
+              ((appliedCouponDiscount * proportion * 100).round() / 100.0));
+        }
+        allocatedCouponSum += currentShopCoupon;
+
+        final double calculatedShopGrandTotalCollected = ((math.max(
+                0.0, shopGrandTotal - currentShopCoupon) *
+            100)
+            .round() /
+            100.0);
 
         final orderId = const Uuid().v4();
         orderIds.add(orderId);
@@ -1080,9 +1111,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'non_food_gst_amount': shopNonFoodGst,
           'tcs_amount': shopTcs,
           'tds_amount': shopTds,
-          'grand_total_collected': math.max(
-              0.0,
-              shopGrandTotal - (appliedCouponDiscount * proportion)),
+          'grand_total_collected': calculatedShopGrandTotalCollected,
           'gst_rate_snapshot': rateSnapshot,
           'prescription_urls':
               shopItems.any((item) => item.product.requiresPrescription)
@@ -1091,8 +1120,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'estimated_distance_km': shopDistanceKm,
           'shop_prep_time_snapshot': shop.prepTimeMinutes,
           'coupon_id': appliedCouponId,
-          'coupon_discount':
-              math.min(shopGrandTotal, appliedCouponDiscount * proportion),
+          'coupon_discount': currentShopCoupon,
         });
 
         final itemsToInsert = shopItems.map((item) {
@@ -1334,6 +1362,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     final isReplacementOrder = widget.existingCartGroupId != null ||
         context.read<CartProvider>().pendingCartGroupId != null;
+    final isEffectiveReplacement =
+        isReplacementOrder && _activeShopIds.isNotEmpty;
 
     double surcharge = 0.0;
     double heavyFee = 0.0;
@@ -1341,7 +1371,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     double effectiveBase = PlatformConfigProvider.instance?.deliveryBaseFee ??
         PaymentConfig.deliveryFee;
 
-    if (isReplacementOrder) {
+    if (isEffectiveReplacement) {
       effectiveBase = 0.0;
       final newUniqueShops = cart.shops
           .where((s) => !_activeShopIds.contains(s.id))
@@ -1417,7 +1447,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       items: cart.taxBreakdownItems,
       deliveryCharge: totalDelivery,
       riderEarnings: riderEarnings,
-      platformFee: isReplacementOrder ? 0.0 : cart.platformFee,
+      platformFee: isEffectiveReplacement ? 0.0 : cart.platformFee,
       paymentMethod: 'upi',
     );
     // Grand total = base items + item GST + delivery + platform - coupon discount
@@ -1824,8 +1854,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         _billRow(
                           'Taxes & GST',
                           '+₹${(gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst).toStringAsFixed(2)}',
-                          hint: 'Govt. taxes on items & delivery services',
+                          hint: 'Govt. taxes on items & delivery (Tap for details)',
                           valueColor: const Color(0xFF1565C0),
+                          onTap: () =>
+                              _showTaxBreakdownModal(context, gstBreakdown),
                         ),
                       ],
                       if (couponDiscount > 0) ...[
@@ -2351,8 +2383,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Widget _billRow(String label, String value,
-      {bool isBold = false, Color? valueColor, String? hint}) {
-    return Row(
+      {bool isBold = false, Color? valueColor, String? hint, VoidCallback? onTap}) {
+    final rowContent = Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2360,16 +2392,28 @@ class _CheckoutPageState extends State<CheckoutPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.outfit(
-                    color: isBold
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
-                    fontSize: isBold ? 15 : 13,
-                    fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
-                  )),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(
+                          color: isBold
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary,
+                          fontSize: isBold ? 15 : 13,
+                          fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
+                        )),
+                  ),
+                  if (onTap != null) ...[
+                    const SizedBox(width: 4),
+                    Icon(Icons.info_outline_rounded,
+                        size: 13, color: valueColor ?? const Color(0xFF1565C0)),
+                  ],
+                ],
+              ),
               if (hint != null)
                 Text(hint,
                     style: GoogleFonts.outfit(
@@ -2391,6 +2435,234 @@ class _CheckoutPageState extends State<CheckoutPage> {
               )),
         ),
       ],
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: rowContent,
+        ),
+      );
+    }
+    return rowContent;
+  }
+
+  void _showTaxBreakdownModal(BuildContext context, OrderTaxBreakdown b) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF16192E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            )
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1565C0).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded,
+                      color: Color(0xFF1565C0), size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Taxes & GST Breakdown',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Statutory GST compliance under Indian tax laws',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (b.taxableByRate.isNotEmpty) ...[
+              Text(
+                'PRODUCT TAX SLABS',
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...b.taxableByRate.entries.map((entry) {
+                final rate = entry.key;
+                final taxable = entry.value;
+                final gst = b.gstByRate[rate] ?? (taxable * rate);
+                final rateLabel = rate == 0.0
+                    ? '0% (Exempt Produce / Grains)'
+                    : '${(rate * 100).toStringAsFixed(0)}% GST';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        rateLabel,
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          color: isDark ? Colors.white70 : AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        rate == 0.0
+                            ? '₹0.00 (on ₹${taxable.toStringAsFixed(2)})'
+                            : '₹${gst.toStringAsFixed(2)} (on ₹${taxable.toStringAsFixed(2)})',
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 12),
+            ],
+            Text(
+              'SERVICE & PLATFORM TAXES',
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Delivery Service GST (18%)',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: isDark ? Colors.white70 : AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  '₹${b.deliveryGst.toStringAsFixed(2)}',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Platform Handling GST (18%)',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    color: isDark ? Colors.white70 : AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  '₹${b.platformFeeGst.toStringAsFixed(2)} (included)',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1565C0).withValues(alpha: isDark ? 0.15 : 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.25),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.shield_outlined,
+                          size: 15, color: Color(0xFF1565C0)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Statutory Remittance Split',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1565C0),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    b.s9_5GstToRemit > 0
+                        ? '• Food/Restaurant GST: ₹${b.s9_5GstToRemit.toStringAsFixed(2)} remitted directly to Govt by Enything under CGST Section 9(5).\n• Retail/Non-Food GST: ₹${b.nonFoodGstPassThrough.toStringAsFixed(2)} passed directly to store bank account for GSTR-3B filing.'
+                        : '• Retail/Non-Food GST: ₹${b.nonFoodGstPassThrough.toStringAsFixed(2)} passed directly to store bank account for GSTR-3B filing.\n• 100% prepaid online payment with zero doorstep cash collection.',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: isDark ? Colors.white70 : const Color(0xFF2B3A4A),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
