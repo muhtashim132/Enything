@@ -33,7 +33,7 @@ def get_supabase_config() -> dict:
                     os.environ.setdefault(key.strip(), value.strip())
 
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE") or ""
     anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
 
     key = service_key if service_key else anon_key
@@ -159,8 +159,9 @@ def insert_product(config: dict, payload: dict) -> dict:
             elif resp.status_code in (401, 403):
                 # Fallback to bulk_upload_shop_products SECURITY DEFINER RPC
                 rpc_res = bulk_upload_products(config, payload["shop_id"], [payload])
-                if rpc_res and rpc_res.get("inserted", 0) > 0:
-                    return {"name": payload["name"], "status": "inserted"}
+                if rpc_res and (rpc_res.get("inserted", 0) > 0 or rpc_res.get("updated", 0) > 0):
+                    status = "inserted" if rpc_res.get("inserted", 0) > 0 else "updated"
+                    return {"name": payload["name"], "status": status}
                 elif rpc_res and rpc_res.get("skipped", 0) > 0:
                     print(f"      ℹ️  Already exists in database: {payload['name']}")
                     return {"name": payload["name"], "status": "skipped"}
@@ -228,15 +229,33 @@ def bulk_upload_products(config: dict, shop_id: str, products: list) -> dict:
 def purge_test_products(config: dict, shop_id: str, test_names: list) -> int:
     """
     Testing Discipline & Zero Test Leftovers rule:
-    Purges any mock or test products created during automated verification.
+    Purges any mock or test products created during automated verification
+    using the privileged public.bulk_delete_shop_products RPC.
     """
-    deleted_count = 0
+    if not shop_id or not test_names:
+        return 0
+
     headers = {
         "apikey": config["key"],
         "Authorization": f"Bearer {config['key']}",
         "Content-Type": "application/json",
     }
 
+    try:
+        url = f"{config['url']}/rest/v1/rpc/bulk_delete_shop_products"
+        resp = requests.post(
+            url,
+            headers=headers,
+            json={"p_shop_id": shop_id, "p_names": test_names},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("deleted", 0)
+    except Exception as e:
+        print(f"      ⚠️  bulk_delete_shop_products exception: {e}")
+
+    # Fallback to direct DELETE
+    deleted_count = 0
     for name in test_names:
         try:
             encoded_name = urllib.parse.quote_plus(name)
@@ -248,6 +267,7 @@ def purge_test_products(config: dict, shop_id: str, test_names: list) -> int:
             pass
 
     return deleted_count
+
 
 
 def get_shop_info(config: dict, shop_id: str) -> dict:

@@ -107,5 +107,16 @@ test_mockup.png
 # Local shelf scan input photos & temp images
 /shelf*.jpeg
 /Shelf*.jpeg
+/g*.jpeg
+/IMG_*.pdf
 scripts/auto_upload/data/product_images/
+scripts/auto_upload/data/*_pages/
+scripts/auto_upload/data/*_studio_images/
+scripts/auto_upload/data/*_crops/
+scripts/auto_upload/data/curated_studio_images/
+scripts/auto_upload/data/test_img/
+scripts/auto_upload/data/*.pdf
+scripts/auto_upload/data/*.jpg
+scripts/auto_upload/data/*.jpeg
 web_public/app
+

@@ -46,10 +46,13 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
         _cancelledOrders = (res['cancelled_orders'] as num?)?.toInt() ?? 0;
         _avgOrderValue = (res['avg_order_value'] as num?)?.toDouble() ?? 0.0;
 
-        final obStatus = (res['orders_by_status'] as Map<String, dynamic>?) ?? {};
-        _ordersByStatus = obStatus.map((k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0));
+        final obStatus =
+            (res['orders_by_status'] as Map<String, dynamic>?) ?? {};
+        _ordersByStatus =
+            obStatus.map((k, v) => MapEntry(k, (v as num?)?.toInt() ?? 0));
 
-        final hDist = (res['hourly_distribution'] as Map<String, dynamic>?) ?? {};
+        final hDist =
+            (res['hourly_distribution'] as Map<String, dynamic>?) ?? {};
         _hourlySpots = List.generate(24, (h) {
           return FlSpot(
               h.toDouble(), (hDist[h.toString()] as num?)?.toDouble() ?? 0.0);
@@ -57,8 +60,11 @@ class _AnalyticsAdminPageState extends State<AnalyticsAdminPage> {
 
         // Peak hour
         if (hDist.isNotEmpty) {
-          final peak = hDist.entries
-              .reduce((a, b) => ((a.value as num?)?.toDouble() ?? 0.0) > ((b.value as num?)?.toDouble() ?? 0.0) ? a : b);
+          final peak = hDist.entries.reduce((a, b) =>
+              ((a.value as num?)?.toDouble() ?? 0.0) >
+                      ((b.value as num?)?.toDouble() ?? 0.0)
+                  ? a
+                  : b);
           final h = int.tryParse(peak.key) ?? 0;
           final suffix = h >= 12 ? 'PM' : 'AM';
           final display = h == 0 ? 12 : (h > 12 ? h - 12 : h);

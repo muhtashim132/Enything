@@ -885,3 +885,415 @@ def research_grocery_product(product_name: str) -> dict:
         }]
 
     return enriched
+
+
+# ── Restaurant & Food Research Master Functions (100% Free) ───────────────────
+
+def _classify_restaurant_category(dish_name: str) -> str:
+    """
+    Intelligently maps any dish into its true restaurant menu section heading.
+    """
+    name_lower = (dish_name or "").lower()
+
+    if any(k in name_lower for k in ["pizza", "calzone"]):
+        return "Pizzas"
+    if any(k in name_lower for k in ["burger", "sandwich", "sub", "panini", "slider", "toast"]):
+        return "Burgers & Sandwiches"
+    if any(k in name_lower for k in ["biryani", "pulao", "fried rice", "jeera rice", "steamed rice"]):
+        return "Biryani & Rice"
+    if any(k in name_lower for k in ["noodle", "noodles", "chowmein", "manchurian", "chilli paneer", "chilli chicken", "schezwan", "chop suey", "dimsum", "wok"]):
+        return "Chinese & Asian"
+    if any(k in name_lower for k in ["pasta", "spaghetti", "penne", "macaroni", "lasagna", "ravioli", "garlic bread", "bruschetta"]):
+        return "Pastas & Continental"
+    if any(k in name_lower for k in ["tikka", "kebab", "momo", "fries", "wing", "wings", "pakoda", "samosa", "cutlet", "finger", "spring roll", "chaat", "nachos", "starter"]):
+        return "Starters"
+    if any(k in name_lower for k in ["tandoori", "seekh", "boti", "grilled"]):
+        return "Tandoori & Grills"
+    if any(k in name_lower for k in ["naan", "roti", "paratha", "kulcha", "rumali", "poori", "bhatura"]):
+        return "Breads"
+    if any(k in name_lower for k in ["shake", "smoothie", "mojito", "coffee", "tea", "chai", "lassi", "cooler", "cold drink", "soda", "lemonade", "mocktail", "beverage", "juice"]):
+        return "Beverages"
+    if any(k in name_lower for k in ["ice cream", "brownie", "cake", "pastry", "gulab jamun", "rasgulla", "kheer", "halwa", "pudding", "sundae", "dessert"]):
+        return "Desserts"
+    if any(k in name_lower for k in ["soup", "broth", "salad"]):
+        return "Soups & Salads"
+    if any(k in name_lower for k in ["dosa", "idli", "vada", "uttapam", "upma", "poha", "chole bhature"]):
+        return "South Indian & Breakfast"
+    if any(k in name_lower for k in ["roll", "wrap", "kathi roll", "shawarma", "shawrma"]):
+        return "Rolls & Shawarma"
+
+    return "Main Course"
+
+
+def _scrape_wikimedia_commons_food_images(dish_name: str, is_veg: bool = True) -> list:
+    """
+    Search Wikimedia Commons directly for high-resolution food and dish photos.
+    Free, non-rate-limited, covers regional Indian & international culinary photos.
+    Enforces strict dietary and ingredient consistency.
+    """
+    urls = []
+    clean_query = re.sub(r"[\(\)\[\]\d+]+", "", dish_name).strip()
+    headers = {"User-Agent": "EnythingMenuBot/2.0 (catalog@enything.in)"}
+
+    clean_dish = dish_name.lower()
+    core_words = [w for w in clean_dish.split() if w not in ("the", "special", "fresh", "hot", "plate", "dish", "crispy", "steamed", "fried")]
+    main_noun = core_words[-1] if core_words else ""
+
+    # Conflict prevention:
+    if is_veg:
+        forbidden_keywords = ("chicken", "mutton", "lamb", "beef", "pork", "fish", "egg", "prawn", "seafood", "meat", "gosht", "kebab")
+    else:
+        # If chicken dish, forbid other meats; if mutton dish, forbid chicken, etc.
+        if "chicken" in clean_dish:
+            forbidden_keywords = ("mutton", "lamb", "beef", "pork", "fish", "paneer")
+        elif "mutton" in clean_dish:
+            forbidden_keywords = ("chicken", "beef", "pork", "fish", "paneer")
+        elif "fish" in clean_dish:
+            forbidden_keywords = ("chicken", "mutton", "beef", "pork", "paneer")
+        else:
+            forbidden_keywords = ()
+
+    required_ingredients = []
+    for ing in ("paneer", "mushroom", "corn", "egg", "chicken", "mutton", "fish", "prawn"):
+        if ing in clean_dish:
+            required_ingredients.append(ing)
+
+    queries = [clean_query, f"{clean_query} dish", f"{clean_query} food"]
+    for q in queries:
+        if urls:
+            break
+        try:
+            url = (
+                "https://commons.wikimedia.org/w/api.php?action=query&generator=search"
+                f"&gsrsearch={urllib.parse.quote_plus(q)}&gsrnamespace=6&gsrlimit=14"
+                "&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json"
+            )
+            resp = _session.get(url, headers=headers, timeout=6)
+            if resp.status_code != 200:
+                continue
+            pages = resp.json().get("query", {}).get("pages", {})
+            for pid, p in pages.items():
+                title = p.get("title", "").lower()
+                ii = p.get("imageinfo", [{}])[0]
+                img_url = ii.get("thumburl") or ii.get("url") or ""
+                url_lower = img_url.lower()
+
+                # Skip invalid extensions and non-food content
+                if any(ext in title for ext in (".pdf", ".svg", ".webm", ".ogv", "chart", "logo", "icon", "map", "flag", "person", "politician", "actor", "cropped", "portrait", "joe rogan", "falooda", "kiev", "cutlet", "salad", "container")):
+                    continue
+
+                # Dietary Filter: Reject conflicting meats/ingredients
+                if any(k in title or k in url_lower for k in forbidden_keywords):
+                    continue
+
+                # Specific ingredient check
+                if required_ingredients and not any(ing in title or ing in url_lower for ing in required_ingredients):
+                    continue
+
+                # Strict noun check with Indian spelling variants (e.g. biryani / biriyani)
+                if main_noun and len(main_noun) >= 4:
+                    if main_noun in ("biryani", "biriyani", "briyani"):
+                        if not any(b in title or b in url_lower for b in ("biryani", "biriyani", "briyani")):
+                            continue
+                    else:
+                        if main_noun not in title and main_noun not in url_lower:
+                            continue
+
+                if img_url and img_url not in urls:
+                    urls.append(img_url)
+                    break
+        except Exception:
+            pass
+    return urls
+
+
+
+def _scrape_wikipedia_food_images(dish_name: str, is_veg: bool = True) -> list:
+    """
+    Search English Wikipedia for authentic food photography.
+    Enforces strict dietary and ingredient consistency.
+    """
+    image_urls = []
+    clean_query = re.sub(r"[\(\)\[\]\d+]+", "", dish_name).strip()
+    headers = {"User-Agent": "EnythingMenuBot/2.0 (catalog@enything.in)"}
+    seen_urls = set()
+
+    clean_dish = dish_name.lower()
+    core_words = [w for w in clean_dish.split() if w not in ("the", "special", "fresh", "hot", "plate", "dish", "crispy", "steamed", "fried")]
+    main_noun = core_words[-1] if core_words else ""
+    non_veg_keywords = ("chicken", "mutton", "lamb", "beef", "pork", "fish", "egg", "prawn", "seafood", "meat", "gosht", "kebab")
+
+    required_ingredients = []
+    for ing in ("paneer", "mushroom", "corn", "egg", "chicken", "mutton", "fish", "prawn"):
+        if ing in clean_dish:
+            required_ingredients.append(ing)
+
+    search_queries = [
+        clean_query,
+        f"{clean_query} food",
+        f"{clean_query} dish",
+    ]
+
+    for q in search_queries:
+        if image_urls:
+            break
+        try:
+            s_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote_plus(q)}&format=json&srlimit=4"
+            resp = _session.get(s_url, headers=headers, timeout=6)
+            if resp.status_code != 200:
+                continue
+
+            results = resp.json().get("query", {}).get("search", [])
+            for item in results:
+                title = item.get("title", "")
+                title_lower = title.lower()
+
+                # Skip non-food results
+                if any(bad in title_lower for bad in ("person", "politician", "actor", "president", "minister", "white house", "stadium", "portrait", "joe rogan", "falooda", "kiev", "cuisine")):
+                    continue
+                if is_veg and any(k in title_lower for k in non_veg_keywords):
+                    continue
+                if required_ingredients and not any(ing in title_lower for ing in required_ingredients):
+                    continue
+                if main_noun and len(main_noun) >= 4 and main_noun not in title_lower:
+                    continue
+
+                p_url = f"https://en.wikipedia.org/w/api.php?action=query&titles={urllib.parse.quote_plus(title)}&prop=pageimages&format=json&pithumbsize=800"
+                pr = _session.get(p_url, headers=headers, timeout=6)
+                if pr.status_code == 200:
+                    pages = pr.json().get("query", {}).get("pages", {})
+                    for pid, p in pages.items():
+                        thumb = p.get("thumbnail", {}).get("source")
+                        if thumb and thumb not in seen_urls:
+                            thumb_lower = thumb.lower()
+                            if is_veg and any(k in thumb_lower for k in non_veg_keywords):
+                                continue
+                            if not any(bad in thumb_lower for bad in ("joe_rogan", "portrait", "cropped", "falooda", "kiev", "chart")):
+                                seen_urls.add(thumb)
+                                image_urls.append(thumb)
+                                break
+                if image_urls:
+                    break
+        except Exception:
+            pass
+
+    return image_urls
+
+
+def _scrape_themealdb_food_images(dish_name: str) -> list:
+    """Search TheMealDB free open database for recipe images."""
+    urls = []
+    try:
+        clean_name = re.sub(r"[\(\)\[\]\d+]+", "", dish_name).strip()
+        m_url = f"https://www.themealdb.com/api/json/v1/1/search.php?s={urllib.parse.quote_plus(clean_name)}"
+        resp = _session.get(m_url, timeout=5)
+        if resp.status_code == 200 and resp.json().get("meals"):
+            for m in resp.json()["meals"][:2]:
+                thumb = m.get("strMealThumb")
+                if thumb and thumb not in urls:
+                    urls.append(thumb)
+
+        if not urls:
+            first_word = clean_name.split()[0]
+            if len(first_word) >= 4 and first_word.lower() not in ("special", "fresh", "crispy", "steamed", "fried"):
+                m_url = f"https://www.themealdb.com/api/json/v1/1/search.php?s={urllib.parse.quote_plus(first_word)}"
+                resp = _session.get(m_url, timeout=5)
+                if resp.status_code == 200 and resp.json().get("meals"):
+                    for m in resp.json()["meals"][:2]:
+                        thumb = m.get("strMealThumb")
+                        if thumb and thumb not in urls:
+                            urls.append(thumb)
+    except Exception:
+        pass
+    return urls
+
+
+
+def _fetch_dish_encyclopedic_description(dish_name: str) -> str:
+    """
+    Search Wikipedia for authentic culinary description, origin, and key ingredients.
+    """
+    try:
+        clean_name = re.sub(r"[\(\)\[\]\d+]+", "", dish_name).strip()
+        headers = {"User-Agent": "EnythingMenuBot/2.0 (catalog@enything.in)"}
+        url = (
+            "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext"
+            f"&redirects=1&titles={urllib.parse.quote_plus(clean_name)}&format=json"
+        )
+        resp = _session.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            pages = resp.json().get("query", {}).get("pages", {})
+            for pid, p in pages.items():
+                extract = p.get("extract", "").strip()
+                if extract and len(extract) > 20:
+                    sentences = [s.strip() for s in extract.split(". ") if s.strip()]
+                    if sentences:
+                        # Take the first 1-2 sentences
+                        desc = ". ".join(sentences[:2])
+                        if not desc.endswith("."):
+                            desc += "."
+                        # Clean bracketed citations or phonetic guides
+                        desc = re.sub(r"\(kashmiri:[^\)]*\)", "", desc, flags=re.IGNORECASE)
+                        desc = re.sub(r"\/[^\/]+\/", "", desc)
+                        desc = re.sub(r"\s+", " ", desc).strip()
+                        return desc
+    except Exception:
+        pass
+    return ""
+
+
+def _generate_culinary_description(dish_name: str, menu_category: str, is_veg: bool) -> str:
+    """
+    Generate an authentic, mouthwatering culinary description if the menu didn't include one.
+    """
+    cat_lower = (menu_category or "").lower()
+    name_lower = dish_name.lower()
+
+    if "pizza" in cat_lower or "pizza" in name_lower:
+        return "Freshly baked artisanal crust topped with rich herb tomato sauce, premium melted cheese, and aromatic seasoning."
+    if "burger" in cat_lower or "burger" in name_lower:
+        return "Savory, perfectly grilled patty layered with crisp fresh greens, melted cheese, and signature dressing inside a toasted bun."
+    if "sandwich" in cat_lower or "sandwich" in name_lower:
+        return "Artisan grilled bread generously layered with fresh fillings, melted cheese, and gourmet house seasonings."
+    if "biryani" in cat_lower or "biryani" in name_lower:
+        return "Fragrant long-grain aged basmati rice dum-cooked with whole spices, caramelized onions, and slow-simmered rich herbs."
+    if "noodle" in cat_lower or "chinese" in cat_lower:
+        return "Wok-tossed noodles and crunchy garden vegetables seasoned with traditional garlic, ginger, and savory soy sauces."
+    if "pasta" in cat_lower:
+        return "Al dente pasta tossed in a rich, slow-simmered artisanal sauce infused with fresh herbs and parmesan cheese."
+    if "starter" in cat_lower or "tikka" in name_lower or "kebab" in name_lower:
+        return "Crisp and flavorful appetizer marinated in signature spices and cooked to golden perfection."
+    if "beverage" in cat_lower or "shake" in name_lower or "drink" in name_lower:
+        return "Refreshing, ice-chilled beverage prepared with premium ingredients for an invigorating flavor."
+    if "dessert" in cat_lower or "sweet" in cat_lower or "ice cream" in name_lower:
+        return "Decadent handcrafted sweet specialty prepared with rich ingredients and exquisite flavors."
+    if "bread" in cat_lower or "roti" in name_lower or "naan" in name_lower:
+        return "Freshly baked clay-oven Indian flatbread brushed with aromatic butter and baked to a soft, fluffy texture."
+    if "shawarma" in cat_lower or "shawarma" in name_lower or "shawrma" in name_lower:
+        return "Freshly wrapped pita filled with seasoned tender fillings, crunchy pickles, and authentic garlic sauce."
+
+    if not is_veg:
+        return f"Tender cuts slow-cooked in an aromatic, rich culinary gravy seasoned with traditional spices and herbs."
+    return f"Fresh culinary specialty simmered to perfection in an aromatic spiced gravy with rich flavors."
+
+
+def research_restaurant_product(
+    product_name: str,
+    menu_category: str = None,
+    is_veg: bool = None,
+    description: str = None,
+    variants: list = None,
+    price: float = None,
+) -> dict:
+    """
+    Research and enrich a restaurant menu dish using 100% FREE public databases:
+    1. Extracts or classifies menu_category (section heading)
+    2. Classifies Veg vs Non-Veg dietary preference
+    3. Finds authentic unwatermarked food photography from Wikipedia & TheMealDB
+    4. Generates an authentic culinary description if missing
+    5. Formats multi-size / portion variants cleanly
+    """
+    print(f"      🍽️  Researching culinary item: {product_name}")
+
+    clean_name = product_name.strip()
+    clean_name = re.sub(r"^[•\*\-\s]+", "", clean_name).strip()
+
+    # Category classification
+    if not menu_category or menu_category.strip().lower() in ("general", "other", "unknown", ""):
+        resolved_category = _classify_restaurant_category(clean_name)
+    else:
+        resolved_category = menu_category.strip().title()
+
+    # Veg / Non-Veg detection
+    name_lower = clean_name.lower()
+    cat_lower = resolved_category.lower()
+    non_veg_k = [
+        "chicken", "mutton", "lamb", "fish", "prawn", "prawns", "seafood",
+        "meat", "keema", "kheema", "egg", "eggs", "omelette", "beef",
+        "pork", "bacon", "ham", "duck", "crab", "rogan josh", "rista", "gosht",
+        "shami", "seekh kebab", "pepperoni", "salami", "non-veg", "non veg"
+    ]
+    veg_k = [
+        "paneer", "cheese", "mushroom", "corn", "dal", "aloo", "gobi", "veg",
+        "vegetable", "palak", "spinach", "chole", "rajma", "matar", "soya", "tofu"
+    ]
+
+    if is_veg is not None:
+        resolved_is_veg = bool(is_veg)
+    elif any(k in name_lower or k in cat_lower for k in non_veg_k):
+        resolved_is_veg = False
+    elif any(k in name_lower for k in veg_k) or "veg" in cat_lower:
+        resolved_is_veg = True
+    else:
+        resolved_is_veg = True  # Safe default for general food
+
+    # Price & Variants
+    resolved_price = float(price) if price and price > 0 else 0.0
+    clean_variants = []
+
+    if variants and isinstance(variants, list):
+        for idx, v in enumerate(variants):
+            if isinstance(v, dict) and v.get("name") and v.get("price"):
+                try:
+                    p_val = float(v["price"])
+                    if p_val > 0:
+                        clean_variants.append({
+                            "id": v.get("id") or f"v_{int(time.time() * 1000)}_{idx}",
+                            "name": str(v["name"]).strip(),
+                            "price": p_val,
+                            "original_price": None,
+                            "is_available": True,
+                        })
+                except Exception:
+                    pass
+
+    if clean_variants and resolved_price <= 0:
+        resolved_price = min(v["price"] for v in clean_variants)
+
+    if not clean_variants and resolved_price > 0:
+        clean_variants.append({
+            "id": f"v_{int(time.time() * 1000)}_0",
+            "name": "Regular",
+            "price": resolved_price,
+            "original_price": None,
+            "is_available": True,
+        })
+
+    # Description (Reconnaissance: Web Encyclopedic Extract -> Curated Culinary Fallback)
+    resolved_description = (description or "").strip()
+    if not resolved_description:
+        resolved_description = _fetch_dish_encyclopedic_description(clean_name)
+    if not resolved_description:
+        resolved_description = _generate_culinary_description(clean_name, resolved_category, resolved_is_veg)
+
+    # Images: Multi-Source Free Web Reconnaissance with Strict Dietary & Ingredient Integrity
+    source_images = []
+    commons_images = _scrape_wikimedia_commons_food_images(clean_name, is_veg=resolved_is_veg)
+    source_images.extend(commons_images)
+
+    if not source_images:
+        wiki_images = _scrape_wikipedia_food_images(clean_name, is_veg=resolved_is_veg)
+        source_images.extend(wiki_images)
+
+    if not source_images:
+        mealdb_images = _scrape_themealdb_food_images(clean_name)
+        source_images.extend(mealdb_images)
+
+
+    enriched = {
+        "name": clean_name,
+        "price": resolved_price,
+        "description": resolved_description,
+        "category": "Restaurant",
+        "menu_category": resolved_category,
+        "is_veg": resolved_is_veg,
+        "pack_info": "1 Portion",
+        "variants": clean_variants,
+        "source_image_urls": source_images[:2],
+        "weight_per_unit": None,
+        "unit_type": "pieces",
+        "requires_prescription": False,
+    }
+
+    return enriched
+

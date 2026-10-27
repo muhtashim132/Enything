@@ -197,16 +197,27 @@ All AI models and developers working on this project MUST adhere to the architec
 5. **Shop Prioritization & Demographic Empty State**: `_computeSortedNormalShops` ranks shops carrying matching demographic products first. If nearby stores have no matching items for the chosen demographic, `_buildDemographicEmptyState(isDark)` renders a polite empty card with a 1-tap "Show All Fashion Items" button rather than a blank sliver.
 6. **Graceful Admin Category Deactivation & Coming Soon**: Tapping Medicine or Demographic banners evaluates `PlatformConfigProvider.isActiveCategory()`. If disabled or if 0 shops exist within delivery radius, display the standardized Coming Soon state without exceptions or crashes.
 
-## 100x Forensic Edge-Case Audit & Remediation (Automated Product Shelf Scan & Ingestion Engine)
+## 100x Forensic Edge-Case Audit & Remediation (Omni-Channel Auto Product & Menu Upload Engine)
 All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols specified in `.agents/rules/auto_product_upload_engine.md`:
 
-1. **Trigger Recognition**: When user says `"Upload products from [image] to [shop]"`, `"Scan shelf [image] and upload medicines"`, or similar, invoke `scripts/auto_upload/engine.py` or execute the verified 5-stage automated ingestion pipeline.
-2. **Target Shop Default**: Default medical store is **Noor Medicate** (`ID: 56883899-c115-42d9-82a9-90a9e59d21ec`). If another store name is given, resolve `shop_id` from `public.shops WHERE is_deleted = false`.
-3. **100% Free Native Vision OCR**: Use native Apple Silicon Vision Neural OCR (`scripts/auto_upload/native_ocr`) via `scripts/auto_upload/vision.py` with 2D spatial clustering and batch noise filtering.
-4. **Clinical & Price Research**: Query PharmEasy public catalog search API via `scripts/auto_upload/scraper.py` for exact MRP in ₹, active salt composition, therapeutic menu category, Rx schedule flag, and variant packing.
-5. **Zero-503 Supabase Storage Hosting**: NEVER hotlink external CDNs (`cdn01.pharmeasy.in` gives 503 errors in mobile apps). Download and pad packaging images to a **1:1 square canvas (800x800)** with white border padding (`#FFFFFF`) using Lanczos resampling. Upload directly to Supabase Storage bucket `products/{shop_id}/` and save the public Supabase URL in `public.products.images`.
-6. **Unit Type Normalization**: `unit_type` must strictly be `'pieces'` (plural) to prevent Flutter `DropdownButtonFormField` assertion crashes in `add_product_page.dart`.
-7. **100% Prepaid Model & Soft Deletes**: Pure MRP (`original_price = null`), zero COD markers, and strictly enforce `is_deleted = false`.
+1. **Trigger Recognition & Universal Master Prompt**: When the user requests menu or shelf upload (e.g. `"Auto-upload products from attached images to shop [SHOP_NAME]"`), execute `scripts/upload_restaurant_menu.py` for restaurants or `scripts/auto_upload/engine.py` for pharmacy/grocery immediately without repetitive questions or paid APIs.
+2. **Shop Resolution**: Auto-resolve `shop_id` by matching `shop_name` against `public.shops` using `ilike` wildcard matching if UUID is not provided.
+3. **Restaurant Mode Guarantees**:
+   - **Verbatim Section Headings (`menu_category`)**: Preserve the EXACT printed heading from the menu in clean Title Case (e.g. `Rice Dishes`, `Indian Non Veg`, `Tandoori Special`). NEVER alter, generalize, or rewrite headings (never turn `Rice Dishes` into `Biryani & Rice`).
+   - **Multi-Variant Parsing**: Accurately parse `Half`/`Full` or portion matrices. If only one price is printed, create strictly that single variant (never invent a fake "Half"). Base `price` is set to minimum variant price.
+   - **Dietary Integrity (`is_veg`)**: Strictly boolean (`true` or `false`) based on ingredients and FSSAI marks.
+   - **Stock & Quantity**: `total_quantity` MUST remain `NULL` (blank) for unlimited kitchen inventory.
+   - **Strictly 1 Studio Photo**: Format exactly 1 photorealistic 1:1 square studio image (800×800, JPEG 80, `< 120KB`) uploaded to Supabase Storage `products/{shop_id}/`.
+4. **Pharmacy Mode Guarantees**:
+   - Extract brand, strength, and formulation. Active salts in `description`.
+   - Therapeutic `menu_category` (e.g. `Pain Relief & Fever`).
+   - `requires_prescription` boolean; `medicine_type: 'General'`; `is_veg: null`.
+   - Exactly 2 clean padded 1:1 images (`< 120KB` each) preserving strip edges.
+5. **Grocery / Supermarket Mode Guarantees**:
+   - Extract brand, full name, pack size/weight.
+   - Department classification for statutory GST & commissions (`Dairy & Eggs`, `Fruits & Vegs`, `Bakery`, `Beverages`, `Grocery`).
+   - Exactly 2 clean padded 1:1 images (`< 120KB` each).
+6. **Zero COD & Soft Delete Rule**: 100% prepaid model (`original_price = null`), `unit_type = 'pieces'`, and `is_deleted = false` strictly enforced across all operations.
 
 ## 100x Forensic Edge-Case Audit & Remediation (Customer Section Search & Dynamic Catalog Fortress)
 All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Section Search & Dynamic Catalog Streaming:

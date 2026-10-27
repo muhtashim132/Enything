@@ -40,7 +40,11 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from vision import analyze_shelf_image, analyze_shelf_image_from_names
-from scraper import research_pharmacy_product, research_grocery_product
+from scraper import (
+    research_pharmacy_product,
+    research_grocery_product,
+    research_restaurant_product,
+)
 from image_pipeline import download_and_prepare_images, upload_images_to_supabase
 from uploader import (
     init_supabase,
@@ -118,6 +122,7 @@ def build_product_payload(product_data: dict, shop_id: str, mode: str, shop_cate
     `lib/pages/seller/add_product_page.dart` (_saveProduct).
     """
     is_pharmacy = mode == "pharmacy"
+    is_restaurant = mode in ("restaurant", "food")
 
     # 100x Omnibus & Department-Aware Category Determination
     is_omnibus_shop = shop_category in (
@@ -132,6 +137,11 @@ def build_product_payload(product_data: dict, shop_id: str, mode: str, shop_cate
     prod_cat = product_data.get("category")
     if is_pharmacy:
         category = "Pharmacy"
+    elif is_restaurant:
+        if shop_category and shop_category in VALID_APP_CATEGORIES and shop_category not in ("Supermarket / Hypermarket", "General Store"):
+            category = shop_category
+        else:
+            category = "Restaurant"
     elif prod_cat and prod_cat in VALID_APP_CATEGORIES and prod_cat != "Supermarket / Hypermarket":
         category = prod_cat
     elif is_omnibus_shop:
@@ -141,18 +151,20 @@ def build_product_payload(product_data: dict, shop_id: str, mode: str, shop_cate
     else:
         category = "Grocery"
 
-    # Pure MRP (float)
+    # Pure MRP / Menu Price (float)
     price = product_data.get("price", 0.0)
     if price <= 0:
         return None
 
     # Variants: list of variant objects
     variants = []
-    for v in product_data.get("variants", []):
+    for idx, v in enumerate(product_data.get("variants", [])):
+        v_name = v.get("name") or "Standard Serving"
+        v_price = float(v.get("price", price))
         variants.append({
-            "id": v.get("id", f"v_{int(time.time() * 1000)}_{len(variants)}"),
-            "name": v.get("name", "Standard Pack"),
-            "price": float(v.get("price", price)),
+            "id": v.get("id", f"v_{int(time.time() * 1000)}_{idx}"),
+            "name": v_name,
+            "price": v_price,
             "original_price": None,
             "is_available": True,
         })
@@ -160,21 +172,31 @@ def build_product_payload(product_data: dict, shop_id: str, mode: str, shop_cate
     if not variants:
         variants.append({
             "id": f"v_{int(time.time() * 1000)}_0",
-            "name": product_data.get("pack_info") or "Standard Pack",
+            "name": product_data.get("pack_info") or "Regular",
             "price": float(price),
             "original_price": None,
             "is_available": True,
         })
 
-    # Description: Salts / composition ONLY for medicines
+    # Description: Salts / composition for medicines; Culinary notes for restaurant
     raw_desc = product_data.get("description", "")
     description = raw_desc.strip() if raw_desc and raw_desc.strip() else None
 
-    # Menu category (therapeutic class for pharmacy, aisle for grocery)
-    menu_category = product_data.get("menu_category") or ("Pain Relief & Fever" if is_pharmacy else "General")
+    # Menu category (therapeutic class for pharmacy, section heading for restaurant, aisle for grocery)
+    if is_pharmacy:
+        menu_category = product_data.get("menu_category") or "Pain Relief & Fever"
+    elif is_restaurant:
+        menu_category = (product_data.get("menu_category") or "Main Course").strip().title()
+    else:
+        menu_category = product_data.get("menu_category") or "General"
 
-    # Veg / Non-veg: strictly null for pharmacy
-    is_veg = None if is_pharmacy else product_data.get("is_veg", True)
+    # Veg / Non-veg: strictly null for pharmacy, boolean for restaurant & grocery
+    if is_pharmacy:
+        is_veg = None
+    elif is_restaurant:
+        is_veg = bool(product_data.get("is_veg", True))
+    else:
+        is_veg = product_data.get("is_veg", True)
 
     # Brand / Manufacturer
     brand = (product_data.get("brand") or product_data.get("brand_name") or "").strip() or None
@@ -184,7 +206,7 @@ def build_product_payload(product_data: dict, shop_id: str, mode: str, shop_cate
         "name": product_data.get("name", "Unknown Product").strip(),
         "brand": brand,
         "price": float(price),
-        "original_price": None,  # 100% pure MRP
+        "original_price": None,  # 100% pure price, zero fake discounts
         "description": description,
         "category": category,
         "menu_category": menu_category,
@@ -216,15 +238,9 @@ def run_engine(args):
         print("❌ ERROR: SUPABASE_URL and SUPABASE_ANON_KEY must be set in .env")
         sys.exit(1)
 
-    print("=" * 70)
-    print("🚀  ENYTHING AUTO PRODUCT UPLOAD ENGINE v2.0")
-    print("=" * 70)
-    print(f"  Mode:       {args.mode.upper()}")
-    print(f"  Shop ID:    {args.shop_id}")
-    print(f"  Dry Run:    {args.dry_run}")
-    print(f"  Supabase:   {config['url'][:45]}...")
-    print("=" * 70)
-    print()
+    # Support --menu alias for --image
+    if hasattr(args, "menu") and args.menu and not args.image:
+        args.image = args.menu
 
     # Verify Shop Exists (by ID or Name fallback)
     shop_info = get_shop_info(config, args.shop_id) if args.shop_id else {}
@@ -236,16 +252,37 @@ def run_engine(args):
     if shop_info:
         args.shop_id = shop_info["id"]
         shop_category = shop_info.get("category")
-        print(f"  🏪 Verified Shop: {shop_info.get('name', 'Shop')} (ID: {args.shop_id}, Category: {shop_category})")
     else:
         shop_category = None
-        print(f"  ⚠️  Shop {args.shop_id} not found in database or permission limited. Continuing...")
+
+    # Auto-detect mode if omitted
+    if not args.mode:
+        cat_lower = (shop_category or "").lower()
+        if any(k in cat_lower for k in ["restaurant", "fast food", "cafe", "bakery", "beverage", "sweets", "ice cream", "food"]):
+            args.mode = "restaurant"
+        elif any(k in cat_lower for k in ["pharmacy", "medical store", "chemist"]):
+            args.mode = "pharmacy"
+        else:
+            args.mode = "grocery"
+
+    is_restaurant = args.mode in ("restaurant", "food")
+
+    print("=" * 70)
+    print("🚀  ENYTHING AUTO PRODUCT UPLOAD ENGINE v2.0")
+    print("=" * 70)
+    print(f"  Mode:       {args.mode.upper()}")
+    print(f"  Shop ID:    {args.shop_id}")
+    if shop_info:
+        print(f"  Shop Name:  {shop_info.get('name', 'Shop')} (Category: {shop_category})")
+    print(f"  Dry Run:    {args.dry_run}")
+    print(f"  Supabase:   {config['url'][:45]}...")
+    print("=" * 70)
+    print()
 
     # ── STEP 1: Identification & Extraction ───────────────────────────────────
     products_to_research = []
 
     if args.products:
-        # Check if argument is a JSON file path or a comma-separated list
         if os.path.exists(args.products):
             print(f"📋 Reading products from file: {args.products}")
             with open(args.products) as f:
@@ -253,7 +290,7 @@ def run_engine(args):
                 products_to_research = analyze_shelf_image_from_names(data)
         else:
             names = [n.strip() for n in args.products.split(",") if n.strip()]
-            print(f"📋 Processing {len(names)} direct product names...")
+            print(f"📋 Processing {len(names)} direct product entries...")
             products_to_research = analyze_shelf_image_from_names(names)
 
     elif args.image:
@@ -270,13 +307,62 @@ def run_engine(args):
         if not resolved_images:
             resolved_images = image_inputs
 
+        # 100x PDF Support: Automatically expand multi-page PDFs to high-res JPG images
+        expanded_images = []
+        for p in resolved_images:
+            if p.lower().endswith(".pdf") and os.path.exists(p):
+                print(f"📄 Detected PDF menu: {p}. Extracting pages via native PDFKit...")
+                pdf_script = f'''
+import PDFKit, AppKit
+let pdfUrl = URL(fileURLWithPath: "{p}")
+guard let doc = PDFDocument(url: pdfUrl) else {{ exit(1) }}
+for i in 0..<doc.pageCount {{
+    guard let page = doc.page(at: i) else {{ continue }}
+    let pageRect = page.bounds(for: .mediaBox)
+    let renderer = NSImage(size: pageRect.size)
+    renderer.lockFocus()
+    guard let context = NSGraphicsContext.current?.cgContext else {{ continue }}
+    context.setFillColor(NSColor.white.cgColor)
+    context.fill(pageRect)
+    page.draw(with: .mediaBox, to: context)
+    renderer.unlockFocus()
+    if let tiff = renderer.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let jpeg = rep.representation(using: .jpeg, properties: [:]) {{
+        let outPath = "/tmp/pdf_page_\\(i+1)_\\(Int(Date().timeIntervalSince1970)).jpg"
+        try? jpeg.write(to: URL(fileURLWithPath: outPath))
+        print(outPath)
+    }}
+}}
+'''
+                try:
+                    res = subprocess.run(["swift", "-e", pdf_script], capture_output=True, text=True, timeout=30)
+                    pages = [line.strip() for line in res.stdout.strip().split("\n") if line.strip().endswith(".jpg")]
+                    if pages:
+                        print(f"    ✨ Extracted {len(pages)} pages from PDF!")
+                        expanded_images.extend(pages)
+                    else:
+                        expanded_images.append(p)
+                except Exception as e:
+                    print(f"    ⚠️  PDF extraction failed: {e}")
+                    expanded_images.append(p)
+            else:
+                expanded_images.append(p)
+
+        resolved_images = expanded_images
+
         gemini_key = os.environ.get("GEMINI_API_KEY", "")
         seen_product_names = set()
+        active_category = "Main Course"
 
         for idx, img_path in enumerate(resolved_images, 1):
             print(f"🔍 Analyzing image [{idx}/{len(resolved_images)}] with Vision Engine: {img_path}")
             items = analyze_shelf_image(img_path, api_key=gemini_key, mode=args.mode)
             for it in items:
+                # Track active section heading across page breaks
+                if it.get("menu_category"):
+                    active_category = it["menu_category"]
+                elif is_restaurant:
+                    it["menu_category"] = active_category
+
                 norm_name = it["name"].strip().lower()
                 if norm_name not in seen_product_names:
                     seen_product_names.add(norm_name)
@@ -292,7 +378,10 @@ def run_engine(args):
 
     print(f"\n📦 Identified {len(products_to_research)} products to research:")
     for idx, p in enumerate(products_to_research, 1):
-        print(f"   {idx}. {p['name']} ({p.get('pack_info') or 'Standard'})")
+        cat_tag = f" [{p.get('menu_category')}]" if p.get("menu_category") else ""
+        diet_tag = f" [{'🟢 VEG' if p.get('is_veg') else '🔴 NON-VEG'}]" if is_restaurant and p.get('is_veg') is not None else ""
+        price_tag = f" - ₹{p['price']}" if p.get("price") else ""
+        print(f"   {idx}. {p['name']}{cat_tag}{diet_tag}{price_tag}")
 
     # ── STEP 2: Research & Verification ───────────────────────────────────────
     print(f"\n🔬 Step 2: Researching products across verified databases...")
@@ -300,7 +389,12 @@ def run_engine(args):
     skipped_duplicates = []
     failed_products = []
 
-    research_fn = research_pharmacy_product if args.mode == "pharmacy" else research_grocery_product
+    if is_restaurant:
+        research_fn = research_restaurant_product
+    elif args.mode == "pharmacy":
+        research_fn = research_pharmacy_product
+    else:
+        research_fn = research_grocery_product
 
     for i, item in enumerate(products_to_research, 1):
         name = item["name"]
@@ -308,29 +402,47 @@ def run_engine(args):
 
         try:
             # Check duplicate in shop (Soft-delete rule: is_deleted = false)
-            if not args.dry_run and check_duplicate_product(config, args.shop_id, name):
+            if not args.dry_run and not getattr(args, "overwrite", False) and check_duplicate_product(config, args.shop_id, name):
                 print(f"    ⏭️  DUPLICATE: Already exists in shop (is_deleted=false). Skipping.")
                 skipped_duplicates.append(name)
                 continue
 
-            # Query online medical database
-            enriched = research_fn(name)
+
+            if is_restaurant:
+                enriched = research_restaurant_product(
+                    product_name=name,
+                    menu_category=item.get("menu_category"),
+                    is_veg=item.get("is_veg"),
+                    description=item.get("description"),
+                    variants=item.get("variants"),
+                    price=item.get("price"),
+                )
+            else:
+                enriched = research_fn(name)
 
             if enriched and enriched.get("price", 0) > 0:
-                # Merge any pack info from vision if missing
                 if not enriched.get("pack_info") and item.get("pack_info"):
                     enriched["pack_info"] = item["pack_info"]
 
                 enriched_products.append(enriched)
                 print(f"    ✅ Verified: {enriched['name']}")
-                print(f"       MRP: ₹{enriched['price']} | Category: {enriched['menu_category']} | Rx: {enriched['requires_prescription']}")
-                if enriched.get("description"):
-                    print(f"       Salts: {enriched['description'][:75]}...")
+                if is_restaurant:
+                    veg_str = "🟢 VEG" if enriched.get("is_veg") else "🔴 NON-VEG"
+                    print(f"       Price: ₹{enriched['price']} | Section: {enriched['menu_category']} | {veg_str}")
+                    if enriched.get("variants") and len(enriched["variants"]) > 1:
+                        var_str = ", ".join(f"{v['name']}: ₹{v['price']}" for v in enriched["variants"])
+                        print(f"       Variants: {var_str}")
+                    if enriched.get("description"):
+                        print(f"       Notes: {enriched['description'][:75]}...")
+                else:
+                    print(f"       MRP: ₹{enriched['price']} | Category: {enriched['menu_category']} | Rx: {enriched.get('requires_prescription')}")
+                    if enriched.get("description"):
+                        print(f"       Salts: {enriched['description'][:75]}...")
             else:
-                print(f"    ⚠️  Could not find verified MRP. Queued for manual review.")
-                failed_products.append({"name": name, "reason": "No verified Indian MRP found"})
+                print(f"    ⚠️  Could not determine valid price. Queued for manual review.")
+                failed_products.append({"name": name, "reason": "No valid price found"})
 
-            time.sleep(0.4)  # Respectful API pacing
+            time.sleep(0.3)
         except Exception as e:
             print(f"    ❌ Error: {e}")
             failed_products.append({"name": name, "reason": str(e)})
@@ -357,6 +469,12 @@ def run_engine(args):
                 salts=product.get("description", ""),
                 pack_info=product.get("pack_info", ""),
                 is_rx=product.get("requires_prescription", False),
+                mode=args.mode,
+                menu_category=product.get("menu_category", ""),
+                price=product.get("price", 0.0),
+                is_veg=product.get("is_veg", True),
+                variants=product.get("variants", []),
+                description=product.get("description", ""),
             )
             product["local_image_paths"] = local_paths
             print(f"    ✅ 2 pristine 1:1 images ready")
@@ -374,12 +492,15 @@ def run_engine(args):
         print("Ready for upload payload preview:\n")
         for idx, p in enumerate(enriched_products, 1):
             payload = build_product_payload(p, args.shop_id, args.mode, shop_category=shop_category)
-            print(f"  {idx}. {payload['name']}")
+            diet_badge = f" [{'🟢 VEG' if payload.get('is_veg') else '🔴 NON-VEG'}]" if payload.get('is_veg') is not None else ""
+            print(f"  {idx}. {payload['name']}{diet_badge}")
             print(f"     Price: ₹{payload['price']} | Category: {payload['category']} > {payload['menu_category']}")
-            print(f"     Rx Required: {payload['requires_prescription']} | Medicine Type: {payload['medicine_type']}")
-            print(f"     Salts / Desc: {payload['description']}")
+            if payload.get("description"):
+                print(f"     Description: {payload['description'][:80]}...")
             print(f"     Images: {len(p.get('local_image_paths', []))} prepared (1:1 800x800)")
-            print(f"     Variants: {payload['variants']}")
+            if payload.get("variants"):
+                v_str = ", ".join(f"{v['name']}: ₹{v['price']}" for v in payload['variants'])
+                print(f"     Variants: {v_str}")
             print()
     else:
         print(f"\n📤 Step 4: Uploading {len(enriched_products)} products to Supabase...")
@@ -411,7 +532,8 @@ def run_engine(args):
                     result = insert_product(config, payload)
                     if result:
                         uploaded_count += 1
-                        print(f"    ✨ SUCCESS: {name} (₹{payload['price']}) added to shop!")
+                        diet_str = f" [{'🟢 VEG' if payload.get('is_veg') else '🔴 NON-VEG'}]" if payload.get('is_veg') is not None else ""
+                        print(f"    ✨ SUCCESS: {name}{diet_str} (₹{payload['price']}) added to shop!")
                     else:
                         failed_upload += 1
                         print(f"    ❌ DB insert failed for: {name}")
@@ -453,24 +575,28 @@ def run_engine(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Enything Auto Medicine & Product Upload Engine v2.0",
+        description="Enything Auto Product & Restaurant Menu Upload Engine v2.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--image", type=str, help="Path to shelf or medicine photo (or comma-separated paths / glob)")
+    parser.add_argument("--image", type=str, help="Path to shelf or menu photo (or comma-separated paths / glob)")
+    parser.add_argument("--menu", type=str, help="Alias for --image (restaurant menu photo or comma-separated pages)")
     parser.add_argument("--products", type=str, help="Comma-separated product names or JSON file path")
-    parser.add_argument("--shop-id", type=str, default="56883899-c115-42d9-82a9-90a9e59d21ec", help="Target shop UUID (defaults to Noor Medicate)")
-    parser.add_argument("--shop-name", type=str, default="Noor Medicate", help="Target shop name (used if shop-id is not provided)")
-    parser.add_argument("--mode", choices=["pharmacy", "grocery"], default="pharmacy", help="Upload mode")
+    parser.add_argument("--shop-id", type=str, default=None, help="Target shop UUID")
+    parser.add_argument("--shop-name", type=str, default=None, help="Target shop name (used to resolve shop-id)")
+    parser.add_argument("--mode", choices=["pharmacy", "grocery", "restaurant", "food"], default=None, help="Upload mode (auto-detected if omitted)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without writing to DB")
+    parser.add_argument("--overwrite", action="store_true", default=False, help="Update/overwrite existing products in shop with fresh OCR data and images")
     parser.add_argument("--limit", type=int, default=0, help="Max number of items to process")
+
 
     args = parser.parse_args()
 
-    if not args.image and not args.products:
-        parser.error("Must provide either --image or --products")
+    if not args.image and not args.menu and not args.products:
+        parser.error("Must provide either --image / --menu or --products")
 
     run_engine(args)
 
 
 if __name__ == "__main__":
     main()
+

@@ -74,6 +74,69 @@ Return a JSON array of objects. Example:
 
 Return ONLY the JSON array, no other text."""
 
+RESTAURANT_MENU_PROMPT = """You are an expert culinary and restaurant menu digitization specialist.
+
+Analyze this restaurant menu photo carefully. It may be a single page, multi-column page, tri-fold leaflet, or page from a restaurant menu booklet.
+Identify and extract EVERY single dish, drink, appetizer, starter, main course, bread, rice, dessert, and combo visible in the menu.
+
+CRITICAL MENU HIERARCHY RULE (Section Headings / Categories):
+- Identify the EXACT SECTION HEADING or CATEGORY as printed on the menu under which each dish is listed (e.g. "Rice Dishes", "Indian Non Veg", "Tandoori Special", "Breads", "Soups", "Starters", "Beverages", etc.).
+- DO NOT invent, rewrite, rephrase, generalize, or alter the section heading! Preserve the exact printed title from the menu in clean Title Case (e.g. if the menu says "RICE DISHES", use "Rice Dishes"; if it says "INDIAN NON VEG", use "Indian Non Veg").
+- Every product under that heading MUST have its `menu_category` set to that exact heading in clean Title Case.
+- If items are under "Veg Pizzas" vs "Non-Veg Pizzas", keep the exact printed heading and set `is_veg` accordingly!
+
+For EACH menu item, extract:
+1. **name**: Full dish name (e.g. "Margherita Pizza", "Paneer Butter Masala", "Chicken Tikka Roll", "Virgin Mojito", "Farmhouse Pizza")
+2. **menu_category**: Exact section heading under which the item appears (e.g. "Rice Dishes", "Indian Non Veg", "Tandoori Special", "Breads", etc. - preserve exact printed heading in Title Case)
+3. **price**: The base price (lowest price if multiple sizes/portions exist, as a pure number, e.g. 199.0)
+4. **description**: The ingredients, recipe details, or taste profile listed under the dish. If not printed on the menu, provide a short appetizing culinary description.
+5. **is_veg**: true if vegetarian (green dot in square symbol, or paneer/cheese/veg/mushrooms/corn/dal), false if non-vegetarian (red/brown symbol, or chicken/mutton/fish/egg/meat/prawn).
+6. **variants**: If the dish has multiple sizes or portions (e.g. Small / Medium / Large; Half / Full; 6 Pcs / 12 Pcs; Steamed / Fried), extract them as an array of objects:
+   [
+     {"name": "Regular (7 inch)", "price": 199.0},
+     {"name": "Medium (10 inch)", "price": 349.0},
+     {"name": "Large (12 inch)", "price": 499.0}
+   ]
+   If no variants exist, return [] or [{"name": "Regular", "price": 199.0}].
+7. **confidence**: "high", "medium", or "low"
+
+Rules:
+- Capture all items on the page.
+- Clean prices (remove ₹, Rs, /-, commas).
+- If an item has both Veg and Non-Veg variants with different prices (e.g. "Fried Rice - Veg: 140, Chicken: 180"), create two distinct items: "Veg Fried Rice" (is_veg: true) and "Chicken Fried Rice" (is_veg: false).
+- Do not hallucinate items not present in the menu.
+
+Return a JSON array of objects. Example:
+[
+  {
+    "name": "Margherita Pizza",
+    "menu_category": "Pizzas",
+    "price": 199.0,
+    "description": "Classic crust topped with herb tomato sauce, fresh mozzarella, and aromatic basil",
+    "is_veg": true,
+    "variants": [
+      {"name": "Regular", "price": 199.0},
+      {"name": "Medium", "price": 349.0},
+      {"name": "Large", "price": 499.0}
+    ],
+    "confidence": "high"
+  },
+  {
+    "name": "Butter Chicken",
+    "menu_category": "Main Course",
+    "price": 240.0,
+    "description": "Tender chicken simmered in a velvety tomato and butter makhani gravy",
+    "is_veg": false,
+    "variants": [
+      {"name": "Half", "price": 240.0},
+      {"name": "Full", "price": 420.0}
+    ],
+    "confidence": "high"
+  }
+]
+
+Return ONLY the JSON array, no other text."""
+
 # Noise lines to filter out from OCR text
 IGNORE_OCR_PATTERNS = [
     r"^(?:batch|b\.?\s*no|lot|mfg|exp|date|m\.?r\.?p|rs\.?|lic|net\s*wt|licence|license)\b",
@@ -209,9 +272,12 @@ do {
 
 def analyze_shelf_image_native(image_path: str, mode: str = "pharmacy") -> list:
     """
-    Scan shelf image using Apple Silicon Native Neural Vision OCR (100% Free, zero tokens).
-    Applies 2D spatial clustering to group words belonging to each medicine box or item.
+    Scan image using Apple Silicon Native Neural Vision OCR (100% Free, zero tokens).
+    Dispatches to specialized restaurant menu parser or pharmacy/grocery 2D spatial clustering.
     """
+    if mode in ("restaurant", "food"):
+        return analyze_restaurant_menu_native(image_path)
+
     if not _ensure_native_ocr_binary():
         return []
 
@@ -410,10 +476,446 @@ def analyze_shelf_image_native(image_path: str, mode: str = "pharmacy") -> list:
     return products
 
 
+def analyze_restaurant_menu_native(image_path: str) -> list:
+    """
+    Apple Silicon Native Vision OCR parser tuned specifically for Restaurant Menus (100% Free, offline).
+    Extracts:
+    1. Section Headings (menu_category): e.g. "Pizzas", "Burgers", "Starters", "Main Course", "Beverages"
+    2. Dishes under each heading with base prices and multi-variant pricing (Half/Full, Small/Med/Large)
+    3. Dietary classification (is_veg): True for veg, False for non-veg based on ingredients & headers
+    """
+    if not _ensure_native_ocr_binary():
+        return []
+
+    try:
+        proc = subprocess.run([str(NATIVE_OCR_BIN), str(image_path)], capture_output=True, text=True, timeout=60)
+        if proc.returncode != 0 or not proc.stdout.strip():
+            print(f"    ⚠️  Native OCR returned error: {proc.stderr}")
+            return []
+
+        observations_raw = json.loads(proc.stdout)
+    except Exception as e:
+        print(f"    ⚠️  Native OCR execution failed: {e}")
+        return []
+
+    if not observations_raw:
+        return []
+
+    # Known Indian and international restaurant menu section headings
+    KNOWN_SECTION_HEADINGS = {
+        "pizzas", "pizza", "burgers", "burger", "sandwiches", "sandwich",
+        "starters", "appetizers", "veg starters", "non-veg starters", "non veg starters",
+        "main course", "veg main course", "non-veg main course", "non veg main course",
+        "tandoori", "kebabs", "tandoori & kebabs", "tandoori specials",
+        "biryani", "biryani & rice", "rice", "fried rice",
+        "chinese", "chinese corner", "noodles", "chowmein", "hakka noodles",
+        "pastas", "pasta", "continental", "italian",
+        "breads", "roti", "naan", "paratha", "kulcha",
+        "rolls", "wraps", "kathi rolls", "momos", "dimsums",
+        "soups", "salads", "soups & salads",
+        "beverages", "drinks", "hot beverages", "cold beverages", "shakes",
+        "mocktails", "tea & coffee", "coffee", "tea",
+        "desserts", "sweets", "ice cream", "pastries", "cakes",
+        "combos", "thali", "platters", "meals", "special combos",
+        "breakfast", "south indian", "north indian", "snacks", "fast food"
+    }
+
+    # Clean lines with bounding box info
+    raw_lines = []
+    for item in observations_raw:
+        text = item.get("text", "").strip()
+        if not text or len(text) < 2:
+            continue
+        box = item.get("box", {})
+        raw_lines.append({
+            "text": text,
+            "x": float(box.get("x", 0.0)),
+            "y": float(box.get("y", 0.0)),
+            "w": float(box.get("width", 0.0)),
+            "h": float(box.get("height", 0.0)),
+            "conf": float(item.get("confidence", 1.0)),
+        })
+
+    if not raw_lines:
+        return []
+
+    # Detect Half/Full column headers for tabular menus
+    half_header = None
+    full_header = None
+    for o in raw_lines:
+        t = o["text"].strip().upper()
+        if t == "HALF":
+            half_header = o
+        elif t == "FULL":
+            full_header = o
+
+    x_half = (half_header["x"] + half_header["w"] / 2) if half_header else None
+    x_full = (full_header["x"] + full_header["w"] / 2) if full_header else None
+
+    # Spatial pairing: Separate pure prices from text labels/dish names
+    text_items = []
+    price_items = []
+
+    for o in raw_lines:
+        t = o["text"].strip()
+        if re.fullmatch(r"[\d\s/]+", t):
+            price_items.append(o)
+        else:
+            text_items.append(o)
+
+    extracted_products = []
+    current_category = "Main Course"
+    seen_names = set()
+
+    non_veg_keywords = [
+        "chicken", "mutton", "lamb", "fish", "prawn", "prawns", "seafood",
+        "meat", "keema", "kheema", "egg", "eggs", "omelette", "beef",
+        "pork", "bacon", "ham", "duck", "crab", "rogan josh", "rista", "gosht",
+        "shami", "seekh kebab", "pepperoni", "salami", "non-veg", "non veg"
+    ]
+    veg_keywords = [
+        "paneer", "cheese", "mushroom", "corn", "dal", "aloo", "gobi", "veg",
+        "vegetable", "palak", "spinach", "chole", "rajma", "matar", "soya", "tofu"
+    ]
+
+    # IF TABLE HAS HALF / FULL COLUMNS: Use exact column coordinate matching!
+    if (x_half or x_full) and len(price_items) >= 2:
+        # 1. Parse text items in top-to-bottom order to resolve active section headings
+        text_items.sort(key=lambda o: (o["y"] + o["h"] / 2.0), reverse=True)
+        raw_dishes = []
+
+        for o in text_items:
+            t = o["text"].strip()
+            line_lower = t.lower()
+
+            # Skip table headers, column titles, and page noise
+            if line_lower in ("half", "full", "regular", "medium", "large", "menu", "rates", "rate", "price", "prices", "portion", "size", "s.no", "no.", "items", "dish", "dishes", "item name", "qty", "quantity", "scanned with oken scanner", "nothing brings people", "together", "like coon food", "like good food"):
+                continue
+
+            # Section heading check
+            is_known_heading = line_lower in KNOWN_SECTION_HEADINGS or any(line_lower == h for h in KNOWN_SECTION_HEADINGS)
+            is_all_caps_heading = (t.isupper() and 3 <= len(t) <= 35 and not re.search(r"\d", t))
+            has_heading_keyword = any(k in line_lower for k in ["pizza", "burger", "sandwich", "starter", "tandoor", "biryani", "rice", "beverage", "dessert", "main course", "noodle", "pasta", "shake", "non veg", "veg"]) and not re.search(r"\d", t)
+
+            if is_known_heading or is_all_caps_heading or has_heading_keyword:
+                current_category = re.sub(r"[\(\)\[\]#\*_]+", "", t).strip().title()
+                continue
+
+
+            # Clean dish name
+            item_name = re.sub(r"^\d+[\.\s\)-]+", "", t).strip()
+            item_name = re.sub(r"[\.\s_…\-:|/]+$", "", item_name).strip()
+
+            spelling_fixes = {
+                r"\bdizza\b": "Pizza",
+                r"\bved\b": "Veg",
+                r"\bleken\b": "Chicken",
+                r"\bakka\b": "Tikka",
+                r"\bnaal\b": "Naan",
+                r"\banee\b": "Paneer",
+                r"\balikka\b": "Tikka",
+                r"\barmhouse\b": "Farmhouse",
+                r"\bmaraharita\b": "Margherita",
+                r"\bshezwan\b": "Schezwan",
+                r"\bzera\b": "Zeera",
+            }
+            for pat, repl in spelling_fixes.items():
+                item_name = re.sub(pat, repl, item_name, flags=re.IGNORECASE)
+
+            item_name = item_name.strip().title()
+            if not item_name or len(item_name) < 3:
+                continue
+
+            yc = o["y"] + o["h"] / 2.0
+            xc = o["x"] + o["w"] / 2.0
+            raw_dishes.append({
+                "name": item_name,
+                "category": current_category,
+                "xc": xc,
+                "yc": yc,
+                "raw": o,
+            })
+
+        if not raw_dishes:
+            return []
+
+        # 2. Partition prices into Half column vs Full column using bounding box centers
+        half_prices = []
+        full_prices = []
+        for p in price_items:
+            pxc = p["x"] + p["w"] / 2.0
+            pyc = p["y"] + p["h"] / 2.0
+            try:
+                pval = float(p["text"].strip().split()[0])
+            except Exception:
+                continue
+
+            if x_half and abs(pxc - x_half) < 0.045:
+                half_prices.append({"val": pval, "xc": pxc, "yc": pyc, "raw": p})
+            elif x_full and abs(pxc - x_full) < 0.045:
+                full_prices.append({"val": pval, "xc": pxc, "yc": pyc, "raw": p})
+
+        # 3. Geometric Center Matching: Map each column price to the closest dish row in Y
+        dish_half_map = {}
+        for hp in half_prices:
+            closest_dish = min(raw_dishes, key=lambda d: abs(hp["yc"] - d["yc"]))
+            if abs(hp["yc"] - closest_dish["yc"]) < 0.020:
+                dish_half_map[id(closest_dish)] = hp["val"]
+
+        dish_full_map = {}
+        for fp in full_prices:
+            closest_dish = min(raw_dishes, key=lambda d: abs(fp["yc"] - d["yc"]))
+            if abs(fp["yc"] - closest_dish["yc"]) < 0.020:
+                dish_full_map[id(closest_dish)] = fp["val"]
+
+        # 4. Construct validated products with strictly verified variants
+        for d in raw_dishes:
+            item_name = d["name"]
+            current_category = d["category"]
+
+            h_val = dish_half_map.get(id(d))
+            f_val = dish_full_map.get(id(d))
+
+            variants = []
+            base_price = 0.0
+
+            if h_val and f_val:
+                base_price = h_val
+                variants = [
+                    {"name": "Half", "price": h_val, "is_available": True, "original_price": None},
+                    {"name": "Full", "price": f_val, "is_available": True, "original_price": None},
+                ]
+            elif f_val:
+                base_price = f_val
+                variants = [
+                    {"name": "Full", "price": f_val, "is_available": True, "original_price": None},
+                ]
+            elif h_val:
+                base_price = h_val
+                variants = [
+                    {"name": "Regular", "price": h_val, "is_available": True, "original_price": None},
+                ]
+            else:
+                continue
+
+            norm_key = item_name.lower()
+            if norm_key in seen_names:
+                continue
+            seen_names.add(norm_key)
+
+            item_lower = item_name.lower()
+            cat_lower = current_category.lower()
+            if any(k in item_lower or k in cat_lower for k in non_veg_keywords):
+                is_veg = False
+            elif any(k in item_lower for k in veg_keywords) or "veg" in cat_lower:
+                is_veg = True
+            else:
+                is_veg = True
+
+            extracted_products.append({
+                "name": item_name,
+                "menu_category": current_category,
+                "price": base_price,
+                "description": "",
+                "is_veg": is_veg,
+                "variants": variants,
+                "confidence": "high",
+                "source": "native_apple_vision_column_aligned",
+            })
+
+        return extracted_products
+
+    # Fallback when no column headers exist
+    ordered_lines = []
+    if price_items and len(price_items) >= 2:
+        text_items.sort(key=lambda o: o["y"], reverse=True)
+        for t in text_items:
+            txt = t["text"]
+            y = t["y"]
+            nearby_prices = [p for p in price_items if abs(p["y"] - y) <= 0.018 and p["x"] >= t["x"] - 0.05]
+            nearby_prices.sort(key=lambda p: p["x"])
+            if nearby_prices:
+                p_str = " ".join(p["text"] for p in nearby_prices)
+                ordered_lines.append(f"{txt} {p_str}")
+            else:
+                ordered_lines.append(txt)
+    else:
+        def cluster_into_rows(lines_subset):
+            lines_subset.sort(key=lambda o: o["y"], reverse=True)
+            row_groups = []
+            for o in lines_subset:
+                y = o["y"]
+                matched = False
+                for r in row_groups:
+                    avg_y = sum(item["y"] for item in r) / len(r)
+                    if abs(y - avg_y) < 0.018:
+                        r.append(o)
+                        matched = True
+                        break
+                if not matched:
+                    row_groups.append([o])
+
+            reconstructed = []
+            for r in row_groups:
+                r.sort(key=lambda o: o["x"])
+                row_text = " ".join(o["text"].strip() for o in r)
+                reconstructed.append(row_text)
+            return reconstructed
+
+        ordered_lines = cluster_into_rows(raw_lines)
+
+    extracted_products = []
+    current_category = "Main Course"
+    seen_names = set()
+
+    # Price patterns: "₹ 199", "Rs. 240", "180/-", "140 / 250", "Half 140 Full 260"
+    price_regex = re.compile(r"(?:₹|rs\.?|inr)?\s*(\d{2,4})\s*(?:/-)?", re.IGNORECASE)
+    multi_price_slash = re.compile(r"(\d{2,4})\s*[/|]\s*(\d{2,4})")
+    half_full_regex = re.compile(r"half\s*:?\s*(?:₹|rs\.?)?\s*(\d{2,4}).*?full\s*:?\s*(?:₹|rs\.?)?\s*(\d{2,4})", re.IGNORECASE)
+    small_med_lrg_regex = re.compile(r"(?:reg|small)\s*:?\s*(\d+).*?med(?:ium)?\s*:?\s*(\d+).*?(?:large|lrg)\s*:?\s*(\d+)", re.IGNORECASE)
+
+    non_veg_keywords = [
+        "chicken", "mutton", "lamb", "fish", "prawn", "prawns", "seafood",
+        "meat", "keema", "kheema", "egg", "eggs", "omelette", "beef",
+        "pork", "bacon", "ham", "duck", "crab", "rogan josh", "rista", "gosht",
+        "shami", "seekh kebab", "pepperoni", "salami", "non-veg", "non veg"
+    ]
+    veg_keywords = [
+        "paneer", "cheese", "mushroom", "corn", "dal", "aloo", "gobi", "veg",
+        "vegetable", "palak", "spinach", "chole", "rajma", "matar", "soya", "tofu"
+    ]
+
+    for line_item in ordered_lines:
+        line = (line_item if isinstance(line_item, str) else line_item.get("text", "")).strip()
+        line_clean = re.sub(r"^[•\*\-\s]+", "", line).strip()
+        line_lower = line_clean.lower()
+
+        # Skip column headers and noise from being treated as section headings
+        if line_lower in ("half", "full", "regular", "medium", "large", "menu", "rates", "rate", "price", "prices", "portion", "size", "s.no", "no.", "items", "dish", "dishes", "item name", "qty", "quantity", "scanned with oken scanner"):
+            continue
+
+        # Check if line is a section heading
+        is_known_heading = line_lower in KNOWN_SECTION_HEADINGS or any(line_lower == h for h in KNOWN_SECTION_HEADINGS)
+        is_all_caps_heading = (line_clean.isupper() and 3 <= len(line_clean) <= 35 and not re.search(r"\d", line_clean))
+        has_heading_keyword = any(k in line_lower for k in ["pizza", "burger", "sandwich", "starter", "tandoor", "biryani", "rice", "beverage", "dessert", "main course", "noodle", "pasta", "shake", "non veg", "veg"]) and not re.search(r"\d", line_clean)
+
+        if is_known_heading or is_all_caps_heading or has_heading_keyword:
+            norm_cat = re.sub(r"[\(\)\[\]#\*_]+", "", line_clean).strip().title()
+            if norm_cat and len(norm_cat) >= 3:
+                current_category = norm_cat
+                continue
+
+
+        # Detect portion/price boundary: dish name is everything BEFORE the first portion/price keyword or number
+        split_pattern = re.compile(
+            r"\b(?:hegular|rglr|regular|reg|small|sml|medium|med|large|lrg|half|halt|hlf|full|ful|single|double|quarter|qtr|pcs|pc|₹|rs\.?)\b|\d{2,4}",
+            re.IGNORECASE,
+        )
+        split_match = split_pattern.search(line_clean)
+
+        item_name = ""
+        base_price = 0.0
+        variants = []
+
+        if split_match:
+            candidate_name = line_clean[:split_match.start()].strip()
+            price_section = line_clean[split_match.start():].strip()
+
+            # Clean trailing symbols from dish name
+            candidate_name = re.sub(r"[\.\s_…\-:|/]+$", "", candidate_name).strip()
+            candidate_name = re.sub(r"^[•\*\-\s]+", "", candidate_name).strip()
+
+            # Parse all numbers in price section
+            numbers = [float(n) for n in re.findall(r"\b\d{2,4}\b", price_section)]
+
+            if len(numbers) >= 3:
+                base_price = numbers[0]
+                variants = [
+                    {"name": "Regular / Small", "price": numbers[0], "is_available": True, "original_price": None},
+                    {"name": "Medium", "price": numbers[1], "is_available": True, "original_price": None},
+                    {"name": "Large", "price": numbers[2], "is_available": True, "original_price": None},
+                ]
+            elif len(numbers) == 2:
+                base_price = min(numbers)
+                variants = [
+                    {"name": "Half", "price": min(numbers), "is_available": True, "original_price": None},
+                    {"name": "Full", "price": max(numbers), "is_available": True, "original_price": None},
+                ]
+            elif len(numbers) == 1:
+                base_price = numbers[0]
+                variants = [{"name": "Regular", "price": numbers[0], "is_available": True, "original_price": None}]
+
+            item_name = candidate_name
+
+        if not item_name or len(item_name) < 3 or base_price <= 0:
+            continue
+
+        # Clean leading digits like "1. ", "2. ", "10. "
+        item_name = re.sub(r"^\d+[\.\s\)-]+", "", item_name).strip()
+
+        # Common OCR spelling fixes for restaurant dishes
+        spelling_fixes = {
+            r"\bdizza\b": "Pizza",
+            r"\bved\b": "Veg",
+            r"\bleken\b": "Chicken",
+            r"\bakka\b": "Tikka",
+            r"\bnaal\b": "Naan",
+            r"\banee\b": "Paneer",
+            r"\balikka\b": "Tikka",
+            r"\barmhouse\b": "Farmhouse",
+            r"\bmaraharita\b": "Margherita",
+            r"\bshezwan\b": "Schezwan",
+        }
+        for pat, repl in spelling_fixes.items():
+            item_name = re.sub(pat, repl, item_name, flags=re.IGNORECASE)
+
+        item_name = item_name.strip().title()
+
+        # Skip noise lines that aren't dishes
+        if any(re.search(pat, item_name, re.IGNORECASE) for pat in IGNORE_OCR_PATTERNS):
+            continue
+
+        norm_key = item_name.lower()
+        if norm_key in seen_names:
+            continue
+        seen_names.add(norm_key)
+
+        # Veg / Non-Veg detection
+        item_lower = item_name.lower()
+        cat_lower = current_category.lower()
+        if any(k in item_lower or k in cat_lower for k in non_veg_keywords):
+            is_veg = False
+        elif any(k in item_lower for k in veg_keywords) or "veg" in cat_lower:
+            is_veg = True
+        else:
+            is_veg = True
+
+        # Assign category strictly as detected from menu heading
+        cat = current_category
+
+        extracted_products.append({
+            "name": item_name,
+            "menu_category": cat,
+            "price": base_price,
+            "description": "",
+            "is_veg": is_veg,
+            "variants": variants,
+            "confidence": "high",
+            "source": "native_apple_vision",
+        })
+
+    return extracted_products
+
+
 def analyze_shelf_image_gemini(image_path: str, api_key: str, mode: str = "pharmacy") -> list:
-    """Analyze a shelf image using Gemini 2.0 Flash / 1.5 Flash (free tier)."""
+    """Analyze a shelf or restaurant menu image using Gemini 2.0 Flash / 1.5 Flash (free tier)."""
     image_data, mime_type = _read_image_as_base64(image_path)
-    prompt = PHARMACY_PROMPT if mode == "pharmacy" else GROCERY_PROMPT
+    if mode in ("restaurant", "food"):
+        prompt = RESTAURANT_MENU_PROMPT
+    elif mode == "pharmacy":
+        prompt = PHARMACY_PROMPT
+    else:
+        prompt = GROCERY_PROMPT
 
     payload = {
         "contents": [
@@ -451,8 +953,11 @@ def analyze_shelf_image_gemini(image_path: str, api_key: str, mode: str = "pharm
         products = _parse_gemini_response(text)
         normalized = []
         seen_names = set()
+
+        is_restaurant = mode in ("restaurant", "food")
+
         for p in products:
-            name = p.get("full_name") or p.get("brand_name") or p.get("name", "")
+            name = p.get("name") or p.get("full_name") or p.get("brand_name", "")
             name = name.strip()
             if not name:
                 continue
@@ -462,13 +967,58 @@ def analyze_shelf_image_gemini(image_path: str, api_key: str, mode: str = "pharm
                 continue
             seen_names.add(name_lower)
 
-            normalized.append({
-                "name": name,
-                "brand_name": (p.get("brand_name") or "").strip(),
-                "pack_info": (p.get("pack_info") or "").strip(),
-                "confidence": p.get("confidence", "high"),
-                "source": "gemini_vision",
-            })
+            if is_restaurant:
+                cat = (p.get("menu_category") or p.get("category") or "Main Course").strip().title()
+                raw_price = p.get("price", 0.0)
+                try:
+                    price = float(raw_price) if raw_price else 0.0
+                except (ValueError, TypeError):
+                    price = 0.0
+
+                is_veg_val = p.get("is_veg")
+                if is_veg_val is None:
+                    non_veg_k = ["chicken", "mutton", "fish", "egg", "meat", "prawn", "beef", "pork", "lamb", "keema"]
+                    is_veg = not any(k in name_lower for k in non_veg_k)
+                else:
+                    is_veg = bool(is_veg_val)
+
+                raw_variants = p.get("variants") or []
+                clean_variants = []
+                if isinstance(raw_variants, list):
+                    for idx, v in enumerate(raw_variants):
+                        if isinstance(v, dict) and v.get("name") and v.get("price"):
+                            try:
+                                clean_variants.append({
+                                    "id": f"v_{int(time.time() * 1000)}_{idx}",
+                                    "name": str(v["name"]).strip(),
+                                    "price": float(v["price"]),
+                                    "original_price": None,
+                                    "is_available": True,
+                                })
+                            except Exception:
+                                pass
+
+                if clean_variants and price <= 0:
+                    price = clean_variants[0]["price"]
+
+                normalized.append({
+                    "name": name,
+                    "menu_category": cat,
+                    "price": price,
+                    "description": (p.get("description") or "").strip(),
+                    "is_veg": is_veg,
+                    "variants": clean_variants,
+                    "confidence": p.get("confidence", "high"),
+                    "source": "gemini_vision",
+                })
+            else:
+                normalized.append({
+                    "name": name,
+                    "brand_name": (p.get("brand_name") or "").strip(),
+                    "pack_info": (p.get("pack_info") or "").strip(),
+                    "confidence": p.get("confidence", "high"),
+                    "source": "gemini_vision",
+                })
 
         return normalized
     except Exception as e:
@@ -478,7 +1028,7 @@ def analyze_shelf_image_gemini(image_path: str, api_key: str, mode: str = "pharm
 
 def analyze_shelf_image(image_path: str, api_key: str = None, mode: str = "pharmacy") -> list:
     """
-    Analyze a shelf image with intelligent multi-tier fallbacks:
+    Analyze image with intelligent multi-tier fallbacks:
     1. If api_key is present: Call Gemini Vision (semantic recognition)
     2. If api_key is missing or fails: Use Native Apple Vision Neural OCR (100% Free, zero tokens)
     """
@@ -505,30 +1055,98 @@ def analyze_shelf_image(image_path: str, api_key: str = None, mode: str = "pharm
 
 
 def analyze_shelf_image_from_names(product_names: list) -> list:
-    """Fallback: Create structured product list from manually provided names."""
+    """Fallback: Create structured product list from manually provided names or JSON."""
     normalized = []
     seen = set()
+
     for item in product_names:
         if isinstance(item, str):
-            name = item.strip()
-            if name and name.lower() not in seen:
-                seen.add(name.lower())
-                normalized.append({
-                    "name": name,
-                    "brand_name": name.split()[0] if name else "",
-                    "pack_info": "",
-                    "confidence": "manual",
-                    "source": "manual_entry",
-                })
+            raw = item.strip()
+            if not raw:
+                continue
+
+            # Check if formatted as "Category > Dish Name: Price" (e.g. "Pizzas > Margherita Pizza: 199")
+            cat = "Main Course"
+            price = 0.0
+            name = raw
+
+            if ">" in raw:
+                cat_part, _, rem = raw.partition(">")
+                cat = cat_part.strip().title()
+                name = rem.strip()
+
+            if ":" in name:
+                name_part, _, price_part = name.rpartition(":")
+                try:
+                    price = float(re.sub(r"[^\d\.]", "", price_part))
+                    name = name_part.strip()
+                except Exception:
+                    pass
+
+            norm_key = name.lower()
+            if norm_key in seen:
+                continue
+            seen.add(norm_key)
+
+            # Auto veg detection
+            non_veg = ["chicken", "mutton", "fish", "egg", "meat", "prawn", "beef", "pork", "lamb", "keema"]
+            is_veg = not any(k in norm_key for k in non_veg)
+
+            variants = [{"name": "Regular", "price": price, "is_available": True, "original_price": None}] if price > 0 else []
+
+            normalized.append({
+                "name": name,
+                "brand_name": name.split()[0] if name else "",
+                "menu_category": cat,
+                "price": price,
+                "description": "",
+                "is_veg": is_veg,
+                "variants": variants,
+                "pack_info": "",
+                "confidence": "manual",
+                "source": "manual_entry",
+            })
+
         elif isinstance(item, dict):
             name = (item.get("name") or item.get("full_name") or "").strip()
-            if name and name.lower() not in seen:
-                seen.add(name.lower())
-                normalized.append({
-                    "name": name,
-                    "brand_name": (item.get("brand_name") or "").strip(),
-                    "pack_info": (item.get("pack_info") or "").strip(),
-                    "confidence": item.get("confidence", "manual"),
-                    "source": "manual_entry",
-                })
+            if not name:
+                continue
+
+            norm_key = name.lower()
+            if norm_key in seen:
+                continue
+            seen.add(norm_key)
+
+            raw_price = item.get("price", 0.0)
+            try:
+                price = float(raw_price) if raw_price else 0.0
+            except Exception:
+                price = 0.0
+
+            cat = (item.get("menu_category") or item.get("category") or "Main Course").strip().title()
+            is_veg = item.get("is_veg")
+            if is_veg is None:
+                non_veg = ["chicken", "mutton", "fish", "egg", "meat", "prawn", "beef", "pork", "lamb", "keema"]
+                is_veg = not any(k in norm_key for k in non_veg)
+            else:
+                is_veg = bool(is_veg)
+
+            variants = item.get("variants") or []
+            if not variants and price > 0:
+                variants = [{"name": "Regular", "price": price, "is_available": True, "original_price": None}]
+
+            normalized.append({
+                "name": name,
+                "brand_name": (item.get("brand_name") or "").strip(),
+                "menu_category": cat,
+                "price": price,
+                "description": (item.get("description") or "").strip(),
+                "is_veg": is_veg,
+                "variants": variants,
+                "pack_info": (item.get("pack_info") or "").strip(),
+                "confidence": item.get("confidence", "manual"),
+                "source": "manual_entry",
+            })
+
     return normalized
+

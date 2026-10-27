@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-10-27 17:11:17",
+  "mode": "restaurant",
+  "shop_id": "e2e0d5ba-94b6-4f02-ac29-2b3a299df4ce",
+  "dry_run": true,
+  "total_detected": 3,
+  "enriched_count": 3,
+  "skipped_duplicates": [],
+  "failed_items": []
+}
