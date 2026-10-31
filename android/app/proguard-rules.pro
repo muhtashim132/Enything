@@ -9,7 +9,10 @@
 -dontwarn com.razorpay.**
 -keep class com.razorpay.** {*;}
 
--optimizations !method/inlining/
+# R8 full-mode optimizations: allow all passes including method inlining.
+# The old !method/inlining/ exclusion was a workaround for an ancient Razorpay
+# SDK bug that has long since been fixed in modern Razorpay versions.
+-optimizationpasses 5
 -keepclasseswithmembers class * {
   public void onPayment*(...);
 }

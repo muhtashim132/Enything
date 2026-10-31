@@ -54,6 +54,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     with SingleTickerProviderStateMixin {
   static final ValueNotifier<bool> globalIsFiltering = ValueNotifier(false);
 
+  // ── Homepage Feed In-Memory Cache ─────────────────────────────────────────
+  // Avoids redundant RPC round-trips on GPS micro-updates (< 100 m movements).
+  // Cache is static so it persists across widget rebuilds within the same session.
+  static List<ShopModel>? _cachedShops;
+  static List<ProductModel>? _cachedProducts;
+  static Map<String, ShopModel>? _cachedProductShops;
+  static DateTime? _cacheTimestamp;
+  static const _cacheTtl = Duration(minutes: 5);
+
   void resetToHome() {
     if (!mounted) return;
     setState(() {
@@ -80,7 +89,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   int _shopsDisplayLimit = 3;
   int _productsDisplayLimit = 6;
   int _searchShopsDisplayLimit = 12;
-  int _searchProductsDisplayLimit = 10;
+  // Show 3 products initially per search (with "See more" to expand to full list)
+  int _searchProductsDisplayLimit = 3;
   List<ShopModel> _shops = [];
   List<ShopModel> _searchResults = [];
   List<ProductModel> _searchProductResults = [];
@@ -376,18 +386,24 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   // ── Frame-Memoized Sorted Getters ──────────────────────────────────────────
   List<ProductModel>? _memoizedSortedProductResults;
   List<ProductModel>? _memoizedSortedNormalProducts;
-  List<ProductModel>? _memoizedSortedGroceryProducts;
   List<ProductModel>? _memoizedSortedPharmacyProducts;
   List<ProductModel>? _memoizedSortedClothingProducts;
+  List<ProductModel>? _memoizedSortedFoodProducts;
+  List<ProductModel>? _memoizedSortedCosmeticsProducts;
+  List<ProductModel>? _memoizedSortedSupermarketProducts;
+  List<ProductModel>? _memoizedSortedStationeryProducts;
   List<ShopModel>? _memoizedSortedShopResults;
   List<ShopModel>? _memoizedSortedNormalShops;
 
   void _invalidateSortMemo() {
     _memoizedSortedProductResults = null;
     _memoizedSortedNormalProducts = null;
-    _memoizedSortedGroceryProducts = null;
     _memoizedSortedPharmacyProducts = null;
     _memoizedSortedClothingProducts = null;
+    _memoizedSortedFoodProducts = null;
+    _memoizedSortedCosmeticsProducts = null;
+    _memoizedSortedSupermarketProducts = null;
+    _memoizedSortedStationeryProducts = null;
     _memoizedSortedShopResults = null;
     _memoizedSortedNormalShops = null;
   }
@@ -581,18 +597,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     return list;
   }
 
-  /// Returns normal products filtered for Grocery & Daily Essentials (immune to clothing demographic filter)
-  List<ProductModel> get _sortedGroceryProducts {
-    if (_memoizedSortedGroceryProducts != null) {
-      return _memoizedSortedGroceryProducts!;
-    }
-    _memoizedSortedGroceryProducts = _computeSortedCategoryProducts(
-      _tabCategories['Grocery'] ?? [],
-      applyDemographic: false,
-    );
-    return _memoizedSortedGroceryProducts!;
-  }
-
   /// Returns normal products filtered for Medicines & Healthcare (immune to clothing demographic filter)
   List<ProductModel> get _sortedPharmacyProducts {
     if (_memoizedSortedPharmacyProducts != null) {
@@ -615,6 +619,54 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       applyDemographic: true,
     );
     return _memoizedSortedClothingProducts!;
+  }
+
+  /// Returns normal products filtered for Food & Restaurants (immune to clothing demographic filter)
+  List<ProductModel> get _sortedFoodProducts {
+    if (_memoizedSortedFoodProducts != null) {
+      return _memoizedSortedFoodProducts!;
+    }
+    _memoizedSortedFoodProducts = _computeSortedCategoryProducts(
+      _tabCategories['Food'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedFoodProducts!;
+  }
+
+  /// Returns normal products filtered for Cosmetics & Beauty (immune to clothing demographic filter)
+  List<ProductModel> get _sortedCosmeticsProducts {
+    if (_memoizedSortedCosmeticsProducts != null) {
+      return _memoizedSortedCosmeticsProducts!;
+    }
+    _memoizedSortedCosmeticsProducts = _computeSortedCategoryProducts(
+      _tabCategories['Cosmetics'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedCosmeticsProducts!;
+  }
+
+  /// Returns normal products filtered for Supermarket/Hypermarket & Grocery combined (immune to clothing demographic filter)
+  List<ProductModel> get _sortedSupermarketProducts {
+    if (_memoizedSortedSupermarketProducts != null) {
+      return _memoizedSortedSupermarketProducts!;
+    }
+    _memoizedSortedSupermarketProducts = _computeSortedCategoryProducts(
+      _tabCategories['Supermarket'] ?? _tabCategories['Grocery'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedSupermarketProducts!;
+  }
+
+  /// Returns normal products filtered for Stationery & Office Supplies (immune to clothing demographic filter)
+  List<ProductModel> get _sortedStationeryProducts {
+    if (_memoizedSortedStationeryProducts != null) {
+      return _memoizedSortedStationeryProducts!;
+    }
+    _memoizedSortedStationeryProducts = _computeSortedCategoryProducts(
+      _tabCategories['Stationery'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedStationeryProducts!;
   }
 
   /// Returns search shop results sorted by the current _sortMode and filtered by dietary preference.
@@ -971,7 +1023,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _trendingScrollTimer?.cancel();
     // Slowly auto-scroll the trending strip, wrap around when reaching end
     _trendingScrollTimer =
-        Timer.periodic(const Duration(milliseconds: 30), (_) {
+        Timer.periodic(const Duration(milliseconds: 60), (_) {
       if (!mounted || !_trendingScrollController.hasClients) return;
       final max = _trendingScrollController.position.maxScrollExtent;
       if (max <= 0) return;
@@ -1395,6 +1447,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               (nearbyShops as List).map((s) => s['id'] as String).toList();
 
           if (shopIds.isNotEmpty) {
+            // CRITICAL FIX: Chaining multiple .or() calls applies AND logic
+            // between chains (PostgREST behaviour), returning 0 results when
+            // there are multiple search terms.  Build ONE single .or() call
+            // with all per-term conditions merged as comma-separated parts so
+            // PostgREST treats them as OR across every condition.
             var q = _supabase
                 .from('products')
                 .select()
@@ -1402,10 +1459,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 .eq('is_available', true)
                 .inFilter('shop_id', shopIds);
 
-            for (final term in terms) {
-              q = q.or(
-                'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,category.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%',
-              );
+            if (terms.isNotEmpty) {
+              final orParts = <String>[];
+              for (final term in terms) {
+                orParts.add('name.ilike.%$term%');
+                orParts.add('description.ilike.%$term%');
+                orParts.add('brand.ilike.%$term%');
+                orParts.add('category.ilike.%$term%');
+                orParts.add('menu_category.ilike.%$term%');
+                orParts.add('sub_category.ilike.%$term%');
+              }
+              q = q.or(orParts.join(','));
             }
 
             final allProducts = await q;
@@ -1849,6 +1913,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     ],
     'Clothing': ['Clothing', 'Footwear', 'Jewellery'],
     'Electronics': ['Electronics', 'Mobile & Repair'],
+    'Cosmetics': ['Cosmetics & Beauty', 'Salon & Beauty'],
+    'Supermarket': [
+      'Supermarket / Hypermarket',
+      'Grocery',
+      'Fruits & Vegs',
+      'Dairy & Eggs',
+      'Butcher',
+      'Fish & Seafood',
+      'Organic'
+    ],
+    'Stationery': ['Stationery'],
     'More': [
       'Hardware Store',
       'Stationery',
@@ -1879,6 +1954,32 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     try {
       final locationProvider = context.read<LocationProvider>();
       final config = context.read<PlatformConfigProvider>();
+
+      // ── In-memory cache fast-path ─────────────────────────────────────────
+      // Serve cached feed data when: (a) cache is warm, (b) TTL not expired,
+      // (c) no user-driven filter change (tab or category filter unchanged).
+      // This gives instant re-renders on GPS micro-updates and back-navigation.
+      final now = DateTime.now();
+      final isCacheWarm = _cachedShops != null &&
+          _cachedProducts != null &&
+          _cachedProductShops != null &&
+          _cacheTimestamp != null &&
+          now.difference(_cacheTimestamp!) < _cacheTtl &&
+          _selectedFilterCategories.isEmpty; // don't use stale cache when filtering
+      if (isCacheWarm && _hasLoadedOnce) {
+        if (mounted && _fetchId == currentFetchId) {
+          _invalidateSortMemo();
+          setState(() {
+            _shops = _cachedShops!;
+            _products = _cachedProducts!;
+            _productShops = _cachedProductShops!;
+            _isLoading = false;
+          });
+        }
+        _isFetching = false;
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       List<String> effectiveCategories = [];
       if (_selectedFilterCategories.isNotEmpty) {
@@ -1958,23 +2059,41 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             .any((c) => lowerTargets.contains(c.trim().toLowerCase()));
       }
 
+      // Stratified sampling: ensure all dedicated homepage department sections
+      // (Food, Pharmacy, Grocery/Supermarket, Cosmetics, Stationery, Clothing)
+      // have products by sampling shops from each category group.
+      final foodShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Food'] ?? []))
+          .take(12);
       final pharmacyShops = nearby
           .where((s) => isShopInCategories(s, _tabCategories['Pharmacy'] ?? []))
-          .take(15);
+          .take(10);
       final groceryShops = nearby
           .where((s) => isShopInCategories(s, _tabCategories['Grocery'] ?? []))
-          .take(15);
+          .take(12);
       final clothingShops = nearby
           .where((s) => isShopInCategories(s, _tabCategories['Clothing'] ?? []))
-          .take(15);
+          .take(10);
+      final cosmeticsShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Cosmetics'] ?? []))
+          .take(8);
+      final stationeryShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Stationery'] ?? []))
+          .take(8);
       final otherShops = nearby
           .where((s) =>
+              !isShopInCategories(s, _tabCategories['Food'] ?? []) &&
               !isShopInCategories(s, _tabCategories['Pharmacy'] ?? []) &&
               !isShopInCategories(s, _tabCategories['Grocery'] ?? []) &&
-              !isShopInCategories(s, _tabCategories['Clothing'] ?? []))
-          .take(25);
+              !isShopInCategories(s, _tabCategories['Clothing'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['Cosmetics'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['Stationery'] ?? []))
+          .take(15);
 
       final diverseShopIds = <String>{};
+      for (final s in foodShops) {
+        diverseShopIds.add(s.id);
+      }
       for (final s in pharmacyShops) {
         diverseShopIds.add(s.id);
       }
@@ -1984,12 +2103,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       for (final s in clothingShops) {
         diverseShopIds.add(s.id);
       }
+      for (final s in cosmeticsShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in stationeryShops) {
+        diverseShopIds.add(s.id);
+      }
       for (final s in otherShops) {
         diverseShopIds.add(s.id);
       }
 
       for (final s in nearby) {
-        if (diverseShopIds.length >= 70) break;
+        if (diverseShopIds.length >= 75) break;
         diverseShopIds.add(s.id);
       }
 
@@ -2038,6 +2163,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         });
 
         if (_fetchId != currentFetchId) return; // Prevent async tab desync
+
+        // ── Populate in-memory cache for fast subsequent renders ───────────
+        _cachedShops = nearby;
+        _cachedProducts = prods;
+        _cachedProductShops = prodShops;
+        _cacheTimestamp = DateTime.now();
 
         _invalidateSortMemo();
         // Atomic update: swap data and clear loading in a single setState
@@ -3301,6 +3432,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             SliverToBoxAdapter(
                               child: _buildCategorySection(isDark),
                             ),
+                            // ── Host an Event or Party? ──
+                            // Positioned directly after Explore Categories
                             SliverToBoxAdapter(
                               child: _buildBulkCateringCard(isDark),
                             ),
@@ -3367,8 +3500,369 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               }),
                             ),
 
+                          // ── Dedicated Department Category Showcases (Primary) ──
+                          // Order: Food → Medicines → Cosmetics → Supermarket/Grocery
+                          if (_selectedTabIndex < 0) ...[
+                            // 1. Food & Restaurants (Premier Showcase)
+                            if (_sortedFoodProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Food & Restaurants',
+                                  subtitle:
+                                      'Fresh meals, snacks & cuisines delivered hot',
+                                  emoji: '🍔',
+                                  count: _sortedFoodProducts.length,
+                                  accentGradient: const [
+                                    Color(0xFFFF6B6B),
+                                    Color(0xFFEE5A24),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Food & Restaurants',
+                                    products: _sortedFoodProducts,
+                                    categories:
+                                        _tabCategories['Food'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedFoodProducts,
+                                  sectionTitle: 'Food',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Food & Restaurants',
+                                    products: _sortedFoodProducts,
+                                    categories:
+                                        _tabCategories['Food'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 2. Medicines & Healthcare (Under Food)
+                            if (_sortedPharmacyProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Medicines & Healthcare',
+                                  subtitle:
+                                      'Prescription drugs, vitamins & wellness',
+                                  emoji: '💊',
+                                  count: _sortedPharmacyProducts.length,
+                                  accentGradient: const [
+                                    Color(0xFF0284C7),
+                                    Color(0xFF06B6D4),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Medicines & Healthcare',
+                                    products: _sortedPharmacyProducts,
+                                    categories:
+                                        _tabCategories['Pharmacy'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedPharmacyProducts,
+                                  sectionTitle: 'Medicines',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Medicines & Healthcare',
+                                    products: _sortedPharmacyProducts,
+                                    categories:
+                                        _tabCategories['Pharmacy'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 3. Cosmetics & Beauty (Under Medicines)
+                            if (_sortedCosmeticsProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Cosmetics & Beauty',
+                                  subtitle:
+                                      'Skincare, makeup & fragrances near you',
+                                  emoji: '💄',
+                                  count: _sortedCosmeticsProducts.length,
+                                  accentGradient: const [
+                                    Color(0xFFE91E8C),
+                                    Color(0xFFFF6FB5),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Cosmetics & Beauty',
+                                    products: _sortedCosmeticsProducts,
+                                    categories:
+                                        _tabCategories['Cosmetics'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedCosmeticsProducts,
+                                  sectionTitle: 'Beauty',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Cosmetics & Beauty',
+                                    products: _sortedCosmeticsProducts,
+                                    categories:
+                                        _tabCategories['Cosmetics'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 4. Stationery & Office Supplies (After Cosmetics & Beauty)
+                            if (_sortedStationeryProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Stationery & Office Supplies',
+                                  subtitle:
+                                      'Books, pens, art & school essentials',
+                                  emoji: '📚',
+                                  count: _sortedStationeryProducts.length,
+                                  accentGradient: const [
+                                    Color(0xFF5B86E5),
+                                    Color(0xFF36D1DC),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Stationery & Office Supplies',
+                                    products: _sortedStationeryProducts,
+                                    categories:
+                                        _tabCategories['Stationery'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedStationeryProducts,
+                                  sectionTitle: 'Stationery',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Stationery & Office Supplies',
+                                    products: _sortedStationeryProducts,
+                                    categories:
+                                        _tabCategories['Stationery'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 5. Supermarket, Hypermarket & Grocery (Under Stationery)
+                            if (_sortedSupermarketProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Supermarket & Grocery',
+                                  subtitle:
+                                      'Daily staples, fresh veggies & household needs',
+                                  emoji: '🏬',
+                                  count: _sortedSupermarketProducts.length,
+                                  accentGradient: const [
+                                    Color(0xFF00B074),
+                                    Color(0xFF10B981),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Supermarket & Grocery',
+                                    products: _sortedSupermarketProducts,
+                                    categories:
+                                        _tabCategories['Supermarket'] ?? _tabCategories['Grocery'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedSupermarketProducts,
+                                  sectionTitle: 'Grocery',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Supermarket & Grocery',
+                                    products: _sortedSupermarketProducts,
+                                    categories:
+                                        _tabCategories['Supermarket'] ?? _tabCategories['Grocery'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+                          ],
+
+                          // ── Products Section / Popular in your area ─────────────────
+                          // Positioned directly under Supermarket & Grocery
+                          if (_products.isNotEmpty) ...[
+                            const SliverToBoxAdapter(
+                                child: SizedBox(height: 8)),
+                            if ((_selectedTabIndex >= 0 &&
+                                    _categories.isNotEmpty &&
+                                    _selectedTabIndex < _categories.length &&
+                                    _categories[_selectedTabIndex]['name'] ==
+                                        'Clothing') ||
+                                _selectedFeedDemographic != 'All') ...[
+                              SliverToBoxAdapter(
+                                child: _buildFeedDemographicSelector(isDark),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 8)),
+                            ],
+                            SliverToBoxAdapter(
+                              child: _buildSectionTitle(
+                                _selectedFeedDemographic == 'Men/Boys'
+                                    ? 'Popular for Men & Boys'
+                                    : (_selectedFeedDemographic == 'Women/Girls'
+                                        ? 'Popular for Women & Girls'
+                                        : 'Popular in your area'),
+                              ),
+                            ),
+                            const SliverToBoxAdapter(
+                                child: SizedBox(height: 16)),
+                            if (_sortedNormalProducts.isEmpty)
+                              SliverToBoxAdapter(
+                                child: _buildDemographicEmptyState(isDark),
+                              )
+                            else
+                              SliverLayoutBuilder(
+                                builder: (context, constraints) {
+                                  final crossAxisCount =
+                                      Responsive.getGridCrossAxisCount(context,
+                                          mobile: 2, tablet: 4, desktop: 5);
+                                  const crossAxisSpacing = 16.0;
+                                  final availableWidth =
+                                      constraints.crossAxisExtent;
+                                  final itemWidth = (availableWidth -
+                                          (crossAxisSpacing *
+                                              (crossAxisCount - 1))) /
+                                      crossAxisCount;
+                                  final itemHeight = itemWidth + 134;
+                                  final childAspectRatio = itemWidth / itemHeight;
+                                  final displayProducts = _sortedNormalProducts
+                                      .take(_productsDisplayLimit)
+                                      .toList();
+
+                                  return SliverGrid.builder(
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      childAspectRatio: childAspectRatio,
+                                      mainAxisSpacing: 16,
+                                      crossAxisSpacing: crossAxisSpacing,
+                                    ),
+                                    itemCount: displayProducts.length,
+                                    itemBuilder: (context, index) {
+                                      final product = displayProducts[index];
+                                      final shop = _productShops[product.id];
+                                      return RepaintBoundary(
+                                        key: ValueKey('home_p_${product.id}'),
+                                        child: ProductCard(
+                                            product: product, shop: shop),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            if (_sortedNormalProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 8)),
+                              SliverToBoxAdapter(
+                                child: _buildModernSeeAllButton(
+                                  context,
+                                  label: 'See all popular items',
+                                  onTap: () => Navigator.pushNamed(
+                                    context,
+                                    AppRoutes.allListings,
+                                    arguments: {
+                                      'type': ListingType.products,
+                                      'products': List<ProductModel>.from(
+                                          _sortedNormalProducts),
+                                      'productShops':
+                                          Map<String, ShopModel>.from(
+                                              _productShops),
+                                      'shops': List<ShopModel>.from(_shops),
+                                      'sectionTitle':
+                                          _selectedFeedDemographic == 'Men/Boys'
+                                              ? 'Popular for Men & Boys'
+                                              : (_selectedFeedDemographic ==
+                                                      'Women/Girls'
+                                                  ? 'Popular for Women & Girls'
+                                                  : 'Popular in Your Area'),
+                                    },
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+                          ],
+
+                          // ── Dedicated Department Category Showcases (Secondary) ──
+                          // Order: Clothing & Fashion (directly under Popular in your area)
+                          if (_selectedTabIndex < 0) ...[
+                            // 6. Clothing & Fashion
+                            if (_sortedClothingProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Clothing & Fashion',
+                                  subtitle:
+                                      'Trending styles, apparel & accessories',
+                                  emoji: '👕',
+                                  count: _sortedClothingProducts.length,
+                                  accentGradient: const [
+                                    Color(0xFF8B5CF6),
+                                    Color(0xFFEC4899),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Clothing & Fashion',
+                                    products: _sortedClothingProducts,
+                                    categories:
+                                        _tabCategories['Clothing'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedClothingProducts,
+                                  sectionTitle: 'Fashion',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Clothing & Fashion',
+                                    products: _sortedClothingProducts,
+                                    categories:
+                                        _tabCategories['Clothing'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+                          ],
+
+                          // ── Stores Near You (At the very end of homepage) ─────────
                           if (_shops.isNotEmpty) ...[
-                            // ── Normal category browse ───────────────────
+                            const SliverToBoxAdapter(
+                                child: SizedBox(height: 24)),
                             SliverToBoxAdapter(
                               child: _buildSectionTitle(
                                 _selectedTabIndex < 0
@@ -3477,235 +3971,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             ),
                           ],
 
-                          // Products Section
-                          if (_products.isNotEmpty) ...[
-                            const SliverToBoxAdapter(
-                                child: SizedBox(height: 8)),
-                            if ((_selectedTabIndex >= 0 &&
-                                    _categories.isNotEmpty &&
-                                    _selectedTabIndex < _categories.length &&
-                                    _categories[_selectedTabIndex]['name'] ==
-                                        'Clothing') ||
-                                _selectedFeedDemographic != 'All') ...[
-                              SliverToBoxAdapter(
-                                child: _buildFeedDemographicSelector(isDark),
-                              ),
-                              const SliverToBoxAdapter(
-                                  child: SizedBox(height: 8)),
-                            ],
-                            SliverToBoxAdapter(
-                              child: _buildSectionTitle(
-                                _selectedFeedDemographic == 'Men/Boys'
-                                    ? 'Popular for Men & Boys'
-                                    : (_selectedFeedDemographic == 'Women/Girls'
-                                        ? 'Popular for Women & Girls'
-                                        : 'Popular in your area'),
-                              ),
-                            ),
-                            const SliverToBoxAdapter(
-                                child: SizedBox(height: 16)),
-                            if (_sortedNormalProducts.isEmpty)
-                              SliverToBoxAdapter(
-                                child: _buildDemographicEmptyState(isDark),
-                              )
-                            else
-                              SliverLayoutBuilder(
-                                builder: (context, constraints) {
-                                  final crossAxisCount =
-                                      Responsive.getGridCrossAxisCount(context,
-                                          mobile: 2, tablet: 4, desktop: 5);
-                                  const crossAxisSpacing = 16.0;
-                                  final availableWidth =
-                                      constraints.crossAxisExtent;
-                                  final itemWidth = (availableWidth -
-                                          (crossAxisSpacing *
-                                              (crossAxisCount - 1))) /
-                                      crossAxisCount;
-                                  final itemHeight = itemWidth + 134;
-                                  final childAspectRatio = itemWidth / itemHeight;
-                                  final displayProducts = _sortedNormalProducts
-                                      .take(_productsDisplayLimit)
-                                      .toList();
-
-                                  return SliverGrid.builder(
-                                    gridDelegate:
-                                        SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: crossAxisCount,
-                                      childAspectRatio: childAspectRatio,
-                                      mainAxisSpacing: 16,
-                                      crossAxisSpacing: crossAxisSpacing,
-                                    ),
-                                    itemCount: displayProducts.length,
-                                    itemBuilder: (context, index) {
-                                      final product = displayProducts[index];
-                                      final shop = _productShops[product.id];
-                                      return RepaintBoundary(
-                                        key: ValueKey('home_p_${product.id}'),
-                                        child: ProductCard(
-                                            product: product, shop: shop),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                            if (_sortedNormalProducts.isNotEmpty) ...[
-                              const SliverToBoxAdapter(
-                                  child: SizedBox(height: 8)),
-                              SliverToBoxAdapter(
-                                child: _buildModernSeeAllButton(
-                                  context,
-                                  label: 'See all popular items',
-                                  onTap: () => Navigator.pushNamed(
-                                    context,
-                                    AppRoutes.allListings,
-                                    arguments: {
-                                      'type': ListingType.products,
-                                      'products': List<ProductModel>.from(
-                                          _sortedNormalProducts),
-                                      'productShops':
-                                          Map<String, ShopModel>.from(
-                                              _productShops),
-                                      'shops': List<ShopModel>.from(_shops),
-                                      'sectionTitle':
-                                          _selectedFeedDemographic == 'Men/Boys'
-                                              ? 'Popular for Men & Boys'
-                                              : (_selectedFeedDemographic ==
-                                                      'Women/Girls'
-                                                  ? 'Popular for Women & Girls'
-                                                  : 'Popular in Your Area'),
-                                    },
-                                  ),
-                                  isDark: isDark,
-                                ),
-                              ),
-                            ],
-
-                            // ── Dedicated Department Category Showcases ────
-                            if (_selectedTabIndex < 0) ...[
-                              // 1. Daily Grocery & Essentials
-                              if (_sortedGroceryProducts.isNotEmpty) ...[
-                                const SliverToBoxAdapter(
-                                    child: SizedBox(height: 24)),
-                                SliverToBoxAdapter(
-                                  child: _buildDepartmentSectionHeader(
-                                    title: 'Daily Grocery & Essentials',
-                                    subtitle:
-                                        'Fresh staples, veggies & daily needs near you',
-                                    emoji: '🛒',
-                                    count: _sortedGroceryProducts.length,
-                                    accentGradient: const [
-                                      Color(0xFF00B074),
-                                      Color(0xFF10B981),
-                                    ],
-                                    onSeeAllTap: () => _openCategoryListing(
-                                      title: 'Daily Grocery & Essentials',
-                                      products: _sortedGroceryProducts,
-                                      categories:
-                                          _tabCategories['Grocery'] ?? [],
-                                    ),
-                                    isDark: isDark,
-                                  ),
-                                ),
-                                const SliverToBoxAdapter(
-                                    child: SizedBox(height: 14)),
-                                SliverToBoxAdapter(
-                                  child: _buildCategoryHorizontalCarousel(
-                                    products: _sortedGroceryProducts,
-                                    sectionTitle: 'Grocery',
-                                    onViewAllTap: () => _openCategoryListing(
-                                      title: 'Daily Grocery & Essentials',
-                                      products: _sortedGroceryProducts,
-                                      categories:
-                                          _tabCategories['Grocery'] ?? [],
-                                    ),
-                                    isDark: isDark,
-                                  ),
-                                ),
-                              ],
-
-                              // 2. Medicines & Healthcare
-                              if (_sortedPharmacyProducts.isNotEmpty) ...[
-                                const SliverToBoxAdapter(
-                                    child: SizedBox(height: 24)),
-                                SliverToBoxAdapter(
-                                  child: _buildDepartmentSectionHeader(
-                                    title: 'Medicines & Healthcare',
-                                    subtitle:
-                                        'Prescription drugs, vitamins & wellness',
-                                    emoji: '💊',
-                                    count: _sortedPharmacyProducts.length,
-                                    accentGradient: const [
-                                      Color(0xFF0284C7),
-                                      Color(0xFF06B6D4),
-                                    ],
-                                    onSeeAllTap: () => _openCategoryListing(
-                                      title: 'Medicines & Healthcare',
-                                      products: _sortedPharmacyProducts,
-                                      categories:
-                                          _tabCategories['Pharmacy'] ?? [],
-                                    ),
-                                    isDark: isDark,
-                                  ),
-                                ),
-                                const SliverToBoxAdapter(
-                                    child: SizedBox(height: 14)),
-                                SliverToBoxAdapter(
-                                  child: _buildCategoryHorizontalCarousel(
-                                    products: _sortedPharmacyProducts,
-                                    sectionTitle: 'Medicines',
-                                    onViewAllTap: () => _openCategoryListing(
-                                      title: 'Medicines & Healthcare',
-                                      products: _sortedPharmacyProducts,
-                                      categories:
-                                          _tabCategories['Pharmacy'] ?? [],
-                                    ),
-                                    isDark: isDark,
-                                  ),
-                                ),
-                              ],
-
-                              // 3. Clothing & Fashion
-                              if (_sortedClothingProducts.isNotEmpty) ...[
-                                const SliverToBoxAdapter(
-                                    child: SizedBox(height: 24)),
-                                SliverToBoxAdapter(
-                                  child: _buildDepartmentSectionHeader(
-                                    title: 'Clothing & Fashion',
-                                    subtitle:
-                                        'Trending styles, apparel & accessories',
-                                    emoji: '👕',
-                                    count: _sortedClothingProducts.length,
-                                    accentGradient: const [
-                                      Color(0xFF8B5CF6),
-                                      Color(0xFFEC4899),
-                                    ],
-                                    onSeeAllTap: () => _openCategoryListing(
-                                      title: 'Clothing & Fashion',
-                                      products: _sortedClothingProducts,
-                                      categories:
-                                          _tabCategories['Clothing'] ?? [],
-                                    ),
-                                    isDark: isDark,
-                                  ),
-                                ),
-                                const SliverToBoxAdapter(
-                                    child: SizedBox(height: 14)),
-                                SliverToBoxAdapter(
-                                  child: _buildCategoryHorizontalCarousel(
-                                    products: _sortedClothingProducts,
-                                    sectionTitle: 'Fashion',
-                                    onViewAllTap: () => _openCategoryListing(
-                                      title: 'Clothing & Fashion',
-                                      products: _sortedClothingProducts,
-                                      categories:
-                                          _tabCategories['Clothing'] ?? [],
-                                    ),
-                                    isDark: isDark,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ] else if (_shops.isNotEmpty && !_isLoading) ...[
+                          if (_products.isEmpty && _shops.isNotEmpty && !_isLoading) ...[
                             // ── "Popular in your area" empty state ──────────────
                             // Shows when shops exist but no products returned yet.
                             // This prevents the section from silently disappearing.

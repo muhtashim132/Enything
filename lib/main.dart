@@ -38,7 +38,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Always allow runtime fetching as a fallback to prevent UI crashes if local fonts fail to map.
-  GoogleFonts.config.allowRuntimeFetching = true;
+  // All fonts (Outfit, Inter) are bundled as assets in pubspec.yaml.
+  // Disabling runtime fetching eliminates ~300-500ms network probes on cold start.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   await dotenv.load(fileName: '.env');
 
@@ -74,11 +76,11 @@ void main() async {
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.white,
+      systemNavigationBarContrastEnforced: false,
     ),
   );
 
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // Large screen / foldable support: orientation locks removed per Play Console UX policy.
 
   // Load platform config asynchronously to avoid blocking the Splash Screen
   final configProvider = PlatformConfigProvider();
