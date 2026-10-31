@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
+import 'package:latlong2/latlong.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
@@ -60,6 +62,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   static List<ShopModel>? _cachedShops;
   static List<ProductModel>? _cachedProducts;
   static Map<String, ShopModel>? _cachedProductShops;
+  static LatLng? _cachedLocation;
   static DateTime? _cacheTimestamp;
   static const _cacheTtl = Duration(minutes: 5);
 
@@ -709,7 +712,27 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }).toList();
     }
 
+    final cleanQ = _searchQuery.toLowerCase().trim();
+    final qTerms = cleanQ
+        .replaceAll(RegExp(r'[,()"\x27]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
     list.sort((a, b) {
+      // Priority 0: Exact / primary restaurant or shop name match outranks unrelated stores
+      if (cleanQ.isNotEmpty) {
+        final aName = a.name.toLowerCase();
+        final bName = b.name.toLowerCase();
+        final aExact = aName == cleanQ || aName.contains(cleanQ);
+        final bExact = bName == cleanQ || bName.contains(cleanQ);
+        if (aExact != bExact) return aExact ? -1 : 1;
+
+        final aMatches = qTerms.isNotEmpty && qTerms.every((t) => aName.contains(t));
+        final bMatches = qTerms.isNotEmpty && qTerms.every((t) => bName.contains(t));
+        if (aMatches != bMatches) return aMatches ? -1 : 1;
+      }
+
       final openA = a.isOpenRightNow ? 1 : 0;
       final openB = b.isOpenRightNow ? 1 : 0;
       if (openA != openB) return openB.compareTo(openA);
@@ -1348,7 +1371,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       _comingSoonSubMessage = null;
       _searchQuery = query;
       _searchShopsDisplayLimit = 2;
-      _searchProductsDisplayLimit = 10;
+      _searchProductsDisplayLimit = 3;
       if (!skipNLP) {
         _selectedSearchDemographic = 'All';
         _selectedSizes.clear();
@@ -1447,19 +1470,85 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               (nearbyShops as List).map((s) => s['id'] as String).toList();
 
           if (shopIds.isNotEmpty) {
-            // CRITICAL FIX: Chaining multiple .or() calls applies AND logic
-            // between chains (PostgREST behaviour), returning 0 results when
-            // there are multiple search terms.  Build ONE single .or() call
-            // with all per-term conditions merged as comma-separated parts so
-            // PostgREST treats them as OR across every condition.
-            var q = _supabase
-                .from('products')
-                .select()
-                .eq('is_deleted', false)
-                .eq('is_available', true)
-                .inFilter('shop_id', shopIds);
+            // ── 100x Forensic Restaurant / Store Name Matching ─────────────────
+            // If the query matches a restaurant or shop by name or cuisine:
+            final matchingShops = shopsByName.where((s) {
+              final sName = (s['name'] as String? ?? '').toLowerCase();
+              final sCuisine = (s['cuisine_type'] as String? ?? '').toLowerCase();
+              final sCat = (s['category'] as String? ?? '').toLowerCase();
+              if (lowerQuery.isNotEmpty &&
+                  (sName.contains(lowerQuery) || lowerQuery.contains(sName))) {
+                return true;
+              }
+              if (terms.isNotEmpty && terms.every((t) => sName.contains(t))) {
+                return true;
+              }
+              if (terms.isNotEmpty &&
+                  terms.every((t) => sCuisine.contains(t) || sCat.contains(t))) {
+                return true;
+              }
+              return false;
+            }).toList();
 
-            if (terms.isNotEmpty) {
+            final matchingShopIds = matchingShops.map((s) => s['id'] as String).toSet();
+
+            if (matchingShopIds.isNotEmpty) {
+              // 1. Fetch ALL active products belonging to the matched restaurant(s)
+              // WITHOUT ANY RESTRICTION ON PRODUCT TITLE TEXT and WITHOUT take(5) capping!
+              final matchingProdsRaw = await _supabase
+                  .from('products')
+                  .select()
+                  .eq('is_deleted', false)
+                  .eq('is_available', true)
+                  .inFilter('shop_id', matchingShopIds.toList());
+
+              final matchingFiltered = matchingProdsRaw.where((p) {
+                if (_selectedSizes.isNotEmpty) {
+                  final variants = p['variants'] as List<dynamic>? ?? [];
+                  final matchesSize = variants.any((v) {
+                    final name = (v['name'] as String?)?.trim() ?? '';
+                    return _selectedSizes.contains(name);
+                  });
+                  if (!matchesSize) return false;
+                }
+                if (_selectedSearchDemographic != 'All') {
+                  final tagsRaw = p['special_tags'];
+                  final List<String> tags = (tagsRaw is List)
+                      ? tagsRaw.map((t) => t.toString().trim()).toList()
+                      : [];
+                  final targetTag = '#$_selectedSearchDemographic';
+                  final allowedTags = <String>[targetTag, '#Unisex'];
+                  if (_selectedSearchDemographic == 'Boys' ||
+                      _selectedSearchDemographic == 'Girls') {
+                    allowedTags.add('#Kids');
+                  } else if (_selectedSearchDemographic == 'Kids') {
+                    allowedTags.addAll(['#Boys', '#Girls']);
+                  }
+                  if (!tags.any((t) => allowedTags.contains(t))) return false;
+                }
+                return true;
+              }).toList();
+
+              matchingFiltered.sort((a, b) {
+                final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
+                final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
+                return ratingB.compareTo(ratingA);
+              });
+
+              // Add all matching store products to the front of results!
+              rawProductsByName.addAll(matchingFiltered);
+            }
+
+            // 2. Fetch keyword-matching products from other shops in radius
+            final otherShopIds = shopIds.where((sid) => !matchingShopIds.contains(sid)).toList();
+            if (otherShopIds.isNotEmpty && terms.isNotEmpty) {
+              var q = _supabase
+                  .from('products')
+                  .select()
+                  .eq('is_deleted', false)
+                  .eq('is_available', true)
+                  .inFilter('shop_id', otherShopIds);
+
               final orParts = <String>[];
               for (final term in terms) {
                 orParts.add('name.ilike.%$term%');
@@ -1470,71 +1559,61 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 orParts.add('sub_category.ilike.%$term%');
               }
               q = q.or(orParts.join(','));
-            }
 
-            final allProducts = await q;
+              final otherProducts = await q;
 
-            // Pre-truncation Local Size & Demographic Filter (Avoids PostgREST JSONB operator mismatch)
-            final filteredProducts = allProducts.where((p) {
-              if (terms.isNotEmpty) {
-                final searchable =
-                    '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
-                        .toLowerCase();
-                if (!terms.every((t) => searchable.contains(t))) return false;
-              }
-              if (_selectedSizes.isNotEmpty) {
-                final variants = p['variants'] as List<dynamic>? ?? [];
-                final matchesSize = variants.any((v) {
-                  final name = (v['name'] as String?)?.trim() ?? '';
-                  return _selectedSizes.contains(name);
-                });
-                if (!matchesSize) return false;
-              }
-
-              if (_selectedSearchDemographic != 'All') {
-                final tagsRaw = p['special_tags'];
-                final List<String> tags = (tagsRaw is List)
-                    ? tagsRaw.map((t) => t.toString().trim()).toList()
-                    : [];
-                final targetTag = '#$_selectedSearchDemographic';
-                final allowedTags = <String>[targetTag, '#Unisex'];
-                if (_selectedSearchDemographic == 'Boys' ||
-                    _selectedSearchDemographic == 'Girls') {
-                  allowedTags.add('#Kids');
-                } else if (_selectedSearchDemographic == 'Kids') {
-                  allowedTags.addAll(['#Boys', '#Girls']);
+              final otherFiltered = otherProducts.where((p) {
+                if (terms.isNotEmpty) {
+                  final searchable =
+                      '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
+                          .toLowerCase();
+                  if (!terms.every((t) => searchable.contains(t))) return false;
                 }
-                final matchesDemographic =
-                    tags.any((t) => allowedTags.contains(t));
-                if (!matchesDemographic) return false;
+                if (_selectedSizes.isNotEmpty) {
+                  final variants = p['variants'] as List<dynamic>? ?? [];
+                  final matchesSize = variants.any((v) {
+                    final name = (v['name'] as String?)?.trim() ?? '';
+                    return _selectedSizes.contains(name);
+                  });
+                  if (!matchesSize) return false;
+                }
+                if (_selectedSearchDemographic != 'All') {
+                  final tagsRaw = p['special_tags'];
+                  final List<String> tags = (tagsRaw is List)
+                      ? tagsRaw.map((t) => t.toString().trim()).toList()
+                      : [];
+                  final targetTag = '#$_selectedSearchDemographic';
+                  final allowedTags = <String>[targetTag, '#Unisex'];
+                  if (_selectedSearchDemographic == 'Boys' ||
+                      _selectedSearchDemographic == 'Girls') {
+                    allowedTags.add('#Kids');
+                  } else if (_selectedSearchDemographic == 'Kids') {
+                    allowedTags.addAll(['#Boys', '#Girls']);
+                  }
+                  if (!tags.any((t) => allowedTags.contains(t))) return false;
+                }
+                return true;
+              }).toList();
+
+              final productsByShop = <String, List<dynamic>>{};
+              for (final p in otherFiltered) {
+                final sid = p['shop_id'] as String;
+                productsByShop.putIfAbsent(sid, () => []).add(p);
               }
 
-              return true;
-            }).toList();
-
-            // Group, sort by rating, limit 5 per shop
-            final productsByShop = <String, List<dynamic>>{};
-            for (final p in filteredProducts) {
-              final sid = p['shop_id'] as String;
-              productsByShop.putIfAbsent(sid, () => []).add(p);
-            }
-
-            // Iterate through sorted shops to maintain distance ordering
-            for (final shop in nearbyShops) {
-              final sid = shop['id'] as String;
-              if (productsByShop.containsKey(sid)) {
-                final shopProds = productsByShop[sid]!;
-                shopProds.sort((a, b) {
-                  final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
-                  final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
-                  return ratingB.compareTo(ratingA);
-                });
-                rawProductsByName.addAll(shopProds.take(5));
-                if (rawProductsByName.length >= 50) break;
+              for (final shop in nearbyShops) {
+                final sid = shop['id'] as String;
+                if (productsByShop.containsKey(sid)) {
+                  final shopProds = productsByShop[sid]!;
+                  shopProds.sort((a, b) {
+                    final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
+                    final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
+                    return ratingB.compareTo(ratingA);
+                  });
+                  rawProductsByName.addAll(shopProds.take(5));
+                  if (rawProductsByName.length >= 60) break;
+                }
               }
-            }
-            if (rawProductsByName.length > 50) {
-              rawProductsByName = rawProductsByName.sublist(0, 50);
             }
           }
           debugPrint(
@@ -1960,11 +2039,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       // (c) no user-driven filter change (tab or category filter unchanged).
       // This gives instant re-renders on GPS micro-updates and back-navigation.
       final now = DateTime.now();
+      final loc = locationProvider.currentLocation;
+      final isLocationSame = loc != null &&
+          _cachedLocation != null &&
+          locationProvider.distanceTo(_cachedLocation!) < 0.2;
       final isCacheWarm = _cachedShops != null &&
           _cachedProducts != null &&
           _cachedProductShops != null &&
           _cacheTimestamp != null &&
           now.difference(_cacheTimestamp!) < _cacheTtl &&
+          (loc == null || isLocationSame) &&
           _selectedFilterCategories.isEmpty; // don't use stale cache when filtering
       if (isCacheWarm && _hasLoadedOnce) {
         if (mounted && _fetchId == currentFetchId) {
@@ -2168,6 +2252,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _cachedShops = nearby;
         _cachedProducts = prods;
         _cachedProductShops = prodShops;
+        _cachedLocation = locationProvider.currentLocation;
         _cacheTimestamp = DateTime.now();
 
         _invalidateSortMemo();
@@ -3245,10 +3330,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 ),
                               ),
                               SliverList.builder(
-                                itemCount: _sortedProductResults.length >
-                                        _searchProductsDisplayLimit
-                                    ? _searchProductsDisplayLimit
-                                    : _sortedProductResults.length,
+                                itemCount: math.min(
+                                  _sortedProductResults.length,
+                                  _searchProductsDisplayLimit,
+                                ),
                                 itemBuilder: (context, index) {
                                   final product = _sortedProductResults[index];
                                   final shop = _searchProductShops[product.id];
@@ -3262,49 +3347,67 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   );
                                 },
                               ),
-                              if (_sortedProductResults.length >
-                                  _searchProductsDisplayLimit)
+
+                              // ── 100x "See more" / "See less" Option ───────────────────
+                              if (_sortedProductResults.length > 3)
                                 SliverToBoxAdapter(
                                   child: Padding(
-                                    padding: const EdgeInsets.only(
-                                        top: 8, bottom: 8),
+                                    padding: const EdgeInsets.only(top: 8, bottom: 8),
                                     child: Center(
-                                      child: TextButton(
-                                        onPressed: () => setState(() =>
-                                            _searchProductsDisplayLimit += 20),
-                                        style: TextButton.styleFrom(
+                                      child: InkWell(
+                                        onTap: () {
+                                          SensoryHaptics.light();
+                                          setState(() {
+                                            if (_searchProductsDisplayLimit <= 3) {
+                                              _searchProductsDisplayLimit =
+                                                  _sortedProductResults.length;
+                                            } else {
+                                              _searchProductsDisplayLimit = 3;
+                                            }
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 24, vertical: 12),
-                                          backgroundColor: isDark
-                                              ? Colors.white
-                                                  .withValues(alpha: 0.05)
-                                              : AppColors.primary
-                                                  .withValues(alpha: 0.05),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(20)),
-                                        ),
-                                        child: Text(
-                                          'Load more items',
-                                          style: GoogleFonts.outfit(
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.primary,
+                                              horizontal: 20, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? Colors.white.withValues(alpha: 0.08)
+                                                : AppColors.primary.withValues(alpha: 0.08),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: AppColors.primary.withValues(alpha: 0.3),
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                _searchProductsDisplayLimit <= 3
+                                                    ? 'See more (${_sortedProductResults.length - 3} more) ▾'
+                                                    : 'See less ▴',
+                                                style: GoogleFonts.outfit(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 13,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              const SliverToBoxAdapter(
-                                  child: SizedBox(height: 16)),
+                              const SliverToBoxAdapter(child: SizedBox(height: 12)),
                             ],
 
-                            // Shops below products
+                            // ── Under "See more": The Restaurant Itself! ──────────────
                             if (_sortedShopResults.isNotEmpty) ...[
                               SliverToBoxAdapter(
                                 child: Padding(
-                                  padding:
-                                      const EdgeInsets.only(bottom: 12, top: 4),
+                                  padding: const EdgeInsets.only(bottom: 12, top: 4),
                                   child: Row(
                                     children: [
                                       Container(
@@ -3315,7 +3418,61 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                               borderRadius:
                                                   BorderRadius.circular(2))),
                                       const SizedBox(width: 8),
-                                      Text('Shops & Restaurants',
+                                      Text(
+                                          AppCategories.groupFor(_sortedShopResults.first.category) ==
+                                                  CategoryGroup.food
+                                              ? 'Restaurant'
+                                              : 'Shop & Store',
+                                          style: GoogleFonts.outfit(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : AppColors.textPrimary)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: SizedBox(
+                                    height: 280,
+                                    child: RepaintBoundary(
+                                      key: ValueKey('search_top_shop_${_sortedShopResults.first.id}'),
+                                      child: AppCategories.groupFor(_sortedShopResults.first.category) ==
+                                              CategoryGroup.food
+                                          ? RestaurantShopCard(
+                                              shop: _sortedShopResults.first,
+                                              onTap: () =>
+                                                  showRestaurantDashboardSheet(
+                                                      context, _sortedShopResults.first.id))
+                                          : ShopCard(
+                                              shop: _sortedShopResults.first,
+                                              onTap: () => showShopDetailSheet(
+                                                  context, _sortedShopResults.first.id)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+
+                            // ── Other Nearby Places (if any) ─────────────────────────
+                            if (_sortedShopResults.length > 1) ...[
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 12, top: 4),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                          width: 4,
+                                          height: 18,
+                                          decoration: BoxDecoration(
+                                              color: AppColors.secondary,
+                                              borderRadius:
+                                                  BorderRadius.circular(2))),
+                                      const SizedBox(width: 8),
+                                      Text('Other Places Near You',
                                           style: GoogleFonts.outfit(
                                               fontSize: 16,
                                               fontWeight: FontWeight.w700,
@@ -3331,7 +3488,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                                 .withValues(alpha: 0.1),
                                             borderRadius:
                                                 BorderRadius.circular(10)),
-                                        child: Text('${_sortedShopResults.length}',
+                                        child: Text('${_sortedShopResults.length - 1}',
                                             style: GoogleFonts.outfit(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w700,
@@ -3342,12 +3499,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 ),
                               ),
                               SliverList.builder(
-                                itemCount: _sortedShopResults.length >
-                                        _searchShopsDisplayLimit
-                                    ? _searchShopsDisplayLimit
-                                    : _sortedShopResults.length,
+                                itemCount: math.min(
+                                  _sortedShopResults.length - 1,
+                                  _searchShopsDisplayLimit,
+                                ),
                                 itemBuilder: (context, index) {
-                                  final shop = _sortedShopResults[index];
+                                  final shop = _sortedShopResults[index + 1];
                                   final isFood =
                                       AppCategories.groupFor(shop.category) ==
                                           CategoryGroup.food;
@@ -3372,33 +3529,32 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   );
                                 },
                               ),
-                              if (_sortedShopResults.length >
+                              if (_sortedShopResults.length - 1 >
                                   _searchShopsDisplayLimit)
                                 SliverToBoxAdapter(
                                   child: Padding(
-                                    padding: const EdgeInsets.only(
-                                        top: 8, bottom: 8),
+                                    padding: const EdgeInsets.only(top: 8, bottom: 8),
                                     child: Center(
                                       child: TextButton(
                                         onPressed: () => setState(() =>
-                                            _searchShopsDisplayLimit += 20),
+                                            _searchShopsDisplayLimit += 10),
                                         style: TextButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 24, vertical: 12),
                                           backgroundColor: isDark
                                               ? Colors.white
                                                   .withValues(alpha: 0.05)
-                                              : AppColors.primary
+                                              : AppColors.secondary
                                                   .withValues(alpha: 0.05),
                                           shape: RoundedRectangleBorder(
                                               borderRadius:
                                                   BorderRadius.circular(20)),
                                         ),
                                         child: Text(
-                                          'Load more shops',
+                                          'Load more stores',
                                           style: GoogleFonts.outfit(
                                             fontWeight: FontWeight.w700,
-                                            color: AppColors.primary,
+                                            color: AppColors.secondary,
                                           ),
                                         ),
                                       ),
