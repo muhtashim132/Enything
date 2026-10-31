@@ -353,3 +353,35 @@ All AI models and developers working on this project MUST adhere to the architec
     - In `_fcmBackgroundHandler` (`lib/main.dart`), customer order updates (`confirmed`, `preparing`, `ready_for_pickup`, `picked_up`, `out_for_delivery`) update the Android Ongoing Progress Notification on the Lock Screen even when the Flutter app is dead, and purge notifications on `delivered` or `cancelled`.
 12. **Cold-Boot & Lifecycle State Restoration**:
     - On app launch or resume, `CustomerMainPage._checkActiveInFlightOrders` checks active in-flight orders and re-attaches the Live Activity and floating pill, ending any zombie activities if the order was delivered while the app was closed.
+
+## 100x Forensic Edge-Case Audit & Remediation (Restaurant Name Search & Product Discovery Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Restaurant Name Search & Product Discovery:
+
+1. **All Products Discovery on Store Name Search**: In `HomePage` (`lib/pages/customer/home_page.dart`), when a query matches any restaurant/shop by name or cuisine, the system MUST query all active, non-deleted products (`is_deleted = false`, `is_available = true`) belonging to that restaurant (`shop_id IN (matchingShopIds)`). Never limit products to items that contain the restaurant name in their product title.
+2. **No Artificial Take(5) Capping on Matching Stores**: When adding products from matching restaurants to `rawProductsByName`, all active products from that restaurant MUST be preserved without artificial `.take(5)` or 50-item truncation caps.
+3. **Initial 3-Product Preview with "See More" Toggle**: Initial product display limit (`_searchProductsDisplayLimit`) is strictly initialized to 3. If more than 3 products exist, render an interactive "See more (X more) ▾" control that expands all products from the restaurant in-place, and provides a "See less ▴" control to collapse back.
+4. **Underneath Restaurant Card Presentation**: Directly underneath the "See more" option (or directly under the products if ≤ 3 items), the matching restaurant itself (`RestaurantShopCard` or `ShopCard`) MUST be rendered prominently at the very top of the restaurant section.
+5. **Exact Restaurant Name Match Prioritization**: In `_computeSortedShopResults()`, shops whose name directly matches the search query or search terms MUST be prioritized to index 0 (top of the shop list), outranking distant or closer unrelated stores.
+
+## 100x Forensic Edge-Case Audit & Remediation (App Performance & Google Play Console Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for App Performance & Google Play Console Compliance:
+
+1. **Edge-to-Edge Android 15 (API 35) Compliance**:
+   - In `styles.xml` across all resource qualifiers (`values/`, `values-night/`, `values-v31/`, `values-night-v31/`), themes inherit from `Theme.AppCompat.*NoActionBar` with transparent system bars (`android:navigationBarColor`, `android:statusBarColor` = `@android:color/transparent`).
+   - In `values-v31/` and `values-night-v31/`, contrast enforcement is disabled (`enforceNavigationBarContrast = false`, `enforceStatusBarContrast = false`) to prevent system-drawn scrims and let Flutter handle drawing.
+   - In `MainActivity.kt`, `WindowCompat.setDecorFitsSystemWindows(window, false)` handles system window insets.
+   - In `main.dart`, `SystemUiOverlayStyle` MUST NOT set deprecated `systemNavigationBarColor: Colors.white`; use `systemNavigationBarContrastEnforced: false`.
+2. **Large Screen, Foldable & Tablet Support**:
+   - `SystemChrome.setPreferredOrientations` MUST NOT lock orientation to `DeviceOrientation.portraitUp`. All screen orientations and fold states are permitted.
+   - `AndroidManifest.xml` must declare `android:resizeableActivity="true"`, configure `<supports-screens>` for small, normal, large, and xlarge screens, and include `navigation|touchscreen` in `android:configChanges`.
+3. **R8 Full Mode & Resource Optimization**:
+   - In `android/gradle.properties`, `android.enableR8.fullMode=true` and `android.enableResourceOptimizations=true` must remain enabled.
+   - In `android/app/proguard-rules.pro`, never disable R8 method inlining (`-optimizations !method/inlining/` is strictly prohibited); use `-optimizationpasses 5` to enable multi-pass dead code elimination and inlining.
+4. **Zero-Latency Asset Font Loading**:
+   - In `main.dart`, `GoogleFonts.config.allowRuntimeFetching = false`. All fonts (`Outfit`, `Inter`) must be bundled locally in `pubspec.yaml` assets to prevent runtime HTTP font fetching delays and UI freezes on cold start.
+5. **PostgREST Single-Call `.or()` Pattern Strictness**:
+   - In all Supabase product/shop queries, NEVER chain multiple `.or()` calls in a loop. Chaining `.or()` in PostgREST applies `AND` logic between chains, resulting in 0 matches for multi-term queries. All OR clauses across terms must be merged into a single `.or(orParts.join(','))` call.
+6. **Homepage In-Memory Feed Cache**:
+   - In `CustomerHomeViewState` (`lib/pages/customer/home_page.dart`), maintain a 5-minute in-memory feed cache (`_cachedShops`, `_cachedProducts`, `_cachedProductShops`, `_cacheTimestamp`) to deliver instant 0ms renders on GPS micro-updates and navigation pop events without redundant network round trips.
+7. **Animation & Ticker Optimization**:
+   - Micro-scrolling tickers (e.g., `_trendingScrollTimer`) must use intervals of >= 50ms (e.g. 60ms) rather than 30ms or unthrottled timers to prevent main thread starvation and reduce battery and CPU overhead.

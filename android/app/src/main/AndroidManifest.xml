@@ -24,6 +24,15 @@
     <!-- Android 13+: required for file_picker to access audio files from device storage -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
 
+    <!-- Large Screen, Tablet & Foldable Support for Google Play Console -->
+    <supports-screens
+        android:smallScreens="true"
+        android:normalScreens="true"
+        android:largeScreens="true"
+        android:xlargeScreens="true"
+        android:anyDensity="true"
+        android:resizeable="true" />
+
     <application
         android:label="Enything"
         android:name="${applicationName}"
