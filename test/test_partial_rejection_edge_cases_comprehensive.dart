@@ -1,15 +1,13 @@
 import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:enythingmobilenew/models/order_model.dart';
-import 'package:enythingmobilenew/models/shop_model.dart';
-import 'package:enythingmobilenew/config/tax_config.dart';
-import 'package:enythingmobilenew/utils/delivery_calculator.dart';
 import 'package:enythingmobilenew/providers/cart_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('100x Comprehensive Partial Rejection & Multi-Shop Recalculation Suite', () {
+  group('100x Comprehensive Partial Rejection & Multi-Shop Recalculation Suite',
+      () {
     const terminalRejectionStatuses = [
       'cancelled',
       'seller_rejected',
@@ -80,7 +78,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 1: 2-Shop Order -> Shop 1 (Base Shop) Rejects
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 1: 2-Shop Order -> Shop 1 (Base Shop) Rejects -> Shop 2 promoted to Base Shop', () {
+    test(
+        'Test 1: 2-Shop Order -> Shop 1 (Base Shop) Rejects -> Shop 2 promoted to Base Shop',
+        () {
       final shop1Initial = buildTestOrder(
         id: 'ord-1',
         shopId: 'shop-1',
@@ -132,7 +132,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 2: 2-Shop Order -> Shop 2 (Leg Shop) Rejects
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 2: 2-Shop Order -> Shop 2 (Leg Shop) Rejects -> Shop 1 retains Base Fee', () {
+    test(
+        'Test 2: 2-Shop Order -> Shop 2 (Leg Shop) Rejects -> Shop 1 retains Base Fee',
+        () {
       final shop1 = buildTestOrder(
         id: 'ord-1',
         shopId: 'shop-1',
@@ -156,14 +158,17 @@ void main() {
       expect(shop1.platformFee, equals(5.0));
       expect(shop1.multiShopSurcharge, equals(0.0));
 
-      final refund = (shop1.grandTotalCollected + shop2.grandTotalCollected) - 225.0;
+      final refund =
+          (shop1.grandTotalCollected + shop2.grandTotalCollected) - 225.0;
       expect(refund, equals(170.0));
     });
 
     // ─────────────────────────────────────────────────────────────────────────
     // Test 3: 3-Shop Order -> 2 Shops Reject (Shop 1 & Shop 2)
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 3: 3-Shop Order -> 2 Shops Reject -> Shop 3 promoted to sole Base Shop', () {
+    test(
+        'Test 3: 3-Shop Order -> 2 Shops Reject -> Shop 3 promoted to sole Base Shop',
+        () {
       final shop1 = buildTestOrder(
         id: 'ord-1',
         shopId: 'shop-1',
@@ -209,7 +214,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 4: 3-Shop Order -> Sequential Rejection (Shop 1 then Shop 2)
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 4: Sequential Rejections: Shop 1 rejects -> Shop 2 promoted -> Shop 2 rejects -> Shop 3 promoted', () {
+    test(
+        'Test 4: Sequential Rejections: Shop 1 rejects -> Shop 2 promoted -> Shop 2 rejects -> Shop 3 promoted',
+        () {
       const step1Shop2Delivery = 20.0;
       const step1Shop2Platform = 5.0;
 
@@ -228,18 +235,36 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 5: All Shops Reject (Complete Rejection)
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 5: All Shops Reject -> 0 active shops, 100% refund pool, zero payout/commission', () {
+    test(
+        'Test 5: All Shops Reject -> 0 active shops, 100% refund pool, zero payout/commission',
+        () {
       final orders = [
-        buildTestOrder(id: '1', shopId: 's1', status: 'seller_rejected', itemTotal: 100, deliveryCharges: 20, multiShopSurcharge: 0, platformFee: 5),
-        buildTestOrder(id: '2', shopId: 's2', status: 'seller_rejected', itemTotal: 100, deliveryCharges: 0, multiShopSurcharge: 20, platformFee: 0),
+        buildTestOrder(
+            id: '1',
+            shopId: 's1',
+            status: 'seller_rejected',
+            itemTotal: 100,
+            deliveryCharges: 20,
+            multiShopSurcharge: 0,
+            platformFee: 5),
+        buildTestOrder(
+            id: '2',
+            shopId: 's2',
+            status: 'seller_rejected',
+            itemTotal: 100,
+            deliveryCharges: 0,
+            multiShopSurcharge: 20,
+            platformFee: 0),
       ];
 
-      final activeOrders = orders.where((o) => !terminalRejectionStatuses.contains(o.status)).toList();
+      final activeOrders = orders
+          .where((o) => !terminalRejectionStatuses.contains(o.status))
+          .toList();
       expect(activeOrders.isEmpty, isTrue);
 
       const double totalOriginalPaid = 125.0 + 120.0;
       const double activeGrandTotal = 0.0;
-      final double totalRefund = totalOriginalPaid - activeGrandTotal;
+      const double totalRefund = totalOriginalPaid - activeGrandTotal;
 
       expect(totalRefund, equals(245.0));
     });
@@ -247,15 +272,19 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 6: Adding 1 Replacement Shop -> Leg Distance Surcharge
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 6: Replacement Order with Surviving Active Shop -> Surcharge added, Base Fee retained', () {
+    test(
+        'Test 6: Replacement Order with Surviving Active Shop -> Surcharge added, Base Fee retained',
+        () {
       final activeShopIds = {'shop-2'};
       const isReplacementOrder = true;
       final legSurcharges = [20.0];
 
       const shopIndex = 0;
       final isExtraLeg = isReplacementOrder && activeShopIds.isNotEmpty;
-      final double currentLegSurcharge = (shopIndex < legSurcharges.length) ? legSurcharges[shopIndex] : 0.0;
-      final double shopSurcharge = (shopIndex == 0 && !isExtraLeg) ? 0.0 : currentLegSurcharge;
+      final double currentLegSurcharge =
+          (shopIndex < legSurcharges.length) ? legSurcharges[shopIndex] : 0.0;
+      final double shopSurcharge =
+          (shopIndex == 0 && !isExtraLeg) ? 0.0 : currentLegSurcharge;
       final double shopBaseFee = (shopIndex == 0)
           ? (0.0 + 0.0 + 0.0 + (isExtraLeg ? currentLegSurcharge : 0.0))
           : currentLegSurcharge;
@@ -267,7 +296,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 7: Adding 2 Replacement Shops -> Sequential Leg Surcharges
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 7: Adding 2 Replacement Shops -> Sequential leg surcharges correctly attributed', () {
+    test(
+        'Test 7: Adding 2 Replacement Shops -> Sequential leg surcharges correctly attributed',
+        () {
       final activeShopIds = {'shop-2'};
       const isReplacementOrder = true;
       final legSurcharges = [20.0, 40.0];
@@ -289,7 +320,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 8: Cascading Rejection Banner Logic
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 8: Cascading Rejection: Shop 1 replaced -> Shop 2 rejects -> banner correctly displays', () {
+    test(
+        'Test 8: Cascading Rejection: Shop 1 replaced -> Shop 2 rejects -> banner correctly displays',
+        () {
       final orders = [
         buildTestOrder(
           id: 'ord-1',
@@ -325,7 +358,8 @@ void main() {
       final hasUnhandledRejection = orders.any((o) =>
           terminalRejectionStatuses.contains(o.status) &&
           !(o.cancelledReason?.startsWith('customer') ?? false));
-      final hasActive = orders.any((o) => !terminalRejectionStatuses.contains(o.status));
+      final hasActive =
+          orders.any((o) => !terminalRejectionStatuses.contains(o.status));
       final fortifiedHasPartialRejection = hasUnhandledRejection && hasActive;
 
       expect(fortifiedHasPartialRejection, isTrue);
@@ -334,7 +368,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 9: Coupon Boundary Recalculation
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 9: Coupon boundary: Subtotal drops below min_order_amount -> coupon revoked', () {
+    test(
+        'Test 9: Coupon boundary: Subtotal drops below min_order_amount -> coupon revoked',
+        () {
       const couponMinOrder = 500.0;
       const couponDiscount = 50.0;
 
@@ -342,18 +378,22 @@ void main() {
       expect(initialSubtotal >= couponMinOrder, isTrue);
 
       const activeSubtotal = 300.0;
-      final effectiveCoupon = (activeSubtotal >= couponMinOrder) ? couponDiscount : 0.0;
+      const effectiveCoupon =
+          (activeSubtotal >= couponMinOrder) ? couponDiscount : 0.0;
       expect(effectiveCoupon, equals(0.0));
 
-      final recoveredSubtotal = activeSubtotal + 250.0;
-      final recoveredCoupon = (recoveredSubtotal >= couponMinOrder) ? couponDiscount : 0.0;
+      const recoveredSubtotal = activeSubtotal + 250.0;
+      const recoveredCoupon =
+          (recoveredSubtotal >= couponMinOrder) ? couponDiscount : 0.0;
       expect(recoveredCoupon, equals(50.0));
     });
 
     // ─────────────────────────────────────────────────────────────────────────
     // Test 10: Small Cart & Heavy Order Fee Transitions
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 10: Dynamic Small Cart & Heavy Order Fee transitions on rejection and replacement', () {
+    test(
+        'Test 10: Dynamic Small Cart & Heavy Order Fee transitions on rejection and replacement',
+        () {
       const smallCartThreshold = 99.0;
       const smallCartFeeRate = 15.0;
       const heavyOrderThreshold = 10.0;
@@ -362,15 +402,20 @@ void main() {
       double subtotal = 150.0;
       double weight = 12.0;
 
-      double smallCartFee = (subtotal < smallCartThreshold) ? smallCartFeeRate : 0.0;
-      double heavyFee = (weight > heavyOrderThreshold) ? (weight - heavyOrderThreshold).ceil() * heavyFeePerKg : 0.0;
+      double smallCartFee =
+          (subtotal < smallCartThreshold) ? smallCartFeeRate : 0.0;
+      double heavyFee = (weight > heavyOrderThreshold)
+          ? (weight - heavyOrderThreshold).ceil() * heavyFeePerKg
+          : 0.0;
       expect(smallCartFee, equals(0.0));
       expect(heavyFee, equals(20.0));
 
       subtotal = 80.0;
       weight = 4.0;
       smallCartFee = (subtotal < smallCartThreshold) ? smallCartFeeRate : 0.0;
-      heavyFee = (weight > heavyOrderThreshold) ? (weight - heavyOrderThreshold).ceil() * heavyFeePerKg : 0.0;
+      heavyFee = (weight > heavyOrderThreshold)
+          ? (weight - heavyOrderThreshold).ceil() * heavyFeePerKg
+          : 0.0;
 
       expect(smallCartFee, equals(15.0));
       expect(heavyFee, equals(0.0));
@@ -378,7 +423,9 @@ void main() {
       subtotal = 130.0;
       weight = 12.0;
       smallCartFee = (subtotal < smallCartThreshold) ? smallCartFeeRate : 0.0;
-      heavyFee = (weight > heavyOrderThreshold) ? (weight - heavyOrderThreshold).ceil() * heavyFeePerKg : 0.0;
+      heavyFee = (weight > heavyOrderThreshold)
+          ? (weight - heavyOrderThreshold).ceil() * heavyFeePerKg
+          : 0.0;
 
       expect(smallCartFee, equals(0.0));
       expect(heavyFee, equals(20.0));
@@ -387,13 +434,15 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 11: Seller Payout & Gateway Deduction Financial Integrity
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 11: Gateway deduction formula & seller payout zeroing on cancellation', () {
+    test(
+        'Test 11: Gateway deduction formula & seller payout zeroing on cancellation',
+        () {
       const grandTotal = 250.0;
-      final gatewayDeduction = grandTotal * 0.02 * 1.18;
+      const gatewayDeduction = grandTotal * 0.02 * 1.18;
       expect(gatewayDeduction, closeTo(5.90, 0.01));
 
       const cancelledGrandTotal = 0.0;
-      final cancelledGatewayDeduction = cancelledGrandTotal * 0.02 * 1.18;
+      const cancelledGatewayDeduction = cancelledGrandTotal * 0.02 * 1.18;
       const cancelledSellerPayout = 0.0;
       const cancelledCommission = 0.0;
 
@@ -405,10 +454,26 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 12: Atomic Single Group Cancellation on Timeout
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 12: Atomic cancellation flags p_cancel_entire_group=true to avoid double rebalances', () {
+    test(
+        'Test 12: Atomic cancellation flags p_cancel_entire_group=true to avoid double rebalances',
+        () {
       final cancellableOrders = [
-        buildTestOrder(id: '1', shopId: 's1', status: 'awaiting_acceptance', itemTotal: 100, deliveryCharges: 20, multiShopSurcharge: 0, platformFee: 5),
-        buildTestOrder(id: '2', shopId: 's2', status: 'awaiting_acceptance', itemTotal: 100, deliveryCharges: 0, multiShopSurcharge: 20, platformFee: 0),
+        buildTestOrder(
+            id: '1',
+            shopId: 's1',
+            status: 'awaiting_acceptance',
+            itemTotal: 100,
+            deliveryCharges: 20,
+            multiShopSurcharge: 0,
+            platformFee: 5),
+        buildTestOrder(
+            id: '2',
+            shopId: 's2',
+            status: 'awaiting_acceptance',
+            itemTotal: 100,
+            deliveryCharges: 0,
+            multiShopSurcharge: 20,
+            platformFee: 0),
       ];
 
       final primaryOrderId = cancellableOrders.first.id;
@@ -425,7 +490,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 13: Cart Pollution Prevention
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 13: clearPendingReplacement clears pendingCartGroupId to prevent cart pollution', () {
+    test(
+        'Test 13: clearPendingReplacement clears pendingCartGroupId to prevent cart pollution',
+        () {
       final cart = CartProvider();
       cart.setPendingCartGroupId('stale-group-id-123');
       cart.setPendingOrderIdToCancel('stale-order-id-456');
@@ -442,9 +509,18 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 14: Banner Auto-Dismiss When All Active Shops Reach Confirmed
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 14: Auto-resolve banner when all remaining active shops reach confirmed+', () {
+    test(
+        'Test 14: Auto-resolve banner when all remaining active shops reach confirmed+',
+        () {
       final activeOrders = [
-        buildTestOrder(id: '2', shopId: 's2', status: 'confirmed', itemTotal: 150, deliveryCharges: 20, multiShopSurcharge: 0, platformFee: 5),
+        buildTestOrder(
+            id: '2',
+            shopId: 's2',
+            status: 'confirmed',
+            itemTotal: 150,
+            deliveryCharges: 20,
+            multiShopSurcharge: 0,
+            platformFee: 5),
       ];
 
       final safeStatuses = [
@@ -465,7 +541,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // Test 15: SharedPreferences Crash Recovery / Backend Truth Check
     // ─────────────────────────────────────────────────────────────────────────
-    test('Test 15: Backend truth check detects all rejected orders are customer-handled and skips timer', () {
+    test(
+        'Test 15: Backend truth check detects all rejected orders are customer-handled and skips timer',
+        () {
       final orders = [
         buildTestOrder(
           id: '1',
@@ -488,9 +566,11 @@ void main() {
         ),
       ];
 
-      final unhandledRejections = orders.where((o) =>
-          terminalRejectionStatuses.contains(o.status) &&
-          !(o.cancelledReason?.startsWith('customer') ?? false)).toList();
+      final unhandledRejections = orders
+          .where((o) =>
+              terminalRejectionStatuses.contains(o.status) &&
+              !(o.cancelledReason?.startsWith('customer') ?? false))
+          .toList();
 
       expect(unhandledRejections.isEmpty, isTrue);
     });

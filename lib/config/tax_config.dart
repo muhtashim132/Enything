@@ -156,6 +156,8 @@ class TaxConfig {
 
     // ── Grocery / Organic ─────────────────────────────────────────────────────
     'Grocery': 0.05, // 5% blended (staples 5%, loose items 0%)
+    'Grocerylm': 0.05, // 5% grocery low margin
+    'Grocery (Low Margin)': 0.05,
     'Organic': 0.05,
     'Supermarket / Hypermarket':
         0.05, // 5% grocery blended [Sept 2025 — new category]

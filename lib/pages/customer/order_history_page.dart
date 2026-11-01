@@ -602,14 +602,17 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                             if (_orders.isNotEmpty) ...[
                               if (quotes.isNotEmpty)
                                 Padding(
-                                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 10),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(0, 4, 0, 10),
                                   child: Text(
                                     'FOOD & STORE ORDERS',
                                     style: GoogleFonts.outfit(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 1.0,
-                                      color: isDark ? Colors.white38 : AppColors.textSecondary,
+                                      color: isDark
+                                          ? Colors.white38
+                                          : AppColors.textSecondary,
                                     ),
                                   ),
                                 ),
@@ -618,7 +621,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                                 const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 20),
                                   child: Center(
-                                    child: CircularProgressIndicator(color: AppColors.primary),
+                                    child: CircularProgressIndicator(
+                                        color: AppColors.primary),
                                   ),
                                 ),
                             ],
@@ -901,10 +905,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.2 : 0.12),
+              color: const Color(0xFF10B981)
+                  .withValues(alpha: isDark ? 0.2 : 0.12),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Icon(Icons.celebration_rounded, color: Color(0xFF10B981), size: 14),
+            child: const Icon(Icons.celebration_rounded,
+                color: Color(0xFF10B981), size: 14),
           ),
           const SizedBox(width: 8),
           Text(
@@ -942,7 +948,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
     final isPending = quote.quoteStatus == 'pending_review';
     final isAccepted = quote.quoteStatus == 'customer_accepted';
     final isPaid = quote.quoteStatus == 'paid';
-    final isDeclined = quote.quoteStatus == 'declined' || quote.quoteStatus == 'customer_rejected';
+    final isDeclined = quote.quoteStatus == 'declined' ||
+        quote.quoteStatus == 'customer_rejected';
 
     Color statusColor;
     String statusLabel;
@@ -1003,7 +1010,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
-            if (isPaid && quote.resultingOrderId != null && quote.resultingOrderId!.isNotEmpty) {
+            if (isPaid &&
+                quote.resultingOrderId != null &&
+                quote.resultingOrderId!.isNotEmpty) {
               Navigator.pushNamed(
                 context,
                 AppRoutes.bulkOrderTracking,
@@ -1027,7 +1036,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                   children: [
                     Expanded(
                       child: Text(
-                        quote.eventName.isNotEmpty ? quote.eventName : 'Catering & Event Quote',
+                        quote.eventName.isNotEmpty
+                            ? quote.eventName
+                            : 'Catering & Event Quote',
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -1038,7 +1049,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
@@ -1066,25 +1078,29 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                   children: [
                     Icon(Icons.people_outline,
                         size: 14,
-                        color: isDark ? Colors.white38 : AppColors.textSecondary),
+                        color:
+                            isDark ? Colors.white38 : AppColors.textSecondary),
                     const SizedBox(width: 4),
                     Text(
                       '${quote.estimatedGuestCount} guests',
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color: isDark ? Colors.white60 : AppColors.textSecondary,
+                        color:
+                            isDark ? Colors.white60 : AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Icon(Icons.calendar_today_outlined,
                         size: 13,
-                        color: isDark ? Colors.white38 : AppColors.textSecondary),
+                        color:
+                            isDark ? Colors.white38 : AppColors.textSecondary),
                     const SizedBox(width: 4),
                     Text(
                       '${quote.eventDate.day}/${quote.eventDate.month}/${quote.eventDate.year}',
                       style: GoogleFonts.outfit(
                         fontSize: 12,
-                        color: isDark ? Colors.white60 : AppColors.textSecondary,
+                        color:
+                            isDark ? Colors.white60 : AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -1103,7 +1119,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                             'Quoted Price',
                             style: GoogleFonts.outfit(
                               fontSize: 11,
-                              color: isDark ? Colors.white38 : AppColors.textSecondary,
+                              color: isDark
+                                  ? Colors.white38
+                                  : AppColors.textSecondary,
                             ),
                           ),
                           Text(
@@ -1122,18 +1140,22 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontStyle: FontStyle.italic,
-                          color: isDark ? Colors.white38 : AppColors.textSecondary,
+                          color:
+                              isDark ? Colors.white38 : AppColors.textSecondary,
                         ),
                       ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 7),
                       decoration: BoxDecoration(
                         gradient: isQuoted
                             ? const LinearGradient(
                                 colors: [Color(0xFF10B981), Color(0xFF059669)])
                             : (isPaid
-                                ? const LinearGradient(
-                                    colors: [Color(0xFF6366F1), Color(0xFF4F46E5)])
+                                ? const LinearGradient(colors: [
+                                    Color(0xFF6366F1),
+                                    Color(0xFF4F46E5)
+                                  ])
                                 : null),
                         color: (isQuoted || isPaid)
                             ? null
@@ -1152,7 +1174,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                               fontWeight: FontWeight.w700,
                               color: (isQuoted || isPaid)
                                   ? Colors.white
-                                  : (isDark ? Colors.white70 : AppColors.textPrimary),
+                                  : (isDark
+                                      ? Colors.white70
+                                      : AppColors.textPrimary),
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -1161,7 +1185,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
                             size: 14,
                             color: (isQuoted || isPaid)
                                 ? Colors.white
-                                : (isDark ? Colors.white70 : AppColors.textPrimary),
+                                : (isDark
+                                    ? Colors.white70
+                                    : AppColors.textPrimary),
                           ),
                         ],
                       ),

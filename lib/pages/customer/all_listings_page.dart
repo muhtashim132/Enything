@@ -14,6 +14,7 @@ import '../../providers/location_provider.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/delivery_calculator.dart';
+import '../../utils/demographic_utils.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
@@ -128,6 +129,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
     'Grocery': [
       'grocery',
       'groceries',
+      'grocerylm',
+      'grocery low margin',
+      'low margin grocery',
       'essentials',
       'supermarket',
       'hypermarket',
@@ -260,7 +264,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
     if (lower.isEmpty) return false;
 
     final title = _pageTitle.toLowerCase();
-    if (title == lower || (lower.length >= 4 && title.contains(lower))) return true;
+    if (title == lower || (lower.length >= 4 && title.contains(lower)))
+      return true;
 
     // Check if query directly references an entire shop name alone
     for (final s in widget.shops) {
@@ -278,7 +283,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
       }
     }
 
-    final terms = lower.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    final terms =
+        lower.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
     if (terms.isEmpty) return false;
 
     for (final entry in _departmentKeywords.entries) {
@@ -290,8 +296,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
                 entry.value.any((k) => cLower.contains(k));
           }) ??
           false;
-      final inTitle = title.contains(deptKey) ||
-          entry.value.any((k) => title.contains(k));
+      final inTitle =
+          title.contains(deptKey) || entry.value.any((k) => title.contains(k));
       if (inFilter || inTitle || entry.key == 'Popular') {
         if (entry.value.contains(lower)) return true;
 
@@ -335,10 +341,12 @@ class _AllListingsPageState extends State<AllListingsPage> {
         };
         dynamic resp;
         try {
-          resp = await Supabase.instance.client.rpc('get_nearby_shops', params: params);
+          resp = await Supabase.instance.client
+              .rpc('get_nearby_shops', params: params);
         } catch (_) {
           // Resilient fallback to search_shops_geospatial (single canonical signature)
-          resp = await Supabase.instance.client.rpc('search_shops_geospatial', params: {
+          resp = await Supabase.instance.client
+              .rpc('search_shops_geospatial', params: {
             'p_lat': loc.currentLocation!.latitude,
             'p_lng': loc.currentLocation!.longitude,
             'p_query': null,
@@ -371,19 +379,23 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
     // 2. From shops already cached in _shopsMap, filtering strictly by delivery radius & category
     if (_shopsMap.isNotEmpty) {
-      final lowerFilters = widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty
+      final lowerFilters = widget.categoryFilter != null &&
+              widget.categoryFilter!.isNotEmpty
           ? widget.categoryFilter!.map((c) => c.trim().toLowerCase()).toSet()
           : null;
 
       return _shopsMap.values
           .where((s) {
             if (lowerFilters != null) {
-              final matches = lowerFilters.contains(s.category.trim().toLowerCase()) ||
-                  s.categories.any((c) => lowerFilters.contains(c.trim().toLowerCase()));
+              final matches =
+                  lowerFilters.contains(s.category.trim().toLowerCase()) ||
+                      s.categories.any(
+                          (c) => lowerFilters.contains(c.trim().toLowerCase()));
               if (!matches) return false;
             }
             if (!loc.hasLocation) return true;
-            if (s.location.latitude == 0 || s.location.longitude == 0) return false;
+            if (s.location.latitude == 0 || s.location.longitude == 0)
+              return false;
             final d = s.distanceKm ?? loc.distanceTo(s.location);
             return DeliveryCalculator.isWithinRange(d);
           })
@@ -470,7 +482,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
       for (final r in rows) {
         final p = ProductModel.fromMap(r as Map<String, dynamic>);
-        if (!existingIds.contains(p.id) && config.isActiveCategory(p.category)) {
+        if (!existingIds.contains(p.id) &&
+            config.isActiveCategory(p.category)) {
           newProducts.add(p);
           existingIds.add(p.id);
           if (!_shopsMap.containsKey(p.shopId)) {
@@ -525,8 +538,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
     setState(() => _isLoadingMore = true);
 
     try {
-      final effectiveConfig =
-          config ?? context.read<PlatformConfigProvider>();
+      final effectiveConfig = config ?? context.read<PlatformConfigProvider>();
       final loc = context.read<LocationProvider>();
       final shopIds = providedShopIds ?? await _resolveNearbyShopIds();
       if (!mounted || shopIds.isEmpty) {
@@ -679,7 +691,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
         for (final r in rows) {
           final p = ProductModel.fromMap(r as Map<String, dynamic>);
-          if (!existingIds.contains(p.id) && config.isActiveCategory(p.category)) {
+          if (!existingIds.contains(p.id) &&
+              config.isActiveCategory(p.category)) {
             newProducts.add(p);
             existingIds.add(p.id);
             if (!_shopsMap.containsKey(p.shopId)) {
@@ -715,7 +728,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
         if (mounted && _searchQuery == trimmed) {
           setState(() {
             _allProducts.addAll(newProducts);
-            _totalAvailableProducts = math.max(_totalAvailableProducts, _allProducts.length);
+            _totalAvailableProducts =
+                math.max(_totalAvailableProducts, _allProducts.length);
             _isSearchingRemote = false;
             _invalidateSortMemo();
           });
@@ -741,13 +755,14 @@ class _AllListingsPageState extends State<AllListingsPage> {
       final terms = specificTerms.isNotEmpty ? specificTerms : rawTerms;
 
       for (final term in terms) {
-        q = q.or(
-          'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,category.ilike.%$term%,medicine_type.ilike.%$term%',
-        );
+        if (!DemographicUtils.isDemographicKeyword(term)) {
+          q = q.or(
+            'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,category.ilike.%$term%,medicine_type.ilike.%$term%',
+          );
+        }
       }
 
-      final response =
-          await q.order('rating', ascending: false).limit(500);
+      final response = await q.order('rating', ascending: false).limit(500);
 
       if (!mounted || _searchQuery != trimmed) return;
 
@@ -785,7 +800,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
             _shopsMap[sm.id] = sm;
           }
         } catch (e) {
-          debugPrint('[AllListingsPage] Error fetching search missing shops: $e');
+          debugPrint(
+              '[AllListingsPage] Error fetching search missing shops: $e');
         }
       }
 
@@ -921,16 +937,24 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
   List<ProductModel> _computeSortedProducts() {
     final loc = context.read<LocationProvider>();
-    final lowerFilters = widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty
-        ? widget.categoryFilter!.map((c) => c.trim().toLowerCase()).toSet()
-        : null;
+    final lowerFilters =
+        widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty
+            ? widget.categoryFilter!.map((c) => c.trim().toLowerCase()).toSet()
+            : null;
 
     var list = _allProducts.where((p) {
       if (lowerFilters != null) {
         final pCat = p.category.trim().toLowerCase();
         final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
-        final isOmnibus = shop != null && AppCategories.isOmnibusStoreCategory(shop.category);
-        final matchesProdCat = lowerFilters.contains(pCat);
+        final isOmnibus =
+            shop != null && AppCategories.isOmnibusStoreCategory(shop.category);
+        final isGroceryFilter = lowerFilters.any((c) =>
+            c.contains('grocery') ||
+            c.contains('supermarket') ||
+            c.contains('hypermarket'));
+        final isGroceryLmProduct = AppCategories.isGroceryLowMargin(pCat);
+        final matchesProdCat = lowerFilters.contains(pCat) ||
+            (isGroceryFilter && isGroceryLmProduct);
 
         if (isOmnibus) {
           // For omnibus multi-department stores, items MUST strictly match the category filter
@@ -939,9 +963,14 @@ class _AllListingsPageState extends State<AllListingsPage> {
         } else {
           final sCat = shop?.category.trim().toLowerCase() ?? '';
           final matchesShopCat = sCat.isNotEmpty && lowerFilters.contains(sCat);
-          final matchesShopMultiCat = shop?.categories.any((c) => lowerFilters.contains(c.trim().toLowerCase())) ?? false;
+          final matchesShopMultiCat = shop?.categories
+                  .any((c) => lowerFilters.contains(c.trim().toLowerCase())) ??
+              false;
           final matchesShopScope = widget.shops.any((s) => s.id == p.shopId);
-          if (!matchesProdCat && !matchesShopCat && !matchesShopMultiCat && !matchesShopScope) {
+          if (!matchesProdCat &&
+              !matchesShopCat &&
+              !matchesShopMultiCat &&
+              !matchesShopScope) {
             return false;
           }
         }
@@ -972,7 +1001,11 @@ class _AllListingsPageState extends State<AllListingsPage> {
           final searchable =
               '${p.name} ${p.description ?? ''} ${p.brand ?? ''} ${p.category} ${p.subCategory ?? ''} ${p.menuCategory ?? ''} ${p.medicineType} ${p.unitType} $variantNames ${p.specialTags.join(' ')} ${shop?.name ?? ''} ${shop?.category ?? ''} $syn'
                   .toLowerCase();
-          return terms.every((t) => searchable.contains(t));
+          return terms.every((t) => DemographicUtils.productMatchesTerm(
+            product: p,
+            term: t,
+            searchableText: searchable,
+          ));
         }).toList();
       }
     }
@@ -1375,8 +1408,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
                           );
                         }
 
-                        final sortIndex =
-                            index - (_hasFoodItems ? 2 : 0);
+                        final sortIndex = index - (_hasFoodItems ? 2 : 0);
                         final f = _sortFilters[sortIndex];
                         final mode = f['mode'] as _AllListingsSortMode;
                         final isSelected = _sortMode == mode;
@@ -1521,9 +1553,8 @@ class _AllListingsPageState extends State<AllListingsPage> {
       return _buildEmptyState(isDark);
     }
 
-    final displayProducts = _searchQuery.isNotEmpty
-        ? sorted
-        : sorted.take(_displayLimit).toList();
+    final displayProducts =
+        _searchQuery.isNotEmpty ? sorted : sorted.take(_displayLimit).toList();
 
     return RefreshIndicator(
       onRefresh: _onRefresh,
@@ -1534,164 +1565,166 @@ class _AllListingsPageState extends State<AllListingsPage> {
           parent: BouncingScrollPhysics(),
         ),
         slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          sliver: SliverLayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = Responsive.getGridCrossAxisCount(context,
-                  mobile: 2, tablet: 4, desktop: 5);
-              const crossAxisSpacing = 16.0;
-              final itemWidth = (constraints.crossAxisExtent -
-                      crossAxisSpacing * (crossAxisCount - 1)) /
-                  crossAxisCount;
-              final itemHeight = itemWidth + 134;
-              final childAspectRatio = itemWidth / itemHeight;
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            sliver: SliverLayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = Responsive.getGridCrossAxisCount(context,
+                    mobile: 2, tablet: 4, desktop: 5);
+                const crossAxisSpacing = 16.0;
+                final itemWidth = (constraints.crossAxisExtent -
+                        crossAxisSpacing * (crossAxisCount - 1)) /
+                    crossAxisCount;
+                final itemHeight = itemWidth + 134;
+                final childAspectRatio = itemWidth / itemHeight;
 
-              return SliverGrid.builder(
-                addAutomaticKeepAlives: false,
-                addRepaintBoundaries: true,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  childAspectRatio: childAspectRatio,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: crossAxisSpacing,
-                ),
-                itemCount: displayProducts.length,
-                itemBuilder: (_, i) {
-                  final product = displayProducts[i];
-                  final shop =
-                      _allProductShops[product.id] ?? _shopsMap[product.shopId];
-                  return RepaintBoundary(
-                    key: ValueKey('all_prod_${product.id}'),
-                    child: ProductCard(product: product, shop: shop),
-                  );
-                },
-              );
-            },
+                return SliverGrid.builder(
+                  addAutomaticKeepAlives: false,
+                  addRepaintBoundaries: true,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: childAspectRatio,
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: crossAxisSpacing,
+                  ),
+                  itemCount: displayProducts.length,
+                  itemBuilder: (_, i) {
+                    final product = displayProducts[i];
+                    final shop = _allProductShops[product.id] ??
+                        _shopsMap[product.shopId];
+                    return RepaintBoundary(
+                      key: ValueKey('all_prod_${product.id}'),
+                      child: ProductCard(product: product, shop: shop),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
-        // ── Load More / Infinite Pagination / End of Feed Footer ─────────────
-        if (sorted.length > _displayLimit || _hasMore)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _isLoadingMore
-                      ? null
-                      : () {
-                          HapticFeedback.lightImpact();
-                          setState(() {
-                            _displayLimit += 20;
-                          });
-                          if (_displayLimit >= sorted.length &&
-                              _hasMore &&
-                              !_isLoadingMore) {
-                            _fetchMoreProductsFromDb();
-                          }
-                        },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : AppColors.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
+          // ── Load More / Infinite Pagination / End of Feed Footer ─────────────
+          if (sorted.length > _displayLimit || _hasMore)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _isLoadingMore
+                        ? null
+                        : () {
+                            HapticFeedback.lightImpact();
+                            setState(() {
+                              _displayLimit += 20;
+                            });
+                            if (_displayLimit >= sorted.length &&
+                                _hasMore &&
+                                !_isLoadingMore) {
+                              _fetchMoreProductsFromDb();
+                            }
+                          },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withValues(alpha: 0.1)
-                            : AppColors.primary.withValues(alpha: 0.2),
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : AppColors.primary.withValues(alpha: 0.2),
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (_isLoadingMore) ...[
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.primary,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_isLoadingMore) ...[
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primary,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Loading more items...',
-                            style: GoogleFonts.outfit(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
+                            const SizedBox(width: 8),
+                            Text(
+                              'Loading more items...',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    isDark ? Colors.white : AppColors.primary,
+                              ),
+                            ),
+                          ] else ...[
+                            Text(
+                              'Load more products',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    isDark ? Colors.white : AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 20,
                               color: isDark ? Colors.white : AppColors.primary,
                             ),
-                          ),
-                        ] else ...[
-                          Text(
-                            'Load more products',
-                            style: GoogleFonts.outfit(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : AppColors.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 20,
-                            color: isDark ? Colors.white : AppColors.primary,
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          )
-        else if (!_hasMore && sorted.isNotEmpty)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-              child: Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 1,
-                      color: isDark ? Colors.white24 : Colors.black12,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        _searchQuery.isNotEmpty
-                            ? 'End of results for "$_searchQuery" 🛍️'
-                            : 'You\'ve reached the end of ${_pageTitle.toLowerCase()} 🛍️',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textSecondary,
+            )
+          else if (!_hasMore && sorted.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 1,
+                        color: isDark ? Colors.white24 : Colors.black12,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          _searchQuery.isNotEmpty
+                              ? 'End of results for "$_searchQuery" 🛍️'
+                              : 'You\'ve reached the end of ${_pageTitle.toLowerCase()} 🛍️',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 24,
-                      height: 1,
-                      color: isDark ? Colors.white24 : Colors.black12,
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 24,
+                        height: 1,
+                        color: isDark ? Colors.white24 : Colors.black12,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   // ── Shops/Restaurants grid ────────────────────────────────────────────────
   Widget _buildShopsBody(bool isDark) {

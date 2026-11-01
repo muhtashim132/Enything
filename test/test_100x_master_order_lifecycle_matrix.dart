@@ -3,19 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:enythingmobilenew/models/order_model.dart';
 import 'package:enythingmobilenew/models/order_group.dart';
-import 'package:enythingmobilenew/models/product_model.dart';
 import 'package:enythingmobilenew/config/tax_config.dart';
-import 'package:enythingmobilenew/config/payment_config.dart';
-import 'package:enythingmobilenew/utils/delivery_calculator.dart';
-import 'package:enythingmobilenew/utils/geo_utils.dart';
-import 'package:enythingmobilenew/utils/weight_engine.dart';
 import 'package:enythingmobilenew/widgets/common/animated_moving_marker.dart';
-import 'package:enythingmobilenew/providers/cart_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('100x MASTER ORDER LIFECYCLE, NOTIFICATION, MAP & CONCURRENCY MATRIX', () {
+  group('100x MASTER ORDER LIFECYCLE, NOTIFICATION, MAP & CONCURRENCY MATRIX',
+      () {
     const terminalRejectionStatuses = [
       'cancelled',
       'seller_rejected',
@@ -61,18 +56,19 @@ void main() {
       DateTime? updatedAt,
       List<OrderItem>? items,
     }) {
-      final grandTotal = grandTotalCollected ?? math.max(
-        0.0,
-        itemTotal +
-            s9_5Gst +
-            nonFoodGst +
-            deliveryCharges +
-            multiShopSurcharge +
-            platformFee +
-            smallCartFee +
-            heavyOrderFee -
-            couponDiscount,
-      );
+      final grandTotal = grandTotalCollected ??
+          math.max(
+            0.0,
+            itemTotal +
+                s9_5Gst +
+                nonFoodGst +
+                deliveryCharges +
+                multiShopSurcharge +
+                platformFee +
+                smallCartFee +
+                heavyOrderFee -
+                couponDiscount,
+          );
 
       return OrderModel(
         id: id,
@@ -104,16 +100,17 @@ void main() {
         arrivedAtShopTime: arrivedAtShopTime,
         createdAt: DateTime.now().subtract(const Duration(minutes: 10)),
         updatedAt: updatedAt ?? DateTime.now(),
-        items: items ?? [
-          OrderItem(
-            id: 'item-$id',
-            productId: 'prod-$id',
-            productName: 'Item for $shopId',
-            price: itemTotal,
-            quantity: 1,
-            weightKg: 1.0,
-          ),
-        ],
+        items: items ??
+            [
+              OrderItem(
+                id: 'item-$id',
+                productId: 'prod-$id',
+                productName: 'Item for $shopId',
+                price: itemTotal,
+                quantity: 1,
+                weightKg: 1.0,
+              ),
+            ],
       );
     }
 
@@ -121,7 +118,9 @@ void main() {
     // 1. Single Shop Restaurant Order: Add-on 5% GST, Base Delivery, Platform Fee,
     //    Rider 80% cut, Seller 95% base - gateway, Admin ledger parity.
     // ─────────────────────────────────────────────────────────────────────────
-    test('1. Single Shop Restaurant Order (5% Section 9(5) GST) Lifecycle & Parity', () {
+    test(
+        '1. Single Shop Restaurant Order (5% Section 9(5) GST) Lifecycle & Parity',
+        () {
       final items = [
         {'category': 'Restaurant', 'price': 400.0, 'quantity': 1},
       ];
@@ -143,10 +142,12 @@ void main() {
       expect(breakdown.itemGrossTotal, 420.0);
       expect(breakdown.s9_5GstToRemit, 20.0); // Enything remits Section 9(5)
       expect(breakdown.nonFoodGstPassThrough, 0.0);
-      expect(breakdown.grandTotal, closeTo(420.0 + 23.60 + 20.0, 0.01)); // ₹463.60
+      expect(
+          breakdown.grandTotal, closeTo(420.0 + 23.60 + 20.0, 0.01)); // ₹463.60
 
       // Gateway deduction (2.36% on grand total)
-      final expectedGateway = breakdown.grandTotal * TaxConfig.effectiveGatewayDeductionPercent;
+      final expectedGateway =
+          breakdown.grandTotal * TaxConfig.effectiveGatewayDeductionPercent;
       expect(breakdown.gatewayDeduction, closeTo(expectedGateway, 0.01));
 
       // Rider share: exactly 80% of ₹20 base = ₹16
@@ -154,8 +155,10 @@ void main() {
 
       // Seller payout: 95% of ₹400 base (₹380) minus seller's gateway share
       const sellerBasePayout = 400.0 * 0.95; // ₹380
-      final sellerGwShare = sellerBasePayout * TaxConfig.effectiveGatewayDeductionPercent;
-      expect(breakdown.sellerPayout, closeTo(sellerBasePayout - sellerGwShare, 0.01));
+      final sellerGwShare =
+          sellerBasePayout * TaxConfig.effectiveGatewayDeductionPercent;
+      expect(breakdown.sellerPayout,
+          closeTo(sellerBasePayout - sellerGwShare, 0.01));
 
       // Notification lifecycle check: Seller buzzer must activate on awaiting_acceptance
       final sellerPendingOrders = <String>{};
@@ -170,7 +173,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // 2. Single Shop Retail / Grocery Order: Non-food 18% GST, Heavy Order Fee (>10kg)
     // ─────────────────────────────────────────────────────────────────────────
-    test('2. Single Shop Retail Order (18% GST, Heavy Order Fee, Small Cart Fee check)', () {
+    test(
+        '2. Single Shop Retail Order (18% GST, Heavy Order Fee, Small Cart Fee check)',
+        () {
       final items = [
         {'category': 'Electronics', 'price': 1200.0, 'quantity': 1},
       ];
@@ -180,7 +185,8 @@ void main() {
       const heavyFee = 20.0;
       const totalDeliveryNet = baseDelivery + heavyFee; // ₹40
       const deliveryCharge = totalDeliveryNet * 1.18; // ₹47.20
-      const riderEarnings = totalDeliveryNet * 0.80; // ₹32.00 (80% of base + heavy)
+      const riderEarnings =
+          totalDeliveryNet * 0.80; // ₹32.00 (80% of base + heavy)
       const platformFee = 20.0;
 
       final breakdown = OrderTaxBreakdown.calculate(
@@ -194,30 +200,37 @@ void main() {
       expect(breakdown.itemBaseSubtotal, 1200.0);
       expect(breakdown.itemGstTotal, 216.0); // 18% GST
       expect(breakdown.s9_5GstToRemit, 0.0);
-      expect(breakdown.nonFoodGstPassThrough, 216.0); // Passed to seller for remittance
-      expect(breakdown.grandTotal, closeTo(1200.0 + 216.0 + 47.20 + 20.0, 0.01)); // ₹1483.20
+      expect(breakdown.nonFoodGstPassThrough,
+          216.0); // Passed to seller for remittance
+      expect(breakdown.grandTotal,
+          closeTo(1200.0 + 216.0 + 47.20 + 20.0, 0.01)); // ₹1483.20
 
       // Rider gets 80% of (base + heavy)
       expect(breakdown.riderEarnings, 32.0);
 
       // Seller payout: Base ₹1200 - 5% commission (₹60) + ₹216 GST passthrough - seller gateway share
       const sellerGross = 1140.0 + 216.0; // ₹1356.00
-      final sellerGwShare = sellerGross * TaxConfig.effectiveGatewayDeductionPercent;
-      expect(breakdown.sellerPayout, closeTo(sellerGross - sellerGwShare, 0.01));
+      final sellerGwShare =
+          sellerGross * TaxConfig.effectiveGatewayDeductionPercent;
+      expect(
+          breakdown.sellerPayout, closeTo(sellerGross - sellerGwShare, 0.01));
     });
 
     // ─────────────────────────────────────────────────────────────────────────
     // 3. 2-Shop Multi-Shop Order: Base Shop + Leg Shop attribution, Route waypoints,
     //    and Synchronous Payment Notification
     // ─────────────────────────────────────────────────────────────────────────
-    test('3. 2-Shop Multi-Shop Order: Inter-Shop Surcharge, Waypoints, and Payment sync', () {
+    test(
+        '3. 2-Shop Multi-Shop Order: Inter-Shop Surcharge, Waypoints, and Payment sync',
+        () {
       const shop1Lat = 34.0837, shop1Lng = 74.7973;
       const shop2Lat = 34.1000, shop2Lng = 74.8200;
       const custLat = 34.1200, custLng = 74.8400;
 
       // Distance between Shop 1 and Shop 2: ~2.75 km -> Ceil(2.75) = 3 km -> Surcharge = 3 * ₹20 = ₹60
       const distCalc = Distance();
-      final interDistKm = distCalc.as(LengthUnit.Kilometer, const LatLng(shop1Lat, shop1Lng), const LatLng(shop2Lat, shop2Lng));
+      final interDistKm = distCalc.as(LengthUnit.Kilometer,
+          const LatLng(shop1Lat, shop1Lng), const LatLng(shop2Lat, shop2Lng));
       final legSurchargeNet = math.max(1, interDistKm.ceil()) * 20.0; // ₹60
       expect(legSurchargeNet, equals(60.0));
 
@@ -246,9 +259,11 @@ void main() {
         itemTotal: 250.0,
         s9_5Gst: 12.5,
         deliveryCharges: 0.0, // Shop 2 has ₹0 base delivery
-        multiShopSurcharge: legSurchargeNet * 1.18, // Shop 2 holds Leg Surcharge: ₹70.80
+        multiShopSurcharge:
+            legSurchargeNet * 1.18, // Shop 2 holds Leg Surcharge: ₹70.80
         platformFee: 0.0,
-        riderEarnings: legSurchargeNet * 0.80, // ₹48.00 (80% of ₹60 leg surcharge)
+        riderEarnings:
+            legSurchargeNet * 0.80, // ₹48.00 (80% of ₹60 leg surcharge)
         shopLat: shop2Lat,
         shopLng: shop2Lng,
         deliveryLat: custLat,
@@ -261,8 +276,12 @@ void main() {
 
       // Combined bill totals
       final totalItems = o1.totalAmount + o2.totalAmount; // ₹550
-      final totalDeliveryGross = o1.deliveryCharges + o2.deliveryCharges + o1.multiShopSurcharge + o2.multiShopSurcharge; // ₹23.60 + ₹70.80 = ₹94.40
-      final totalRiderEarnings = o1.riderEarnings + o2.riderEarnings; // ₹16 + ₹48 = ₹64 (80% of ₹80 total net delivery)
+      final totalDeliveryGross = o1.deliveryCharges +
+          o2.deliveryCharges +
+          o1.multiShopSurcharge +
+          o2.multiShopSurcharge; // ₹23.60 + ₹70.80 = ₹94.40
+      final totalRiderEarnings = o1.riderEarnings +
+          o2.riderEarnings; // ₹16 + ₹48 = ₹64 (80% of ₹80 total net delivery)
       expect(totalDeliveryGross, closeTo(94.40, 0.01));
       expect(totalRiderEarnings, equals(64.0));
 
@@ -275,17 +294,21 @@ void main() {
 
       var o1Accepted = o1.copyWith(sellerAccepted: true);
       var o2Pending = o2.copyWith(sellerAccepted: false);
-      expect(shouldPromptPayment([o1Accepted, o2Pending], true), isFalse); // Still blocked!
+      expect(shouldPromptPayment([o1Accepted, o2Pending], true),
+          isFalse); // Still blocked!
 
       // Seller 2 accepts AND rider accepts -> NOW payment prompt fires!
       var o2Accepted = o2.copyWith(sellerAccepted: true);
-      expect(shouldPromptPayment([o1Accepted, o2Accepted], true), isTrue); // UNBLOCKED!
+      expect(shouldPromptPayment([o1Accepted, o2Accepted], true),
+          isTrue); // UNBLOCKED!
     });
 
     // ─────────────────────────────────────────────────────────────────────────
     // 4. 3-Shop Multi-Shop Order: Sequential Chained Legs, Shop 1 Rejection & Rebalance
     // ─────────────────────────────────────────────────────────────────────────
-    test('4. 3-Shop Order: Shop 1 (Base Shop) Rejection Promotes Shop 2 & Recalculates Leg to Shop 3', () {
+    test(
+        '4. 3-Shop Order: Shop 1 (Base Shop) Rejection Promotes Shop 2 & Recalculates Leg to Shop 3',
+        () {
       // 3 shops in sequence: Shop 1 -> Shop 2 -> Shop 3
       // Initially:
       // Shop 1: Base Delivery ₹20 (+ 18% GST = ₹23.60) + Platform Fee ₹20
@@ -371,18 +394,24 @@ void main() {
         riderEarnings: 16.0,
       );
 
-      final postGroup = OrderGroup('cart-grp-3s', [o1Cancelled, o2Promoted, o3Surviving]);
+      final postGroup =
+          OrderGroup('cart-grp-3s', [o1Cancelled, o2Promoted, o3Surviving]);
       expect(postGroup.activeOrders.length, equals(2));
-      expect(postGroup.activeOrders.first.id, equals('ord-3s-2')); // Shop 2 is now first active
-      expect(postGroup.activeOrders.first.deliveryCharges, closeTo(23.60, 0.01)); // Holds Base Fee
-      expect(postGroup.activeOrders.first.platformFee, equals(20.0)); // Holds Platform Fee
+      expect(postGroup.activeOrders.first.id,
+          equals('ord-3s-2')); // Shop 2 is now first active
+      expect(postGroup.activeOrders.first.deliveryCharges,
+          closeTo(23.60, 0.01)); // Holds Base Fee
+      expect(postGroup.activeOrders.first.platformFee,
+          equals(20.0)); // Holds Platform Fee
 
       // Total active delivery charges = ₹23.60 (Base) + ₹23.60 (Leg surcharge) = ₹47.20
-      final activeDelivery = postGroup.activeOrders.fold<double>(0.0, (sum, o) => sum + o.deliveryCharges + o.multiShopSurcharge);
+      final activeDelivery = postGroup.activeOrders.fold<double>(
+          0.0, (sum, o) => sum + o.deliveryCharges + o.multiShopSurcharge);
       expect(activeDelivery, closeTo(47.20, 0.01));
 
       // Active rider earnings = ₹16.00 + ₹16.00 = ₹32.00 (80% of net ₹40)
-      final activeRiderEarnings = postGroup.activeOrders.fold<double>(0.0, (sum, o) => sum + o.riderEarnings);
+      final activeRiderEarnings = postGroup.activeOrders
+          .fold<double>(0.0, (sum, o) => sum + o.riderEarnings);
       expect(activeRiderEarnings, equals(32.0));
 
       // Cancelled Shop 1 financial ledger check
@@ -394,7 +423,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // 5. 4-Shop Order with 2 Shops Rejecting (Shop 2 & Shop 4 Reject)
     // ─────────────────────────────────────────────────────────────────────────
-    test('5. 4-Shop Order: 2 Shops Reject -> Inter-Shop Distance Recomputed between Shop 1 and Shop 3', () {
+    test(
+        '5. 4-Shop Order: 2 Shops Reject -> Inter-Shop Distance Recomputed between Shop 1 and Shop 3',
+        () {
       final o1 = buildOrder(
         id: 'ord-4s-1',
         customerId: 'cust-1',
@@ -424,7 +455,8 @@ void main() {
         status: 'awaiting_acceptance',
         itemTotal: 250.0,
         deliveryCharges: 0.0,
-        multiShopSurcharge: 47.20, // Recomputed direct distance surcharge from Shop 1 to Shop 3 (2 km = ₹40 * 1.18 = ₹47.20)
+        multiShopSurcharge:
+            47.20, // Recomputed direct distance surcharge from Shop 1 to Shop 3 (2 km = ₹40 * 1.18 = ₹47.20)
         platformFee: 0.0,
         riderEarnings: 32.0, // 80% of ₹40
       );
@@ -442,7 +474,8 @@ void main() {
 
       final group = OrderGroup('cart-grp-4s', [o1, o2, o3, o4]);
       expect(group.activeOrders.length, equals(2));
-      expect(group.activeOrders.map((o) => o.id).toList(), equals(['ord-4s-1', 'ord-4s-3']));
+      expect(group.activeOrders.map((o) => o.id).toList(),
+          equals(['ord-4s-1', 'ord-4s-3']));
 
       // Surviving Shop 1 retains base delivery & platform fee
       expect(group.activeOrders[0].deliveryCharges, closeTo(23.60, 0.01));
@@ -458,7 +491,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // 6. Complete Rejection (All Shops Reject): 100% Refund Pool & Full Ledger Zeroing
     // ─────────────────────────────────────────────────────────────────────────
-    test('6. Complete Rejection: All shops reject -> 0 active, 100% refund, rider released', () {
+    test(
+        '6. Complete Rejection: All shops reject -> 0 active, 100% refund, rider released',
+        () {
       final o1 = buildOrder(
         id: 'ord-all-1',
         customerId: 'cust-1',
@@ -500,7 +535,9 @@ void main() {
     // 7. Live Map Dynamic Tracking: lerpLatLng, calculateBearing, heading smoothing,
     //    and noise thresholds
     // ─────────────────────────────────────────────────────────────────────────
-    test('7. Live Map Dynamic Tracking: coordinate interpolation, heading angle, jitter suppression', () {
+    test(
+        '7. Live Map Dynamic Tracking: coordinate interpolation, heading angle, jitter suppression',
+        () {
       const p1 = LatLng(34.0837, 74.7973); // Srinagar
       const p2 = LatLng(34.0900, 74.8050);
 
@@ -516,21 +553,26 @@ void main() {
 
       // Heading wrap-around across 360/0 degree border
       final angleCross = lerpAngle(355.0, 5.0, 0.5);
-      expect(angleCross, closeTo(0.0, 0.01)); // Interpolates across 0°, not backwards 180°!
+      expect(angleCross,
+          closeTo(0.0, 0.01)); // Interpolates across 0°, not backwards 180°!
 
       // Micro-jitter threshold check: movement < 1.5m ignored to prevent UI flutter
       const jitterDistMeters = 1.2;
-      expect(jitterDistMeters < 1.5, isTrue); // Ignored by SmoothMovingRiderMarkerLayer
+      expect(jitterDistMeters < 1.5,
+          isTrue); // Ignored by SmoothMovingRiderMarkerLayer
 
       // Teleport threshold check: movement > 5000m snaps immediately
       const teleportMeters = 6200.0;
-      expect(teleportMeters > 5000.0, isTrue); // Snaps without sliding across city
+      expect(
+          teleportMeters > 5000.0, isTrue); // Snaps without sliding across city
     });
 
     // ─────────────────────────────────────────────────────────────────────────
     // 8. Push Notification Deduplication Key Deep Edge Case
     // ─────────────────────────────────────────────────────────────────────────
-    test('8. Push Notification Deduplication Key: user_id + order_id + title prevents alert loss', () {
+    test(
+        '8. Push Notification Deduplication Key: user_id + order_id + title prevents alert loss',
+        () {
       // Simulating edge function cache behavior
       final recentPushes = <String, int>{};
 
@@ -549,27 +591,34 @@ void main() {
 
       // Old flawed key: user_id + order_id (ignoring title)
       const flawedKey1 = '${userId}_$orderId';
-      expect(isDuplicatePush(flawedKey1, t0), isFalse); // First push ("Shop Accepted") sent
+      expect(isDuplicatePush(flawedKey1, t0),
+          isFalse); // First push ("Shop Accepted") sent
 
-      final t1 = t0 + 4000; // 4 seconds later
+      const t1 = t0 + 4000; // 4 seconds later
       const flawedKey2 = '${userId}_$orderId'; // Second push ("Pay Now 💳")
       // WITH FLAWED KEY: It gets incorrectly DROPPED!
-      expect(isDuplicatePush(flawedKey2, t1), isTrue); // BUG CONFIRMED: Pay Now push dropped!
+      expect(isDuplicatePush(flawedKey2, t1),
+          isTrue); // BUG CONFIRMED: Pay Now push dropped!
 
       // Reset cache and test NEW 100x fortified key: user_id + order_id + title
       recentPushes.clear();
       const goodKey1 = '${userId}_${orderId}_Shop Accepted!';
       const goodKey2 = '${userId}_${orderId}_✅ Shop & Rider Ready! Pay Now 💳';
 
-      expect(isDuplicatePush(goodKey1, t0), isFalse); // "Shop Accepted" delivered!
-      expect(isDuplicatePush(goodKey2, t1), isFalse); // "Pay Now" ALSO delivered!
-      expect(isDuplicatePush(goodKey1, t1), isTrue);  // Exact same push repeated at t1 is properly suppressed!
+      expect(
+          isDuplicatePush(goodKey1, t0), isFalse); // "Shop Accepted" delivered!
+      expect(
+          isDuplicatePush(goodKey2, t1), isFalse); // "Pay Now" ALSO delivered!
+      expect(isDuplicatePush(goodKey1, t1),
+          isTrue); // Exact same push repeated at t1 is properly suppressed!
     });
 
     // ─────────────────────────────────────────────────────────────────────────
     // 9. HIGH CONCURRENCY STRESS MATRIX: 14 Concurrent Customers, 13 Sellers, 13 Riders
     // ─────────────────────────────────────────────────────────────────────────
-    test('9. High Concurrency Stress Matrix: 14 Customers, 13 Sellers, 13 Riders concurrent execution', () {
+    test(
+        '9. High Concurrency Stress Matrix: 14 Customers, 13 Sellers, 13 Riders concurrent execution',
+        () {
       final customers = List.generate(14, (i) => 'customer-${i + 1}');
       final sellers = List.generate(13, (i) => 'seller-${i + 1}');
       final riders = List.generate(13, (i) => 'rider-${i + 1}');
@@ -597,7 +646,8 @@ void main() {
           const grand = itemBase + foodGst + delivery + platform;
           final gw = grand * TaxConfig.effectiveGatewayDeductionPercent;
           const riderCut = 16.0;
-          final sellerGw = (itemBase * 0.95) * TaxConfig.effectiveGatewayDeductionPercent;
+          final sellerGw =
+              (itemBase * 0.95) * TaxConfig.effectiveGatewayDeductionPercent;
           final sellerCut = (itemBase * 0.95) - sellerGw;
           final platformComm = (itemBase * 0.05) + sellerGw;
 
@@ -720,13 +770,16 @@ void main() {
 
       // Check single-shop financial balance
       expect(totalSystemGrandCollected, greaterThan(0.0));
-      expect(totalSystemRiderEarnings, equals(5 * 16.0)); // 5 single shop orders * ₹16 rider cut
+      expect(totalSystemRiderEarnings,
+          equals(5 * 16.0)); // 5 single shop orders * ₹16 rider cut
     });
 
     // ─────────────────────────────────────────────────────────────────────────
     // 10. BellAlertService Loop Lifecycle & Mute Edge Cases
     // ─────────────────────────────────────────────────────────────────────────
-    test('10. BellAlertService: Order addition, multi-order loop maintenance, and instant silence', () {
+    test(
+        '10. BellAlertService: Order addition, multi-order loop maintenance, and instant silence',
+        () {
       final bellPending = <String>{};
 
       // Order 1 arrives for seller -> start loop
@@ -752,7 +805,9 @@ void main() {
     // ─────────────────────────────────────────────────────────────────────────
     // 11. CustomerOrderMapPage Terminal Status Filter & Polylines Parity
     // ─────────────────────────────────────────────────────────────────────────
-    test('11. CustomerOrderMapPage: Terminal statuses correctly exclude rejected shops from polylines', () {
+    test(
+        '11. CustomerOrderMapPage: Terminal statuses correctly exclude rejected shops from polylines',
+        () {
       final o1 = buildOrder(
         id: 'ord-m-1',
         customerId: 'c1',
@@ -797,16 +852,23 @@ void main() {
       final groupOrders = [o1, o2, o3, o4];
 
       // Filter using the fortified terminal status set
-      final activeShops = groupOrders.where((o) => !terminalRejectionStatuses.contains(o.status)).toList();
+      final activeShops = groupOrders
+          .where((o) => !terminalRejectionStatuses.contains(o.status))
+          .toList();
 
       // Only o1 and o4 should be active! o2 (partner_rejected) and o3 (timeout) must be excluded!
       expect(activeShops.length, equals(2));
-      expect(activeShops.map((o) => o.id).toList(), equals(['ord-m-1', 'ord-m-4']));
+      expect(activeShops.map((o) => o.id).toList(),
+          equals(['ord-m-1', 'ord-m-4']));
 
       // Waypoint routing: Unpicked active stops
-      final unpicked = activeShops.where((o) => o.status != 'picked_up' && o.status != 'out_for_delivery').toList();
+      final unpicked = activeShops
+          .where(
+              (o) => o.status != 'picked_up' && o.status != 'out_for_delivery')
+          .toList();
       expect(unpicked.length, equals(1));
-      expect(unpicked.first.shopId, equals('s4')); // Only shop 4 remains to be visited!
+      expect(unpicked.first.shopId,
+          equals('s4')); // Only shop 4 remains to be visited!
     });
   });
 }

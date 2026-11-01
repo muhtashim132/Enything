@@ -28,6 +28,7 @@ import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
 import '../../config/app_categories.dart';
 import '../../utils/delivery_calculator.dart';
+import '../../utils/demographic_utils.dart';
 import '../../utils/responsive_layout.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
@@ -147,10 +148,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     ],
     'Grocery': [
       'grocery',
+      'grocerylm',
       'milk',
       'bread',
       'eggs',
       'supermarket',
+      'hypermarket',
       'ration',
       'vegetables',
       'fruits',
@@ -455,65 +458,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     return list;
   }
 
-  /// 100x Demographic matcher for feed items (Men/Boys & Women/Girls)
+  /// 100x Demographic matcher for feed items (Men, Women, Boys, Girls, Kids, Unisex)
   bool _matchesDemographic(ProductModel product, String demographic) {
-    if (demographic == 'All') return true;
-
-    final tags = product.specialTags
-        .map((t) => t.trim().toLowerCase().replaceAll('#', ''))
-        .toList();
-
-    if (demographic == 'Men/Boys') {
-      // 1. Direct positive tag matches
-      final hasMenTag = tags.any((t) =>
-          t == 'men' ||
-          t == 'boys' ||
-          t == 'boy' ||
-          t == 'kids' ||
-          t == 'unisex');
-      if (hasMenTag) return true;
-
-      // 2. Strict negative tag matches: if explicitly tagged for Women/Girls, reject
-      final hasWomenTag = tags.any((t) =>
-          t == 'women' ||
-          t == 'girls' ||
-          t == 'girl');
-      if (hasWomenTag) return false;
-
-      // 3. Fallback to name & description keyword analysis for untagged items
-      final text = '${product.name} ${product.description}'.toLowerCase();
-      // Block if text clearly mentions women/girls
-      if (RegExp(r"\b(women|womens|women's|girls|girl's|ladies|lady|female|kurti|saree|lehenga|bra|makeup)\b").hasMatch(text)) {
-        return false;
-      }
-      return RegExp(r"\b(men|mens|men's|boy|boys|boy's|gent|gents|gent's|male)\b").hasMatch(text);
-    } else if (demographic == 'Women/Girls') {
-      // 1. Direct positive tag matches
-      final hasWomenTag = tags.any((t) =>
-          t == 'women' ||
-          t == 'girls' ||
-          t == 'girl' ||
-          t == 'kids' ||
-          t == 'unisex');
-      if (hasWomenTag) return true;
-
-      // 2. Strict negative tag matches: if explicitly tagged for Men/Boys, reject
-      final hasMenTag = tags.any((t) =>
-          t == 'men' ||
-          t == 'boys' ||
-          t == 'boy');
-      if (hasMenTag) return false;
-
-      // 3. Fallback to name & description keyword analysis for untagged items
-      final text = '${product.name} ${product.description}'.toLowerCase();
-      // Block if text clearly mentions men/boys
-      if (RegExp(r"\b(men|mens|men's|boys|boy's|gents|gent's|male)\b").hasMatch(text)) {
-        return false;
-      }
-      return RegExp(r"\b(women|womens|women's|girl|girls|girl's|ladies|lady|female|kurti|saree|lehenga|dress|beauty|cosmetics)\b").hasMatch(text);
-    }
-
-    return true;
+    return DemographicUtils.matchesDemographic(product, demographic);
   }
 
   /// Returns normal product results sorted by the current _sortMode.
@@ -1512,19 +1459,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   if (!matchesSize) return false;
                 }
                 if (_selectedSearchDemographic != 'All') {
-                  final tagsRaw = p['special_tags'];
-                  final List<String> tags = (tagsRaw is List)
-                      ? tagsRaw.map((t) => t.toString().trim()).toList()
-                      : [];
-                  final targetTag = '#$_selectedSearchDemographic';
-                  final allowedTags = <String>[targetTag, '#Unisex'];
-                  if (_selectedSearchDemographic == 'Boys' ||
-                      _selectedSearchDemographic == 'Girls') {
-                    allowedTags.add('#Kids');
-                  } else if (_selectedSearchDemographic == 'Kids') {
-                    allowedTags.addAll(['#Boys', '#Girls']);
+                  final allowedTags = DemographicUtils.getAllowedTags(_selectedSearchDemographic);
+                  if (allowedTags != null) {
+                    final tagsRaw = p['special_tags'];
+                    final List<String> tags = (tagsRaw is List)
+                        ? tagsRaw.map((t) => t.toString().trim()).toList()
+                        : [];
+                    if (!tags.any((t) => allowedTags.contains(t))) return false;
                   }
-                  if (!tags.any((t) => allowedTags.contains(t))) return false;
                 }
                 return true;
               }).toList();
@@ -1551,14 +1493,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
               final orParts = <String>[];
               for (final term in terms) {
-                orParts.add('name.ilike.%$term%');
-                orParts.add('description.ilike.%$term%');
-                orParts.add('brand.ilike.%$term%');
-                orParts.add('category.ilike.%$term%');
-                orParts.add('menu_category.ilike.%$term%');
-                orParts.add('sub_category.ilike.%$term%');
+                if (!DemographicUtils.isDemographicKeyword(term)) {
+                  orParts.add('name.ilike.%$term%');
+                  orParts.add('description.ilike.%$term%');
+                  orParts.add('brand.ilike.%$term%');
+                  orParts.add('category.ilike.%$term%');
+                  orParts.add('menu_category.ilike.%$term%');
+                  orParts.add('sub_category.ilike.%$term%');
+                }
               }
-              q = q.or(orParts.join(','));
+              if (orParts.isNotEmpty) {
+                q = q.or(orParts.join(','));
+              }
 
               final otherProducts = await q;
 
@@ -1567,7 +1513,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   final searchable =
                       '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
                           .toLowerCase();
-                  if (!terms.every((t) => searchable.contains(t))) return false;
+                  final matchesAllTerms = terms.every((t) =>
+                      DemographicUtils.rawProductMatchesTerm(
+                        product: p,
+                        term: t,
+                        searchableText: searchable,
+                      ));
+                  if (!matchesAllTerms) return false;
                 }
                 if (_selectedSizes.isNotEmpty) {
                   final variants = p['variants'] as List<dynamic>? ?? [];
@@ -1578,19 +1530,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   if (!matchesSize) return false;
                 }
                 if (_selectedSearchDemographic != 'All') {
-                  final tagsRaw = p['special_tags'];
-                  final List<String> tags = (tagsRaw is List)
-                      ? tagsRaw.map((t) => t.toString().trim()).toList()
-                      : [];
-                  final targetTag = '#$_selectedSearchDemographic';
-                  final allowedTags = <String>[targetTag, '#Unisex'];
-                  if (_selectedSearchDemographic == 'Boys' ||
-                      _selectedSearchDemographic == 'Girls') {
-                    allowedTags.add('#Kids');
-                  } else if (_selectedSearchDemographic == 'Kids') {
-                    allowedTags.addAll(['#Boys', '#Girls']);
+                  final allowedTags = DemographicUtils.getAllowedTags(_selectedSearchDemographic);
+                  if (allowedTags != null) {
+                    final tagsRaw = p['special_tags'];
+                    final List<String> tags = (tagsRaw is List)
+                        ? tagsRaw.map((t) => t.toString().trim()).toList()
+                        : [];
+                    if (!tags.any((t) => allowedTags.contains(t))) return false;
                   }
-                  if (!tags.any((t) => allowedTags.contains(t))) return false;
                 }
                 return true;
               }).toList();
@@ -1664,7 +1611,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   final searchable =
                       '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
                           .toLowerCase();
-                  if (!terms.every((t) => searchable.contains(t))) return false;
+                  final matchesAllTerms = terms.every((t) =>
+                      DemographicUtils.rawProductMatchesTerm(
+                        product: p,
+                        term: t,
+                        searchableText: searchable,
+                      ));
+                  if (!matchesAllTerms) return false;
                 }
                 if (_selectedSizes.isNotEmpty) {
                   final variants = p['variants'] as List<dynamic>? ?? [];
@@ -1676,21 +1629,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 }
 
                 if (_selectedSearchDemographic != 'All') {
-                  final tagsRaw = p['special_tags'];
-                  final List<String> tags = (tagsRaw is List)
-                      ? tagsRaw.map((t) => t.toString().trim()).toList()
-                      : [];
-                  final targetTag = '#$_selectedSearchDemographic';
-                  final allowedTags = <String>[targetTag, '#Unisex'];
-                  if (_selectedSearchDemographic == 'Boys' ||
-                      _selectedSearchDemographic == 'Girls') {
-                    allowedTags.add('#Kids');
-                  } else if (_selectedSearchDemographic == 'Kids') {
-                    allowedTags.addAll(['#Boys', '#Girls']);
+                  final allowedTags = DemographicUtils.getAllowedTags(_selectedSearchDemographic);
+                  if (allowedTags != null) {
+                    final tagsRaw = p['special_tags'];
+                    final List<String> tags = (tagsRaw is List)
+                        ? tagsRaw.map((t) => t.toString().trim()).toList()
+                        : [];
+                    final matchesDemographic =
+                        tags.any((t) => allowedTags.contains(t));
+                    if (!matchesDemographic) return false;
                   }
-                  final matchesDemographic =
-                      tags.any((t) => allowedTags.contains(t));
-                  if (!matchesDemographic) return false;
                 }
 
                 return true;
@@ -1971,6 +1919,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     ],
     'Grocery': [
       'Grocery',
+      'Grocerylm',
       'Supermarket / Hypermarket',
       'Fruits & Vegs',
       'Dairy & Eggs',
@@ -1981,6 +1930,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     'Pharmacy': ['Pharmacy', 'Medical Store'],
     'GroceryAndMed': [
       'Grocery',
+      'Grocerylm',
       'Supermarket / Hypermarket',
       'Fruits & Vegs',
       'Dairy & Eggs',
@@ -1996,6 +1946,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     'Supermarket': [
       'Supermarket / Hypermarket',
       'Grocery',
+      'Grocerylm',
+      'Fruits & Vegs',
+      'Dairy & Eggs',
+      'Butcher',
+      'Fish & Seafood',
+      'Organic'
+    ],
+    'Supermarket / Hypermarket': [
+      'Supermarket / Hypermarket',
+      'Grocery',
+      'Grocerylm',
       'Fruits & Vegs',
       'Dairy & Eggs',
       'Butcher',
@@ -3888,7 +3849,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ? 'Popular for Men & Boys'
                                     : (_selectedFeedDemographic == 'Women/Girls'
                                         ? 'Popular for Women & Girls'
-                                        : 'Popular in your area'),
+                                        : (_selectedFeedDemographic == 'Kids'
+                                            ? 'Popular for Kids'
+                                            : (_selectedFeedDemographic == 'Unisex'
+                                                ? 'Popular Unisex Fashion'
+                                                : 'Popular in your area'))),
                               ),
                             ),
                             const SliverToBoxAdapter(
@@ -4468,7 +4433,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              children: ['All', 'Men', 'Women', 'Boys', 'Girls', 'Kids']
+              children: DemographicUtils.customerDemographics
                   .map((demo) => Padding(
                         padding:
                             const EdgeInsets.only(right: 8, top: 8, bottom: 8),
@@ -5859,6 +5824,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       {'key': 'All', 'label': 'All Fashion', 'emoji': '🛍️'},
       {'key': 'Men/Boys', 'label': 'Men & Boys', 'emoji': '👔'},
       {'key': 'Women/Girls', 'label': 'Women & Girls', 'emoji': '👗'},
+      {'key': 'Kids', 'label': 'Kids', 'emoji': '🧸'},
+      {'key': 'Unisex', 'label': 'Unisex', 'emoji': '✨'},
     ];
 
     return SizedBox(
@@ -5942,7 +5909,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   }
 
   Widget _buildDemographicEmptyState(bool isDark) {
-    final isMen = _selectedFeedDemographic == 'Men/Boys';
+    final emoji = _selectedFeedDemographic == 'Men/Boys'
+        ? '👔'
+        : (_selectedFeedDemographic == 'Women/Girls'
+            ? '👗'
+            : (_selectedFeedDemographic == 'Kids'
+                ? '🧸'
+                : (_selectedFeedDemographic == 'Unisex' ? '✨' : '🛍️')));
+    final label = _selectedFeedDemographic == 'Men/Boys'
+        ? 'Men & Boys'
+        : (_selectedFeedDemographic == 'Women/Girls'
+            ? 'Women & Girls'
+            : (_selectedFeedDemographic == 'Kids'
+                ? 'Kids'
+                : (_selectedFeedDemographic == 'Unisex' ? 'Unisex' : 'Fashion')));
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       child: Center(
@@ -5957,14 +5937,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Center(
-                child: Text(isMen ? '👔' : '👗', style: const TextStyle(fontSize: 28)),
+                child: Text(emoji, style: const TextStyle(fontSize: 28)),
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              isMen
-                  ? 'No Men & Boys items found nearby'
-                  : 'No Women & Girls items found nearby',
+              'No $label items found nearby',
               style: GoogleFonts.outfit(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,

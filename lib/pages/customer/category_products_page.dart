@@ -15,6 +15,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/product_card.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/delivery_calculator.dart';
+import '../../utils/demographic_utils.dart';
 import '../../widgets/customer/floating_cart_bar.dart';
 import '../../config/app_categories.dart';
 
@@ -81,6 +82,9 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
     'Grocery': [
       'grocery',
       'groceries',
+      'grocerylm',
+      'grocery low margin',
+      'low margin grocery',
       'essentials',
       'supermarket',
       'hypermarket',
@@ -249,12 +253,37 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
     ],
     'Grocery': [
       'Grocery',
+      'Grocerylm',
       'Supermarket / Hypermarket',
       'Fruits & Vegs',
       'Dairy & Eggs',
       'Butcher',
       'Fish & Seafood',
       'Organic'
+    ],
+    'Supermarket / Hypermarket': [
+      'Supermarket / Hypermarket',
+      'Grocery',
+      'Grocerylm',
+      'Dairy & Eggs',
+      'Fruits & Vegs',
+      'Organic',
+    ],
+    'Supermarket': [
+      'Supermarket / Hypermarket',
+      'Grocery',
+      'Grocerylm',
+      'Dairy & Eggs',
+      'Fruits & Vegs',
+      'Organic',
+    ],
+    'Hypermarket': [
+      'Supermarket / Hypermarket',
+      'Grocery',
+      'Grocerylm',
+      'Dairy & Eggs',
+      'Fruits & Vegs',
+      'Organic',
     ],
     'Pharmacy': ['Pharmacy', 'Medical Store'],
     'Clothing': ['Clothing', 'Footwear', 'Jewellery'],
@@ -360,24 +389,21 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
             }
 
             if (_selectedDemographic != 'All') {
-              final tagsRaw = p['special_tags'];
-              final List<String> tags = (tagsRaw is List)
-                  ? tagsRaw.map((t) => t.toString().trim()).toList()
-                  : [];
-              final allowedTags = <String>['#$_selectedDemographic', '#Unisex'];
-              if (_selectedDemographic == 'Men/Boys') {
-                allowedTags.addAll(['#Men', '#Boys', '#Kids']);
-              } else if (_selectedDemographic == 'Women/Girls') {
-                allowedTags.addAll(['#Women', '#Girls', '#Kids']);
-              } else if (_selectedDemographic == 'Boys' ||
-                  _selectedDemographic == 'Girls') {
-                allowedTags.add('#Kids');
-              } else if (_selectedDemographic == 'Kids') {
-                allowedTags.addAll(['#Boys', '#Girls']);
+              final allowedTags = DemographicUtils.getAllowedTags(_selectedDemographic);
+              if (allowedTags != null) {
+                final tagsRaw = p['special_tags'];
+                final List<String> tags = (tagsRaw is List)
+                    ? tagsRaw.map((t) => t.toString().trim()).toList()
+                    : [];
+                final matchesDemographic =
+                    tags.any((t) => allowedTags.contains(t));
+                if (!matchesDemographic) {
+                  final pModel = ProductModel.fromMap(p);
+                  if (!DemographicUtils.matchesDemographic(pModel, _selectedDemographic)) {
+                    return false;
+                  }
+                }
               }
-              final matchesDemographic =
-                  tags.any((t) => allowedTags.contains(t));
-              if (!matchesDemographic) return false;
             }
 
             // 100x Multi-Category Fortress: For omnibus/multi-department stores (e.g. Supermarkets),
@@ -507,19 +533,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
               final Set<String> sizes = {};
               for (final p in prods) {
                 if (_selectedDemographic != 'All') {
-                  final List<String> allowedTags = [
-                    '#$_selectedDemographic',
-                    '#Unisex'
-                  ];
-                  if (_selectedDemographic == 'Men/Boys') {
-                    allowedTags.addAll(['#Men', '#Boys', '#Kids']);
-                  } else if (_selectedDemographic == 'Women/Girls') {
-                    allowedTags.addAll(['#Women', '#Girls', '#Kids']);
-                  } else if (_selectedDemographic == 'Boys' ||
-                      _selectedDemographic == 'Girls') {
-                    allowedTags.add('#Kids');
-                  }
-                  if (!p.specialTags.any((tag) => allowedTags.contains(tag))) {
+                  if (!DemographicUtils.matchesDemographic(p, _selectedDemographic)) {
                     continue;
                   }
                 }
@@ -595,16 +609,23 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           .eq('is_available', true);
 
       final cleanQuery = trimmed.replaceAll(RegExp(r'[,()"\x27]'), ' ');
-      final terms = cleanQuery
+      final rawTerms = cleanQuery
           .toLowerCase()
           .split(RegExp(r'\s+'))
           .where((t) => t.isNotEmpty)
           .toList();
 
+      final nonDemoTerms = rawTerms
+          .where((t) => !DemographicUtils.isDemographicKeyword(t))
+          .toList();
+      final terms = nonDemoTerms.isNotEmpty ? nonDemoTerms : rawTerms;
+
       for (final term in terms) {
-        q = q.or(
-          'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,category.ilike.%$term%,medicine_type.ilike.%$term%',
-        );
+        if (!DemographicUtils.isDemographicKeyword(term)) {
+          q = q.or(
+            'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,category.ilike.%$term%,medicine_type.ilike.%$term%',
+          );
+        }
       }
 
       final rows = await q.order('rating', ascending: false).limit(300);
@@ -748,7 +769,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 4),
                       child: Row(
-                        children: ['All', 'Men', 'Women', 'Boys', 'Girls']
+                        children: DemographicUtils.customerDemographics
                             .map((demo) => Padding(
                                   padding: const EdgeInsets.only(right: 8),
                                   child: ChoiceChip(
@@ -1009,21 +1030,9 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                               .toList();
                         }
                         if (_selectedDemographic != 'All') {
-                          final List<String> allowedTags = [
-                            '#$_selectedDemographic',
-                            '#Unisex'
-                          ];
-                          if (_selectedDemographic == 'Men/Boys') {
-                            allowedTags.addAll(['#Men', '#Boys', '#Kids']);
-                          } else if (_selectedDemographic == 'Women/Girls') {
-                            allowedTags.addAll(['#Women', '#Girls', '#Kids']);
-                          } else if (_selectedDemographic == 'Boys' ||
-                              _selectedDemographic == 'Girls') {
-                            allowedTags.add('#Kids');
-                          }
                           filteredProducts = filteredProducts
-                              .where((p) => p.specialTags
-                                  .any((tag) => allowedTags.contains(tag)))
+                              .where((p) => DemographicUtils.matchesDemographic(
+                                  p, _selectedDemographic))
                               .toList();
                         }
 
@@ -1043,7 +1052,12 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                               final searchable =
                                   '${p.name} ${p.description ?? ''} ${p.brand ?? ''} ${p.category} ${p.subCategory ?? ''} ${p.menuCategory ?? ''} ${p.medicineType} ${p.unitType} $variantNames ${p.specialTags.join(' ')} ${pShop?.name ?? ''} ${pShop?.category ?? ''} $syn'
                                       .toLowerCase();
-                              return terms.every((t) => searchable.contains(t));
+                              return terms.every((t) =>
+                                  DemographicUtils.productMatchesTerm(
+                                    product: p,
+                                    term: t,
+                                    searchableText: searchable,
+                                  ));
                             }).toList();
                           }
                         }

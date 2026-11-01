@@ -133,6 +133,13 @@ class SellerDeductibleCard extends StatelessWidget {
       'description': 'Staples, packaged snacks, pantry & grains',
     },
     {
+      'name': 'Grocerylm',
+      'emoji': '🛒',
+      'defaultCommission': 3.0,
+      'gstRate': 0.05,
+      'description': 'Low-margin grocery, bulk pantry & staples',
+    },
+    {
       'name': 'Dairy & Eggs',
       'emoji': '🥛',
       'defaultCommission': 5.0,

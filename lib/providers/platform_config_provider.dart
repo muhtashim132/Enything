@@ -109,13 +109,17 @@ class PlatformConfigProvider extends ChangeNotifier {
   /// All disabled category names.
   Set<String> get disabledCategories => Set.unmodifiable(_disabledCategories);
 
-  /// Returns all active built-in category maps (filtered by disabled set).
+  /// Returns all active built-in category maps (filtered by disabled set and internal-only categories).
   List<Map<String, String>> get activeCategoryMaps {
     final builtIn = AppCategories.all
-        .where((c) => isActiveCategory(c['name']))
+        .where((c) =>
+            isActiveCategory(c['name']) &&
+            !AppCategories.isInternalOnly(c['name']))
         .toList();
     final custom = _customCategories
-        .where((c) => isActiveCategory(c['name']))
+        .where((c) =>
+            isActiveCategory(c['name']) &&
+            !AppCategories.isInternalOnly(c['name']))
         .toList();
     return [...builtIn, ...custom];
   }
@@ -151,11 +155,38 @@ class PlatformConfigProvider extends ChangeNotifier {
       if (_categoryCommissionOverrides.containsKey(trimmed)) {
         return _categoryCommissionOverrides[trimmed]!;
       }
+      // 100x Aliasing & Case-Insensitive Fallback for Grocerylm
+      if (AppCategories.isGroceryLowMargin(trimmed)) {
+        for (final entry in _categoryCommissionOverrides.entries) {
+          if (AppCategories.isGroceryLowMargin(entry.key)) {
+            return entry.value;
+          }
+        }
+      }
+      final lower = trimmed.toLowerCase();
+      for (final entry in _categoryCommissionOverrides.entries) {
+        if (entry.key.trim().toLowerCase() == lower) {
+          return entry.value;
+        }
+      }
     }
     if (fallbackCategory != null && fallbackCategory.trim().isNotEmpty) {
       final trimmedFallback = fallbackCategory.trim();
       if (_categoryCommissionOverrides.containsKey(trimmedFallback)) {
         return _categoryCommissionOverrides[trimmedFallback]!;
+      }
+      if (AppCategories.isGroceryLowMargin(trimmedFallback)) {
+        for (final entry in _categoryCommissionOverrides.entries) {
+          if (AppCategories.isGroceryLowMargin(entry.key)) {
+            return entry.value;
+          }
+        }
+      }
+      final lowerFallback = trimmedFallback.toLowerCase();
+      for (final entry in _categoryCommissionOverrides.entries) {
+        if (entry.key.trim().toLowerCase() == lowerFallback) {
+          return entry.value;
+        }
       }
     }
     return _commissionPercent;
@@ -167,7 +198,13 @@ class PlatformConfigProvider extends ChangeNotifier {
 
   bool hasCategoryCommissionOverride(String? category) {
     if (category == null || category.trim().isEmpty) return false;
-    return _categoryCommissionOverrides.containsKey(category.trim());
+    final trimmed = category.trim();
+    if (_categoryCommissionOverrides.containsKey(trimmed)) return true;
+    if (AppCategories.isGroceryLowMargin(trimmed)) {
+      return _categoryCommissionOverrides.keys.any(AppCategories.isGroceryLowMargin);
+    }
+    final lower = trimmed.toLowerCase();
+    return _categoryCommissionOverrides.keys.any((k) => k.trim().toLowerCase() == lower);
   }
 
   Map<String, double> get categoryCommissionOverrides =>

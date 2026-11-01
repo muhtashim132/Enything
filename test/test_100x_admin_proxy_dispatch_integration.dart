@@ -7,17 +7,20 @@ String _phoneFromId(String phone) => phone.replaceAll('+', '').trim();
 String _emailFromPhone(String phone) => '${_phoneFromId(phone)}@enything.com';
 String _passwordFromPhone(String phone) => 'Pass_${_phoneFromId(phone)}!';
 
-Future<String> authUser(SupabaseClient client, String phone, String role) async {
+Future<String> authUser(
+    SupabaseClient client, String phone, String role) async {
   final email = _emailFromPhone(phone);
   final password = _passwordFromPhone(phone);
 
   try {
-    final res = await client.auth.signInWithPassword(email: email, password: password);
+    final res =
+        await client.auth.signInWithPassword(email: email, password: password);
     if (res.user != null) return res.user!.id;
   } catch (_) {}
 
   try {
-    final signUpRes = await client.auth.signUp(email: email, password: password);
+    final signUpRes =
+        await client.auth.signUp(email: email, password: password);
     final userId = signUpRes.user!.id;
 
     await client.from('profiles').upsert({
@@ -28,7 +31,8 @@ Future<String> authUser(SupabaseClient client, String phone, String role) async 
     });
     return userId;
   } catch (e) {
-    final res = await client.auth.signInWithPassword(email: email, password: password);
+    final res =
+        await client.auth.signInWithPassword(email: email, password: password);
     return res.user!.id;
   }
 }
@@ -37,7 +41,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
 
-  group('100x ADMIN & DISPATCHER PROXY ACCEPTANCE & RADAR INTEGRATION MATRIX', () {
+  group('100x ADMIN & DISPATCHER PROXY ACCEPTANCE & RADAR INTEGRATION MATRIX',
+      () {
     late SupabaseClient client;
     String? adminId;
     String? testShopId;
@@ -68,7 +73,8 @@ void main() {
       );
       client = Supabase.instance.client;
 
-      final rand = DateTime.now().millisecondsSinceEpoch.toString().substring(6);
+      final rand =
+          DateTime.now().millisecondsSinceEpoch.toString().substring(6);
       final adminPhone = '+919955555$rand';
 
       adminId = await authUser(client, adminPhone, 'admin');
@@ -117,12 +123,6 @@ void main() {
           await client.from('orders').delete().eq('id', oid);
         } catch (_) {}
       }
-      // Delete test product
-      if (testProductId != null) {
-        try {
-          await client.from('products').delete().eq('id', testProductId!);
-        } catch (_) {}
-      }
       // Delete test shop
       if (testShopId != null) {
         try {
@@ -141,7 +141,8 @@ void main() {
       print('✅ All mock entities successfully purged from database.');
     });
 
-    test('1. Verify dispatcher role & permissions seeded in database', () async {
+    test('1. Verify dispatcher role & permissions seeded in database',
+        () async {
       final roleResp = await client
           .from('roles')
           .select('id, name, slug, color')
@@ -183,7 +184,8 @@ void main() {
       });
 
       expect(res, isA<List>());
-      print('✅ admin_get_dispatch_feed returned ${(res as List).length} live queue items in unlimited mode');
+      print(
+          '✅ admin_get_dispatch_feed returned ${(res as List).length} live queue items in unlimited mode');
 
       // Test with coordinates and radius (Radius Mode)
       final resRadius = await client.rpc('admin_get_dispatch_feed', params: {
@@ -194,52 +196,60 @@ void main() {
         'p_include_sellers': true,
       });
       expect(resRadius, isA<List>());
-      print('✅ admin_get_dispatch_feed with 25km radius returned ${(resRadius as List).length} items');
+      print(
+          '✅ admin_get_dispatch_feed with 25km radius returned ${(resRadius as List).length} items');
     });
 
     test('3. Verify admin_get_online_riders RPC execution', () async {
       final res = await client.rpc('admin_get_online_riders');
       expect(res, isA<List>());
-      print('✅ admin_get_online_riders returned ${(res as List).length} active couriers');
+      print(
+          '✅ admin_get_online_riders returned ${(res as List).length} active couriers');
     });
 
     test('4. End-to-End Proxy Lifecycle & Concurrency Matrix', () async {
       // Fetch or use an existing customer ID
-      final existingCustomer = await client
-          .from('profiles')
-          .select('id')
-          .limit(1)
-          .single();
+      final existingCustomer =
+          await client.from('profiles').select('id').limit(1).single();
       testCustomerId = existingCustomer['id'] as String;
 
       // Create test shop
-      final shopResp = await client.from('shops').insert({
-        'name': '100x Dispatch Test Kitchen',
-        'address': 'Test Operational Hub Street',
-        'is_active': true,
-        'verification_status': 'verified',
-        'seller_id': testCustomerId, // Dummy seller id
-      }).select('id').single();
+      final shopResp = await client
+          .from('shops')
+          .insert({
+            'name': '100x Dispatch Test Kitchen',
+            'address': 'Test Operational Hub Street',
+            'is_active': true,
+            'verification_status': 'verified',
+            'seller_id': testCustomerId, // Dummy seller id
+          })
+          .select('id')
+          .single();
       testShopId = shopResp['id'] as String;
 
       // Create test order in awaiting_acceptance
-      final orderResp = await client.from('orders').insert({
-        'customer_id': testCustomerId,
-        'shop_id': testShopId,
-        'status': 'awaiting_acceptance',
-        'seller_accepted': false,
-        'partner_accepted': false,
-        'payment_status': 'pending',
-        'payment_method': 'upi',
-        'total_amount': 299.0,
-      }).select('id').single();
+      final orderResp = await client
+          .from('orders')
+          .insert({
+            'customer_id': testCustomerId,
+            'shop_id': testShopId,
+            'status': 'awaiting_acceptance',
+            'seller_accepted': false,
+            'partner_accepted': false,
+            'payment_status': 'pending',
+            'payment_method': 'upi',
+            'total_amount': 299.0,
+          })
+          .select('id')
+          .single();
       final orderId1 = orderResp['id'] as String;
       createdOrderIds.add(orderId1);
 
       print('✅ Created test order #$orderId1');
 
       // STEP A: Proxy Seller Accept
-      final sellerAcceptRes = await client.rpc('admin_proxy_accept_seller', params: {
+      final sellerAcceptRes =
+          await client.rpc('admin_proxy_accept_seller', params: {
         'p_order_id': orderId1,
         'p_prep_time_minutes': 20,
       });
@@ -247,7 +257,8 @@ void main() {
 
       final orderAfterSeller = await client
           .from('orders')
-          .select('seller_accepted, partner_accepted, status, shop_prep_time_snapshot')
+          .select(
+              'seller_accepted, partner_accepted, status, shop_prep_time_snapshot')
           .eq('id', orderId1)
           .single();
       expect(orderAfterSeller['seller_accepted'], isTrue);
@@ -255,36 +266,44 @@ void main() {
       print('✅ Verified admin_proxy_accept_seller: seller_accepted=true');
 
       // STEP B: Proxy Rider Accept (Unlimited Hoarding Bypass)
-      final riderAcceptRes = await client.rpc('admin_proxy_accept_rider', params: {
+      final riderAcceptRes =
+          await client.rpc('admin_proxy_accept_rider', params: {
         'p_order_id': orderId1,
       });
       expect(riderAcceptRes, isTrue, reason: 'Both sides now accepted');
 
       final orderAfterBoth = await client
           .from('orders')
-          .select('seller_accepted, partner_accepted, status, delivery_partner_id, payment_deadline')
+          .select(
+              'seller_accepted, partner_accepted, status, delivery_partner_id, payment_deadline')
           .eq('id', orderId1)
           .single();
       expect(orderAfterBoth['partner_accepted'], isTrue);
       expect(orderAfterBoth['status'], 'awaiting_payment');
       expect(orderAfterBoth['payment_deadline'], isNotNull);
-      print('✅ Verified admin_proxy_accept_rider: status transitioned to awaiting_payment');
+      print(
+          '✅ Verified admin_proxy_accept_rider: status transitioned to awaiting_payment');
 
       // STEP C: 1-Tap Dual Accept on new order
-      final orderResp2 = await client.from('orders').insert({
-        'customer_id': testCustomerId,
-        'shop_id': testShopId,
-        'status': 'awaiting_acceptance',
-        'seller_accepted': false,
-        'partner_accepted': false,
-        'payment_status': 'pending',
-        'payment_method': 'upi',
-        'total_amount': 450.0,
-      }).select('id').single();
+      final orderResp2 = await client
+          .from('orders')
+          .insert({
+            'customer_id': testCustomerId,
+            'shop_id': testShopId,
+            'status': 'awaiting_acceptance',
+            'seller_accepted': false,
+            'partner_accepted': false,
+            'payment_status': 'pending',
+            'payment_method': 'upi',
+            'total_amount': 450.0,
+          })
+          .select('id')
+          .single();
       final orderId2 = orderResp2['id'] as String;
       createdOrderIds.add(orderId2);
 
-      final dualAcceptRes = await client.rpc('admin_proxy_accept_both', params: {
+      final dualAcceptRes =
+          await client.rpc('admin_proxy_accept_both', params: {
         'p_order_id': orderId2,
         'p_prep_time_minutes': 15,
       });
@@ -298,16 +317,21 @@ void main() {
       expect(order2AfterBoth['seller_accepted'], isTrue);
       expect(order2AfterBoth['partner_accepted'], isTrue);
       expect(order2AfterBoth['status'], 'awaiting_payment');
-      print('✅ Verified admin_proxy_accept_both: atomic dual confirmation complete');
+      print(
+          '✅ Verified admin_proxy_accept_both: atomic dual confirmation complete');
 
       // STEP D: Concurrency & Cancellation Edge Case Guard
-      final orderResp3 = await client.from('orders').insert({
-        'customer_id': testCustomerId,
-        'shop_id': testShopId,
-        'status': 'cancelled', // Pre-cancelled
-        'payment_method': 'upi',
-        'total_amount': 150.0,
-      }).select('id').single();
+      final orderResp3 = await client
+          .from('orders')
+          .insert({
+            'customer_id': testCustomerId,
+            'shop_id': testShopId,
+            'status': 'cancelled', // Pre-cancelled
+            'payment_method': 'upi',
+            'total_amount': 150.0,
+          })
+          .select('id')
+          .single();
       final orderId3 = orderResp3['id'] as String;
       createdOrderIds.add(orderId3);
 
@@ -321,13 +345,17 @@ void main() {
       print('✅ Verified ORDER_CANCELLED guard on cancelled order');
 
       // STEP E: Store Already Rejected Edge Case Guard
-      final orderResp4 = await client.from('orders').insert({
-        'customer_id': testCustomerId,
-        'shop_id': testShopId,
-        'status': 'seller_rejected', // Declined by store
-        'payment_method': 'upi',
-        'total_amount': 220.0,
-      }).select('id').single();
+      final orderResp4 = await client
+          .from('orders')
+          .insert({
+            'customer_id': testCustomerId,
+            'shop_id': testShopId,
+            'status': 'seller_rejected', // Declined by store
+            'payment_method': 'upi',
+            'total_amount': 220.0,
+          })
+          .select('id')
+          .single();
       final orderId4 = orderResp4['id'] as String;
       createdOrderIds.add(orderId4);
 
@@ -335,46 +363,56 @@ void main() {
         () async => await client.rpc('admin_proxy_accept_seller', params: {
           'p_order_id': orderId4,
         }),
-        throwsA(predicate((e) => e.toString().contains('ORDER_ALREADY_REJECTED'))),
+        throwsA(
+            predicate((e) => e.toString().contains('ORDER_ALREADY_REJECTED'))),
         reason: 'Proxy accept must respect store owner rejection',
       );
       print('✅ Verified ORDER_ALREADY_REJECTED guard on declined order');
 
       // STEP F: 100x Multi-Shop Sibling Atomicity & Phone Resolution Test
-      final multiCartGroupId = 'a0000000-0000-4000-a000-123456789abc';
-      
+      const multiCartGroupId = 'a0000000-0000-4000-a000-123456789abc';
+
       // Sub-order 1 (Shop 1)
-      final subOrder1Resp = await client.from('orders').insert({
-        'customer_id': testCustomerId,
-        'shop_id': testShopId,
-        'cart_group_id': multiCartGroupId,
-        'status': 'awaiting_acceptance',
-        'seller_accepted': false,
-        'partner_accepted': false,
-        'payment_status': 'pending',
-        'payment_method': 'upi',
-        'total_amount': 250.0,
-      }).select('id').single();
+      final subOrder1Resp = await client
+          .from('orders')
+          .insert({
+            'customer_id': testCustomerId,
+            'shop_id': testShopId,
+            'cart_group_id': multiCartGroupId,
+            'status': 'awaiting_acceptance',
+            'seller_accepted': false,
+            'partner_accepted': false,
+            'payment_status': 'pending',
+            'payment_method': 'upi',
+            'total_amount': 250.0,
+          })
+          .select('id')
+          .single();
       final subOrderId1 = subOrder1Resp['id'] as String;
       createdOrderIds.add(subOrderId1);
 
       // Sub-order 2 (Shop 2)
-      final subOrder2Resp = await client.from('orders').insert({
-        'customer_id': testCustomerId,
-        'shop_id': testShopId,
-        'cart_group_id': multiCartGroupId,
-        'status': 'awaiting_acceptance',
-        'seller_accepted': false,
-        'partner_accepted': false,
-        'payment_status': 'pending',
-        'payment_method': 'upi',
-        'total_amount': 350.0,
-      }).select('id').single();
+      final subOrder2Resp = await client
+          .from('orders')
+          .insert({
+            'customer_id': testCustomerId,
+            'shop_id': testShopId,
+            'cart_group_id': multiCartGroupId,
+            'status': 'awaiting_acceptance',
+            'seller_accepted': false,
+            'partner_accepted': false,
+            'payment_status': 'pending',
+            'payment_method': 'upi',
+            'total_amount': 350.0,
+          })
+          .select('id')
+          .single();
       final subOrderId2 = subOrder2Resp['id'] as String;
       createdOrderIds.add(subOrderId2);
 
       // Sub-step 1: Admin accepts rider for the multi-shop cart group
-      final multiRiderRes = await client.rpc('admin_proxy_accept_rider', params: {
+      final multiRiderRes =
+          await client.rpc('admin_proxy_accept_rider', params: {
         'p_order_id': subOrderId1,
       });
       expect(multiRiderRes, isFalse, reason: 'Neither shop has accepted yet');
@@ -382,15 +420,18 @@ void main() {
       // Verify both sub-orders have partner_accepted = true and delivery_partner_id = adminId
       final subOrdersAfterRider = await client
           .from('orders')
-          .select('id, partner_accepted, status, rider_phone, delivery_partner_id')
+          .select(
+              'id, partner_accepted, status, rider_phone, delivery_partner_id')
           .inFilter('id', [subOrderId1, subOrderId2]);
       for (final so in subOrdersAfterRider as List) {
         expect(so['partner_accepted'], isTrue);
         expect(so['delivery_partner_id'], adminId);
-        expect(so['status'], 'awaiting_acceptance', reason: 'Stores have not accepted yet');
+        expect(so['status'], 'awaiting_acceptance',
+            reason: 'Stores have not accepted yet');
         expect(so['rider_phone'], isNotEmpty);
       }
-      print('✅ Verified multi-shop rider acceptance: both sub-orders assigned to courier');
+      print(
+          '✅ Verified multi-shop rider acceptance: both sub-orders assigned to courier');
 
       // Sub-step 2: Admin accepts Store 1 only
       final store1Res = await client.rpc('admin_proxy_accept_seller', params: {
@@ -399,13 +440,24 @@ void main() {
       });
       expect(store1Res, isFalse, reason: 'Store 2 has not accepted yet');
 
-      final sub1AfterStore1 = await client.from('orders').select('seller_accepted, status').eq('id', subOrderId1).single();
-      final sub2AfterStore1 = await client.from('orders').select('seller_accepted, status').eq('id', subOrderId2).single();
+      final sub1AfterStore1 = await client
+          .from('orders')
+          .select('seller_accepted, status')
+          .eq('id', subOrderId1)
+          .single();
+      final sub2AfterStore1 = await client
+          .from('orders')
+          .select('seller_accepted, status')
+          .eq('id', subOrderId2)
+          .single();
       expect(sub1AfterStore1['seller_accepted'], isTrue);
-      expect(sub1AfterStore1['status'], 'awaiting_acceptance', reason: 'Must NOT advance to awaiting_payment until Store 2 confirms');
+      expect(sub1AfterStore1['status'], 'awaiting_acceptance',
+          reason:
+              'Must NOT advance to awaiting_payment until Store 2 confirms');
       expect(sub2AfterStore1['seller_accepted'], isFalse);
       expect(sub2AfterStore1['status'], 'awaiting_acceptance');
-      print('✅ Verified multi-shop partial acceptance: status held at awaiting_acceptance');
+      print(
+          '✅ Verified multi-shop partial acceptance: status held at awaiting_acceptance');
 
       // Sub-step 3: Admin accepts Store 2 -> Completes cart group!
       final store2Res = await client.rpc('admin_proxy_accept_seller', params: {
@@ -414,16 +466,27 @@ void main() {
       });
       expect(store2Res, isTrue, reason: 'All stores now accepted!');
 
-      final sub1Final = await client.from('orders').select('seller_accepted, partner_accepted, status, payment_deadline').eq('id', subOrderId1).single();
-      final sub2Final = await client.from('orders').select('seller_accepted, partner_accepted, status, payment_deadline').eq('id', subOrderId2).single();
+      final sub1Final = await client
+          .from('orders')
+          .select('seller_accepted, partner_accepted, status, payment_deadline')
+          .eq('id', subOrderId1)
+          .single();
+      final sub2Final = await client
+          .from('orders')
+          .select('seller_accepted, partner_accepted, status, payment_deadline')
+          .eq('id', subOrderId2)
+          .single();
       expect(sub1Final['seller_accepted'], isTrue);
-      expect(sub1Final['status'], 'awaiting_payment', reason: 'Atomically advanced to awaiting_payment');
+      expect(sub1Final['status'], 'awaiting_payment',
+          reason: 'Atomically advanced to awaiting_payment');
       expect(sub1Final['payment_deadline'], isNotNull);
 
       expect(sub2Final['seller_accepted'], isTrue);
-      expect(sub2Final['status'], 'awaiting_payment', reason: 'Atomically advanced to awaiting_payment');
+      expect(sub2Final['status'], 'awaiting_payment',
+          reason: 'Atomically advanced to awaiting_payment');
       expect(sub2Final['payment_deadline'], isNotNull);
-      print('✅ Verified multi-shop sibling atomicity: both sub-orders synchronized to awaiting_payment');
+      print(
+          '✅ Verified multi-shop sibling atomicity: both sub-orders synchronized to awaiting_payment');
     });
   });
 }

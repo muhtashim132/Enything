@@ -585,7 +585,18 @@ class _CategoryTile extends StatelessWidget {
           children: [
             Text(name, style: AdminStyles.body(size: 14)),
             const SizedBox(width: 8),
-            if (!isBuiltIn)
+            if (AppCategories.isInternalOnly(name))
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AdminColors.warning.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('Low Margin / Product Only',
+                    style: AdminStyles.caption(
+                        color: AdminColors.warning, size: 10)),
+              )
+            else if (!isBuiltIn)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(

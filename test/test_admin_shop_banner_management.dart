@@ -4,26 +4,31 @@ import 'package:enythingmobilenew/pages/admin/platform/admin_product_management_
 
 void main() {
   group('100x Admin Shop Banner Management - Model & Invariant Tests', () {
-    test('AdminShopItem.fromMap correctly parses banner_url and banner_image', () {
+    test('AdminShopItem.fromMap correctly parses banner_url and banner_image',
+        () {
       final mapWithUrl = {
         'id': 'shop-1',
         'name': 'Bistro Cafe',
         'category': 'Restaurant',
         'is_active': true,
-        'banner_url': 'https://storage.enything.in/shops/banners/shop-1/100.jpg',
+        'banner_url':
+            'https://storage.enything.in/shops/banners/shop-1/100.jpg',
       };
       final item1 = AdminShopItem.fromMap(mapWithUrl);
-      expect(item1.bannerUrl, equals('https://storage.enything.in/shops/banners/shop-1/100.jpg'));
+      expect(item1.bannerUrl,
+          equals('https://storage.enything.in/shops/banners/shop-1/100.jpg'));
 
       final mapWithLegacyImage = {
         'id': 'shop-2',
         'name': 'Spice Garden',
         'category': 'Restaurant',
         'is_active': true,
-        'banner_image': 'https://storage.enything.in/shops/banners/shop-2/200.jpg',
+        'banner_image':
+            'https://storage.enything.in/shops/banners/shop-2/200.jpg',
       };
       final item2 = AdminShopItem.fromMap(mapWithLegacyImage);
-      expect(item2.bannerUrl, equals('https://storage.enything.in/shops/banners/shop-2/200.jpg'));
+      expect(item2.bannerUrl,
+          equals('https://storage.enything.in/shops/banners/shop-2/200.jpg'));
 
       final mapWithoutBanner = {
         'id': 'shop-3',
@@ -35,7 +40,9 @@ void main() {
       expect(item3.bannerUrl, isNull);
     });
 
-    test('AdminShopItem.copyWith updates and clears bannerUrl cleanly without tombstone resurrection', () {
+    test(
+        'AdminShopItem.copyWith updates and clears bannerUrl cleanly without tombstone resurrection',
+        () {
       const initial = AdminShopItem(
         id: 'shop-10',
         name: 'Royal Diner',
@@ -61,7 +68,8 @@ void main() {
       expect(preserved.bannerUrl, equals('https://example.com/new_banner.jpg'));
     });
 
-    test('Realtime payload resolution handles explicit null banner removal', () {
+    test('Realtime payload resolution handles explicit null banner removal',
+        () {
       const current = AdminShopItem(
         id: 'shop-99',
         name: 'Sunset Pizzeria',
@@ -78,8 +86,10 @@ void main() {
         'banner_image': null,
       };
 
-      final hasBannerField = newRec.containsKey('banner_url') || newRec.containsKey('banner_image');
-      final rawBanner = (newRec['banner_url'] ?? newRec['banner_image'])?.toString();
+      final hasBannerField = newRec.containsKey('banner_url') ||
+          newRec.containsKey('banner_image');
+      final rawBanner =
+          (newRec['banner_url'] ?? newRec['banner_image'])?.toString();
       final updatedBannerUrl = hasBannerField ? rawBanner : current.bannerUrl;
 
       final updated = current.copyWith(
@@ -88,10 +98,13 @@ void main() {
       );
 
       expect(updated.bannerUrl, isNull,
-          reason: 'Deleting a banner via realtime must not revive the old bannerUrl');
+          reason:
+              'Deleting a banner via realtime must not revive the old bannerUrl');
     });
 
-    test('URL validation rules enforce valid HTTP/HTTPS scheme and length constraints', () {
+    test(
+        'URL validation rules enforce valid HTTP/HTTPS scheme and length constraints',
+        () {
       bool isValidBannerUrl(String? url) {
         if (url == null || url.trim().isEmpty) return false;
         final trimmed = url.trim();
@@ -105,8 +118,12 @@ void main() {
 
       // Valid URLs
       expect(isValidBannerUrl('https://example.com/banner.jpg'), isTrue);
-      expect(isValidBannerUrl('http://cdn.restaurant.com/images/123.png'), isTrue);
-      expect(isValidBannerUrl('https://supabase.enything.in/storage/v1/object/public/shops/banners/1/test.jpg'), isTrue);
+      expect(
+          isValidBannerUrl('http://cdn.restaurant.com/images/123.png'), isTrue);
+      expect(
+          isValidBannerUrl(
+              'https://supabase.enything.in/storage/v1/object/public/shops/banners/1/test.jpg'),
+          isTrue);
 
       // Invalid URLs
       expect(isValidBannerUrl(''), isFalse);
@@ -114,11 +131,14 @@ void main() {
       expect(isValidBannerUrl('ftp://example.com/image.jpg'), isFalse);
       expect(isValidBannerUrl('file:///path/to/image.jpg'), isFalse);
       expect(isValidBannerUrl('not-a-valid-url'), isFalse);
-      expect(isValidBannerUrl('https://' + 'a' * 1005 + '.jpg'), isFalse);
+      expect(isValidBannerUrl('https://${'a' * 1005}.jpg'), isFalse);
     });
 
-    test('Dual-column update payload generates matching banner_url and banner_image', () {
-      const targetUrl = 'https://storage.enything.in/shops/banners/shop-1/new.jpg';
+    test(
+        'Dual-column update payload generates matching banner_url and banner_image',
+        () {
+      const targetUrl =
+          'https://storage.enything.in/shops/banners/shop-1/new.jpg';
       final payload = {
         'banner_url': targetUrl,
         'banner_image': targetUrl,
@@ -126,31 +146,45 @@ void main() {
       };
 
       expect(payload['banner_url'], equals(payload['banner_image']),
-          reason: 'Both columns must remain in 100% parity to prevent split-brain banner state');
+          reason:
+              'Both columns must remain in 100% parity to prevent split-brain banner state');
     });
   });
 
   group('100x Admin Shop Banner Management - Migration Verification', () {
-    test('Migration 149 file exists and defines admin_update_shop_banner and shops bucket', () {
-      final migrationFile = File('supabase/migrations/20290000000149_100x_admin_shop_banner_management.sql');
+    test(
+        'Migration 149 file exists and defines admin_update_shop_banner and shops bucket',
+        () {
+      final migrationFile = File(
+          'supabase/migrations/20290000000149_100x_admin_shop_banner_management.sql');
       expect(migrationFile.existsSync(), isTrue,
-          reason: 'Migration 20290000000149_100x_admin_shop_banner_management.sql must exist');
+          reason:
+              'Migration 20290000000149_100x_admin_shop_banner_management.sql must exist');
 
       final sql = migrationFile.readAsStringSync();
 
       // Check storage bucket configuration
-      expect(sql.contains("INSERT INTO storage.buckets (id, name, public)"), isTrue);
+      expect(sql.contains("INSERT INTO storage.buckets (id, name, public)"),
+          isTrue);
       expect(sql.contains("VALUES ('shops', 'shops', true)"), isTrue);
       expect(sql.contains("CREATE POLICY \"Public Access Shops\""), isTrue);
-      expect(sql.contains("CREATE POLICY \"Authenticated Upload Shops Banners\""), isTrue);
+      expect(
+          sql.contains("CREATE POLICY \"Authenticated Upload Shops Banners\""),
+          isTrue);
 
       // Check atomic RPC definition
-      expect(sql.contains("CREATE OR REPLACE FUNCTION public.admin_update_shop_banner"), isTrue);
+      expect(
+          sql.contains(
+              "CREATE OR REPLACE FUNCTION public.admin_update_shop_banner"),
+          isTrue);
       expect(sql.contains("p_shop_id UUID"), isTrue);
       expect(sql.contains("p_banner_url TEXT"), isTrue);
       expect(sql.contains("banner_url = v_clean_url"), isTrue);
       expect(sql.contains("banner_image = v_clean_url"), isTrue);
-      expect(sql.contains("GRANT EXECUTE ON FUNCTION public.admin_update_shop_banner"), isTrue);
+      expect(
+          sql.contains(
+              "GRANT EXECUTE ON FUNCTION public.admin_update_shop_banner"),
+          isTrue);
     });
   });
 }

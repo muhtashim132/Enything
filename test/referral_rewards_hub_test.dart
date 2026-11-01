@@ -67,7 +67,8 @@ void main() {
   });
 
   group('Referral Metrics & Calculation Edge Cases', () {
-    test('pendingCount clamps to 0 when completedCount exceeds invitedCount', () {
+    test('pendingCount clamps to 0 when completedCount exceeds invitedCount',
+        () {
       final provider = ReferralProvider();
 
       // Default state
@@ -105,7 +106,8 @@ void main() {
       expect(match!.group(1), 'REF25-9F8A2B');
     });
 
-    test('Successfully extracts Welcome Reward coupon code with -W- pattern', () {
+    test('Successfully extracts Welcome Reward coupon code with -W- pattern',
+        () {
       const body =
           'Welcome to Enything! Thanks for joining using a referral code. Here is your welcome coupon: REF25-W-A8C3D1. Apply it on your first order!';
       final match = codeRegex.firstMatch(body);
@@ -125,7 +127,8 @@ void main() {
       expect(match2, isNull);
     });
 
-    test('Deduplicates duplicate notifications with identical coupon codes', () {
+    test('Deduplicates duplicate notifications with identical coupon codes',
+        () {
       final notifs = [
         {
           'body': 'Your coupon: REF25-ABC123',
@@ -185,7 +188,8 @@ void main() {
         'min_order_amount': 199,
         'usage_limit': 1,
         'usage_count': 1,
-        'valid_until': DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+        'valid_until':
+            DateTime.now().add(const Duration(days: 30)).toIso8601String(),
       };
 
       final usageCount = (dbCoupon['usage_count'] as num).toInt();
@@ -218,7 +222,9 @@ void main() {
   });
 
   group('Single Coupon Per Order Limit & Stacking Prevention Tests', () {
-    test('Applying a second coupon replaces the previous coupon (strictly 1 coupon per order)', () {
+    test(
+        'Applying a second coupon replaces the previous coupon (strictly 1 coupon per order)',
+        () {
       // Simulate multiple coupons owned by Person 1
       final coupon1 = ReferralRewardCoupon(
         code: 'REF25-AAA111',
@@ -273,21 +279,25 @@ void main() {
       expect(appliedCoupon.discountValue, 25.0); // strictly ₹25, NOT ₹75
     });
 
-    test('Min order threshold validation prevents discount when cart subtotal < 199', () {
+    test(
+        'Min order threshold validation prevents discount when cart subtotal < 199',
+        () {
       const minOrderAmount = 199.0;
       const smallCartTotal = 150.0;
       const eligibleCartTotal = 250.0;
 
-      final bool canApplySmall = smallCartTotal >= minOrderAmount;
+      const bool canApplySmall = smallCartTotal >= minOrderAmount;
       expect(canApplySmall, isFalse);
-      final double shortfall = minOrderAmount - smallCartTotal;
+      const double shortfall = minOrderAmount - smallCartTotal;
       expect(shortfall, 49.0);
 
-      final bool canApplyEligible = eligibleCartTotal >= minOrderAmount;
+      const bool canApplyEligible = eligibleCartTotal >= minOrderAmount;
       expect(canApplyEligible, isTrue);
     });
 
-    test('Referral balance display formatting handles zero and positive amounts', () {
+    test(
+        'Referral balance display formatting handles zero and positive amounts',
+        () {
       double totalEarned = 0.0;
       String subtitle = totalEarned > 0
           ? '₹${totalEarned.toStringAsFixed(0)} earned • Invite friends'
@@ -302,4 +312,3 @@ void main() {
     });
   });
 }
-

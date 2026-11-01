@@ -292,7 +292,11 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                       final subtitle =
                           'Total Deductible: ${total.toStringAsFixed(2)}% (Comm: $val%, GW (Online): ${gw.toStringAsFixed(2)}%*, TDS: $tds%, TCS: $tcs%)';
 
-                      return _buildItem('commission_percent_$cat', cat,
+                      final displayTitle = AppCategories.isGroceryLowMargin(cat)
+                          ? 'Grocerylm (Low Margin)'
+                          : cat;
+
+                      return _buildItem('commission_percent_$cat', displayTitle,
                           subtitle, val, '%', config, rbac);
                     }),
                     Padding(

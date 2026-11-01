@@ -770,7 +770,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
                     final config = ctx.read<PlatformConfigProvider>();
                     final activeCats = config.activeCategoryMaps.isNotEmpty
                         ? config.activeCategoryMaps
-                        : AppCategories.all;
+                        : AppCategories.publicCategories;
                     // If current selection is now disabled, reset to first active
                     final activeNames =
                         activeCats.map((c) => c['name']!).toList();

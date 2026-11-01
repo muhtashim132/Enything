@@ -172,9 +172,16 @@ class ProductModel {
       totalQuantity: _parseIntNullable(map['total_quantity']),
       weightPerUnit: _parseDoubleNullable(map['weight_per_unit']),
       unitType: () {
-        final u = map['unit_type']?.toString().trim().toLowerCase();
-        if (u == null || u.isEmpty || u == 'piece' || u == 'pc' || u == 'pcs') return 'pieces';
-        return u;
+        final raw = map['unit_type']?.toString().trim().toLowerCase() ??
+            map['unit']?.toString().trim().toLowerCase();
+        if (raw == null || raw.isEmpty || raw == 'piece' || raw == 'pc' || raw == 'pcs') {
+          return 'pieces';
+        }
+        if (raw == 'g' || raw == 'gm' || raw == 'gms' || raw == 'gram') return 'grams';
+        if (raw == 'l' || raw == 'ltr' || raw == 'litre' || raw == 'litres') return 'liter';
+        if (raw == 'ml' || raw == 'milliliter' || raw == 'milliliters') return 'ml';
+        if (raw == 'kg' || raw == 'kgs' || raw == 'kilogram' || raw == 'kilograms') return 'kg';
+        return raw;
       }(),
       description: map['description'],
       images: imageList,

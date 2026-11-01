@@ -11,9 +11,12 @@ enum CategoryGroup {
 }
 
 class AppCategories {
+  static const String groceryLm = 'Grocerylm';
+
   static const List<Map<String, String>> all = [
     {'name': 'Supermarket / Hypermarket', 'emoji': '🏬'},
     {'name': 'Grocery', 'emoji': '🛒'},
+    {'name': 'Grocerylm', 'emoji': '🛒'},
     {'name': 'Restaurant', 'emoji': '🍽️'},
     {'name': 'Fast Food', 'emoji': '🍔'},
     {'name': 'Bakery', 'emoji': '🥖'},
@@ -59,6 +62,29 @@ class AppCategories {
     return match['emoji'] ?? '🏪';
   }
 
+  /// Returns whether a category is an internal/seller-only category
+  /// that should NOT be displayed directly/individually to customers
+  /// on their dashboard/home feeds or category navigation grids.
+  static bool isInternalOnly(String? categoryName) {
+    if (categoryName == null || categoryName.trim().isEmpty) return false;
+    final cat = categoryName.trim().toLowerCase();
+    return cat == 'grocerylm' ||
+        cat == 'grocery (low margin)' ||
+        cat == 'grocery low margin' ||
+        cat == 'grocery_lm';
+  }
+
+  /// Returns whether a category is Grocerylm (Grocery Low Margin).
+  static bool isGroceryLowMargin(String? categoryName) => isInternalOnly(categoryName);
+
+  /// Returns only customer-facing categories (excluding internal-only categories like Grocerylm).
+  static List<Map<String, String>> get publicCategories =>
+      all.where((c) => !isInternalOnly(c['name'])).toList();
+
+  /// Flat list of customer-facing category names.
+  static List<String> get publicNames =>
+      publicCategories.map((c) => c['name']!).toList();
+
   // ── Group mapping ──────────────────────────────────────────────────────────
 
   static const Map<String, CategoryGroup> _groupMap = {
@@ -84,6 +110,8 @@ class AppCategories {
     'Dairy & Eggs': CategoryGroup.perishable,
     'Fruits & Vegs': CategoryGroup.perishable,
     'Grocery': CategoryGroup.perishable,
+    'Grocerylm': CategoryGroup.perishable,
+    'Grocery (Low Margin)': CategoryGroup.perishable,
     'Organic': CategoryGroup.perishable,
   };
 
@@ -107,6 +135,10 @@ class AppCategories {
         cat == 'cafe' ||
         cat == 'beverages' ||
         cat == 'grocery' ||
+        cat == 'grocerylm' ||
+        cat == 'grocery (low margin)' ||
+        cat == 'grocery low margin' ||
+        cat == 'grocery_lm' ||
         cat == 'supermarket / hypermarket' ||
         cat == 'fruits & vegs' ||
         cat == 'fruits and vegetables' ||
@@ -217,6 +249,8 @@ class AppCategories {
       case 'Supermarket / Hypermarket':
         return 'Daily staples, pantry & household';
       case 'Grocery':
+      case 'Grocerylm':
+      case 'Grocery (Low Margin)':
         return 'Fresh provisions & daily cooking needs';
       case 'Restaurant':
         return 'Dine-in meals, thalis & specials';
@@ -312,6 +346,8 @@ class AppCategories {
         return 'Food & Dining';
       case 'Supermarket / Hypermarket':
       case 'Grocery':
+      case 'Grocerylm':
+      case 'Grocery (Low Margin)':
       case 'Fruits & Vegs':
       case 'Dairy & Eggs':
       case 'Butcher':
@@ -366,6 +402,8 @@ class AppCategories {
       case 'Ice Cream':
         return ['Small', 'Medium', 'Large', 'Single', 'Double'];
       case 'Grocery':
+      case 'Grocerylm':
+      case 'Grocery (Low Margin)':
       case 'Supermarket / Hypermarket':
       case 'Organic':
         return ['100g', '250g', '500g', '1kg', '5kg'];
@@ -407,6 +445,8 @@ class AppCategories {
       case 'Supermarket / Hypermarket':
         return '${base}1643107242058-9391a7ba60d3$params';
       case 'Grocery':
+      case 'Grocerylm':
+      case 'Grocery (Low Margin)':
         return '${base}1583258292688-d0213dc5a3a8$params';
       case 'Restaurant':
         return '${base}1550966871-3ed3cdb5ed0c$params';

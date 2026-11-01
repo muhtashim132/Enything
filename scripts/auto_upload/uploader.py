@@ -195,11 +195,37 @@ def bulk_upload_products(config: dict, shop_id: str, products: list) -> dict:
     if not shop_id or not products:
         return {"inserted": 0, "skipped": 0}
 
-    # Ensure each product has is_deleted = False
+    # Ensure each product has is_deleted = False and proper unit_type
     clean_products = []
     for p in products:
         prod_copy = dict(p)
         prod_copy["is_deleted"] = False
+        raw_unit = (prod_copy.get("unit_type") or prod_copy.get("unit") or "").lower().strip()
+        if raw_unit in ("g", "gm", "gms", "gram"):
+            prod_copy["unit_type"] = "grams"
+        elif raw_unit in ("l", "ltr", "litre", "litres"):
+            prod_copy["unit_type"] = "liter"
+        elif raw_unit in ("kg", "kgs", "kilogram"):
+            prod_copy["unit_type"] = "kg"
+        elif raw_unit in ("ml", "milliliter", "milliliters"):
+            prod_copy["unit_type"] = "ml"
+        elif not raw_unit or raw_unit in ("piece", "pc", "pcs", "pieces"):
+            name = (prod_copy.get("name") or "").lower()
+            if re.search(r'\b\d+(\.\d+)?\s*(ml|milliliter|milli\s*litre)\b', name):
+                prod_copy["unit_type"] = "ml"
+            elif re.search(r'\b\d+(\.\d+)?\s*(kg|kilo|kilogram)\b', name):
+                prod_copy["unit_type"] = "kg"
+            elif re.search(r'\b\d+(\.\d+)?\s*(l|ltr|liter|litres?)\b', name):
+                prod_copy["unit_type"] = "liter"
+            elif re.search(r'\b\d+(\.\d+)?\s*(g|gm|gms|gram|grams)\b', name):
+                prod_copy["unit_type"] = "grams"
+            elif re.search(r'\b(perfume|edp|edt|cologne|mist|body spray|shampoo|conditioner|body wash|shower gel|face wash|lotion|serum|hair oil|toner|cleanser|micellar)\b', name) and not re.search(r'\b(soap|powder|cream|butter|wax|scrub|strip|patch|roller|sponge|kit)\b', name):
+                prod_copy["unit_type"] = "ml"
+            elif re.search(r'\b(cream|moisturizer|clay|scrub|powder|soap bar|butter|wax|sunscreen gel|sunscreen cream|bleach)\b', name) and not re.search(r'\b(strip|patch|roller|sponge|brush|kit|ml|perfume|shampoo|wash)\b', name):
+                prod_copy["unit_type"] = "grams"
+            else:
+                prod_copy["unit_type"] = "pieces"
+        prod_copy["unit"] = prod_copy["unit_type"]
         clean_products.append(prod_copy)
 
     headers = {

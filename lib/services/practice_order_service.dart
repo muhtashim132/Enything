@@ -108,11 +108,13 @@ class PracticeOrderService {
         case PracticeTargetType.allSellers:
           final shopsResp = await _db
               .from('shops')
-              .select('id, name, seller_id, phone, location, prep_time_minutes')
-              .eq('is_deleted', false)
+              .select('id, name, seller_id, phone, location, prep_time_minutes, is_active')
               .eq('is_active', true)
               .limit(50);
-          final shops = (shopsResp as List).cast<Map<String, dynamic>>();
+          final shops = (shopsResp as List)
+              .cast<Map<String, dynamic>>()
+              .where((s) => s['is_deleted'] != true)
+              .toList();
           if (shops.isEmpty) {
             return const PracticeDispatchResult(
               success: false,
@@ -395,7 +397,7 @@ class PracticeOrderService {
       itemsToInsert.add({
         'id': _uuid.v4(),
         'order_id': orderId,
-        'product_id': _uuid.v4(),
+        'product_id': null, // NULL is valid for nullable FK when no catalog product exists
         'product_name': '🧪 Training Demo Meal (Simulation)',
         'quantity': 1,
         'price': 0.0,
@@ -538,7 +540,6 @@ class PracticeOrderService {
           .from('shops')
           .select('id, name, seller_id, phone, location, prep_time_minutes')
           .eq('id', shopId)
-          .eq('is_deleted', false)
           .maybeSingle();
       return resp;
     } catch (_) {
@@ -564,8 +565,6 @@ class PracticeOrderService {
       final shops = await _db
           .from('shops')
           .select('id, name, seller_id, phone, location, prep_time_minutes')
-          .eq('is_deleted', false)
-          .eq('is_active', true)
           .limit(1);
       final list = (shops as List).cast<Map<String, dynamic>>();
       if (list.isNotEmpty) return list.first;

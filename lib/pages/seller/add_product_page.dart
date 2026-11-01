@@ -21,6 +21,7 @@ import 'dart:ui' show lerpDouble;
 import '../../services/gst_recommendation_engine.dart';
 import '../../services/master_catalog_service.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/demographic_utils.dart';
 
 /// 100x Unified Image Item for Product Gallery
 /// Preserves exact drag-and-drop repositioning sequence across remote CDN URLs and local files.
@@ -124,6 +125,72 @@ class _AddProductPageState extends State<AddProductPage> {
     return ['pieces', 'kg', 'grams', 'liter', 'ml'];
   }
 
+  static String _normalizeUnitType(String raw) {
+    final lower = raw.trim().toLowerCase();
+    if (lower == 'g' || lower == 'gm' || lower == 'gms' || lower == 'gram') return 'grams';
+    if (lower == 'l' || lower == 'ltr' || lower == 'litre' || lower == 'litres') return 'liter';
+    if (lower == 'ml' || lower == 'milliliter' || lower == 'milliliters') return 'ml';
+    if (lower == 'kg' || lower == 'kgs' || lower == 'kilogram' || lower == 'kilograms') return 'kg';
+    if (lower == 'piece' || lower == 'pc' || lower == 'pcs' || lower == 'pieces' || lower.isEmpty) return 'pieces';
+    return lower;
+  }
+
+  static String _inferUnitFromName(String name, {String fallback = 'pieces'}) {
+    final lower = name.toLowerCase();
+    if (RegExp(r'\b\d+(\.\d+)?\s*(ml|milliliter|milli\s*litre)\b').hasMatch(lower)) return 'ml';
+    if (RegExp(r'\b\d+(\.\d+)?\s*(kg|kilo|kilogram)\b').hasMatch(lower)) return 'kg';
+    if (RegExp(r'\b\d+(\.\d+)?\s*(l|ltr|liter|litres?)\b').hasMatch(lower)) return 'liter';
+    if (RegExp(r'\b\d+(\.\d+)?\s*(g|gm|gms|gram|grams)\b').hasMatch(lower)) return 'grams';
+    if (RegExp(r'\b(perfume|edp|edt|cologne|mist|body spray|shampoo|conditioner|body wash|shower gel|face wash|lotion|serum|hair oil|toner|cleanser|micellar)\b').hasMatch(lower) &&
+        !RegExp(r'\b(soap|powder|cream|butter|wax|scrub|strip|patch|roller|sponge|kit)\b').hasMatch(lower)) {
+      return 'ml';
+    }
+    if (RegExp(r'\b(cream|moisturizer|clay|scrub|powder|soap bar|butter|wax|sunscreen gel|sunscreen cream|bleach)\b').hasMatch(lower) &&
+        !RegExp(r'\b(strip|patch|roller|sponge|brush|kit|ml|perfume|shampoo|wash)\b').hasMatch(lower)) {
+      return 'grams';
+    }
+    return fallback;
+  }
+
+  void _autoDetectWeightAndUnitFromName(String name) {
+    if (name.trim().isEmpty) return;
+    final lower = name.toLowerCase();
+
+    final m = RegExp(
+      r'\b(\d+(?:\.\d+)?)\s*(ml|milliliter|milli\s*litre|g|gm|gms|gram|grams|kg|kilo|kilogram|l|ltr|liter|litres?)\b',
+      caseSensitive: false,
+    ).firstMatch(lower);
+
+    if (m != null) {
+      final numStr = m.group(1);
+      final rawUnit = m.group(2) ?? '';
+      final normalizedUnit = _normalizeUnitType(rawUnit);
+      if (_availableUnitTypes.contains(normalizedUnit)) {
+        if (_weightController.text.trim().isEmpty) {
+          final parsed = double.tryParse(numStr ?? '');
+          if (parsed != null) {
+            _weightController.text =
+                parsed % 1 == 0 ? parsed.toInt().toString() : parsed.toString();
+          }
+        }
+        if (_unitType == 'pieces' || !_availableUnitTypes.contains(_unitType)) {
+          setState(() {
+            _unitType = normalizedUnit;
+          });
+        }
+      }
+    } else {
+      if (_unitType == 'pieces') {
+        final inferred = _inferUnitFromName(name);
+        if (inferred != 'pieces' && _availableUnitTypes.contains(inferred)) {
+          setState(() {
+            _unitType = inferred;
+          });
+        }
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -164,13 +231,17 @@ class _AddProductPageState extends State<AddProductPage> {
       _isVeg = AppCategories.isFoodCategory(p.category) ? p.isVeg : null;
       _isAvailable = p.isAvailable;
       if (p.weightPerUnit != null) {
-        _weightController.text = p.weightPerUnit.toString();
+        _weightController.text = p.weightPerUnit! % 1 == 0
+            ? p.weightPerUnit!.toInt().toString()
+            : p.weightPerUnit.toString();
       }
-      final normalizedUnit = (p.unitType.toLowerCase() == 'piece' || p.unitType.isEmpty)
-          ? 'pieces'
-          : p.unitType.toLowerCase();
-      _unitType = _availableUnitTypes.contains(normalizedUnit)
-          ? normalizedUnit
+      final rawUnit = p.unitType.toLowerCase().trim();
+      String resolvedUnit = _normalizeUnitType(rawUnit);
+      if ((resolvedUnit == 'pieces' || resolvedUnit.isEmpty) && p.name.isNotEmpty) {
+        resolvedUnit = _inferUnitFromName(p.name, fallback: resolvedUnit);
+      }
+      _unitType = _availableUnitTypes.contains(resolvedUnit)
+          ? resolvedUnit
           : _availableUnitTypes.first;
       if (p.totalQuantity != null) {
         _inventoryController.text = p.totalQuantity.toString();
@@ -255,11 +326,29 @@ class _AddProductPageState extends State<AddProductPage> {
       // Exception: Supermarkets, Hypermarkets, Supermarts, and Departmental stores can sell anything.
       final isOmnibus = shopCatNames.any(AppCategories.isOmnibusStoreCategory);
       final allowed = isOmnibus
-          ? activeNames
+          ? List<String>.from(activeNames)
           : activeNames
               .where(
                   (name) => shopGroups.contains(AppCategories.groupFor(name)))
               .toList();
+
+      final isGroceryOrSupermarket = isOmnibus ||
+          shopCatNames.any((c) {
+            final lower = c.toLowerCase();
+            return lower.contains('grocery') ||
+                lower.contains('supermarket') ||
+                lower.contains('hypermarket');
+          });
+
+      // Grocerylm (Low Margin) option is available for Supermarket, Hypermarket, and Grocery stores
+      if (isGroceryOrSupermarket) {
+        if (!allowed.contains('Grocerylm') && activeNames.contains('Grocerylm')) {
+          allowed.add('Grocerylm');
+        }
+      } else if (widget.existingProduct?.category != 'Grocerylm') {
+        // Exclude Grocerylm for non-grocery stores (e.g. pure butchers, electronics, pharmacies)
+        allowed.removeWhere(AppCategories.isGroceryLowMargin);
+      }
 
       // Primary category to default to (shop's own declared category)
       final primaryCat = resp['category'] ??
@@ -1762,6 +1851,7 @@ class _AddProductPageState extends State<AddProductPage> {
             ? null
             : double.tryParse(_weightController.text.trim()),
         'unit_type': _unitType,
+        'unit': _unitType,
         'total_quantity': _inventoryController.text.trim().isEmpty
             ? null
             : int.tryParse(_inventoryController.text.trim()),
@@ -1796,7 +1886,9 @@ class _AddProductPageState extends State<AddProductPage> {
             'Footwear',
             'Jewellery',
             'Cosmetics & Beauty',
-            'Salon & Beauty'
+            'Salon & Beauty',
+            'Sports',
+            'Toys & Games',
           ].contains(_productCategory)) {
             tags.add('#$_selectedDemographic');
           }
@@ -1909,6 +2001,7 @@ class _AddProductPageState extends State<AddProductPage> {
     }
 
     final query = _nameController.text.trim();
+    _autoDetectWeightAndUnitFromName(query);
     if (query.length < 2) {
       _catalogDebounce?.cancel();
       if (_catalogSuggestions.isNotEmpty || _showCatalogSuggestions) {
@@ -2056,11 +2149,13 @@ class _AddProductPageState extends State<AddProductPage> {
       }
 
       // 7. Unit Type & Weight
-      final normalizedUnit = (template.unitType.toLowerCase() == 'piece' || template.unitType.isEmpty)
-          ? 'pieces'
-          : template.unitType.toLowerCase();
-      _unitType = _availableUnitTypes.contains(normalizedUnit)
-          ? normalizedUnit
+      final rawTemplateUnit = template.unitType.toLowerCase().trim();
+      String resolvedTemplateUnit = _normalizeUnitType(rawTemplateUnit);
+      if ((resolvedTemplateUnit == 'pieces' || resolvedTemplateUnit.isEmpty) && template.name.isNotEmpty) {
+        resolvedTemplateUnit = _inferUnitFromName(template.name, fallback: resolvedTemplateUnit);
+      }
+      _unitType = _availableUnitTypes.contains(resolvedTemplateUnit)
+          ? resolvedTemplateUnit
           : _availableUnitTypes.first;
 
       if (template.weightPerUnit != null && template.weightPerUnit! > 0) {
@@ -3570,6 +3665,7 @@ class _AddProductPageState extends State<AddProductPage> {
                         final isPharmacy = _productCategory == 'Pharmacy' ||
                             AppCategories.isPharmacyCategory(_productCategory);
                         final isGrocery = _productCategory == 'Grocery' ||
+                            _productCategory == 'Grocerylm' ||
                             _productCategory == 'Supermarket' ||
                             _productCategory == 'Hypermarket' ||
                             _productCategory == 'Supermarket / Hypermarket';
@@ -4066,14 +4162,23 @@ class _AddProductPageState extends State<AddProductPage> {
                           prefixIcon: Icon(Icons.lock_outline),
                           helperText: 'Determined by your shop type',
                         ),
-                        child: Text(
-                          '${AppCategories.all.firstWhere((c) => c['name'] == _productCategory, orElse: () => {
-                                'emoji': '🏪'
-                              })['emoji']}  $_productCategory',
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: AppColors.textSecondary,
-                          ),
+                        child: Builder(
+                          builder: (context) {
+                            final displayCat = AppCategories.isGroceryLowMargin(_productCategory)
+                                ? 'Grocerylm (Low Margin)'
+                                : _productCategory;
+                            final emoji = AppCategories.all.firstWhere(
+                              (c) => c['name'] == _productCategory,
+                              orElse: () => {'emoji': '🏪'},
+                            )['emoji'];
+                            return Text(
+                              '$emoji  $displayCat',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                color: AppColors.textSecondary,
+                              ),
+                            );
+                          },
                         ),
                       )
                     else
@@ -4094,9 +4199,12 @@ class _AddProductPageState extends State<AddProductPage> {
                           final emoji = AppCategories.all.firstWhere(
                               (c) => c['name'] == cat,
                               orElse: () => {'emoji': '🏪'})['emoji'];
+                          final displayLabel = AppCategories.isGroceryLowMargin(cat)
+                              ? 'Grocerylm (Low Margin)'
+                              : cat;
                           return DropdownMenuItem(
                             value: cat,
-                            child: Text('$emoji  $cat'),
+                            child: Text('$emoji  $displayLabel'),
                           );
                         }).toList(),
                         onChanged: (v) {
@@ -4129,7 +4237,9 @@ class _AddProductPageState extends State<AddProductPage> {
                       'Footwear',
                       'Jewellery',
                       'Cosmetics & Beauty',
-                      'Salon & Beauty'
+                      'Salon & Beauty',
+                      'Sports',
+                      'Toys & Games',
                     ].contains(_productCategory)) ...[
                       const SizedBox(height: 20),
                       const Text(
@@ -4144,7 +4254,7 @@ class _AddProductPageState extends State<AddProductPage> {
                         spacing: 8,
                         runSpacing: 8,
                         children:
-                            ['Unisex', 'Men', 'Women', 'Boys', 'Girls', 'Kids']
+                            DemographicUtils.sellerDemographics
                                 .map((demo) => ChoiceChip(
                                       label: Text(demo),
                                       selected: _selectedDemographic == demo,
