@@ -72,10 +72,10 @@ Deno.serve(async (req) => {
         return new Response("No refund needed: COD order.", { status: 200 });
       }
 
-      // 2. Fetch fresh order from DB to get the latest reallocated grand_total_collected
+      // 2. Fetch fresh order from DB to get the latest reallocated grand_total_collected & pending_refund_amount
       const { data: freshOrder } = await supabaseAdmin
         .from("orders")
-        .select("grand_total_collected, razorpay_payment_id, refund_status, refund_id, payment_method")
+        .select("grand_total_collected, pending_refund_amount, total_refunded, razorpay_payment_id, refund_status, refund_id, payment_method")
         .eq("id", record.id)
         .maybeSingle();
 
@@ -99,9 +99,12 @@ Deno.serve(async (req) => {
       }
       const razorpayAuth = btoa(`${keyId}:${keySecret}`);
 
-      const collectedAmount = freshOrder?.grand_total_collected != null 
-        ? Number(freshOrder.grand_total_collected) 
-        : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0);
+      const hasPendingItemRefund = freshOrder?.pending_refund_amount != null && Number(freshOrder.pending_refund_amount) > 0;
+      const collectedAmount = hasPendingItemRefund
+        ? Number(freshOrder.pending_refund_amount)
+        : (freshOrder?.grand_total_collected != null 
+            ? Number(freshOrder.grand_total_collected) 
+            : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0));
       let amountInPaise = Math.round(collectedAmount * 100);
 
       if (amountInPaise <= 0) {
@@ -176,10 +179,12 @@ Deno.serve(async (req) => {
         return new Response(`Razorpay Error: ${refundData.error?.description}`, { status: 200 });
       }
 
-      // 5. Update the Database with the Refund ID
+      // 5. Update the Database with the Refund ID & reset pending_refund_amount
       await supabaseAdmin.from("orders").update({
         refund_id: refundData.id,
-        refund_status: "processed"
+        refund_status: "processed",
+        total_refunded: (Number(freshOrder?.total_refunded) || 0) + collectedAmount,
+        pending_refund_amount: 0.00
       }).eq("id", record.id);
 
       console.log(`Refund ${refundData.id} successfully processed for order ${record.id}.`);

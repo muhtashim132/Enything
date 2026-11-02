@@ -376,6 +376,18 @@ class OrderModel {
   /// Net seller taxable turnover for TCS basis (base amount only).
   double get sellerNetTaxableSupply => totalAmount;
 
+  /// Active items in this order (excluding declined/cancelled items)
+  List<OrderItem> get activeItems => items.where((i) => i.isActive).toList();
+
+  /// Items that were declined by the seller (e.g., out of stock)
+  List<OrderItem> get declinedItems => items.where((i) => i.isDeclined).toList();
+
+  /// Whether this order has any items that were declined by the seller
+  bool get hasDeclinedItems => items.any((i) => i.isDeclined);
+
+  /// Total count of active items
+  int get activeItemsCount => activeItems.fold<int>(0, (sum, i) => sum + i.quantity);
+
   OrderModel copyWith({
     String? status,
     String? deliveryPartnerId,
@@ -589,6 +601,9 @@ class OrderItem {
   final String? specialInstructions;
   final bool requiresPrescription;
   final String? imageUrl;
+  final String status; // 'active' | 'declined' | 'cancelled'
+  final String? declinedReason;
+  final DateTime? declinedAt;
 
   OrderItem({
     required this.id,
@@ -601,6 +616,9 @@ class OrderItem {
     this.specialInstructions,
     this.requiresPrescription = false,
     this.imageUrl,
+    this.status = 'active',
+    this.declinedReason,
+    this.declinedAt,
   });
 
   factory OrderItem.fromMap(Map<String, dynamic> map) {
@@ -630,10 +648,19 @@ class OrderItem {
       requiresPrescription: map['requires_prescription'] == true ||
           map['requires_prescription'] == 'true',
       imageUrl: resolvedImageUrl,
+      status: map['status']?.toString().toLowerCase().trim() ?? 'active',
+      declinedReason: map['declined_reason']?.toString(),
+      declinedAt: map['declined_at'] != null
+          ? DateTime.tryParse(map['declined_at'].toString())
+          : null,
     );
   }
 
   double get totalPrice => price * quantity;
+
+  bool get isDeclined => status == 'declined';
+  bool get isActive => status == 'active';
+  bool get isCancelled => status == 'cancelled';
 
   OrderItem copyWith({
     String? id,
@@ -646,6 +673,9 @@ class OrderItem {
     String? specialInstructions,
     bool? requiresPrescription,
     String? imageUrl,
+    String? status,
+    String? declinedReason,
+    DateTime? declinedAt,
   }) {
     return OrderItem(
       id: id ?? this.id,
@@ -658,6 +688,9 @@ class OrderItem {
       specialInstructions: specialInstructions ?? this.specialInstructions,
       requiresPrescription: requiresPrescription ?? this.requiresPrescription,
       imageUrl: imageUrl ?? this.imageUrl,
+      status: status ?? this.status,
+      declinedReason: declinedReason ?? this.declinedReason,
+      declinedAt: declinedAt ?? this.declinedAt,
     );
   }
 
@@ -671,6 +704,9 @@ class OrderItem {
         'weight_kg': weightKg,
         'special_instructions': specialInstructions,
         'requires_prescription': requiresPrescription,
+        'status': status,
+        if (declinedReason != null) 'declined_reason': declinedReason,
+        if (declinedAt != null) 'declined_at': declinedAt?.toIso8601String(),
         if (imageUrl != null) 'image_url': imageUrl,
       };
 }

@@ -459,8 +459,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               final oldOrder =
                   _groupOrders.firstWhereOrNull((o) => o.id == updatedOrder.id);
 
-              if (oldOrder == null) {
-                // This is a new order (INSERT) — full reload needed
+              if (oldOrder == null || oldOrder.totalAmount != updatedOrder.totalAmount) {
+                // This is a new order (INSERT) or items declined/modified — full reload needed
                 _fetchOrder();
                 return;
               }
@@ -723,17 +723,23 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   bool get _hasPartialRejection {
     // Fix 3: customer already made a decision — hide the panel.
     if (_partialRejectionResolved) return false;
-    if (_groupOrders.isEmpty) return false;
+    final orders = _groupOrders.isNotEmpty ? _groupOrders : (_order != null ? [_order!] : <OrderModel>[]);
+    if (orders.isEmpty) return false;
 
-    // 100x FIX: Dynamic backend state check — partial rejection is active if there is
-    // at least one unhandled rejection (not yet replaced, proceeded, or cancelled by customer)
-    // AND at least one surviving active shop.
-    final hasUnhandledRejection = _groupOrders.any((o) =>
+    // 100x FIX: Dynamic backend state check — partial rejection is active if:
+    // A) Whole Shop Order Rejection: At least one unhandled shop rejection AND at least one surviving active shop.
+    final hasUnhandledShopRejection = orders.any((o) =>
         _terminalRejectionStatuses.contains(o.status) &&
         !(o.cancelledReason?.startsWith('customer') ?? false));
-    final hasActive = _groupOrders
+    final hasActiveShop = orders
         .any((o) => !_terminalRejectionStatuses.contains(o.status));
-    return hasUnhandledRejection && hasActive;
+    final hasShopPartialRejection = hasUnhandledShopRejection && hasActiveShop;
+
+    // B) 100x Item-Level Partial Rejection: At least one active shop has declined items!
+    final hasItemPartialRejection = orders.any((o) =>
+        !_terminalRejectionStatuses.contains(o.status) && o.hasDeclinedItems);
+
+    return hasShopPartialRejection || hasItemPartialRejection;
   }
 
   List<OrderModel> get _activeGroupOrders {
@@ -797,6 +803,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   double _computeGroupMultiShopSurcharge() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.multiShopSurcharge);
+
+  double _computeGroupRefundDelta() {
+    final orders = _groupOrders.isNotEmpty ? _groupOrders : (_order != null ? [_order!] : <OrderModel>[]);
+    double sum = 0.0;
+    for (final o in orders) {
+      for (final it in o.declinedItems) {
+        sum += it.totalPrice;
+      }
+    }
+    return sum;
+  }
 
   double _computeGroupSmallCartFee() =>
       _activeGroupOrders.fold(0.0, (sum, o) => sum + o.smallCartFee);
@@ -1877,7 +1894,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         final shopsToRate = _groupOrders.isEmpty ? [_order!] : _groupOrders;
         final allItems = <OrderItem>[];
         for (final order in shopsToRate) {
-          allItems.addAll(order.items);
+          allItems.addAll(order.activeItems);
         }
         if (allItems.isNotEmpty) {
           showModalBottomSheet(
@@ -3453,6 +3470,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                     _showTaxBreakdownSheet(context, isDark),
                               ),
                             ],
+                            if (_groupOrders.any((o) => o.hasDeclinedItems) ||
+                                (_order != null && _order!.hasDeclinedItems)) ...[
+                              const SizedBox(height: 8),
+                              _billRow(
+                                'Refund Processing (Unavailable)',
+                                '-₹${_computeGroupRefundDelta().toStringAsFixed(0)}',
+                                isDark: isDark,
+                                valueColor: AppColors.success,
+                              ),
+                            ],
                             Divider(
                               height: 24,
                               color: isDark
@@ -3917,16 +3944,28 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   // ── Partial Rejection Panel ───────────────────────────────────────────
   Widget _buildPartialRejectionPanel(bool isDark) {
-    final rejectedOrders = _groupOrders
+    final allOrders = _groupOrders.isNotEmpty ? _groupOrders : (_order != null ? [_order!] : <OrderModel>[]);
+    final rejectedOrders = allOrders
         .where((o) => _terminalRejectionStatuses.contains(o.status))
         .toList();
+    final activeOrders = allOrders
+        .where((o) => !_terminalRejectionStatuses.contains(o.status))
+        .toList();
     final hasReadyToPayShops =
-        _groupOrders.any((o) => o.status == 'awaiting_payment');
-    final hasSellerAcceptedShops = _groupOrders.any((o) =>
+        allOrders.any((o) => o.status == 'awaiting_payment');
+    final hasSellerAcceptedShops = allOrders.any((o) =>
         o.sellerAccepted == true &&
         !_terminalRejectionStatuses.contains(o.status));
-    final hasPendingShops = _groupOrders.any(
+    final hasPendingShops = allOrders.any(
         (o) => o.status == 'awaiting_acceptance' && o.sellerAccepted != true);
+
+    final declinedItemsAcrossAll = <OrderItem>[];
+    for (final o in activeOrders) {
+      declinedItemsAcrossAll.addAll(o.declinedItems);
+    }
+    final isItemLevelOnly = declinedItemsAcrossAll.isNotEmpty && rejectedOrders.isEmpty;
+    final totalActiveGrand = activeOrders.fold<double>(0, (sum, o) => sum + o.grandTotal);
+    final isPaidOrder = ['confirmed', 'preparing', 'ready_for_pickup'].contains(_aggregateStatus);
 
     return Container(
       key: _partialRejectionKey,
@@ -3948,12 +3987,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   color: AppColors.danger, size: 24),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('Partial Order Rejection',
-                    style: GoogleFonts.outfit(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
-                    )),
+                child: Text(
+                  isItemLevelOnly
+                      ? '⚠️ Items Unavailable in Store'
+                      : (declinedItemsAcrossAll.isNotEmpty
+                          ? 'Partial Order & Unavailable Items'
+                          : 'Partial Order Rejection'),
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
               ),
               ValueListenableBuilder<int>(
                 valueListenable: _decisionSecondsLeft,
@@ -3980,29 +4025,39 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           ),
           const SizedBox(height: 8),
           Text(
-              'One or more shops could not accept their part of your order. Please decide how you want to proceed before the timer runs out, or your entire order will be automatically cancelled.',
-              style: GoogleFonts.outfit(
-                fontSize: 13,
-                color: isDark ? Colors.white70 : AppColors.textSecondary,
-              )),
+            isItemLevelOnly
+                ? 'The store had to remove ${declinedItemsAcrossAll.map((i) => "${i.quantity}x ${i.productName}").join(", ")} because they are out of stock. Your updated order total is ₹${totalActiveGrand.toStringAsFixed(0)}. Please decide how to proceed before time runs out:'
+                : (declinedItemsAcrossAll.isNotEmpty
+                    ? 'A shop declined their part of the order, and items (${declinedItemsAcrossAll.map((i) => "${i.quantity}x ${i.productName}").join(", ")}) were out of stock. Total updated to ₹${totalActiveGrand.toStringAsFixed(0)}. Decide how you want to proceed:'
+                    : 'One or more shops could not accept their part of your order. Please decide how you want to proceed before the timer runs out, or your entire order will be automatically cancelled.'),
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              color: isDark ? Colors.white70 : AppColors.textSecondary,
+            ),
+          ),
           const SizedBox(height: 16),
           // POINTS 1, 2, 3: UI fixes for the 3 distinct sections permanently shown
           _recoveryBtn(
             label: _aggregateStatus == 'awaiting_payment'
-                ? '✅ Proceed & Pay for Remaining'
-                : (hasReadyToPayShops
-                    ? '✅ Pay Now (Skip Waiting Shops)'
-                    : (hasSellerAcceptedShops
-                        ? '✅ Cancel Pending Shops'
-                        : '⏳ Waiting for other shops...')),
+                ? '✅ Proceed & Pay ₹${totalActiveGrand.toStringAsFixed(0)}'
+                : (isPaidOrder
+                    ? '✅ Acknowledge & Continue Delivery'
+                    : (hasReadyToPayShops
+                        ? '✅ Pay Now (Skip Waiting Shops)'
+                        : (hasSellerAcceptedShops
+                            ? '✅ Continue with Accepted Items'
+                            : '⏳ Waiting for other shops...'))),
             subtitle: _aggregateStatus == 'awaiting_payment'
-                ? 'Continue without the rejected items'
-                : (hasReadyToPayShops
-                    ? 'Cancel pending shops and pay for accepted items'
-                    : (hasSellerAcceptedShops
-                        ? 'Cancel pending shops and wait for rider for accepted items'
-                        : 'You can pay once the remaining shops accept')),
+                ? 'Continue and pay for the remaining active items'
+                : (isPaidOrder
+                    ? 'Refund for unavailable items will be automatically processed'
+                    : (hasReadyToPayShops
+                        ? 'Cancel pending shops and pay for accepted items'
+                        : (hasSellerAcceptedShops
+                            ? 'Continue with available items and wait for rider assignment'
+                            : 'You can pay once the remaining shops accept'))),
             color: (_aggregateStatus == 'awaiting_payment' ||
+                    isPaidOrder ||
                     hasReadyToPayShops ||
                     hasSellerAcceptedShops)
                 ? const Color(0xFF0F9B58)
@@ -4010,9 +4065,34 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             isDark: isDark,
             loading: _isProcessingPayment,
             onTap: (_aggregateStatus == 'awaiting_payment' ||
+                    isPaidOrder ||
                     hasReadyToPayShops ||
                     hasSellerAcceptedShops)
                 ? () async {
+                    if (_isProcessingPayment) return;
+
+                    if (isPaidOrder) {
+                      _decisionCountdownTimer?.cancel();
+                      final cartGroupId = _order?.cartGroupId ?? _order?.id ?? 'unknown';
+                      try {
+                        await _supabase.rpc('acknowledge_partial_rejection', params: {
+                          'p_cart_group_id': cartGroupId,
+                          'p_action': 'proceeded',
+                        });
+                      } catch (_) {}
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('partial_rejection_resolved_$cartGroupId', true);
+                      if (mounted) {
+                        setState(() {
+                          _partialRejectionResolved = true;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Order updated! Remaining items are being prepared. Refund is queued.'),
+                          backgroundColor: Color(0xFF0F9B58),
+                        ));
+                      }
+                      return;
+                    }
                     if (_isProcessingPayment) return;
 
                     if (_aggregateStatus == 'awaiting_acceptance') {
@@ -4226,11 +4306,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               // place_orders_transaction recognises this as a valid replacement
               // and bypasses the delivery floor check (floor check only runs on
               // brand-new orders, not on orders replacing a rejected one).
-              final firstRejected = _groupOrders.firstWhere(
+              final firstRejected = _groupOrders.firstWhereOrNull(
                 (o) => _terminalRejectionStatuses.contains(o.status),
-                orElse: () => _groupOrders.first,
               );
-              cartProvider.setPendingOrderIdToCancel(firstRejected.id);
+              if (firstRejected != null) {
+                cartProvider.setPendingOrderIdToCancel(firstRejected.id);
+              } else {
+                cartProvider.setPendingOrderIdToCancel(null);
+              }
 
               final activeShops = await _fetchActivePendingShops();
               cartProvider.setActivePendingShops(activeShops);
@@ -4262,9 +4345,15 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   void _showMissingItemsSheet(List<OrderModel> rejectedOrders, bool isDark) async {
     if (_isMissingItemsSheetOpen) return;
+    final allOrders = _groupOrders.isNotEmpty ? _groupOrders : (_order != null ? [_order!] : <OrderModel>[]);
     final missingItems = <OrderItem>[];
     for (final o in rejectedOrders) {
       missingItems.addAll(o.items);
+    }
+    for (final o in allOrders) {
+      if (!_terminalRejectionStatuses.contains(o.status)) {
+        missingItems.addAll(o.declinedItems);
+      }
     }
 
     try {
@@ -4395,12 +4484,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         onPressed: () {
                           Navigator.pop(
                               context); // Close the missing items sheet
-                          _showAlternativesDialog(
-                              item,
-                              rejectedOrders.firstWhere(
-                                  (o) => o.items
-                                      .any((i) => i.productId == item.productId),
-                                  orElse: () => rejectedOrders.first));
+                          final sourceOrder = allOrders.firstWhere(
+                              (o) => o.items.any((i) => i.productId == item.productId || i.id == item.id),
+                              orElse: () => (rejectedOrders.isNotEmpty ? rejectedOrders.first : allOrders.first));
+                          _showAlternativesDialog(item, sourceOrder);
                         },
                         icon: const Icon(Icons.search,
                             size: 16, color: Colors.white),
@@ -5155,6 +5242,54 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                             color: statusColor,
                           ),
                         ),
+                        if (shopOrder.items.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          ...shopOrder.items.map((it) {
+                            final isItemDeclined = it.isDeclined;
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 3),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${it.quantity}x ${it.productName}${it.variantName != null && it.variantName!.isNotEmpty ? " (${it.variantName})" : ""}',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11,
+                                        color: isItemDeclined
+                                            ? (isDark ? Colors.white38 : Colors.black38)
+                                            : (isDark ? Colors.white70 : Colors.black87),
+                                        decoration: isItemDeclined
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                        decorationColor: Colors.redAccent,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (isItemDeclined)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      margin: const EdgeInsets.only(left: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.red.withValues(alpha: 0.3), width: 0.8),
+                                      ),
+                                      child: Text(
+                                        'Out of Stock',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.redAccent,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
                       ],
                     ),
                   ),
@@ -6107,7 +6242,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           MaterialPageRoute(
               builder: (ctx) => CheckoutPage(
                     existingCartGroupId: _order!.cartGroupId,
-                    orderIdToCancelOnSuccess: rejectedOrder.id,
+                    orderIdToCancelOnSuccess: _terminalRejectionStatuses.contains(rejectedOrder.status)
+                        ? rejectedOrder.id
+                        : null,
                   ))).then((_) {
         // Upon returning from checkout, refetch order group
         _fetchOrder();

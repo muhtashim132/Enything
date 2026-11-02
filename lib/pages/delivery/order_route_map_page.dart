@@ -1309,7 +1309,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                                   child: Text(
                                                     shops[selectedIndex]
                                                         .orders
-                                                        .expand((o) => o.items)
+                                                        .expand((o) => o.activeItems.isNotEmpty ? o.activeItems : o.items)
                                                         .map((it) =>
                                                             '${it.quantity}x ${it.productName}')
                                                         .join(', '),
@@ -1419,7 +1419,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                                         TextOverflow.ellipsis,
                                                   ),
                                                 Text(
-                                                  '${group.activeOrders.length} store${group.activeOrders.length > 1 ? 's' : ''} · ${group.activeOrders.fold<int>(0, (sum, o) => sum + o.items.fold<int>(0, (s, i) => s + i.quantity))} items',
+                                                  '${group.activeOrders.length} store${group.activeOrders.length > 1 ? 's' : ''} · ${group.activeOrders.fold<int>(0, (sum, o) => sum + (o.activeItems.isNotEmpty ? o.activeItems : o.items).fold<int>(0, (s, i) => s + i.quantity))} items',
                                                   style: GoogleFonts.outfit(
                                                     fontSize: 10,
                                                     color: isDark

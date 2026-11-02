@@ -2861,12 +2861,17 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: allItems
                                       .map((item) => Text(
-                                          '${item.quantity}x ${item.productName}',
+                                          '${item.quantity}x ${item.productName}${item.isDeclined ? " (Out of Stock)" : ""}',
                                           style: GoogleFonts.outfit(
                                             fontSize: 12,
-                                            color: isDark
-                                                ? Colors.white54
-                                                : Colors.black54,
+                                            color: item.isDeclined
+                                                ? Colors.grey
+                                                : (isDark
+                                                    ? Colors.white54
+                                                    : Colors.black54),
+                                            decoration: item.isDeclined
+                                                ? TextDecoration.lineThrough
+                                                : null,
                                           )))
                                       .toList(),
                                 ),
@@ -3474,30 +3479,73 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
-                children: order.items.map((i) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${i.quantity}x ',
-                            style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: AppColors.accent)),
-                        Expanded(
-                          child: Text(
-                            i.productName,
-                            style: GoogleFonts.outfit(
-                                fontSize: 13,
-                                color:
-                                    isDark ? Colors.white70 : Colors.black87),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (order.hasDeclinedItems) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, size: 12, color: Colors.amber),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '${order.declinedItems.length} item(s) out of stock. Collect only active items.',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.amber,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  );
-                }).toList(),
+                  ],
+                  ...order.items.map((i) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${i.quantity}x ',
+                              style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: i.isDeclined ? Colors.grey : AppColors.accent)),
+                          Expanded(
+                            child: Text(
+                              i.productName,
+                              style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  color: i.isDeclined
+                                      ? Colors.grey
+                                      : (isDark ? Colors.white70 : Colors.black87),
+                                  decoration: i.isDeclined ? TextDecoration.lineThrough : null),
+                            ),
+                          ),
+                          if (i.isDeclined) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '(Out of Stock)',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.danger,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }),
+                ],
               ),
             ),
           ],

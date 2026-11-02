@@ -184,18 +184,22 @@ class _CustomerMainPageState extends State<CustomerMainPage>
         if (cartGroupId != null) {
           final siblings = await supabase
               .from('orders')
-              .select('id, status, updated_at, shop_id')
+              .select('id, status, updated_at, shop_id, order_items(status)')
               .eq('cart_group_id', cartGroupId);
 
           DateTime? rejectionTime;
           for (var s in siblings) {
+            final st = s['status'] as String?;
+            final itemsList = s['order_items'] as List? ?? [];
+            final hasDeclinedItems = itemsList.any((it) => it['status'] == 'declined');
+
             if ({
               'seller_rejected',
               'partner_rejected',
               'rider_rejected',
               'verification_failed',
               'cancelled'
-            }.contains(s['status'])) {
+            }.contains(st) || hasDeclinedItems) {
               isPartialRejection = true;
               final u = s['updated_at'] != null
                   ? DateTime.tryParse(s['updated_at'])
@@ -255,9 +259,18 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                   }.contains(s['status']),
                   orElse: () => siblings.first,
                 );
-                if (firstRejected['id'] != null) {
+                final isTerminalRejected = {
+                  'seller_rejected',
+                  'partner_rejected',
+                  'rider_rejected',
+                  'verification_failed',
+                  'cancelled'
+                }.contains(firstRejected['status']);
+                if (firstRejected['id'] != null && isTerminalRejected) {
                   cartProvider
                       .setPendingOrderIdToCancel(firstRejected['id'] as String);
+                } else {
+                  cartProvider.setPendingOrderIdToCancel(null);
                 }
                 final activeShopIds = siblings
                     .where((s) => !{

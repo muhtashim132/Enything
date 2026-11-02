@@ -25,7 +25,8 @@ void main() {
 
       // Standard categories are NOT internal-only
       expect(AppCategories.isInternalOnly('Grocery'), isFalse);
-      expect(AppCategories.isInternalOnly('Supermarket / Hypermarket'), isFalse);
+      expect(
+          AppCategories.isInternalOnly('Supermarket / Hypermarket'), isFalse);
       expect(AppCategories.isInternalOnly('Restaurant'), isFalse);
       expect(AppCategories.isInternalOnly('Pharmacy'), isFalse);
 
@@ -37,17 +38,21 @@ void main() {
       expect(publicNames.contains('Supermarket / Hypermarket'), isTrue);
 
       // Group and food categorization
-      expect(AppCategories.groupFor('Grocerylm'), equals(CategoryGroup.perishable));
+      expect(AppCategories.groupFor('Grocerylm'),
+          equals(CategoryGroup.perishable));
       expect(AppCategories.isFoodCategory('Grocerylm'), isTrue);
       expect(AppCategories.isFoodCategory('grocerylm'), isTrue);
-      expect(AppCategories.getCustomerCollection('Grocerylm'), equals('Grocery & Fresh'));
-      expect(AppCategories.getSuggestedVariants('Grocerylm'), containsAll(['100g', '500g', '1kg']));
+      expect(AppCategories.getCustomerCollection('Grocerylm'),
+          equals('Grocery & Fresh'));
+      expect(AppCategories.getSuggestedVariants('Grocerylm'),
+          containsAll(['100g', '500g', '1kg']));
     });
 
     test('2. TaxConfig GST & Section 9(5) classification for Grocerylm', () {
       // 5% standard grocery blended rate
       expect(TaxConfig.gstRateForCategory('Grocerylm'), equals(0.05));
-      expect(TaxConfig.gstRateForCategory('Grocery (Low Margin)'), equals(0.05));
+      expect(
+          TaxConfig.gstRateForCategory('Grocery (Low Margin)'), equals(0.05));
 
       // Grocerylm is standard non-deemed supplier (seller files GST, unlike restaurants)
       expect(TaxConfig.isEnythingDeemedSupplier('Grocerylm'), isFalse);
@@ -68,12 +73,16 @@ void main() {
       expect(allNames.contains('Grocerylm'), isTrue);
 
       // Commission resolution with aliases
-      expect(config.getCommissionPercentForCategory('Grocerylm'), equals(5.0)); // fallback default
+      expect(config.getCommissionPercentForCategory('Grocerylm'),
+          equals(5.0)); // fallback default
       expect(config.getCommissionPercentForCategory('grocerylm'), equals(5.0));
-      expect(config.getCommissionPercentForCategory('Grocery (Low Margin)'), equals(5.0));
+      expect(config.getCommissionPercentForCategory('Grocery (Low Margin)'),
+          equals(5.0));
     });
 
-    test('4. Seller omnibus schedule includes Grocerylm with low-margin commission', () {
+    test(
+        '4. Seller omnibus schedule includes Grocerylm with low-margin commission',
+        () {
       final schedules = SellerDeductibleCard.omnibusDepartmentSchedules;
       final groceryLmSchedule = schedules.firstWhere(
         (s) => s['name'] == 'Grocerylm',

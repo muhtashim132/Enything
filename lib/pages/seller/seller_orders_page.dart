@@ -570,202 +570,498 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     }
   }
 
+  /// 100x Forensic Action: Decline a single item from an active order directly
+  Future<void> _confirmDeclineItem(OrderModel order, OrderItem item) async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.danger.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.inventory_2_outlined, color: AppColors.danger, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mark Item Out of Stock',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        'Item will be removed from this order',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Row(
+                children: [
+                  if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: item.imageUrl!,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => const Icon(Icons.fastfood, color: Colors.white38),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.fastfood, color: Colors.white38),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.productName,
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (item.variantName != null && item.variantName!.isNotEmpty)
+                          Text('Variant: ${item.variantName}',
+                              style: GoogleFonts.outfit(color: AppColors.primary, fontSize: 11)),
+                        Text('${item.quantity}x · ₹${item.totalPrice.toStringAsFixed(0)}',
+                            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2E1A1A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: AppColors.danger, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Product will be marked Out of Stock in your store inventory.',
+                          style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: AppColors.danger, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Order total will be recalculated for the remaining active items.',
+                          style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: AppColors.danger, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Customer will be notified with options to proceed, replace, or cancel.',
+                          style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white24),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.white70, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.danger,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text('Mark Out of Stock', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final res = await _supabase.rpc('decline_order_items_seller', params: {
+        'p_order_id': order.id,
+        'p_order_item_ids': [item.id],
+        'p_reason': 'out_of_stock',
+      });
+
+      final bool allDeclined = res is Map && res['all_items_declined'] == true;
+
+      if (mounted) {
+        context.read<NotificationProvider>().sendBackgroundPush(
+          targetUserId: order.customerId,
+          title: allDeclined
+              ? '🏪 Order Cancelled — All Items Out of Stock'
+              : '⚠️ Item Unavailable at ${_shopNames[order.shopId] ?? "Store"}',
+          body: allDeclined
+              ? 'The shop could not fulfill any items in your order. Full refund will be processed.'
+              : '"${item.productName}" is out of stock and was removed from your order. Tap to view options!',
+          data: {'order_id': order.id, 'role': 'customer', 'type': 'item_level_partial_rejection'},
+        );
+      }
+
+      final partnerId = order.deliveryPartnerId;
+      if (mounted && partnerId != null) {
+        context.read<NotificationProvider>().sendBackgroundPush(
+          targetUserId: partnerId,
+          title: '📦 Order Item Update',
+          body: '"${item.productName}" marked out of stock. Do not collect this item.',
+          data: {'order_id': order.id, 'role': 'rider'},
+        );
+      }
+
+      _loadOrders();
+      _showSnack(
+        allDeclined
+            ? 'All items declined. Order is now cancelled.'
+            : '"${item.productName}" marked out of stock & removed from order.',
+        isError: allDeclined,
+      );
+    } catch (e) {
+      debugPrint('Error declining item: $e');
+      if (mounted) {
+        _showSnack('Failed to decline item: $e', isError: true);
+      }
+    }
+  }
+
   Future<void> _sellerReject(OrderModel order) async {
     final messageController = TextEditingController();
     String rejectReason =
         order.prescriptionUrls.isNotEmpty ? 'prescription' : 'out_of_stock';
-    String? selectedOutOfStockProductId =
-        order.items.isNotEmpty ? order.items.first.productId : null;
+    final selectedOutOfStockItemIds = <String>{};
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => Padding(
-          padding:
-              EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFF1A1A2E),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text('Decline Order',
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    )),
-                const SizedBox(height: 12),
-                if (order.prescriptionUrls.isNotEmpty) ...[
-                  _rejectionOptionCard(
-                    title: 'Prescription Issue',
-                    subtitle: 'Invalid, expired or unreadable prescription',
-                    icon: Icons.medical_information_outlined,
-                    isSelected: rejectReason == 'prescription',
-                    onTap: () => setState(() => rejectReason = 'prescription'),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                _rejectionOptionCard(
-                  title: 'Out of Stock',
-                  subtitle: 'Item is not currently available in store',
-                  icon: Icons.inventory_2_outlined,
-                  isSelected: rejectReason == 'out_of_stock',
-                  onTap: () => setState(() => rejectReason = 'out_of_stock'),
-                ),
-                if (rejectReason == 'out_of_stock' && order.items.length > 1) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8, left: 4, right: 4, bottom: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Select Out-of-Stock Item:',
-                            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.07),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white12),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: selectedOutOfStockProductId,
-                              isExpanded: true,
-                              dropdownColor: const Color(0xFF1A1A2E),
-                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 13),
-                              items: order.items.map((item) {
-                                return DropdownMenuItem<String>(
-                                  value: item.productId,
-                                  child: Row(
-                                    children: [
-                                      if (item.imageUrl != null &&
-                                          item.imageUrl!.isNotEmpty) ...[
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(4),
-                                          child: CachedNetworkImage(
-                                            imageUrl: item.imageUrl!,
-                                            width: 22,
-                                            height: 22,
-                                            fit: BoxFit.cover,
-                                            memCacheWidth: 60,
-                                            errorWidget: (_, __, ___) =>
-                                                const Icon(
-                                              Icons.fastfood,
-                                              size: 16,
-                                              color: Colors.white38,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      Expanded(
-                                        child: Text(
-                                          item.productName,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (val) =>
-                                  setState(() => selectedOutOfStockProductId = val),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                _rejectionOptionCard(
-                  title: 'Other Reason',
-                  subtitle: 'Shop closed early, technical issue, etc.',
-                  icon: Icons.info_outline,
-                  isSelected: rejectReason == 'other',
-                  onTap: () => setState(() => rejectReason = 'other'),
-                ),
-                const SizedBox(height: 12),
-                Text('Send an optional message to the customer explaining why.',
-                    style: GoogleFonts.outfit(
-                        color: Colors.white54, fontSize: 13)),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: messageController,
-                  maxLines: 3,
-                  style: GoogleFonts.outfit(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'e.g. "This item is currently out of stock"',
-                    hintStyle:
-                        GoogleFonts.outfit(color: Colors.white30, fontSize: 13),
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.07),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.all(14),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white24),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: Text('Go Back',
-                            style: GoogleFonts.outfit(
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w600)),
+        builder: (ctx, setState) {
+          final isPartialDecline = rejectReason == 'out_of_stock' &&
+              selectedOutOfStockItemIds.isNotEmpty &&
+              selectedOutOfStockItemIds.length < order.activeItems.length;
+
+          return Padding(
+            padding:
+                EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF1A1A2E),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.danger,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: Text('Send & Decline',
-                            style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(height: 20),
+                  Text('Decline Order / Items',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      )),
+                  const SizedBox(height: 12),
+                  if (order.prescriptionUrls.isNotEmpty) ...[
+                    _rejectionOptionCard(
+                      title: 'Prescription Issue',
+                      subtitle: 'Invalid, expired or unreadable prescription',
+                      icon: Icons.medical_information_outlined,
+                      isSelected: rejectReason == 'prescription',
+                      onTap: () => setState(() => rejectReason = 'prescription'),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  _rejectionOptionCard(
+                    title: 'Out of Stock (Items Unavailable)',
+                    subtitle: 'Select which item(s) are not available in store',
+                    icon: Icons.inventory_2_outlined,
+                    isSelected: rejectReason == 'out_of_stock',
+                    onTap: () => setState(() => rejectReason = 'out_of_stock'),
+                  ),
+                  if (rejectReason == 'out_of_stock' && order.activeItems.length > 1) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10, left: 4, right: 4, bottom: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Select Out-of-Stock Items:',
+                                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w700)),
+                              if (selectedOutOfStockItemIds.isNotEmpty)
+                                GestureDetector(
+                                  onTap: () => setState(() => selectedOutOfStockItemIds.clear()),
+                                  child: Text('Clear Selection',
+                                      style: GoogleFonts.outfit(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 180),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.white12),
+                            ),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              itemCount: order.activeItems.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white10),
+                              itemBuilder: (ctx, idx) {
+                                final it = order.activeItems[idx];
+                                final isSelected = selectedOutOfStockItemIds.contains(it.id);
+                                return InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      if (isSelected) {
+                                        selectedOutOfStockItemIds.remove(it.id);
+                                      } else {
+                                        selectedOutOfStockItemIds.add(it.id);
+                                      }
+                                    });
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                                          color: isSelected ? AppColors.danger : Colors.white38,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            '${it.quantity}x ${it.productName}',
+                                            style: GoogleFonts.outfit(
+                                              color: isSelected ? Colors.white : Colors.white70,
+                                              fontSize: 13,
+                                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        Text('₹${it.totalPrice.toStringAsFixed(0)}',
+                                            style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12)),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          if (isPartialDecline)
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.info_outline, size: 14, color: Colors.amber),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      '${selectedOutOfStockItemIds.length} item(s) will be removed. Remaining ${order.activeItems.length - selectedOutOfStockItemIds.length} item(s) will stay active!',
+                                      style: GoogleFonts.outfit(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  _rejectionOptionCard(
+                    title: 'Other Reason (Decline Entire Order)',
+                    subtitle: 'Shop closed early, technical issue, etc.',
+                    icon: Icons.info_outline,
+                    isSelected: rejectReason == 'other',
+                    onTap: () => setState(() => rejectReason = 'other'),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Send an optional message to the customer explaining why.',
+                      style: GoogleFonts.outfit(
+                          color: Colors.white54, fontSize: 13)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: messageController,
+                    maxLines: 2,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. "Item ran out of stock this evening"',
+                      hintStyle:
+                          GoogleFonts.outfit(color: Colors.white30, fontSize: 13),
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.07),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white24),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: Text('Go Back',
+                              style: GoogleFonts.outfit(
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isPartialDecline ? const Color(0xFFD97706) : AppColors.danger,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: Text(
+                            isPartialDecline
+                                ? 'Remove ${selectedOutOfStockItemIds.length} Item(s)'
+                                : 'Decline Order',
+                            style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
 
@@ -797,13 +1093,68 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       }
 
       final msg = messageController.text.trim();
-      await _supabase.rpc('reject_order_seller', params: {
-        'p_order_id': order.id,
-        'p_reject_reason': rejectReason,
-        'p_message': msg.isNotEmpty ? msg : null,
-        if (rejectReason == 'out_of_stock' && selectedOutOfStockProductId != null)
-          'p_out_of_stock_product_id': selectedOutOfStockProductId,
-      });
+
+      // ── 100x Partial Item Rejection Branch ──
+      if (rejectReason == 'out_of_stock' &&
+          selectedOutOfStockItemIds.isNotEmpty &&
+          selectedOutOfStockItemIds.length < order.activeItems.length) {
+        await _supabase.rpc('decline_order_items_seller', params: {
+          'p_order_id': order.id,
+          'p_order_item_ids': selectedOutOfStockItemIds.toList(),
+          'p_reason': 'out_of_stock',
+          'p_message': msg.isNotEmpty ? msg : null,
+        });
+
+        BellAlertService.instance.removePendingOrder(order.id);
+
+        final declinedNames = order.items
+            .where((i) => selectedOutOfStockItemIds.contains(i.id))
+            .map((i) => i.productName)
+            .join(', ');
+
+        if (mounted) {
+          context.read<NotificationProvider>().sendBackgroundPush(
+            targetUserId: order.customerId,
+            title: '⚠️ Items Unavailable at ${_shopNames[order.shopId] ?? "Store"}',
+            body: '$declinedNames unavailable and removed from your order. Tap to view your options!',
+            data: {'order_id': order.id, 'role': 'customer', 'type': 'item_level_partial_rejection'},
+          );
+        }
+
+        final partnerIdToNotify = latestPartnerId ?? order.deliveryPartnerId;
+        if (mounted && partnerIdToNotify != null) {
+          context.read<NotificationProvider>().sendBackgroundPush(
+            targetUserId: partnerIdToNotify,
+            title: '📦 Order Items Updated',
+            body: '$declinedNames marked out of stock. Please do not collect these items.',
+            data: {'order_id': order.id, 'role': 'rider'},
+          );
+        }
+
+        _loadOrders();
+        _showSnack(
+          '${selectedOutOfStockItemIds.length} item(s) marked out of stock. Remaining order is active.',
+          isError: false,
+        );
+        return;
+      }
+
+      // ── Full Order Rejection Branch (All items selected or non-stock reason) ──
+      if (rejectReason == 'out_of_stock' && selectedOutOfStockItemIds.isNotEmpty) {
+        await _supabase.rpc('decline_order_items_seller', params: {
+          'p_order_id': order.id,
+          'p_order_item_ids': selectedOutOfStockItemIds.toList(),
+          'p_reason': 'out_of_stock',
+          'p_message': msg.isNotEmpty ? msg : null,
+        });
+      } else {
+        await _supabase.rpc('reject_order_seller', params: {
+          'p_order_id': order.id,
+          'p_reject_reason': rejectReason,
+          'p_message': msg.isNotEmpty ? msg : null,
+        });
+      }
+
       BellAlertService.instance.removePendingOrder(order.id);
 
       if (mounted) {
@@ -1645,6 +1996,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   Widget _buildOrderItemRow(
     BuildContext context,
+    OrderModel order,
     OrderItem item,
     bool isDark,
   ) {
@@ -1726,7 +2078,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
+              color: item.isDeclined
+                  ? Colors.grey.withValues(alpha: 0.15)
+                  : AppColors.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -1734,7 +2088,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
-                color: AppColors.primary,
+                color: item.isDeclined ? Colors.grey : AppColors.primary,
               ),
             ),
           ),
@@ -1751,11 +2105,33 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   style: GoogleFonts.outfit(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : AppColors.textPrimary,
+                    color: item.isDeclined
+                        ? (isDark ? Colors.white38 : Colors.grey)
+                        : (isDark ? Colors.white : AppColors.textPrimary),
+                    decoration: item.isDeclined ? TextDecoration.lineThrough : null,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (item.isDeclined) ...[
+                  const SizedBox(height: 3),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.danger.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      '❌ Out of Stock · Removed',
+                      style: GoogleFonts.outfit(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.danger,
+                      ),
+                    ),
+                  ),
+                ],
                 if (item.variantName != null &&
                     item.variantName!.trim().isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -1796,14 +2172,55 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           ),
           const SizedBox(width: 8),
 
-          // 4. Item Total Price
-          Text(
-            '₹${item.totalPrice.toStringAsFixed(0)}',
-            style: GoogleFonts.outfit(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : AppColors.textPrimary,
-            ),
+          // 4. Item Total Price & Inline Quick Action
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '₹${item.totalPrice.toStringAsFixed(0)}',
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: item.isDeclined
+                      ? (isDark ? Colors.white30 : Colors.grey)
+                      : (isDark ? Colors.white : AppColors.textPrimary),
+                  decoration: item.isDeclined ? TextDecoration.lineThrough : null,
+                ),
+              ),
+              if (item.isActive &&
+                  ['awaiting_acceptance', 'awaiting_payment', 'pending', 'confirmed', 'preparing']
+                      .contains(order.status)) ...[
+                const SizedBox(height: 4),
+                InkWell(
+                  onTap: () => _confirmDeclineItem(order, item),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.danger.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.block, size: 10, color: AppColors.danger),
+                        const SizedBox(width: 3),
+                        Text(
+                          'Unavailable',
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -2352,7 +2769,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 const Divider(height: 1),
                                 const SizedBox(height: 10),
                                 ...order.items.map((item) =>
-                                    _buildOrderItemRow(context, item, isDark)),
+                                    _buildOrderItemRow(context, order, item, isDark)),
                                 if (order.sellerPayout > 0) ...[
                                   const SizedBox(height: 10),
                                   Container(
@@ -3377,6 +3794,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 const SizedBox(height: 8),
                 ...order.items.map((item) => _buildOrderItemRow(
                       context,
+                      order,
                       item,
                       Theme.of(context).brightness == Brightness.dark,
                     )),

@@ -49,14 +49,19 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
     try {
       final itemsData = await _supabase
           .from('order_items')
-          .select('product_id, quantity, variant_name')
+          .select('product_id, quantity, variant_name, status')
           .eq('order_id', order.id);
 
       if (!mounted) return;
 
+      // 100x Edge Case: Exclude declined/cancelled items so customer reorders only fulfilled items
+      final validItems = (itemsData as List)
+          .where((i) => (i['status'] as String? ?? 'active') == 'active')
+          .toList();
+
       // Fetch current product availability for each item
       final productIds =
-          (itemsData as List).map((i) => i['product_id'] as String).toList();
+          validItems.map((i) => i['product_id'] as String).toList();
 
       if (productIds.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -91,7 +96,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
       int skipped = 0;
       String? firstError;
 
-      for (final item in itemsData) {
+      for (final item in validItems) {
         final productId = item['product_id'] as String;
         final quantity = item['quantity'] as int? ?? 1;
         final variantName = item['variant_name'] as String?;

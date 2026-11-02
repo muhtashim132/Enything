@@ -50,6 +50,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   // ── Maintenance Mode (Additive) ─────────────────────────────────────────
   /// When true, all new customer orders are blocked platform-wide.
   bool _maintenanceMode = false;
+
   /// Custom message shown to customers during maintenance.
   String _maintenanceMessage =
       'We are currently updating our platform to serve you better. Ordering will resume shortly.';
@@ -61,7 +62,8 @@ class PlatformConfigProvider extends ChangeNotifier {
   String _forceUpdateMessage =
       'A newer version of Enything is available. Please update your app from the store to continue using our delivery services.';
   String _appStoreUrl = 'https://apps.apple.com/in/app/enything/id6809016496';
-  String _playStoreUrl = 'https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything';
+  String _playStoreUrl =
+      'https://play.google.com/store/apps/details?id=com.muhtaashimnazki.enything';
 
   // ── Category Management (Additive) ──────────────────────────────────────
   /// Set of category names that the admin has disabled.
@@ -149,7 +151,8 @@ class PlatformConfigProvider extends ChangeNotifier {
   /// If base commission is 5% and gateway is 2.36%, this returns 7.36.
   double get unifiedCommissionPercent => _commissionPercent + (0.0236 * 100);
 
-  double getCommissionPercentForCategory(String? category, {String? fallbackCategory}) {
+  double getCommissionPercentForCategory(String? category,
+      {String? fallbackCategory}) {
     if (category != null && category.trim().isNotEmpty) {
       final trimmed = category.trim();
       if (_categoryCommissionOverrides.containsKey(trimmed)) {
@@ -192,8 +195,11 @@ class PlatformConfigProvider extends ChangeNotifier {
     return _commissionPercent;
   }
 
-  double getCommissionRateForCategory(String? category, {String? fallbackCategory}) {
-    return getCommissionPercentForCategory(category, fallbackCategory: fallbackCategory) / 100.0;
+  double getCommissionRateForCategory(String? category,
+      {String? fallbackCategory}) {
+    return getCommissionPercentForCategory(category,
+            fallbackCategory: fallbackCategory) /
+        100.0;
   }
 
   bool hasCategoryCommissionOverride(String? category) {
@@ -201,10 +207,12 @@ class PlatformConfigProvider extends ChangeNotifier {
     final trimmed = category.trim();
     if (_categoryCommissionOverrides.containsKey(trimmed)) return true;
     if (AppCategories.isGroceryLowMargin(trimmed)) {
-      return _categoryCommissionOverrides.keys.any(AppCategories.isGroceryLowMargin);
+      return _categoryCommissionOverrides.keys
+          .any(AppCategories.isGroceryLowMargin);
     }
     final lower = trimmed.toLowerCase();
-    return _categoryCommissionOverrides.keys.any((k) => k.trim().toLowerCase() == lower);
+    return _categoryCommissionOverrides.keys
+        .any((k) => k.trim().toLowerCase() == lower);
   }
 
   Map<String, double> get categoryCommissionOverrides =>
@@ -244,7 +252,8 @@ class PlatformConfigProvider extends ChangeNotifier {
   String get forceUpdateMessage => _forceUpdateMessage;
   String get appStoreUrl => _appStoreUrl;
   String get playStoreUrl => _playStoreUrl;
-  bool get isForceUpdateRequired => AppVersion.buildNumber < _minSupportedBuildNumber;
+  bool get isForceUpdateRequired =>
+      AppVersion.buildNumber < _minSupportedBuildNumber;
   bool get isUpdateAvailable => AppVersion.buildNumber < _latestBuildNumber;
 
   // ── Load Settings ────────────────────────────────────────────
@@ -458,7 +467,8 @@ class PlatformConfigProvider extends ChangeNotifier {
                       '[CategoryMgmt] realtime disabled_categories parse error: $e');
                 }
               } else if (key == 'maintenance_mode') {
-                _maintenanceMode = valRaw == true || valRaw.toString() == 'true';
+                _maintenanceMode =
+                    valRaw == true || valRaw.toString() == 'true';
               } else if (key == 'maintenance_message') {
                 final msgStr = _cleanMaintenanceMessage(valRaw);
                 if (msgStr.isNotEmpty && msgStr != 'null') {
@@ -804,7 +814,9 @@ class PlatformConfigProvider extends ChangeNotifier {
 
       final cleanActorId = _isValidUuid(actorId)
           ? actorId
-          : (_isValidUuid(_db.auth.currentUser?.id) ? _db.auth.currentUser!.id : null);
+          : (_isValidUuid(_db.auth.currentUser?.id)
+              ? _db.auth.currentUser!.id
+              : null);
 
       // Persist both keys atomically
       await _db.from('platform_config').upsert({
@@ -826,9 +838,8 @@ class PlatformConfigProvider extends ChangeNotifier {
         await _db.from('audit_logs').insert({
           'actor_id': cleanActorId,
           'actor_role': actorRole,
-          'action': enabled
-              ? 'enable_maintenance_mode'
-              : 'disable_maintenance_mode',
+          'action':
+              enabled ? 'enable_maintenance_mode' : 'disable_maintenance_mode',
           'entity_type': 'platform_config',
           'entity_id': null,
           'metadata': {
@@ -863,7 +874,9 @@ class PlatformConfigProvider extends ChangeNotifier {
 
       final cleanActorId = _isValidUuid(actorId)
           ? actorId
-          : (_isValidUuid(_db.auth.currentUser?.id) ? _db.auth.currentUser!.id : null);
+          : (_isValidUuid(_db.auth.currentUser?.id)
+              ? _db.auth.currentUser!.id
+              : null);
 
       await _db.from('platform_config').upsert({
         'key': 'maintenance_message',

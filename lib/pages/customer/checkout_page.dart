@@ -134,8 +134,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         try {
           final weightResponse = await supabase
               .from('order_items')
-              .select('quantity, weight_kg, weight_in_grams, product:products!inner(weight_per_unit, unit_type, category, is_deleted)')
+              .select('quantity, weight_kg, weight_in_grams, status, product:products!inner(weight_per_unit, unit_type, category, is_deleted)')
               .inFilter('order_id', activeOrderIds)
+              .neq('status', 'declined')
+              .neq('status', 'cancelled')
               .eq('product.is_deleted', false);
           for (var row in (weightResponse as List)) {
             final qty = (row['quantity'] as num?)?.toDouble() ?? 1.0;
